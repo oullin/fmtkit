@@ -7,7 +7,7 @@
 [![Codecov](https://codecov.io/gh/oullin/go-fmt/graph/badge.svg?branch=main)](https://codecov.io/gh/oullin/go-fmt)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Foullin%2Fgo--fmt-2496ED?logo=docker&logoColor=white)](https://github.com/oullin/go-fmt/pkgs/container/go-fmt)
 
-**Rule-driven formatting for Go, with a Docker Compose-first workflow.**
+**Rule-driven formatting for Go, runnable as a CLI or a single shared container.**
 
 `go-fmt` fixes layout and structure that `gofmt` does not touch, then finishes with `gofmt` and `goimports`. The result is a single command that can check or rewrite Go code with consistent rule-driven formatting, automatic `go vet` validation, predictable output, and a clean path for local use, CI, or container-based workflows.
 
@@ -18,25 +18,28 @@
 - Adds formatter rules on top of `gofmt`, not just whitespace cleanup
 - Runs rules first, then `gofmt` and `goimports` for a deterministic result
 - Runs `go vet ./...` automatically when the current working directory is inside a Go module or workspace
-- Works as a local CLI or a reusable Docker Compose service
+- Works as a local CLI or a shared container via a single host wrapper
 - Supports `text`, `json`, and `agent` output modes
 - Can also be embedded from the Go engine in `packages/formatter/engine`
 
 ## Quick Start
 
-### Recommended: Docker Compose
+### Recommended: host wrapper
 
-Use the maintained consumer Compose file from [`examples/consumer/go-fmt.compose.yaml`](examples/consumer/go-fmt.compose.yaml):
+Install the single host wrapper once. One image (`ghcr.io/oullin/go-fmt:latest`) and one shared cache volume (`go-fmt-cache`) are reused across every project on the host — no per-project file, no per-project version drift:
 
 ```bash
-curl -o go-fmt.compose.yaml https://raw.githubusercontent.com/oullin/go-fmt/main/examples/consumer/go-fmt.compose.yaml
+curl -fsSL -o /tmp/go-fmt-host.sh https://raw.githubusercontent.com/oullin/go-fmt/main/scripts/go-fmt-host.sh
+sudo install -m 0755 /tmp/go-fmt-host.sh /usr/local/bin/go-fmt
 
-docker compose -f go-fmt.compose.yaml run --rm go-fmt check .
-docker compose -f go-fmt.compose.yaml run --rm go-fmt format .
-docker compose -f go-fmt.compose.yaml run --rm go-fmt format ./core ./demo/api
+go-fmt check .
+go-fmt format .
+go-fmt format ./core ./demo/api
 ```
 
-This is the recommended integration path. It keeps the command short, the container configuration reusable, and the toolchain identical across machines and CI. The Compose file mounts your project at `/work`, keeps Go build and module caches in the shared Docker volume `go-fmt-cache`, and avoids writing `storage/.cache` into consumer repositories. When the mounted project contains a Go module or workspace, both `check` and `format` also run `go vet ./...` automatically.
+The wrapper mounts your project at `/work`, keeps Go build and module caches in the shared Docker volume `go-fmt-cache`, and avoids writing `storage/.cache` into consumer repositories. When the mounted project contains a Go module or workspace, both `check` and `format` also run `go vet ./...` automatically.
+
+Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …` when pinning a specific release without editing any project files.
 
 ### Local install
 
@@ -92,24 +95,12 @@ No install is required when working inside this repository:
 
 ### One-off Docker run
 
-If you do not want a Compose file, use the published image directly:
+For ad-hoc use without installing the wrapper, run the published image directly:
 
 ```bash
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest check .
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
 ```
-
-### Host wrapper (one image for every project)
-
-When multiple projects on the same host need `go-fmt`, prefer the host wrapper at [`scripts/go-fmt-host.sh`](scripts/go-fmt-host.sh) over per-project Compose files. It uses one image (`ghcr.io/oullin/go-fmt:latest`) and one shared cache volume (`go-fmt-cache`) across every project — no per-project compose file, no per-project version drift.
-
-```bash
-sudo install -m 0755 scripts/go-fmt-host.sh /usr/local/bin/go-fmt
-go-fmt format .
-go-fmt check ./pkg ./cmd
-```
-
-Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …` when you need to pin a specific release without editing project files.
 
 ## CLI
 
@@ -170,50 +161,23 @@ The stand-alone CLI formats Go source only. Repository-local `make format` also 
 
 The public image is published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
 
-### Compose file
+### Host wrapper
 
-The recommended Compose file is already in this repository at [`examples/consumer/go-fmt.compose.yaml`](examples/consumer/go-fmt.compose.yaml):
+The recommended way to invoke the image is through the host wrapper installed in [Quick Start](#quick-start). It mounts the current project at `/work`, reuses the shared `go-fmt-cache` volume, and sets `HOST_PROJECT_PATH` so `--host-path` works without extra configuration.
 
-```yaml
-services:
-    go-fmt:
-        image: ghcr.io/oullin/go-fmt:latest
-        working_dir: /work
-        volumes:
-            - ${GO_FMT_PROJECT_DIR:-${PWD}}:/work
-            - go-fmt-cache:/cache
-        environment:
-            HOST_PROJECT_PATH: ${GO_FMT_PROJECT_DIR:-${PWD}}
-            GOCACHE: /cache/go-build
-            GOPATH: /cache/gopath
-            GOMODCACHE: /cache/gopath/pkg/mod
-        command: ['help']
-volumes:
-    go-fmt-cache:
-        name: go-fmt-cache
-```
-
-Download it into your project:
+`--host-path` accepts one absolute host path per invocation and rejects paths outside `HOST_PROJECT_PATH`:
 
 ```bash
-curl -o go-fmt.compose.yaml https://raw.githubusercontent.com/oullin/go-fmt/main/examples/consumer/go-fmt.compose.yaml
+go-fmt format --host-path "$PWD/pkg/api"
 ```
 
-Then run:
+Use positional paths such as `./core ./demo/api` when you need multiple targets.
+
+Override the project root with `GO_FMT_PROJECT_DIR` when invoking the wrapper from outside the project you want to format:
 
 ```bash
-docker compose -f go-fmt.compose.yaml run --rm go-fmt check .
-docker compose -f go-fmt.compose.yaml run --rm go-fmt format .
-docker compose -f go-fmt.compose.yaml run --rm go-fmt format ./core ./demo/api
+GO_FMT_PROJECT_DIR="$PWD" go-fmt format ./core ./demo/api
 ```
-
-### Why Compose is the default recommendation
-
-- The command stays short once the file is in the project
-- The image tag and mount setup are reusable across a team
-- `HOST_PROJECT_PATH` enables `--host-path` for mounted subtrees
-- Go build and module caches persist in the shared Docker volume `go-fmt-cache`
-- The same setup works well in local dev and CI
 
 Remove the shared cache when you want a completely cold start:
 
@@ -221,36 +185,9 @@ Remove the shared cache when you want a completely cold start:
 docker volume rm go-fmt-cache
 ```
 
-### Existing project-local Compose files
-
-If your project already defines a `go-fmt` service, use it the same way:
-
-```bash
-docker compose -f api/docker.api.compose.yaml run --rm go-fmt check .
-docker compose -f api/docker.api.compose.yaml run --rm go-fmt format .
-```
-
-### Shared Compose files
-
-If the Compose file lives outside the project you want to format, set `GO_FMT_PROJECT_DIR` to the project root you want mounted at `/work`:
-
-```bash
-GO_FMT_PROJECT_DIR="$PWD" docker compose -f /path/to/go-fmt.compose.yaml run --rm go-fmt check .
-GO_FMT_PROJECT_DIR="$PWD" docker compose -f /path/to/go-fmt.compose.yaml run --rm go-fmt format .
-GO_FMT_PROJECT_DIR="$PWD" docker compose -f /path/to/go-fmt.compose.yaml run --rm go-fmt format ./core ./demo/api
-```
-
-To target a mounted subdirectory with `--host-path`, pass one host path per invocation:
-
-```bash
-GO_FMT_PROJECT_DIR="$PWD" docker compose -f /path/to/go-fmt.compose.yaml run --rm go-fmt format --host-path "$PWD/pkg/api"
-```
-
-Use positional paths such as `./core ./demo/api` when you need multiple targets. Paths outside `GO_FMT_PROJECT_DIR` are intentionally rejected.
-
 ### One-off container usage
 
-Running the image directly is still useful for quick checks:
+If you do not want the wrapper installed, run the image directly:
 
 ```bash
 docker run --rm ghcr.io/oullin/go-fmt:latest

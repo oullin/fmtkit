@@ -65,7 +65,13 @@ func (r Runner) Run(mode Mode, args []string) int {
 		return 1
 	}
 
-	formatterReport, err := r.runFormatter(mode, runPaths, cfg.FormatterConfig())
+	formatterCfg := cfg.FormatterConfig()
+
+	if opts.jobs > 0 {
+		formatterCfg.Concurrency = opts.jobs
+	}
+
+	formatterReport, err := r.runFormatter(mode, runPaths, formatterCfg)
 
 	if err != nil {
 		r.writeError("%v\n", err)

@@ -7,4 +7,6 @@ type options struct {
 	outputFormat string
 	hostPath     HostPath
 	positional   []string
+	// jobs overrides config.Concurrency when > 0. -1 means "unset".
+	jobs int
 }

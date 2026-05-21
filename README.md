@@ -99,6 +99,18 @@ docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest check .
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
 ```
 
+### Host wrapper (one image for every project)
+
+When multiple projects on the same host need `go-fmt`, prefer the host wrapper at [`scripts/go-fmt-host.sh`](scripts/go-fmt-host.sh) over per-project Compose files. It uses one image (`ghcr.io/oullin/go-fmt:latest`) and one shared cache volume (`go-fmt-cache`) across every project — no per-project compose file, no per-project version drift.
+
+```bash
+sudo install -m 0755 scripts/go-fmt-host.sh /usr/local/bin/go-fmt
+go-fmt format .
+go-fmt check ./pkg ./cmd
+```
+
+Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …` when you need to pin a specific release without editing project files.
+
 ## CLI
 
 The binary is `go-fmt` and it exposes two primary commands:
@@ -114,12 +126,13 @@ If no paths are provided, both commands default to the current directory (`.`). 
 
 Both commands accept the same flags:
 
-| Flag          | Description                                                                          | Default                           |
-| ------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
-| `--config`    | Path to a `config.yml` file                                                          | Auto-detected in the working tree |
-| `--cwd`       | Base path used for config discovery and relative output paths                        | Current working directory         |
-| `--format`    | Output format: `text`, `json`, or `agent`                                            | `text`                            |
-| `--host-path` | Absolute host path under `HOST_PROJECT_PATH`; intended for the Compose consumer flow | Disabled unless env is set        |
+| Flag          | Description                                                                            | Default                           |
+| ------------- | -------------------------------------------------------------------------------------- | --------------------------------- |
+| `--config`    | Path to a `config.yml` file                                                            | Auto-detected in the working tree |
+| `--cwd`       | Base path used for config discovery and relative output paths                          | Current working directory         |
+| `--format`    | Output format: `text`, `json`, or `agent`                                              | `text`                            |
+| `--host-path` | Absolute host path under `HOST_PROJECT_PATH`; intended for the Compose consumer flow   | Disabled unless env is set        |
+| `--jobs`      | Max files processed in parallel; `0` uses `runtime.NumCPU()`. Also reads `GO_FMT_JOBS` | `0` (NumCPU)                      |
 
 ### Common workflows
 
@@ -273,6 +286,8 @@ not_path:
 
 not_name:
     - '*.pb.go'
+
+concurrency: 0
 ```
 
 | Field                   | Type | Default                          | Description                                 |
@@ -284,6 +299,7 @@ not_name:
 | `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names to skip during tree walking |
 | `not_path`              | list | Empty                            | Substring matches against full file paths   |
 | `not_name`              | list | Empty                            | Glob patterns matched against file names    |
+| `concurrency`           | int  | `0` (NumCPU)                     | Max files processed in parallel             |
 
 ## Spacing Rule
 

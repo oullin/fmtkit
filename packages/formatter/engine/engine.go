@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"runtime"
+	"sync"
+	"sync/atomic"
 
 	"github.com/oullin/go-fmt/packages/formatter/config"
 	"github.com/oullin/go-fmt/packages/formatter/rules"
@@ -73,14 +76,48 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 		return report, nil
 	}
 
-	for _, file := range files {
-		result := e.processFile(file, write)
-		report.Results = append(report.Results, result)
+	workers := effectiveConcurrency(e.cfg.Concurrency, len(files))
+	results := make([]FileResult, len(files))
 
-		if result.Changed {
-			report.Changed++
+	var changed atomic.Int64
+
+	if workers <= 1 {
+		for i, file := range files {
+			r := e.processFile(file, write)
+			results[i] = r
+
+			if r.Changed {
+				changed.Add(1)
+			}
 		}
+	} else {
+		sem := make(chan struct{}, workers)
+
+		var wg sync.WaitGroup
+
+		for i, file := range files {
+			wg.Add(1)
+			sem <- struct{}{}
+
+			go func(i int, file string) {
+				defer wg.Done()
+
+				defer func() { <-sem }()
+
+				r := e.processFile(file, write)
+				results[i] = r
+
+				if r.Changed {
+					changed.Add(1)
+				}
+			}(i, file)
+		}
+
+		wg.Wait()
 	}
+
+	report.Results = results
+	report.Changed = int(changed.Load())
 
 	switch {
 	case report.ErrorCount() > 0:
@@ -92,6 +129,27 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 	}
 
 	return report, nil
+}
+
+// effectiveConcurrency resolves the worker count for a run.
+// Zero/negative configured values default to runtime.NumCPU(); the result
+// is clamped to at most len(files) so small runs stay goroutine-free.
+func effectiveConcurrency(configured, fileCount int) int {
+	n := configured
+
+	if n <= 0 {
+		n = runtime.NumCPU()
+	}
+
+	if n > fileCount {
+		n = fileCount
+	}
+
+	if n < 1 {
+		n = 1
+	}
+
+	return n
 }
 
 func (e *Engine) processFile(path string, write bool) FileResult {

@@ -14,8 +14,11 @@ BIN ?= $(BUILD_DIR)/$(APP)
 DIST_DIR ?= storage/dist ## Directory for release binaries
 DIST_TEST_DIR ?= storage/dist-test ## Directory for test build artifacts
 RELEASE_PLATFORMS ?= darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 ## Space-separated GOOS/GOARCH release targets
+GO_FMT_IMAGE ?= ghcr.io/oullin/go-fmt:latest ## Container image used by host-* targets
+GO_FMT_CACHE_VOLUME ?= go-fmt-cache ## Named Docker volume reused across host-* runs
+GO_FMT_PROJECT_DIR ?= $(CURDIR) ## Project root bind-mounted into the container
 
-.PHONY: help format build release test test-race test-short vet fmt-source install clean
+.PHONY: help format build release test test-race test-short vet fmt-source install clean host-format host-check host-version host-help
 
 help: ## Show available targets and override variables
 	@# Parse Make metadata and render styled help output through the dedicated helper script.
@@ -24,6 +27,34 @@ help: ## Show available targets and override variables
 format: ## Apply formatter changes to ARGS
 	@# Run the repository formatter script against the requested files or directories.
 	@OXFMT_BIN="$(OXFMT_BIN)" ./scripts/format.sh $(ARGS)
+
+host-format: ## Run the dockerized `go-fmt format` against ARGS (default `.`)
+	@# Format files inside the shared go-fmt container; forwards ARGS as target paths.
+	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh format $(ARGS)
+
+host-check: ## Run the dockerized `go-fmt check` against ARGS (default `.`)
+	@# Verify formatting inside the shared go-fmt container without writing changes.
+	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh check $(ARGS)
+
+host-version: ## Print the dockerized go-fmt version
+	@# Show the version baked into the configured GO_FMT_IMAGE.
+	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh version
+
+host-help: ## Print the dockerized go-fmt usage
+	@# Show the upstream CLI help text from the configured GO_FMT_IMAGE.
+	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh help
 
 build: ## Build a host-native binary into ./storage/bin
 	@# Compile the current version into a local binary for the host platform.

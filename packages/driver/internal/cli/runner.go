@@ -67,7 +67,7 @@ func (r Runner) Run(mode Mode, args []string) int {
 
 	formatterCfg := cfg.FormatterConfig()
 
-	if opts.jobs > 0 {
+	if opts.jobs != -1 {
 		formatterCfg.Concurrency = opts.jobs
 	}
 

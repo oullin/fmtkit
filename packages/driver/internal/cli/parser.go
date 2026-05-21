@@ -42,18 +42,26 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 }
 
 // envJobs reads GO_FMT_JOBS as the default for the --jobs flag.
-// Invalid or missing values default to 0 (engine picks NumCPU).
+// Returns -1 when the env var is unset so the runner can distinguish
+// "unset" from an explicit 0 (which means "use NumCPU").
+// Invalid values fall back to -1 as well.
 func envJobs() int {
-	raw := strings.TrimSpace(os.Getenv("GO_FMT_JOBS"))
+	val, ok := os.LookupEnv("GO_FMT_JOBS")
+
+	if !ok {
+		return -1
+	}
+
+	raw := strings.TrimSpace(val)
 
 	if raw == "" {
-		return 0
+		return -1
 	}
 
 	n, err := strconv.Atoi(raw)
 
 	if err != nil || n < 0 {
-		return 0
+		return -1
 	}
 
 	return n

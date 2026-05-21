@@ -6,7 +6,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"sync/atomic"
 
 	"github.com/oullin/go-fmt/packages/formatter/config"
 	"github.com/oullin/go-fmt/packages/formatter/rules"
@@ -79,16 +78,9 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 	workers := effectiveConcurrency(e.cfg.Concurrency, len(files))
 	results := make([]FileResult, len(files))
 
-	var changed atomic.Int64
-
 	if workers <= 1 {
 		for i, file := range files {
-			r := e.processFile(file, write)
-			results[i] = r
-
-			if r.Changed {
-				changed.Add(1)
-			}
+			results[i] = e.processFile(file, write)
 		}
 	} else {
 		sem := make(chan struct{}, workers)
@@ -104,12 +96,7 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 
 				defer func() { <-sem }()
 
-				r := e.processFile(file, write)
-				results[i] = r
-
-				if r.Changed {
-					changed.Add(1)
-				}
+				results[i] = e.processFile(file, write)
 			}(i, file)
 		}
 
@@ -117,7 +104,12 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 	}
 
 	report.Results = results
-	report.Changed = int(changed.Load())
+
+	for _, r := range results {
+		if r.Changed {
+			report.Changed++
+		}
+	}
 
 	switch {
 	case report.ErrorCount() > 0:

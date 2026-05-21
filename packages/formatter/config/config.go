@@ -23,6 +23,9 @@ type Config struct {
 	Exclude    []string   `mapstructure:"exclude"`
 	NotPath    []string   `mapstructure:"not_path"`
 	NotName    []string   `mapstructure:"not_name"`
+	// Concurrency caps the number of files processed in parallel.
+	// Zero means use runtime.NumCPU().
+	Concurrency int `mapstructure:"concurrency"`
 }
 
 // Default returns the default formatter configuration.

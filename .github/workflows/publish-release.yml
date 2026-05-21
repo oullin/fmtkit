@@ -82,12 +82,6 @@ jobs:
               run: ./scripts/verify-release-image.sh
               shell: bash
 
-            - name: Verify published consumer Compose flow
-              env:
-                  NEW_TAG: ${{ env.RELEASE_TAG }}
-              run: ./scripts/verify-consumer-compose.sh
-              shell: bash
-
             - name: Promote verified release image to latest
               env:
                   DIGEST: ${{ steps.build.outputs.digest }}

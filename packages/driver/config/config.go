@@ -29,6 +29,9 @@ type Config struct {
 	Exclude    []string   `mapstructure:"exclude"`
 	NotPath    []string   `mapstructure:"not_path"`
 	NotName    []string   `mapstructure:"not_name"`
+	// Concurrency caps the number of files processed in parallel.
+	// Zero means use runtime.NumCPU().
+	Concurrency int `mapstructure:"concurrency"`
 }
 
 // Default returns the default CLI configuration.
@@ -62,9 +65,10 @@ func (c Config) FormatterConfig() formatterconfig.Config {
 			Gofmt:     c.Formatters.Gofmt,
 			Goimports: c.Formatters.Goimports,
 		},
-		Exclude: c.Exclude,
-		NotPath: c.NotPath,
-		NotName: c.NotName,
+		Exclude:     c.Exclude,
+		NotPath:     c.NotPath,
+		NotName:     c.NotName,
+		Concurrency: c.Concurrency,
 	}
 }
 

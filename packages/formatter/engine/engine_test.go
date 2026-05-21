@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"fmt"
 	"go/format"
 	"os"
 	"path/filepath"
@@ -129,6 +130,126 @@ func run() {
 
 	if !strings.Contains(string(content), "defer println(\"done\")\n\n\treturn") {
 		t.Fatalf("expected file to be rewritten, got:\n%s", content)
+	}
+}
+
+func TestFormatIsDeterministicAcrossConcurrencyLevels(t *testing.T) {
+	const fileCount = 16
+
+	source := `package sample
+
+func run() {
+	defer println("done")
+	return
+}
+`
+
+	makeTree := func(t *testing.T) string {
+		t.Helper()
+		root := t.TempDir()
+
+		for i := 0; i < fileCount; i++ {
+			path := filepath.Join(root, fmt.Sprintf("pkg%02d", i), "sample.go")
+			testutil.WriteGoFile(t, path, source)
+		}
+
+		return root
+	}
+
+	readAll := func(t *testing.T, root string) map[string]string {
+		t.Helper()
+		got := map[string]string{}
+
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() || filepath.Ext(path) != ".go" {
+				return nil
+			}
+
+			data, err := os.ReadFile(path)
+
+			if err != nil {
+				return err
+			}
+
+			rel, err := filepath.Rel(root, path)
+
+			if err != nil {
+				return err
+			}
+
+			got[rel] = string(data)
+
+			return nil
+		})
+
+		if err != nil {
+			t.Fatalf("walk: %v", err)
+		}
+
+		return got
+	}
+
+	runWith := func(t *testing.T, concurrency int) (engine.Report, map[string]string) {
+		t.Helper()
+		root := makeTree(t)
+		cfg := config.Default()
+		cfg.Concurrency = concurrency
+
+		report, err := engine.New(cfg, defaultRules(), defaultFormatters()).Format([]string{root})
+
+		if err != nil {
+			t.Fatalf("format (concurrency=%d): %v", concurrency, err)
+		}
+
+		return report, readAll(t, root)
+	}
+
+	serialReport, serialContent := runWith(t, 1)
+	parallelReport, parallelContent := runWith(t, 8)
+
+	if serialReport.Files != parallelReport.Files {
+		t.Fatalf("Files mismatch: serial=%d parallel=%d", serialReport.Files, parallelReport.Files)
+	}
+
+	if serialReport.Changed != parallelReport.Changed {
+		t.Fatalf("Changed mismatch: serial=%d parallel=%d", serialReport.Changed, parallelReport.Changed)
+	}
+
+	if serialReport.Result != parallelReport.Result {
+		t.Fatalf("Result mismatch: serial=%q parallel=%q", serialReport.Result, parallelReport.Result)
+	}
+
+	if len(serialReport.Results) != len(parallelReport.Results) {
+		t.Fatalf("Results length mismatch: serial=%d parallel=%d", len(serialReport.Results), len(parallelReport.Results))
+	}
+
+	for i := range serialReport.Results {
+		s := filepath.Base(filepath.Dir(serialReport.Results[i].File))
+		p := filepath.Base(filepath.Dir(parallelReport.Results[i].File))
+
+		if s != p {
+			t.Fatalf("Results order diverged at index %d: serial=%s parallel=%s", i, s, p)
+		}
+	}
+
+	if len(serialContent) != len(parallelContent) {
+		t.Fatalf("content map size mismatch: serial=%d parallel=%d", len(serialContent), len(parallelContent))
+	}
+
+	for rel, want := range serialContent {
+		got, ok := parallelContent[rel]
+
+		if !ok {
+			t.Fatalf("missing %s in parallel output", rel)
+		}
+
+		if got != want {
+			t.Fatalf("content mismatch for %s\n--- serial\n%s\n--- parallel\n%s", rel, want, got)
+		}
 	}
 }
 

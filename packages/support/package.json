@@ -2,10 +2,19 @@
 	"name": "support",
 	"private": true,
 	"scripts": {
-		"check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
-		"format": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern"
+		"blank-lines": "cd ../.. && tsx packages/support/scripts/blank-lines.ts",
+		"blank-lines:check": "cd ../.. && tsx packages/support/scripts/blank-lines.ts --check",
+		"lint": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxlint --fix",
+		"lint:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxlint",
+		"oxfmt": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern",
+		"oxfmt:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/support/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
+		"format": "pnpm blank-lines && pnpm lint && pnpm oxfmt",
+		"check": "pnpm blank-lines:check && pnpm lint:check && pnpm oxfmt:check"
 	},
 	"devDependencies": {
-		"oxfmt": "0.41.0"
+		"oxc-parser": "0.132.0",
+		"oxfmt": "0.41.0",
+		"oxlint": "1.66.0",
+		"tsx": "^4.20.0"
 	}
 }

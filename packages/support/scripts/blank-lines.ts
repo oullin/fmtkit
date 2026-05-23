@@ -1,10 +1,12 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { isAbsolute, resolve } from 'node:path';
 import { parseSync } from 'oxc-parser';
 
 const cwd = process.cwd();
-const check = process.argv.includes('--check');
-const candidateDirs = ['src', 'scripts'];
+const rawArgs = process.argv.slice(2);
+const check = rawArgs.includes('--check');
+const positionalPaths = rawArgs.filter((a) => a !== '--check');
 
 type Node = {
 	type: string;
@@ -101,37 +103,73 @@ function countNewlines(source: string, from: number, to: number): number {
 	return count;
 }
 
-async function dirExists(dir: string): Promise<boolean> {
-	try {
-		const s = await stat(dir);
-
-		return s.isDirectory();
-	} catch {
-		return false;
-	}
+function isTargetFile(p: string): boolean {
+	return p.endsWith('.ts') || p.endsWith('.vue');
 }
 
-async function listSourceFiles(dir: string): Promise<string[]> {
-	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+function runGitLsFiles(scope?: string): string[] {
+	const args = ['ls-files', '--cached', '--others', '--exclude-standard', '-z'];
+
+	if (scope) {
+		args.push('--', scope);
+	}
+
+	const result = spawnSync('git', args, { cwd, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 });
+
+	if (result.error || result.status !== 0) {
+		const reason = result.error ? result.error.message : `git ls-files exited ${result.status}`;
+
+		console.warn(`[blank-lines] could not list files via git (${reason}); skipping`);
+
+		return [];
+	}
+
+	const stdout = result.stdout?.toString('utf8') ?? '';
+	const entries = stdout.split('\0').filter((s) => s.length > 0);
 	const files: string[] = [];
 
 	for (const entry of entries) {
-		if (!entry.isFile()) {
+		if (!isTargetFile(entry)) {
 			continue;
 		}
 
-		if (entry.name.endsWith('.d.ts')) {
-			continue;
-		}
-
-		if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.vue')) {
-			continue;
-		}
-
-		files.push(resolve(entry.parentPath, entry.name));
+		files.push(isAbsolute(entry) ? entry : resolve(cwd, entry));
 	}
 
 	return files;
+}
+
+async function collectFiles(positional: string[]): Promise<string[]> {
+	if (positional.length === 0) {
+		return runGitLsFiles();
+	}
+
+	const collected: string[] = [];
+
+	for (const raw of positional) {
+		const absolute = isAbsolute(raw) ? raw : resolve(cwd, raw);
+		const info = await stat(absolute).catch(() => null);
+
+		if (!info) {
+			console.warn(`[blank-lines] path not found, skipping: ${absolute}`);
+
+			continue;
+		}
+
+		if (info.isFile()) {
+			if (isTargetFile(absolute)) {
+				collected.push(absolute);
+			}
+
+			continue;
+		}
+
+		if (info.isDirectory()) {
+			collected.push(...runGitLsFiles(absolute));
+		}
+	}
+
+	return collected;
 }
 
 function computeInsertPositions(content: string, virtualName: string, baseOffset: number): number[] {
@@ -216,17 +254,7 @@ async function processFile(file: string): Promise<boolean> {
 	return true;
 }
 
-const targetDirs: string[] = [];
-
-for (const dir of candidateDirs) {
-	const absolute = resolve(cwd, dir);
-
-	if (await dirExists(absolute)) {
-		targetDirs.push(absolute);
-	}
-}
-
-const files = (await Promise.all(targetDirs.map(listSourceFiles))).flat();
+const files = [...new Set(await collectFiles(positionalPaths))];
 
 let changedCount = 0;
 

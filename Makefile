@@ -5,6 +5,7 @@ APP := go-fmt
 CMD := ./cmd/fmt
 GO_WORKDIR := packages/driver
 OXFMT_BIN := packages/support/node_modules/.bin/oxfmt
+TSX_BIN := packages/support/node_modules/.bin/tsx
 
 ARGS ?= . ## With '.', format changed tracked/untracked files first, then widen semantic formatting if needed; set a path to target a specific subtree
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev) ## Build version injected into binaries
@@ -26,7 +27,7 @@ help: ## Show available targets and override variables
 
 format: ## Apply formatter changes to ARGS
 	@# Run the repository formatter script against the requested files or directories.
-	@OXFMT_BIN="$(OXFMT_BIN)" ./scripts/format.sh $(ARGS)
+	@OXFMT_BIN="$(OXFMT_BIN)" TSX_BIN="$(TSX_BIN)" ./scripts/format.sh $(ARGS)
 
 host-format: ## Run the dockerized `go-fmt format` against ARGS (default `.`)
 	@# Format files inside the shared go-fmt container; forwards ARGS as target paths.

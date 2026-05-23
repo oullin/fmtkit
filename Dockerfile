@@ -47,5 +47,8 @@ COPY --from=builder /out/go-fmt /usr/local/bin/go-fmt
 COPY --from=builder /out/gofmt /usr/local/bin/gofmt
 COPY --from=builder /out/goimports /usr/local/bin/goimports
 
+LABEL org.opencontainers.image.source="https://github.com/oullin/go-fmt" \
+	org.opencontainers.image.description="go-fmt formatter container"
+
 ENTRYPOINT ["/usr/local/bin/go-fmt"]
 CMD ["help"]

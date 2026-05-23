@@ -111,6 +111,7 @@ jobs:
     # fan-out from a workflow-created tag.
     publish_release:
         needs: create_tag
+        if: needs.create_tag.outputs.tag != ''
         permissions:
             contents: write
             packages: write

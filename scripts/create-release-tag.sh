@@ -38,18 +38,26 @@ if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
 	exit 1
 fi
 
-commits="$(git log --format='%B%n---END---' "${commit_range}" 2>/dev/null || true)"
+if [ -n "${latest_tag}" ] && ! git rev-parse -q --verify "${latest_tag}^{commit}" >/dev/null; then
+	printf 'latest tag %s is not reachable in local history (shallow clone?); refusing to bump\n' "${latest_tag}" >&2
+	exit 1
+fi
+
+commits="$(git log --format='%B%n---END---' "${commit_range}")"
+
+if [ -z "${commits}" ]; then
+	printf 'no new commits since %s; skipping tag creation\n' "${latest_tag:-<start>}"
+	exit 0
+fi
 
 bump="${default_bump}"
-if [ -n "${commits}" ]; then
-	if printf '%s' "${commits}" | grep -qiE '(^|\n)BREAKING[ -]CHANGE(:|!)' \
-		|| printf '%s' "${commits}" | grep -qE '^[a-zA-Z]+(\([^)]+\))?!:'; then
-		bump="major"
-	elif printf '%s' "${commits}" | grep -qE '^feat(\([^)]+\))?:'; then
-		bump="minor"
-	elif printf '%s' "${commits}" | grep -qE '^(fix|perf|refactor|revert)(\([^)]+\))?:'; then
-		bump="patch"
-	fi
+if printf '%s' "${commits}" | grep -qiE '(^|\n)BREAKING[ -]CHANGE(:|!)' \
+	|| printf '%s' "${commits}" | grep -qE '^[a-zA-Z]+(\([^)]+\))?!:'; then
+	bump="major"
+elif printf '%s' "${commits}" | grep -qE '^feat(\([^)]+\))?:'; then
+	bump="minor"
+elif printf '%s' "${commits}" | grep -qE '^(fix|perf|refactor|revert)(\([^)]+\))?:'; then
+	bump="patch"
 fi
 
 case "${bump}" in

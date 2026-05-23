@@ -36,6 +36,8 @@ const CLASS_METHOD_TYPES = new Set(['MethodDefinition', 'TSAbstractMethodDefinit
 
 const CLASS_PROPERTY_TYPES = new Set(['PropertyDefinition', 'TSAbstractPropertyDefinition', 'AccessorProperty', 'TSIndexSignature', 'StaticBlock']);
 
+const BLANK_LINE_ABOVE_TYPES = new Set(['SwitchStatement', 'SwitchCase', 'FunctionDeclaration', 'ClassDeclaration']);
+
 function getStart(n: Node): number {
 	return typeof n.start === 'number' ? n.start : (n.range?.[0] ?? -1);
 }
@@ -108,12 +110,16 @@ function isExportWithDeclaration(n: Node): boolean {
 	return Boolean(n.declaration);
 }
 
+function isBlankLineAboveType(next: Node): boolean {
+	return BLANK_LINE_ABOVE_TYPES.has(next.type);
+}
+
 function needsBlankLineAbove(next: Node): boolean {
 	if (next.type === 'ReturnStatement') {
 		return true;
 	}
 
-	if (next.type === 'SwitchStatement' || next.type === 'SwitchCase' || next.type === 'FunctionDeclaration' || next.type === 'ClassDeclaration') {
+	if (isBlankLineAboveType(next)) {
 		return true;
 	}
 

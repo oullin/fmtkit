@@ -155,7 +155,7 @@ go-fmt check --host-path /absolute/host/project/pkg/api
 
 Use positional paths when you need to target multiple files or directories. `--host-path` accepts one host path per invocation.
 
-The stand-alone CLI formats Go source only. Repository-local `make format` also runs Oxc formatting for supported non-Go files through the `support` workspace.
+The stand-alone CLI formats Go source only. Repository-local `make format` also enforces TS/Vue blank-line rules and runs Oxc formatting for supported non-Go files through the `support` workspace. Both steps walk `git ls-files`, so a single `make format` covers every tracked file in the repository.
 
 ## Docker
 
@@ -567,14 +567,16 @@ make clean
 
 ### Make variables
 
-| Variable            | Default                                             | Description                           |
-| ------------------- | --------------------------------------------------- | ------------------------------------- |
-| `ARGS`              | `.`                                                 | Files or directories to target        |
-| `VERSION`           | `git describe ...` or `dev`                         | Build version injected into binaries  |
-| `CGO_ENABLED`       | `0`                                                 | CGO setting for build and release     |
-| `BUILD_DIR`         | `storage/bin`                                       | Output directory for local binaries   |
-| `DIST_DIR`          | `storage/dist`                                      | Output directory for release binaries |
-| `RELEASE_PLATFORMS` | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`     |
+| Variable            | Default                                             | Description                                           |
+| ------------------- | --------------------------------------------------- | ----------------------------------------------------- |
+| `ARGS`              | `.`                                                 | Files or directories to target                        |
+| `VERSION`           | `git describe ...` or `dev`                         | Build version injected into binaries                  |
+| `CGO_ENABLED`       | `0`                                                 | CGO setting for build and release                     |
+| `BUILD_DIR`         | `storage/bin`                                       | Output directory for local binaries                   |
+| `DIST_DIR`          | `storage/dist`                                      | Output directory for release binaries                 |
+| `RELEASE_PLATFORMS` | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`                     |
+| `OXFMT_BIN`         | `packages/support/node_modules/.bin/oxfmt`          | Path to the `oxfmt` binary used by `make format`      |
+| `TSX_BIN`           | `packages/support/node_modules/.bin/tsx`            | Path to the `tsx` binary used to run `blank-lines.ts` |
 
 ### Examples
 
@@ -607,7 +609,7 @@ The release workflow:
 packages/driver/      Stand-alone Go CLI entrypoint, config loading, report rendering
 packages/vet/         Vet planning and automatic go vet execution
 packages/formatter/   Formatter planning, engine, rules, and formatters
-packages/support/     Oxc-based formatting for supported non-Go file types
+packages/support/     Oxc-based formatting and blank-line enforcement for supported non-Go file types
 ```
 
 ### Formatting pipeline

@@ -5,6 +5,7 @@ source "$(dirname "$0")/env.sh"
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 oxfmt_bin="${OXFMT_BIN:-packages/support/node_modules/.bin/oxfmt}"
+tsx_bin="${TSX_BIN:-packages/support/node_modules/.bin/tsx}"
 
 declare -a args=("$@")
 declare -a go_fmt_args=()
@@ -38,6 +39,8 @@ done
 
 ensure_storage_layout
 go -C "$GO_WORKDIR" run "$CMD" format --cwd "$repo_root" "${go_fmt_args[@]}"
+
+(cd "$repo_root" && "$tsx_bin" packages/support/scripts/blank-lines.ts "${go_fmt_args[@]}")
 
 git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \
 	| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern

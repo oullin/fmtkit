@@ -60,6 +60,12 @@ exit 0
 EOF
 	chmod +x "$fixture_root/oxfmt-stub.sh"
 
+	cat >"$fixture_root/tsx-stub.sh" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+	chmod +x "$fixture_root/tsx-stub.sh"
+
 	cat >"$fixture_root/bin/go" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -73,7 +79,7 @@ EOF
 		git init -q
 		git config user.email tests@example.com
 		git config user.name 'Test Runner'
-		git add scripts semantic oxfmt-stub.sh bin/go
+		git add scripts semantic oxfmt-stub.sh tsx-stub.sh bin/go
 		git commit -q -m 'initial'
 	)
 
@@ -91,6 +97,7 @@ run_format() {
 		PATH="$fixture_root/bin:$PATH" \
 			GO_WRAPPER_LOG="$fixture_root/go-invocations.log" \
 			OXFMT_BIN="$fixture_root/oxfmt-stub.sh" \
+			TSX_BIN="$fixture_root/tsx-stub.sh" \
 			./scripts/format.sh "$@"
 	)
 }

@@ -92,14 +92,18 @@ jobs:
               with:
                   fetch-depth: 0
 
+            - name: Configure git identity
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
             - name: Create release tag
               id: version
-              uses: mathieudutour/github-tag-action@v6.2
-              with:
-                  github_token: ${{ secrets.GITHUB_TOKEN }}
-                  default_bump: patch
-                  default_prerelease_bump: false
-                  tag_prefix: v
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG_PREFIX: v
+                  DEFAULT_BUMP: patch
+              run: ./scripts/create-release-tag.sh
 
     # Publishing is invoked directly so this workflow does not rely on tag-push
     # fan-out from a workflow-created tag.

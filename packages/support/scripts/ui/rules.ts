@@ -34,7 +34,7 @@ function needsBlankLineAbove(next: Node): boolean {
 	return isExportWithDeclaration(next);
 }
 
-function isTypeDeclarationBelow(prev: Node): boolean {
+function isTypeDeclarationAbove(prev: Node): boolean {
 	if (TS_TYPE_DECLARATION_TYPES.has(prev.type)) {
 		return true;
 	}
@@ -69,7 +69,7 @@ export function needsBlankLine(prev: Node, next: Node): boolean {
 		return true;
 	}
 
-	if (isTypeDeclarationBelow(prev)) {
+	if (isTypeDeclarationAbove(prev)) {
 		return true;
 	}
 

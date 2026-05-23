@@ -43,6 +43,7 @@ export async function processFile(file: string, check: boolean): Promise<boolean
 
 	if (file.endsWith('.vue')) {
 		const segments: { content: string; start: number; virtualName: string }[] = [];
+
 		VUE_SCRIPT_REGEX.lastIndex = 0;
 		let match: RegExpExecArray | null;
 

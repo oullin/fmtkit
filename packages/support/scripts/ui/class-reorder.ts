@@ -3,6 +3,31 @@ import { collectClassBodies, getEnd, getStart } from './ast';
 import { classifyMember } from './rules';
 import type { Edit, Node } from './types';
 
+function containsComment(s: string): boolean {
+	return /\/\/|\/\*/.test(s);
+}
+
+function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): boolean {
+	const bodyStart = getStart(body);
+	const bodyEnd = getEnd(body);
+	const firstStart = getStart(members[0]);
+	const lastEnd = getEnd(members[members.length - 1]);
+
+	if (containsComment(source.slice(bodyStart + 1, firstStart))) {
+		return true;
+	}
+
+	for (let i = 0; i < members.length - 1; i++) {
+		const gap = source.slice(getEnd(members[i]), getStart(members[i + 1]));
+
+		if (containsComment(gap)) {
+			return true;
+		}
+	}
+
+	return containsComment(source.slice(lastEnd, bodyEnd - 1));
+}
+
 function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	const members = body.body as Node[] | undefined;
 
@@ -37,6 +62,10 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	const bodyEnd = getEnd(body);
 
 	if (bodyStart < 0 || bodyEnd < 0) {
+		return null;
+	}
+
+	if (hasCommentsAroundMembers(source, body, members)) {
 		return null;
 	}
 

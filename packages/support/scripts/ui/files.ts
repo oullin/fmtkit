@@ -1,6 +1,6 @@
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { processSegment } from './segment';
+import { processSegment } from '@ui/segment';
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
@@ -20,10 +20,6 @@ export async function listSourceFiles(dir: string): Promise<string[]> {
 
 	for (const entry of entries) {
 		if (!entry.isFile()) {
-			continue;
-		}
-
-		if (entry.name.endsWith('.d.ts')) {
 			continue;
 		}
 

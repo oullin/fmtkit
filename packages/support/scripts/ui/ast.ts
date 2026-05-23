@@ -1,4 +1,4 @@
-import type { Node } from './types';
+import type { Node } from '@ui/types';
 
 const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	Program: 'body',

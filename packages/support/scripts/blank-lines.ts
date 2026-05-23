@@ -1,3 +1,3 @@
-import { run } from './ui/cli';
+import { run } from '@ui/cli';
 
 await run();

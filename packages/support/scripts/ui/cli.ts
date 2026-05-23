@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { dirExists, listSourceFiles, processFile } from './files';
+import { dirExists, listSourceFiles, processFile } from '@ui/files';
 
 const CANDIDATE_DIRS = ['src', 'scripts'];
 

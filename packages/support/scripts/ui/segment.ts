@@ -1,6 +1,6 @@
-import { computeInsertPositions, insertBlankLines } from './blank-line-inserter';
-import { computeReorderEdits } from './class-reorder';
-import { applyEdits } from './edits';
+import { computeInsertPositions, insertBlankLines } from '@ui/blank-line-inserter';
+import { computeReorderEdits } from '@ui/class-reorder';
+import { applyEdits } from '@ui/edits';
 
 export function processSegment(content: string, virtualName: string): string {
 	const reorderEdits = computeReorderEdits(content, virtualName);

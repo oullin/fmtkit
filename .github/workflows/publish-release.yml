@@ -93,19 +93,6 @@ jobs:
                       "${IMAGE_NAME}@${DIGEST}"
               shell: bash
 
-            - name: Ensure GHCR package is public
-              env:
-                  GH_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
-              run: |
-                  set -euo pipefail
-
-                  gh api \
-                      --method PATCH \
-                      -H "Accept: application/vnd.github+json" \
-                      /orgs/oullin/packages/container/go-fmt \
-                      -f visibility=public
-              shell: bash
-
             - name: Create or update release
               uses: softprops/action-gh-release@v2
               with:

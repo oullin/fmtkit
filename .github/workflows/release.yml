@@ -6,7 +6,7 @@ on:
             - main
 
 permissions:
-    contents: write
+    contents: read
 
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -84,6 +84,8 @@ jobs:
             - check
             - test
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
         outputs:
             tag: ${{ steps.version.outputs.new_tag }}
 

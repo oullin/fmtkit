@@ -23,10 +23,13 @@ if [ -z "${latest_tag}" ]; then
 	commit_range="HEAD"
 else
 	version="${latest_tag#"${tag_prefix}"}"
-	IFS='.' read -r major minor patch <<<"${version}"
-	major="${major:-0}"
-	minor="${minor:-0}"
-	patch="${patch:-0}"
+	if ! [[ "${version}" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+		printf 'latest tag %s does not parse as strict %sMAJOR.MINOR.PATCH semver; refusing to bump\n' "${latest_tag}" "${tag_prefix}" >&2
+		exit 1
+	fi
+	major="${BASH_REMATCH[1]}"
+	minor="${BASH_REMATCH[2]}"
+	patch="${BASH_REMATCH[3]}"
 	commit_range="${latest_tag}..HEAD"
 fi
 

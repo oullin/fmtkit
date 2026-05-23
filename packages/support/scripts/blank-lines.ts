@@ -104,7 +104,7 @@ function countNewlines(source: string, from: number, to: number): number {
 }
 
 function isTargetFile(p: string): boolean {
-	return p.endsWith('.ts') || p.endsWith('.vue');
+	return (p.endsWith('.ts') && !p.endsWith('.d.ts')) || p.endsWith('.vue');
 }
 
 function runGitLsFiles(scope?: string): string[] {
@@ -156,15 +156,7 @@ async function collectFiles(positional: string[]): Promise<string[]> {
 			continue;
 		}
 
-		if (info.isFile()) {
-			if (isTargetFile(absolute)) {
-				collected.push(absolute);
-			}
-
-			continue;
-		}
-
-		if (info.isDirectory()) {
+		if (info.isFile() || info.isDirectory()) {
 			collected.push(...runGitLsFiles(absolute));
 		}
 	}

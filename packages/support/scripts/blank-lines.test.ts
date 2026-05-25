@@ -1,21 +1,22 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const repoRoot = new URL('../../..', import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const script = join(repoRoot, 'packages/support/scripts/blank-lines.ts');
 const tsx = join(repoRoot, 'packages/support/node_modules/.bin/tsx');
 
-function run(command, args, cwd) {
+function run(command: string, args: string[], cwd: string): void {
 	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
 
 	assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
-async function withFixture(files, fn) {
+async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-blank-lines-'));
 
 	try {

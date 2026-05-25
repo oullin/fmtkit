@@ -16,11 +16,11 @@ case "$task" in
 	vet)
 		exec "$script_dir/with-storage-env.sh" go vet ./... "$@"
 		;;
-	fmt-source)
+	gofmt)
 		exec gofmt -w . "$@"
 		;;
 	*)
-		printf 'usage: %s <check|test|vet|fmt-source> [args...]\n' "${0##*/}" >&2
+		printf 'usage: %s <check|test|vet|gofmt> [args...]\n' "${0##*/}" >&2
 		exit 1
 		;;
 esac

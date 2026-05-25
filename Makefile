@@ -19,7 +19,7 @@ GO_FMT_IMAGE ?= ghcr.io/oullin/go-fmt:latest ## Container image used by host-* t
 GO_FMT_CACHE_VOLUME ?= go-fmt-cache ## Named Docker volume reused across host-* runs
 GO_FMT_PROJECT_DIR ?= $(CURDIR) ## Project root bind-mounted into the container
 
-.PHONY: help format format-all format-run build release test test-race test-short vet fmt-source install clean host-format host-check host-version host-help
+.PHONY: help format format-all format-run build release test test-race test-short vet gofmt install clean host-format host-check host-version host-help
 
 help: ## Show available targets and override variables
 	@# Parse Make metadata and render styled help output through the dedicated helper script.
@@ -111,7 +111,7 @@ vet: ## Run go vet across the module
 	@# Run static analysis checks configured for the repository workspace.
 	pnpm vet
 
-fmt-source: ## Rewrite Go source formatting in the repository
+gofmt: ## Rewrite Go source formatting in the repository
 	@# Normalize Go source formatting across tracked repository files.
 	@./scripts/fmt-source.sh
 

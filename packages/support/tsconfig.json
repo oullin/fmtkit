@@ -9,5 +9,5 @@
 		"types": ["node"],
 		"noEmit": true
 	},
-	"include": ["scripts/**/*.ts"]
+	"include": ["scripts/blank-lines.ts", "scripts/blank-lines.test.ts"]
 }

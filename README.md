@@ -561,7 +561,7 @@ make test
 make test-race
 make test-short
 make vet
-make fmt-source
+make gofmt
 make format-all
 make install
 make clean
@@ -589,7 +589,7 @@ make clean
 ```bash
 make format-all
 make format ARGS=README.md
-make fmt-source
+make gofmt
 make release DIST_DIR=storage/builds
 ```
 

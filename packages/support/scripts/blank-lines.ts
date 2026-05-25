@@ -24,7 +24,7 @@ const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 };
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
-const CONTROL_FLOW_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
+const CONTROL_FLOW_STATEMENTS = BLOCK_HAVING_STATEMENTS;
 
 function getStart(n: Node): number {
 	return typeof n.start === 'number' ? n.start : (n.range?.[0] ?? -1);
@@ -275,4 +275,7 @@ async function main(): Promise<void> {
 	console.log(`[blank-lines] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${check ? 'would change' : 'changed'}`);
 }
 
-void main();
+main().catch((err: unknown) => {
+	console.error(err);
+	process.exit(1);
+});

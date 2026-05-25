@@ -5,7 +5,6 @@
 		"build": "cd ../.. && ./scripts/build.sh",
 		"check": "../../scripts/go-package-task.sh check",
 		"fmt-source": "../../scripts/go-package-task.sh fmt-source",
-		"format": "../../scripts/with-storage-env.sh go run ./cmd/fmt format",
 		"test": "../../scripts/go-package-task.sh test",
 		"vet": "../../scripts/go-package-task.sh vet"
 	}

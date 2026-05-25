@@ -6,8 +6,9 @@
 # default go-fmt-cache). Drop this script anywhere on $PATH (or symlink it as
 # `go-fmt`) and invoke from any project root:
 #
-#     go-fmt-host.sh format .
-#     go-fmt-host.sh check ./pkg ./cmd
+#     go-fmt-host.sh go format .
+#     go-fmt-host.sh go check ./pkg ./cmd
+#     go-fmt-host.sh ts .
 #
 # Override the image tag for a session by exporting GO_FMT_IMAGE — useful when
 # pinning to a specific release temporarily without editing per-project files.

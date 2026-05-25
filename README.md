@@ -32,9 +32,9 @@ Install the single host wrapper once. One image (`ghcr.io/oullin/go-fmt:latest`)
 curl -fsSL -o /tmp/go-fmt-host.sh https://raw.githubusercontent.com/oullin/go-fmt/main/scripts/go-fmt-host.sh
 sudo install -m 0755 /tmp/go-fmt-host.sh /usr/local/bin/go-fmt
 
-go-fmt check .
-go-fmt format .
-go-fmt format ./core ./demo/api
+go-fmt go check .
+go-fmt go format .
+go-fmt go format ./core ./demo/api
 ```
 
 The wrapper mounts your project at `/work`, keeps Go build and module caches in the shared Docker volume `go-fmt-cache`, and avoids writing `storage/.cache` into consumer repositories. When the mounted project contains a Go module or workspace, both `check` and `format` also run `go vet ./...` automatically.
@@ -98,8 +98,9 @@ No install is required when working inside this repository:
 For ad-hoc use without installing the wrapper, run the published image directly:
 
 ```bash
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest check .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go check .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest ts .
 ```
 
 ## CLI
@@ -155,7 +156,7 @@ go-fmt check --host-path /absolute/host/project/pkg/api
 
 Use positional paths when you need to target multiple files or directories. `--host-path` accepts one host path per invocation.
 
-The stand-alone CLI formats Go source only. Repository-local `make format` also enforces TS/Vue blank-line rules and runs Oxc formatting for supported non-Go files through the `support` workspace. Both steps walk `git ls-files`, so a single `make format` covers every tracked file in the repository.
+The stand-alone Go CLI formats Go source only. Repository-local `make format` and `pnpm format` build the default `formatter` Docker target and run TS/Vue support first, then Go formatting, against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
 
 ## Docker
 
@@ -168,7 +169,7 @@ The recommended way to invoke the image is through the host wrapper installed in
 `--host-path` accepts one absolute host path per invocation and rejects paths outside `HOST_PROJECT_PATH`:
 
 ```bash
-go-fmt format --host-path "$PWD/pkg/api"
+go-fmt go format --host-path "$PWD/pkg/api"
 ```
 
 Use positional paths such as `./core ./demo/api` when you need multiple targets.
@@ -176,7 +177,7 @@ Use positional paths such as `./core ./demo/api` when you need multiple targets.
 Override the project root with `GO_FMT_PROJECT_DIR` when invoking the wrapper from outside the project you want to format:
 
 ```bash
-GO_FMT_PROJECT_DIR="$PWD" go-fmt format ./core ./demo/api
+GO_FMT_PROJECT_DIR="$PWD" go-fmt go format ./core ./demo/api
 ```
 
 Remove the shared cache when you want a completely cold start:
@@ -190,10 +191,12 @@ docker volume rm go-fmt-cache
 If you do not want the wrapper installed, run the image directly:
 
 ```bash
-docker run --rm ghcr.io/oullin/go-fmt:latest
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest check .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go check .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest ts .
 ```
+
+The container entrypoint requires the first argument to be either `go` or `ts`. Plain `docker run ghcr.io/oullin/go-fmt:latest format .` is no longer supported.
 
 ## Configuration
 
@@ -533,7 +536,7 @@ Compact JSON for AI agents and CI integrations:
 ### Prerequisites
 
 - Go 1.25 or newer
-- Node.js 25.8.2 with `pnpm` 10.32.1 for repo-local Make and Turbo workflows
+- Node.js 25.8.2 with `pnpm` 10.33.0 for repo-local Make and Turbo workflows
 - Docker Desktop or another Docker runtime if you use the published image
 
 Install workspace dependencies before using local repository tasks:
@@ -559,28 +562,32 @@ make test-race
 make test-short
 make vet
 make fmt-source
+make format-all
 make install
 make clean
 ```
 
-`make test-race` forces `CGO_ENABLED=1` because the Go race detector requires CGO.
+`make format` runs the complete Dockerized formatter pipeline against `ARGS`, defaulting to `.`. `make format-all` runs the same pipeline against the whole mounted repository regardless of `ARGS`. `make test-race` forces `CGO_ENABLED=1` because the Go race detector requires CGO.
 
 ### Make variables
 
-| Variable            | Default                                             | Description                                           |
-| ------------------- | --------------------------------------------------- | ----------------------------------------------------- |
-| `ARGS`              | `.`                                                 | Files or directories to target                        |
-| `VERSION`           | `git describe ...` or `dev`                         | Build version injected into binaries                  |
-| `CGO_ENABLED`       | `0`                                                 | CGO setting for build and release                     |
-| `BUILD_DIR`         | `storage/bin`                                       | Output directory for local binaries                   |
-| `DIST_DIR`          | `storage/dist`                                      | Output directory for release binaries                 |
-| `RELEASE_PLATFORMS` | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`                     |
-| `OXFMT_BIN`         | `packages/support/node_modules/.bin/oxfmt`          | Path to the `oxfmt` binary used by `make format`      |
-| `TSX_BIN`           | `packages/support/node_modules/.bin/tsx`            | Path to the `tsx` binary used to run `blank-lines.ts` |
+| Variable                  | Default                                             | Description                                  |
+| ------------------------- | --------------------------------------------------- | -------------------------------------------- |
+| `ARGS`                    | `.`                                                 | Files or directories to target               |
+| `VERSION`                 | `git describe ...` or `dev`                         | Build version injected into binaries         |
+| `CGO_ENABLED`             | `0`                                                 | CGO setting for build and release            |
+| `BUILD_DIR`               | `storage/bin`                                       | Output directory for local binaries          |
+| `DIST_DIR`                | `storage/dist`                                      | Output directory for release binaries        |
+| `RELEASE_PLATFORMS`       | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`            |
+| `FORMATTER_IMAGE`         | `go-fmt-formatter:local`                            | Local image built by `make format-all`       |
+| `FORMATTER_DOCKER_TARGET` | `formatter`                                         | Dockerfile target for the formatter image    |
+| `GO_FMT_CACHE_VOLUME`     | `go-fmt-cache`                                      | Docker cache volume reused by formatter runs |
+| `GO_FMT_PROJECT_DIR`      | current directory                                   | Repository mounted at `/work` in Docker      |
 
 ### Examples
 
 ```bash
+make format-all
 make format ARGS=README.md
 make fmt-source
 make release DIST_DIR=storage/builds
@@ -609,7 +616,7 @@ The release workflow:
 packages/driver/      Stand-alone Go CLI entrypoint, config loading, report rendering
 packages/vet/         Vet planning and automatic go vet execution
 packages/formatter/   Formatter planning, engine, rules, and formatters
-packages/support/     Oxc-based formatting and blank-line enforcement for supported non-Go file types
+packages/support/     Oxc-based formatting for supported non-Go file types
 ```
 
 ### Formatting pipeline

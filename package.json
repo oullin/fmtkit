@@ -4,8 +4,10 @@
 	"scripts": {
 		"build": "pnpm --filter driver run build",
 		"format": "make format",
-		"format:support": "./scripts/with-storage-env.sh pnpm turbo run format --cache-dir=storage/.cache/turbo --filter=support",
-		"test": "./scripts/with-storage-env.sh pnpm turbo run test --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver",
+		"format-all": "make format-all",
+		"lint": "./scripts/with-storage-env.sh pnpm --filter support run lint:check",
+		"test": "./scripts/with-storage-env.sh pnpm turbo run test --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver --filter=support",
+		"typecheck": "./scripts/with-storage-env.sh pnpm --filter support run typecheck",
 		"vet": "./scripts/with-storage-env.sh pnpm turbo run vet --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver"
 	},
 	"devDependencies": {

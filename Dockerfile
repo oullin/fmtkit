@@ -30,9 +30,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOPATH=/tmp/go \
 
 FROM golang:1.25-alpine AS gosdk
 
-FROM alpine:3.21
+FROM node:25.8.2-alpine AS formatter
 
-RUN apk add --no-cache git
+RUN apk add --no-cache bash git
 
 WORKDIR /work
 
@@ -47,8 +47,13 @@ COPY --from=builder /out/go-fmt /usr/local/bin/go-fmt
 COPY --from=builder /out/gofmt /usr/local/bin/gofmt
 COPY --from=builder /out/goimports /usr/local/bin/goimports
 
-LABEL org.opencontainers.image.source="https://github.com/oullin/go-fmt" \
-	org.opencontainers.image.description="go-fmt formatter container"
+WORKDIR /opt/go-fmt/support
+RUN npm install --no-save oxc-parser@0.132.0 oxfmt@0.41.0 tsx@4.22.3
 
-ENTRYPOINT ["/usr/local/bin/go-fmt"]
-CMD ["help"]
+COPY packages/support/scripts/blank-lines.ts /opt/go-fmt/support/blank-lines.ts
+COPY scripts/format-ts.sh /usr/local/bin/format-ts
+COPY scripts/formatter-entrypoint.sh /usr/local/bin/formatter-entrypoint
+
+WORKDIR /work
+
+ENTRYPOINT ["/usr/local/bin/formatter-entrypoint"]

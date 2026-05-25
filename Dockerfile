@@ -48,11 +48,11 @@ COPY --from=builder /out/gofmt /usr/local/bin/gofmt
 COPY --from=builder /out/goimports /usr/local/bin/goimports
 
 WORKDIR /opt/go-fmt/support
-COPY packages/support/package.json /opt/go-fmt/support/package.json
+COPY packages/devx/package.json /opt/go-fmt/support/package.json
 RUN node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "oxfmt", "tsx"]; console.log(deps.map((name) => `${name}@${p.devDependencies[name]}`).join(" "));' \
 	| xargs npm install --no-save
 
-COPY packages/support/scripts/blank-lines.ts /opt/go-fmt/support/blank-lines.ts
+COPY packages/devx/scripts/blank-lines.ts /opt/go-fmt/support/blank-lines.ts
 COPY scripts/format-ts.sh /usr/local/bin/format-ts
 COPY scripts/formatter-entrypoint.sh /usr/local/bin/formatter-entrypoint
 

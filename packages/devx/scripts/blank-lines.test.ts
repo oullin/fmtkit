@@ -7,8 +7,8 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const script = join(repoRoot, 'packages/support/scripts/blank-lines.ts');
-const tsx = join(repoRoot, 'packages/support/node_modules/.bin/tsx');
+const script = join(repoRoot, 'packages/devx/scripts/blank-lines.ts');
+const tsx = join(repoRoot, 'packages/devx/node_modules/.bin/tsx');
 
 function run(command: string, args: string[], cwd: string): void {
 	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });

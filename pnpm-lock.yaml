@@ -12,11 +12,7 @@ importers:
         specifier: 2.5.8
         version: 2.5.8
 
-  packages/driver: {}
-
-  packages/formatter: {}
-
-  packages/support:
+  packages/devx:
     devDependencies:
       '@types/node':
         specifier: 25.9.1
@@ -36,6 +32,10 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
+
+  packages/driver: {}
+
+  packages/formatter: {}
 
   packages/vet: {}
 

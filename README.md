@@ -553,7 +553,7 @@ Start with `make help` to see the available repository tasks and override variab
 ```bash
 make help
 pnpm turbo run check --filter=formatter
-pnpm turbo run check --filter=support
+pnpm turbo run check --filter=devx
 make format
 make build
 make release
@@ -616,7 +616,7 @@ The release workflow:
 packages/driver/      Stand-alone Go CLI entrypoint, config loading, report rendering
 packages/vet/         Vet planning and automatic go vet execution
 packages/formatter/   Formatter planning, engine, rules, and formatters
-packages/support/     Oxc-based formatting for supported non-Go file types
+packages/devx/        Oxc-based formatting for supported non-Go file types
 ```
 
 ### Formatting pipeline

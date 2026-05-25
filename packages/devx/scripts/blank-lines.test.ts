@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -77,6 +77,24 @@ test('ignores untracked ignored files and declaration files', async () => {
 			assert.match(tracked, /const value = 1;\n\n\tif \(value\) return value;\n\n\treturn 0;/);
 			assert.doesNotMatch(ignored, /const value = 1;\n\n\tif/);
 			assert.doesNotMatch(types, /value: string;\n\ndeclare function/);
+		},
+	);
+});
+
+test('skips tracked files missing from the working tree', async () => {
+	await withFixture(
+		{
+			'deleted.ts': ['function run() {', '\tconst value = 1;', '\treturn value;', '}', ''].join('\n'),
+			'kept.ts': ['function run() {', '\tconst value = 1;', '\treturn value;', '}', ''].join('\n'),
+		},
+		async (dir) => {
+			await unlink(join(dir, 'deleted.ts'));
+
+			run(tsx, [script, '.'], dir);
+
+			const kept = await readFile(join(dir, 'kept.ts'), 'utf8');
+
+			assert.match(kept, /const value = 1;\n\n\treturn value;/);
 		},
 	);
 });

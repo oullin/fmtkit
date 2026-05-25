@@ -1,4 +1,4 @@
-import type { Node } from '@ui/types';
+import type { Node } from './types';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
 

@@ -209,8 +209,25 @@ function computeInsertPositions(content: string, virtualName: string, baseOffset
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
+function isNotFoundError(err: unknown): boolean {
+	return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
+}
+
 async function processFile(file: string): Promise<boolean> {
-	const source = await readFile(file, 'utf8');
+	const source = await readFile(file, 'utf8').catch((err: unknown) => {
+		if (isNotFoundError(err)) {
+			console.warn(`[blank-lines] path not found, skipping: ${file}`);
+
+			return null;
+		}
+
+		throw err;
+	});
+
+	if (source === null) {
+		return false;
+	}
+
 	const positions: number[] = [];
 
 	if (file.endsWith('.vue')) {

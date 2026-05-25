@@ -33,8 +33,9 @@ curl -fsSL -o /tmp/go-fmt-host.sh https://raw.githubusercontent.com/oullin/go-fm
 sudo install -m 0755 /tmp/go-fmt-host.sh /usr/local/bin/go-fmt
 
 go-fmt go check .
-go-fmt go format .
-go-fmt go format ./core ./demo/api
+go-fmt format .
+go-fmt format ./core ./demo/api
+go-fmt format-all
 ```
 
 The wrapper mounts your project at `/work`, keeps Go build and module caches in the shared Docker volume `go-fmt-cache`, and avoids writing `storage/.cache` into consumer repositories. When the mounted project contains a Go module or workspace, both `check` and `format` also run `go vet ./...` automatically.
@@ -99,8 +100,8 @@ For ad-hoc use without installing the wrapper, run the published image directly:
 
 ```bash
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go check .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go format .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest ts .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format-all
 ```
 
 ## CLI
@@ -156,7 +157,7 @@ go-fmt check --host-path /absolute/host/project/pkg/api
 
 Use positional paths when you need to target multiple files or directories. `--host-path` accepts one host path per invocation.
 
-The stand-alone Go CLI formats Go source only. Repository-local `make format` and `pnpm format` build the default `formatter` Docker target and run TS/Vue support first, then Go formatting, against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
+The stand-alone Go CLI formats Go source only. The Docker image entrypoint exposes `format [paths...]` for the full TS/Vue plus Go pipeline, and `format-all` as an alias for `format .`. Repository-local `make format` and `pnpm format` build the default `formatter` Docker target and call that combined entrypoint against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
 
 ## Docker
 
@@ -177,7 +178,7 @@ Use positional paths such as `./core ./demo/api` when you need multiple targets.
 Override the project root with `GO_FMT_PROJECT_DIR` when invoking the wrapper from outside the project you want to format:
 
 ```bash
-GO_FMT_PROJECT_DIR="$PWD" go-fmt go format ./core ./demo/api
+GO_FMT_PROJECT_DIR="$PWD" go-fmt format ./core ./demo/api
 ```
 
 Remove the shared cache when you want a completely cold start:
@@ -192,11 +193,11 @@ If you do not want the wrapper installed, run the image directly:
 
 ```bash
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go check .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go format .
-docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest ts .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format-all
 ```
 
-The container entrypoint requires the first argument to be either `go` or `ts`. Plain `docker run ghcr.io/oullin/go-fmt:latest format .` is no longer supported.
+The container entrypoint accepts `format` and `format-all` for the combined pipeline. The lower-level `go` and `ts` modes remain available when you need to run only one formatter layer.
 
 ## Configuration
 

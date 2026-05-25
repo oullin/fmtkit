@@ -9,7 +9,7 @@
 		"oxfmt": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern",
 		"oxfmt:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
 		"check": "pnpm blank-lines:check && pnpm lint:check && pnpm oxfmt:check",
-		"test": "tsx --test scripts/blank-lines.test.ts",
+		"test": "tsx --test scripts/blank-lines.test.ts scripts/__tests__/*.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {

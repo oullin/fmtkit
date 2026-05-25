@@ -1,4 +1,4 @@
-import type { Edit } from '@ui/types';
+import type { Edit } from './types';
 
 export function applyEdits(source: string, edits: Edit[]): string {
 	const sorted = [...edits].sort((a, b) => b.start - a.start);

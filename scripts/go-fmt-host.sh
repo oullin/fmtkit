@@ -6,7 +6,8 @@
 # default go-fmt-cache). Drop this script anywhere on $PATH (or symlink it as
 # `go-fmt`) and invoke from any project root:
 #
-#     go-fmt-host.sh go format .
+#     go-fmt-host.sh format .
+#     go-fmt-host.sh format-all
 #     go-fmt-host.sh go check ./pkg ./cmd
 #     go-fmt-host.sh ts .
 #

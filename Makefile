@@ -35,8 +35,30 @@ format-all: ## Build and run the full Dockerized formatter pipeline against ARGS
 
 format-run:
 	@# Build the local formatter image, run TS/Vue support first, then run Go formatting.
-	docker build --target '$(strip $(FORMATTER_DOCKER_TARGET))' -t '$(strip $(FORMATTER_IMAGE))' .
-	docker run --rm \
+	@bold=''; dim=''; cyan=''; green=''; red=''; reset=''; \
+		if [[ -n "$${FORCE_COLOR:-}" || (-z "$${NO_COLOR:-}" && -t 2) ]]; then \
+			bold=$$(printf '\033[1m'); dim=$$(printf '\033[2m'); cyan=$$(printf '\033[36m'); green=$$(printf '\033[32m'); red=$$(printf '\033[31m'); reset=$$(printf '\033[0m'); \
+		fi; \
+		printf '\n%s==>%s %sBuilding formatter image%s\n' "$$cyan" "$$reset" "$$bold" "$$reset"; \
+		printf '    %s%-12s%s %s\n' "$$dim" image "$$reset" '$(strip $(FORMATTER_IMAGE))'; \
+		build_log="$$(mktemp)"; \
+		if docker build --target '$(strip $(FORMATTER_DOCKER_TARGET))' -t '$(strip $(FORMATTER_IMAGE))' . >"$$build_log" 2>&1; then \
+			printf '    %s%-12s%s %s%s%s\n' "$$green" status "$$reset" "$$green" built "$$reset"; \
+			rm -f "$$build_log"; \
+		else \
+			status="$$?"; \
+			printf '\n%s!!%s %sDocker build failed%s\n' "$$red" "$$reset" "$$bold" "$$reset" >&2; \
+			cat "$$build_log" >&2; \
+			rm -f "$$build_log"; \
+			exit "$$status"; \
+		fi
+	@bold=''; dim=''; cyan=''; reset=''; \
+		if [[ -n "$${FORCE_COLOR:-}" || (-z "$${NO_COLOR:-}" && -t 2) ]]; then \
+			bold=$$(printf '\033[1m'); dim=$$(printf '\033[2m'); cyan=$$(printf '\033[36m'); reset=$$(printf '\033[0m'); \
+		fi; \
+		printf '\n%s==>%s %sStarting formatter container%s\n' "$$cyan" "$$reset" "$$bold" "$$reset"; \
+		printf '    %s%-12s%s %s\n' "$$dim" workdir "$$reset" '$(strip $(GO_FMT_PROJECT_DIR))'
+	@docker run --rm \
 		-v '$(strip $(GO_FMT_PROJECT_DIR)):/work' \
 		-v '$(strip $(GO_FMT_CACHE_VOLUME)):/cache' \
 		-w /work \
@@ -44,23 +66,14 @@ format-run:
 		-e GOCACHE=/cache/go-build \
 		-e GOPATH=/cache/gopath \
 		-e GOMODCACHE=/cache/gopath/pkg/mod \
-		'$(strip $(FORMATTER_IMAGE))' ts $(FORMAT_ARGS)
-	docker run --rm \
-		-v '$(strip $(GO_FMT_PROJECT_DIR)):/work' \
-		-v '$(strip $(GO_FMT_CACHE_VOLUME)):/cache' \
-		-w /work \
-		-e 'HOST_PROJECT_PATH=$(strip $(GO_FMT_PROJECT_DIR))' \
-		-e GOCACHE=/cache/go-build \
-		-e GOPATH=/cache/gopath \
-		-e GOMODCACHE=/cache/gopath/pkg/mod \
-		'$(strip $(FORMATTER_IMAGE))' go format $(FORMAT_ARGS)
+		'$(strip $(FORMATTER_IMAGE))' format $(FORMAT_ARGS)
 
-host-format: ## Run the dockerized `go-fmt format` against ARGS (default `.`)
+host-format: ## Run the dockerized full formatter pipeline against ARGS (default `.`)
 	@# Format files inside the shared go-fmt container; forwards ARGS as target paths.
 	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
 		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
 		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
-		./scripts/go-fmt-host.sh go format $(ARGS)
+		./scripts/go-fmt-host.sh format $(ARGS)
 
 host-check: ## Run the dockerized `go-fmt check` against ARGS (default `.`)
 	@# Verify formatting inside the shared go-fmt container without writing changes.

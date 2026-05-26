@@ -157,7 +157,7 @@ go-fmt check --host-path /absolute/host/project/pkg/api
 
 Use positional paths when you need to target multiple files or directories. `--host-path` accepts one host path per invocation.
 
-The stand-alone Go CLI formats Go source only. The full Docker image entrypoint exposes `format [paths...]` for the TS/Vue plus Go pipeline, and `format-all` as an alias for `format .`. Repository-local `make format` and `pnpm format` build `docker/Dockerfile.full` and call that combined entrypoint against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
+The stand-alone Go CLI formats Go source only. The full Docker image entrypoint exposes `format [paths...]` for the TS/Vue plus Go pipeline, and `format-all` as an alias for `format .`. Repository-local `make format` and `pnpm format` ensure the local full formatter image exists, rebuilding it only when missing or when its embedded version differs from `VERSION`, then call the combined entrypoint against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
 
 ## Docker
 
@@ -577,7 +577,7 @@ make install
 make clean
 ```
 
-`make format` runs the complete Dockerized formatter pipeline against `ARGS`, defaulting to `.`. `make format-all` runs the same pipeline against the whole mounted repository regardless of `ARGS`. `make test-race` forces `CGO_ENABLED=1` because the Go race detector requires CGO.
+`make format` runs the complete Dockerized formatter pipeline against `ARGS`, defaulting to `.`. `make format-all` runs the same pipeline against the whole mounted repository regardless of `ARGS`. By default, those targets build the local formatter image only when it is missing or its embedded `go-fmt version` output does not match `VERSION`; use `FORMATTER_BUILD=always` to force a rebuild or `FORMATTER_BUILD=never` to require an existing image. `make test-race` forces `CGO_ENABLED=1` because the Go race detector requires CGO.
 
 ### Make variables
 
@@ -591,6 +591,7 @@ make clean
 | `RELEASE_PLATFORMS`    | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`                 |
 | `FORMATTER_IMAGE`      | `go-fmt-full:local`                                 | Local image built by `make format-all`            |
 | `FORMATTER_DOCKERFILE` | `docker/Dockerfile.full`                            | Dockerfile used for the formatter image           |
+| `FORMATTER_BUILD`      | `auto`                                              | Formatter image build policy: auto, always, never |
 | `GO_IMAGE`             | `go-fmt-go:local`                                   | Local Go-only image built by `make image-go`      |
 | `NODE_TS_IMAGE`        | `go-fmt-node-ts:local`                              | Local Node/TS image built by `make image-node-ts` |
 | `FULL_IMAGE`           | `go-fmt-full:local`                                 | Local full image built by `make image-full`       |

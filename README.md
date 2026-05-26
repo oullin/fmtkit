@@ -26,7 +26,7 @@
 
 ### Recommended: host wrapper
 
-Install the single host wrapper once. One image (`ghcr.io/oullin/go-fmt:latest`) and one shared cache volume (`go-fmt-cache`) are reused across every project on the host — no per-project file, no per-project version drift:
+Install the single host wrapper once. One selected image (`ghcr.io/oullin/go-fmt:latest` by default) and one shared cache volume (`go-fmt-cache`) are reused across every project on the host — no per-project file, no per-project version drift:
 
 ```bash
 curl -fsSL -o /tmp/go-fmt-host.sh https://raw.githubusercontent.com/oullin/go-fmt/main/scripts/go-fmt-host.sh
@@ -40,7 +40,7 @@ go-fmt format-all
 
 The wrapper mounts your project at `/work`, keeps Go build and module caches in the shared Docker volume `go-fmt-cache`, and avoids writing `storage/.cache` into consumer repositories. When the mounted project contains a Go module or workspace, both `check` and `format` also run `go vet ./...` automatically.
 
-Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …` when pinning a specific release without editing any project files.
+Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …` when pinning a specific release without editing any project files. Use flavor tags when a consumer only needs one formatter layer: `latest-go`, `latest-node-ts`, or `latest-full`.
 
 ### Local install
 
@@ -157,11 +157,18 @@ go-fmt check --host-path /absolute/host/project/pkg/api
 
 Use positional paths when you need to target multiple files or directories. `--host-path` accepts one host path per invocation.
 
-The stand-alone Go CLI formats Go source only. The Docker image entrypoint exposes `format [paths...]` for the full TS/Vue plus Go pipeline, and `format-all` as an alias for `format .`. Repository-local `make format` and `pnpm format` build the default `formatter` Docker target and call that combined entrypoint against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
+The stand-alone Go CLI formats Go source only. The full Docker image entrypoint exposes `format [paths...]` for the TS/Vue plus Go pipeline, and `format-all` as an alias for `format .`. Repository-local `make format` and `pnpm format` build `docker/Dockerfile.full` and call that combined entrypoint against `ARGS` (`.` by default). Use `make format-all` or `pnpm format-all` when you want the full mounted repository regardless of the current `ARGS` value.
 
 ## Docker
 
-The public image is published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
+The public images are published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
+
+| Tag                               | Contents                                                    | Entrypoint             |
+| --------------------------------- | ----------------------------------------------------------- | ---------------------- |
+| `latest`, `<tag>`                 | Full Go + TS/Vue formatter, kept for backward compatibility | `formatter-entrypoint` |
+| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter                                  | `formatter-entrypoint` |
+| `latest-go`, `<tag>-go`           | Go formatter CLI only                                       | `go-fmt`               |
+| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only                                       | `format-ts`            |
 
 ### Host wrapper
 
@@ -173,7 +180,7 @@ The recommended way to invoke the image is through the host wrapper installed in
 go-fmt go format --host-path "$PWD/pkg/api"
 ```
 
-Use positional paths such as `./core ./demo/api` when you need multiple targets.
+Use positional paths such as `./core ./demo/api` when you need multiple targets. Select a flavor by setting `GO_FMT_IMAGE`, for example `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:latest-node-ts go-fmt .` for TS/Vue-only projects.
 
 Override the project root with `GO_FMT_PROJECT_DIR` when invoking the wrapper from outside the project you want to format:
 
@@ -195,9 +202,11 @@ If you do not want the wrapper installed, run the image directly:
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest go check .
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format .
 docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest format-all
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest-go check .
+docker run --rm -v "$PWD":/work -w /work ghcr.io/oullin/go-fmt:latest-node-ts .
 ```
 
-The container entrypoint accepts `format` and `format-all` for the combined pipeline. The lower-level `go` and `ts` modes remain available when you need to run only one formatter layer.
+The full container entrypoint accepts `format` and `format-all` for the combined pipeline. The lower-level `go` and `ts` modes remain available in the full image when you need to run only one formatter layer. The `latest-go` image accepts Go CLI commands directly, while the `latest-node-ts` image accepts paths directly.
 
 ## Configuration
 
@@ -572,24 +581,30 @@ make clean
 
 ### Make variables
 
-| Variable                  | Default                                             | Description                                  |
-| ------------------------- | --------------------------------------------------- | -------------------------------------------- |
-| `ARGS`                    | `.`                                                 | Files or directories to target               |
-| `VERSION`                 | `git describe ...` or `dev`                         | Build version injected into binaries         |
-| `CGO_ENABLED`             | `0`                                                 | CGO setting for build and release            |
-| `BUILD_DIR`               | `storage/bin`                                       | Output directory for local binaries          |
-| `DIST_DIR`                | `storage/dist`                                      | Output directory for release binaries        |
-| `RELEASE_PLATFORMS`       | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`            |
-| `FORMATTER_IMAGE`         | `go-fmt-formatter:local`                            | Local image built by `make format-all`       |
-| `FORMATTER_DOCKER_TARGET` | `formatter`                                         | Dockerfile target for the formatter image    |
-| `GO_FMT_CACHE_VOLUME`     | `go-fmt-cache`                                      | Docker cache volume reused by formatter runs |
-| `GO_FMT_PROJECT_DIR`      | current directory                                   | Repository mounted at `/work` in Docker      |
+| Variable               | Default                                             | Description                                       |
+| ---------------------- | --------------------------------------------------- | ------------------------------------------------- |
+| `ARGS`                 | `.`                                                 | Files or directories to target                    |
+| `VERSION`              | `git describe ...` or `dev`                         | Build version injected into binaries              |
+| `CGO_ENABLED`          | `0`                                                 | CGO setting for build and release                 |
+| `BUILD_DIR`            | `storage/bin`                                       | Output directory for local binaries               |
+| `DIST_DIR`             | `storage/dist`                                      | Output directory for release binaries             |
+| `RELEASE_PLATFORMS`    | `darwin/amd64 darwin/arm64 linux/amd64 linux/arm64` | Platforms built by `make release`                 |
+| `FORMATTER_IMAGE`      | `go-fmt-full:local`                                 | Local image built by `make format-all`            |
+| `FORMATTER_DOCKERFILE` | `docker/Dockerfile.full`                            | Dockerfile used for the formatter image           |
+| `GO_IMAGE`             | `go-fmt-go:local`                                   | Local Go-only image built by `make image-go`      |
+| `NODE_TS_IMAGE`        | `go-fmt-node-ts:local`                              | Local Node/TS image built by `make image-node-ts` |
+| `FULL_IMAGE`           | `go-fmt-full:local`                                 | Local full image built by `make image-full`       |
+| `GO_FMT_CACHE_VOLUME`  | `go-fmt-cache`                                      | Docker cache volume reused by formatter runs      |
+| `GO_FMT_PROJECT_DIR`   | current directory                                   | Repository mounted at `/work` in Docker           |
 
 ### Examples
 
 ```bash
 make format-all
 make format ARGS=README.md
+make image-go
+make image-node-ts
+make image-full
 make gofmt
 make release DIST_DIR=storage/builds
 ```
@@ -604,8 +619,9 @@ The release workflow:
 - runs Go tests with the race detector
 - creates the next Git tag when `main` advances
 - publishes the GitHub release from that immutable tag
-- publishes `ghcr.io/oullin/go-fmt:latest`
-- publishes `ghcr.io/oullin/go-fmt:<tag>`
+- publishes `ghcr.io/oullin/go-fmt:latest-go`, `:latest-node-ts`, and `:latest-full`
+- publishes `ghcr.io/oullin/go-fmt:<tag>-go`, `:<tag>-node-ts`, and `:<tag>-full`
+- publishes `ghcr.io/oullin/go-fmt:latest` and `:<tag>` as aliases for the full image
 - pushes multi-arch images for `linux/amd64` and `linux/arm64`
 - supports retrying a failed publish by manually dispatching the publish workflow for an existing tag
 

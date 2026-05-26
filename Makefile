@@ -13,13 +13,16 @@ BIN ?= $(BUILD_DIR)/$(APP)
 DIST_DIR ?= storage/dist ## Directory for release binaries
 DIST_TEST_DIR ?= storage/dist-test ## Directory for test build artifacts
 RELEASE_PLATFORMS ?= darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 ## Space-separated GOOS/GOARCH release targets
-FORMATTER_IMAGE ?= go-fmt-formatter:local ## Local Docker image used by make format-all
-FORMATTER_DOCKER_TARGET ?= formatter ## Dockerfile target for the combined formatter image
+FORMATTER_IMAGE ?= go-fmt-full:local ## Local Docker image used by make format-all
+FORMATTER_DOCKERFILE ?= docker/Dockerfile.full ## Dockerfile used for the local formatter image
+GO_IMAGE ?= go-fmt-go:local ## Local Go-only Docker image
+NODE_TS_IMAGE ?= go-fmt-node-ts:local ## Local Node/TS-only Docker image
+FULL_IMAGE ?= go-fmt-full:local ## Local full Docker image
 GO_FMT_IMAGE ?= ghcr.io/oullin/go-fmt:latest ## Container image used by host-* targets
 GO_FMT_CACHE_VOLUME ?= go-fmt-cache ## Named Docker volume reused across host-* runs
 GO_FMT_PROJECT_DIR ?= $(CURDIR) ## Project root bind-mounted into the container
 
-.PHONY: help format format-all format-run build release test test-race test-short vet gofmt install clean host-format host-check host-version host-help
+.PHONY: help format format-all format-run image-go image-node-ts image-full build release test test-race test-short vet gofmt install clean host-format host-format-go host-format-ts host-format-full host-check host-version host-help
 
 help: ## Show available targets and override variables
 	@# Parse Make metadata and render styled help output through the dedicated helper script.
@@ -41,8 +44,8 @@ format-run:
 		fi; \
 		printf '\n%s==>%s %sBuilding formatter image%s\n' "$$cyan" "$$reset" "$$bold" "$$reset"; \
 		printf '    %s%-12s%s %s\n' "$$dim" image "$$reset" '$(strip $(FORMATTER_IMAGE))'; \
-		build_log="$$(mktemp)"; \
-		if docker build --target '$(strip $(FORMATTER_DOCKER_TARGET))' -t '$(strip $(FORMATTER_IMAGE))' . >"$$build_log" 2>&1; then \
+			build_log="$$(mktemp)"; \
+			if docker build -f '$(strip $(FORMATTER_DOCKERFILE))' -t '$(strip $(FORMATTER_IMAGE))' . >"$$build_log" 2>&1; then \
 			printf '    %s%-12s%s %s%s%s\n' "$$green" status "$$reset" "$$green" built "$$reset"; \
 			rm -f "$$build_log"; \
 		else \
@@ -65,12 +68,39 @@ format-run:
 		-e 'HOST_PROJECT_PATH=$(strip $(GO_FMT_PROJECT_DIR))' \
 		-e GOCACHE=/cache/go-build \
 		-e GOPATH=/cache/gopath \
-		-e GOMODCACHE=/cache/gopath/pkg/mod \
-		'$(strip $(FORMATTER_IMAGE))' format $(FORMAT_ARGS)
+			-e GOMODCACHE=/cache/gopath/pkg/mod \
+			'$(strip $(FORMATTER_IMAGE))' format $(FORMAT_ARGS)
+
+image-go: ## Build the local Go-only formatter image
+	@docker build -f docker/Dockerfile.go -t '$(strip $(GO_IMAGE))' .
+
+image-node-ts: ## Build the local Node/TS-only formatter image
+	@docker build -f docker/Dockerfile.node-ts -t '$(strip $(NODE_TS_IMAGE))' .
+
+image-full: ## Build the local full Go + TS formatter image
+	@docker build -f docker/Dockerfile.full -t '$(strip $(FULL_IMAGE))' .
 
 host-format: ## Run the dockerized full formatter pipeline against ARGS (default `.`)
 	@# Format files inside the shared go-fmt container; forwards ARGS as target paths.
 	@GO_FMT_IMAGE='$(strip $(GO_FMT_IMAGE))' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh format $(ARGS)
+
+host-format-go: ## Run the dockerized Go-only formatter against ARGS (default `.`)
+	@GO_FMT_IMAGE='ghcr.io/oullin/go-fmt:latest-go' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh format $(ARGS)
+
+host-format-ts: ## Run the dockerized Node/TS-only formatter against ARGS (default `.`)
+	@GO_FMT_IMAGE='ghcr.io/oullin/go-fmt:latest-node-ts' \
+		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
+		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
+		./scripts/go-fmt-host.sh $(ARGS)
+
+host-format-full: ## Run the dockerized full formatter against ARGS (default `.`)
+	@GO_FMT_IMAGE='ghcr.io/oullin/go-fmt:latest-full' \
 		GO_FMT_CACHE_VOLUME='$(strip $(GO_FMT_CACHE_VOLUME))' \
 		GO_FMT_PROJECT_DIR='$(strip $(GO_FMT_PROJECT_DIR))' \
 		./scripts/go-fmt-host.sh format $(ARGS)

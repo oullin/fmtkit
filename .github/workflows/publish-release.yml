@@ -55,24 +55,43 @@ jobs:
                   username: ${{ github.actor }}
                   password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Docker metadata
-              id: meta
-              uses: docker/metadata-action@v6
-              with:
-                  images: ${{ env.IMAGE_NAME }}
-                  tags: |
-                      type=raw,value=${{ env.RELEASE_TAG }}
-
-            - name: Build and push release image
-              id: build
+            - name: Build and push Go image
+              id: build-go
               uses: docker/build-push-action@v7
               with:
                   context: .
-                  file: ./Dockerfile
+                  file: ./docker/Dockerfile.go
                   push: true
                   platforms: linux/amd64,linux/arm64
-                  tags: ${{ steps.meta.outputs.tags }}
-                  labels: ${{ steps.meta.outputs.labels }}
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go
+                      ${{ env.IMAGE_NAME }}:latest-go
+                  build-args: |
+                      VERSION=${{ env.RELEASE_TAG }}
+
+            - name: Build and push Node/TS image
+              id: build-node-ts
+              uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  file: ./docker/Dockerfile.node-ts
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
+                      ${{ env.IMAGE_NAME }}:latest-node-ts
+
+            - name: Build and push full image
+              id: build-full
+              uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  file: ./docker/Dockerfile.full
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full
+                      ${{ env.IMAGE_NAME }}:latest-full
                   build-args: |
                       VERSION=${{ env.RELEASE_TAG }}
 
@@ -82,13 +101,14 @@ jobs:
               run: ./scripts/verify-release-image.sh
               shell: bash
 
-            - name: Promote verified release image to latest
+            - name: Promote verified full image to compatibility tags
               env:
-                  DIGEST: ${{ steps.build.outputs.digest }}
+                  DIGEST: ${{ steps.build-full.outputs.digest }}
               run: |
                   set -euo pipefail
 
                   docker buildx imagetools create \
+                      --tag "${IMAGE_NAME}:${RELEASE_TAG}" \
                       --tag "${IMAGE_NAME}:latest" \
                       "${IMAGE_NAME}@${DIGEST}"
               shell: bash
@@ -100,5 +120,16 @@ jobs:
                   prerelease: false
                   generate_release_notes: true
                   body: |
-                      Docker image published to `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}`.
-                      `${{ env.IMAGE_NAME }}:latest` now aliases the verified `${{ env.RELEASE_TAG }}` digest.
+                      Docker images published:
+
+                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go`
+                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts`
+                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full`
+                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}` aliases the verified full image
+
+                      Latest tags updated:
+
+                      - `${{ env.IMAGE_NAME }}:latest-go`
+                      - `${{ env.IMAGE_NAME }}:latest-node-ts`
+                      - `${{ env.IMAGE_NAME }}:latest-full`
+                      - `${{ env.IMAGE_NAME }}:latest` aliases the verified full image

@@ -45,14 +45,14 @@ Override the image for a session with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.1
 ### Local install
 
 ```bash
-go install github.com/oullin/go-fmt/packages/driver/cmd/fmt@latest
+go install github.com/oullin/go-fmt/packages/driver/cmd/fmt-go@latest
 
-fmt version
-fmt check .
-fmt format .
+fmt-go version
+fmt-go check .
+fmt-go format .
 ```
 
-If `fmt` is not on `PATH`, add your Go bin directory:
+If `fmt-go` is not on `PATH`, add your Go bin directory:
 
 ```bash
 export PATH="$(go env GOPATH)/bin:$PATH"
@@ -65,8 +65,8 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 Requires Go 1.25 or newer.
 
 ```bash
-go install github.com/oullin/go-fmt/packages/driver/cmd/fmt@latest
-fmt version
+go install github.com/oullin/go-fmt/packages/driver/cmd/fmt-go@latest
+fmt-go version
 ```
 
 ### Build locally from this repository
@@ -90,8 +90,8 @@ fmt version
 No install is required when working inside this repository:
 
 ```bash
-./scripts/with-storage-env.sh go -C packages/driver run ./cmd/fmt check .
-./scripts/with-storage-env.sh go -C packages/driver run ./cmd/fmt format .
+./scripts/with-storage-env.sh go -C packages/driver run ./cmd/fmt-go check .
+./scripts/with-storage-env.sh go -C packages/driver run ./cmd/fmt-go format .
 ```
 
 ### One-off Docker run
@@ -163,12 +163,12 @@ The stand-alone Go CLI formats Go source only. The full Docker image entrypoint 
 
 The public images are published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
 
-| Tag                               | Contents                                                    | Entrypoint             |
-| --------------------------------- | ----------------------------------------------------------- | ---------------------- |
-| `latest`, `<tag>`                 | Full Go + TS/Vue formatter, kept for backward compatibility | `formatter-entrypoint` |
-| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter                                  | `formatter-entrypoint` |
-| `latest-go`, `<tag>-go`           | Go formatter CLI only                                       | `go-fmt`               |
-| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only                                       | `format-ts`            |
+| Tag                               | Contents                                                    | Entrypoint |
+| --------------------------------- | ----------------------------------------------------------- | ---------- |
+| `latest`, `<tag>`                 | Full Go + TS/Vue formatter, kept for backward compatibility | `fmt-all`  |
+| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter                                  | `fmt-all`  |
+| `latest-go`, `<tag>-go`           | Go formatter CLI only                                       | `fmt-go`   |
+| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only                                       | `fmt-ts`   |
 
 ### Host wrapper
 

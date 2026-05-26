@@ -19,7 +19,7 @@ COPY . .
 RUN bash -lc 'source /src/scripts/env.sh && assert_no_legacy_artifacts'
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/go-fmt ./cmd/fmt
+	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmt-go ./cmd/fmt-go
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOPATH=/tmp/go \
 	go install -trimpath -ldflags="-s -w" golang.org/x/tools/cmd/goimports@v0.43.0 && \
@@ -35,7 +35,7 @@ ENV GOCACHE="/work/storage/.cache/go-build" \
 	GOPATH="/work/storage/.cache/gopath" \
 	GOMODCACHE="/work/storage/.cache/gopath/pkg/mod"
 
-COPY --from=builder /out/go-fmt /usr/local/bin/go-fmt
+COPY --from=builder /out/fmt-go /usr/local/bin/fmt-go
 COPY --from=builder /out/goimports /usr/local/bin/goimports
 
-ENTRYPOINT ["/usr/local/bin/go-fmt"]
+ENTRYPOINT ["/usr/local/bin/fmt-go"]

@@ -19,7 +19,7 @@ COPY . .
 RUN bash -lc 'source /src/scripts/env.sh && assert_no_legacy_artifacts'
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/go-fmt ./cmd/fmt
+	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmt-go ./cmd/fmt-go
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOPATH=/tmp/go \
 	go install -trimpath -ldflags="-s -w" golang.org/x/tools/cmd/goimports@v0.43.0 && \
@@ -40,7 +40,7 @@ ENV PATH="/usr/local/go/bin:${PATH}" \
 	GOMODCACHE="/work/storage/.cache/gopath/pkg/mod" \
 	TURBO_CACHE_DIR="/work/storage/.cache/turbo"
 
-COPY --from=builder /out/go-fmt /usr/local/bin/go-fmt
+COPY --from=builder /out/fmt-go /usr/local/bin/fmt-go
 COPY --from=builder /out/goimports /usr/local/bin/goimports
 
 WORKDIR /opt/go-fmt/support
@@ -49,10 +49,10 @@ RUN node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "o
 	| xargs npm install --no-save
 
 COPY packages/devx/scripts/blank-lines.ts /opt/go-fmt/support/blank-lines.ts
-COPY scripts/format-ts.sh /usr/local/bin/format-ts
-COPY scripts/formatter-entrypoint.sh /usr/local/bin/formatter-entrypoint
-RUN chmod +x /usr/local/bin/format-ts /usr/local/bin/formatter-entrypoint
+COPY cmd/fmt-ts /usr/local/bin/fmt-ts
+COPY cmd/fmt-all /usr/local/bin/fmt-all
+RUN chmod +x /usr/local/bin/fmt-ts /usr/local/bin/fmt-all
 
 WORKDIR /work
 
-ENTRYPOINT ["/usr/local/bin/formatter-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/fmt-all"]

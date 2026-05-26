@@ -18,8 +18,8 @@ fi
 mode="$1"
 shift
 
-go_fmt_bin="${GO_FMT_BIN:-/usr/local/bin/go-fmt}"
-format_ts_bin="${FORMAT_TS_BIN:-/usr/local/bin/format-ts}"
+go_fmt_bin="${GO_FMT_BIN:-/usr/local/bin/fmt-go}"
+format_ts_bin="${FORMAT_TS_BIN:-/usr/local/bin/fmt-ts}"
 
 bold=''
 dim=''

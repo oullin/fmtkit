@@ -9,9 +9,9 @@ RUN node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "o
 	| xargs npm install --no-save
 
 COPY packages/devx/scripts/blank-lines.ts /opt/go-fmt/support/blank-lines.ts
-COPY scripts/format-ts.sh /usr/local/bin/format-ts
-RUN chmod +x /usr/local/bin/format-ts
+COPY cmd/fmt-ts /usr/local/bin/fmt-ts
+RUN chmod +x /usr/local/bin/fmt-ts
 
 WORKDIR /work
 
-ENTRYPOINT ["/usr/local/bin/format-ts"]
+ENTRYPOINT ["/usr/local/bin/fmt-ts"]

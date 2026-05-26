@@ -22,12 +22,12 @@ write_stub() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s %s\n' "$name" "\$*" >> "$log_file"
-case "$name" in
-	format-ts)
+	case "$name" in
+		fmt-ts)
 		printf '[blank-lines] processed 3 file(s) in /work, 0 changed\n'
 		printf 'Finished in 10ms on 3 files using 8 threads.\n'
 		;;
-	go-fmt)
+		fmt-go)
 		if [[ "\${1:-}" == "format" ]]; then
 			printf '\nFormatter\n\n'
 			printf '  Formatted 2 file(s).\n\n'
@@ -87,16 +87,16 @@ run_entrypoint() {
 	: >"$stdout_file"
 	: >"$stderr_file"
 
-	GO_FMT_BIN="$tmp_root/go-fmt-stub" \
-		FORMAT_TS_BIN="$tmp_root/format-ts-stub" \
-		"$repo_root/scripts/formatter-entrypoint.sh" "$@" >"$stdout_file" 2>"$stderr_file"
+	GO_FMT_BIN="$tmp_root/fmt-go-stub" \
+		FORMAT_TS_BIN="$tmp_root/fmt-ts-stub" \
+		"$repo_root/cmd/fmt-all" "$@" >"$stdout_file" 2>"$stderr_file"
 }
 
-write_stub "$tmp_root/go-fmt-stub" go-fmt
-write_stub "$tmp_root/format-ts-stub" format-ts
+write_stub "$tmp_root/fmt-go-stub" fmt-go
+write_stub "$tmp_root/fmt-ts-stub" fmt-ts
 
 run_entrypoint format .
-assert_log_equals $'format-ts .\ngo-fmt format .'
+assert_log_equals $'fmt-ts .\nfmt-go format .'
 assert_contains "$stderr_file" '==> Formatting target(s)'
 assert_contains "$stderr_file" 'paths        .'
 assert_contains "$stderr_file" '==> Running TS/Vue formatting'
@@ -114,25 +114,25 @@ assert_contains "$stderr_file" 'status'
 assert_contains "$stderr_file" 'done'
 
 run_entrypoint format-all
-assert_log_equals $'format-ts .\ngo-fmt format .'
+assert_log_equals $'fmt-ts .\nfmt-go format .'
 
 run_entrypoint go format .
-assert_log_equals 'go-fmt format .'
+assert_log_equals 'fmt-go format .'
 assert_not_contains "$stderr_file" '==> Running TS/Vue formatting'
 
 run_entrypoint ts .
-assert_log_equals 'format-ts .'
+assert_log_equals 'fmt-ts .'
 assert_not_contains "$stderr_file" '==> Running Go formatting'
 
 run_entrypoint check .
-assert_log_equals 'go-fmt check .'
+assert_log_equals 'fmt-go check .'
 
 run_entrypoint version
-assert_log_equals 'go-fmt version'
+assert_log_equals 'fmt-go version'
 
 if run_entrypoint unknown; then
 	printf 'expected unknown mode to fail\n' >&2
 	exit 1
 fi
 
-assert_contains "$stderr_file" 'usage: formatter-entrypoint.sh <format|format-all|go|ts|check|version|help> [args...]'
+assert_contains "$stderr_file" 'usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]'

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+support_dir="${GO_FMT_SUPPORT_DIR:-/opt/go-fmt/support}"
+tsx_bin="${support_dir}/node_modules/.bin/tsx"
+oxfmt_bin="${support_dir}/node_modules/.bin/oxfmt"
+
+declare -a args=("$@")
+
+if [[ ${#args[@]} -eq 0 ]]; then
+	args=(.)
+fi
+
+"$tsx_bin" "${support_dir}/blank-lines.ts" "${args[@]}"
+
+git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \
+	| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern

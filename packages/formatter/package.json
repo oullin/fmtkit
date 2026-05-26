@@ -3,7 +3,7 @@
 	"private": true,
 	"scripts": {
 		"check": "../../scripts/go-package-task.sh check",
-		"fmt-source": "../../scripts/go-package-task.sh fmt-source",
+		"gofmt": "../../scripts/go-package-task.sh gofmt",
 		"test": "../../scripts/go-package-task.sh test",
 		"vet": "../../scripts/go-package-task.sh vet"
 	}

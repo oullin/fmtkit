@@ -142,6 +142,10 @@ func isGoSource(path string) bool {
 
 	base := filepath.Base(path)
 
+	if strings.HasPrefix(base, "Dockerfile") {
+		return false
+	}
+
 	if strings.HasSuffix(base, ".gen.go") {
 		return false
 	}

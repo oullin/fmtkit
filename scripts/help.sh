@@ -68,5 +68,5 @@ fi
 
 printf '\n%bExamples:%b\n' "$bold" "$reset"
 printf '  %b%s%b\n' "$example_color" "./scripts/with-storage-env.sh pnpm turbo run check --cache-dir=storage/.cache/turbo --filter=driver" "$reset"
-printf '  %b%s%b\n' "$example_color" "./scripts/with-storage-env.sh pnpm turbo run check --cache-dir=storage/.cache/turbo --filter=support" "$reset"
-printf '  %b%s%b\n' "$example_color" "make fmt-source" "$reset"
+printf '  %b%s%b\n' "$example_color" "./scripts/with-storage-env.sh pnpm turbo run check --cache-dir=storage/.cache/turbo --filter=devx" "$reset"
+printf '  %b%s%b\n' "$example_color" "make gofmt" "$reset"

@@ -1,0 +1,14 @@
+{
+	"type": "module",
+	"imports": {
+		"#devx/ast": "./ast.ts",
+		"#devx/blank-line-inserter": "./blank-line-inserter.ts",
+		"#devx/class-reorder": "./class-reorder.ts",
+		"#devx/cli": "./cli.ts",
+		"#devx/edits": "./edits.ts",
+		"#devx/files": "./files.ts",
+		"#devx/rules": "./rules.ts",
+		"#devx/segment": "./segment.ts",
+		"#devx/types": "./types.ts"
+	}
+}

@@ -1,6 +1,6 @@
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { processSegment } from '@ui/segment';
+import { processSegment } from '#devx/segment';
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 

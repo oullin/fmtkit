@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { processSegment } from '@ui/segment';
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { processSegment } from '#devx/segment';
 
 interface Case {
 	name: string;
@@ -41,7 +42,7 @@ describe('blank-line rules', () => {
 			const virtualName = c.name.endsWith('.js') ? 'fixture.js' : 'fixture.ts';
 			const out = processSegment(c.input, virtualName);
 
-			expect(out).toBe(c.expected);
+			assert.equal(out, c.expected);
 		});
 	}
 
@@ -51,6 +52,6 @@ describe('blank-line rules', () => {
 		const once = processSegment(input, 'fixture.ts');
 		const twice = processSegment(once, 'fixture.ts');
 
-		expect(twice).toBe(once);
+		assert.equal(twice, once);
 	});
 });

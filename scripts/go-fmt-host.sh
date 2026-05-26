@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 # go-fmt-host.sh — single-image, no-compose host wrapper for go-fmt.
 #
-# Every project on the host shares one image (GO_FMT_IMAGE, default
+# Every project on the host shares one selected image (GO_FMT_IMAGE, default
 # ghcr.io/oullin/go-fmt:latest) and one named cache volume (GO_FMT_CACHE_VOLUME,
 # default go-fmt-cache). Drop this script anywhere on $PATH (or symlink it as
 # `go-fmt`) and invoke from any project root:
 #
 #     go-fmt-host.sh format .
-#     go-fmt-host.sh check ./pkg ./cmd
+#     go-fmt-host.sh format-all
+#     go-fmt-host.sh go check ./pkg ./cmd
+#     go-fmt-host.sh ts .
 #
-# Override the image tag for a session by exporting GO_FMT_IMAGE — useful when
-# pinning to a specific release temporarily without editing per-project files.
+# Select a formatter flavor by exporting GO_FMT_IMAGE:
+#
+#     GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:latest-full
+#     GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:latest-go
+#     GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:latest-node-ts
+#
+# Versioned flavor tags follow the same shape, for example v0.0.18-go,
+# v0.0.18-node-ts, and v0.0.18-full.
 
 set -euo pipefail
 

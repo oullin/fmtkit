@@ -1,6 +1,6 @@
-import { computeInsertPositions, insertBlankLines } from '@ui/blank-line-inserter';
-import { computeReorderEdits } from '@ui/class-reorder';
-import { applyEdits } from '@ui/edits';
+import { computeInsertPositions, insertBlankLines } from '#devx/blank-line-inserter';
+import { computeReorderEdits } from '#devx/class-reorder';
+import { applyEdits } from '#devx/edits';
 
 export function processSegment(content: string, virtualName: string): string {
 	const reorderEdits = computeReorderEdits(content, virtualName);

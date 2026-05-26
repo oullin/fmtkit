@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+	printf 'usage: %s <format|format-all|go|ts|check|version|help> [args...]\n' "${0##*/}" >&2
+	printf '  format [paths...]                        run TS/Vue support, then Go formatting\n' >&2
+	printf '  format-all                               run the full formatter pipeline against .\n' >&2
+	printf '  go [check|format|version|help] [args...] run the Go formatter CLI\n' >&2
+	printf '  ts [paths...]                            run TS/Vue blank-line support and oxfmt\n' >&2
+	printf '  check|version|help [args...]             run the matching Go formatter CLI command\n' >&2
+}
+
+if [[ $# -eq 0 ]]; then
+	usage
+	exit 2
+fi
+
+mode="$1"
+shift
+
+go_fmt_bin="${GO_FMT_BIN:-/usr/local/bin/fmt-go}"
+format_ts_bin="${FORMAT_TS_BIN:-/usr/local/bin/fmt-ts}"
+
+bold=''
+dim=''
+cyan=''
+green=''
+red=''
+reset=''
+
+if [[ -n "${FORCE_COLOR:-}" || (-z "${NO_COLOR:-}" && -t 2) ]]; then
+	bold=$'\033[1m'
+	dim=$'\033[2m'
+	cyan=$'\033[36m'
+	green=$'\033[32m'
+	red=$'\033[31m'
+	reset=$'\033[0m'
+fi
+
+section() {
+	printf '\n%s==>%s %s%s%s\n' "$cyan" "$reset" "$bold" "$1" "$reset" >&2
+}
+
+detail() {
+	printf '    %s%-12s%s %s\n' "$dim" "$1" "$reset" "$2" >&2
+}
+
+success_detail() {
+	printf '    %s%-12s%s %s%s%s\n' "$green" "$1" "$reset" "$green" "$2" "$reset" >&2
+}
+
+failure() {
+	printf '\n%s!!%s %s%s%s\n' "$red" "$reset" "$bold" "$1" "$reset" >&2
+}
+
+run_logged() {
+	local label="$1"
+	local summary="$2"
+	shift 2
+
+	local log_file
+	log_file="$(mktemp)"
+
+	section "$label"
+
+	if "$@" >"$log_file" 2>&1; then
+		"$summary" "$log_file"
+		rm -f "$log_file"
+
+		return 0
+	fi
+
+	local status="$?"
+	failure "$label failed"
+	cat "$log_file" >&2
+	rm -f "$log_file"
+
+	return "$status"
+}
+
+summarize_ts_format() {
+	local log_file="$1"
+	local missing_count
+	local blank_lines_summary
+	local oxfmt_summary
+
+	missing_count="$(grep -c '^\[blank-lines\] path not found, skipping:' "$log_file" || true)"
+	blank_lines_summary="$(grep '^\[blank-lines\] processed ' "$log_file" | tail -n 1 | sed 's/^\[blank-lines\] //' || true)"
+	oxfmt_summary="$(grep '^Finished in ' "$log_file" | tail -n 1 || true)"
+
+	if [[ -n "$blank_lines_summary" ]]; then
+		detail 'blank-lines' "$blank_lines_summary"
+	fi
+
+	if [[ "$missing_count" -gt 0 ]]; then
+		detail 'skipped' "$missing_count missing tracked file(s)"
+	fi
+
+	if [[ -n "$oxfmt_summary" ]]; then
+		detail 'oxfmt' "$oxfmt_summary"
+	fi
+}
+
+summarize_go_format() {
+	local log_file="$1"
+	local file_summary
+	local formatter_result
+	local vet_summary
+	local vet_result
+
+	file_summary="$(grep -E '  (Formatted|Checked) [0-9]+ file\(s\)\.|  No Go files found\.' "$log_file" | head -n 1 | sed 's/^  //' || true)"
+	formatter_result="$(grep '  Result: ' "$log_file" | head -n 1 | sed 's/^  Result: //' || true)"
+	vet_summary="$(grep -E '  go vet \./\.\.\. passed\.|  Skipped automatic go vet ' "$log_file" | head -n 1 | sed 's/^  //' || true)"
+	vet_result="$(grep '  Result: ' "$log_file" | tail -n 1 | sed 's/^  Result: //' || true)"
+
+	if [[ -n "$file_summary" ]]; then
+		detail 'go-fmt' "$file_summary"
+	fi
+
+	if [[ -n "$formatter_result" ]]; then
+		detail 'result' "$formatter_result"
+	fi
+
+	if [[ -n "$vet_summary" ]]; then
+		detail 'vet' "$vet_summary"
+	fi
+
+	if [[ -n "$vet_result" && "$vet_result" != "$formatter_result" ]]; then
+		detail 'vet result' "$vet_result"
+	fi
+}
+
+run_format_pipeline() {
+	if [[ $# -eq 0 ]]; then
+		set -- .
+	fi
+
+	section 'Formatting target(s)'
+	detail 'paths' "$*"
+	run_logged 'Running TS/Vue formatting' summarize_ts_format "$format_ts_bin" "$@"
+	run_logged 'Running Go formatting' summarize_go_format "$go_fmt_bin" format "$@"
+	section 'Formatting complete'
+	success_detail 'status' 'done'
+}
+
+case "$mode" in
+	format)
+		run_format_pipeline "$@"
+		;;
+	format-all)
+		if [[ $# -ne 0 ]]; then
+			usage
+			exit 2
+		fi
+
+		run_format_pipeline .
+		;;
+	go)
+		exec "$go_fmt_bin" "$@"
+		;;
+	ts)
+		exec "$format_ts_bin" "$@"
+		;;
+	check | version | help)
+		exec "$go_fmt_bin" "$mode" "$@"
+		;;
+	*)
+		usage
+		exit 2
+		;;
+esac

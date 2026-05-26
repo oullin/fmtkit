@@ -24,6 +24,7 @@ const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 };
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
+const CONTROL_FLOW_STATEMENTS = BLOCK_HAVING_STATEMENTS;
 
 function getStart(n: Node): number {
 	return typeof n.start === 'number' ? n.start : (n.range?.[0] ?? -1);
@@ -77,6 +78,10 @@ function collectStatementLists(program: Node): Node[][] {
 
 function needsBlankLine(prev: Node, next: Node): boolean {
 	if (next.type === 'ReturnStatement') {
+		return true;
+	}
+
+	if (CONTROL_FLOW_STATEMENTS.has(next.type)) {
 		return true;
 	}
 
@@ -204,8 +209,25 @@ function computeInsertPositions(content: string, virtualName: string, baseOffset
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
+function isNotFoundError(err: unknown): boolean {
+	return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
+}
+
 async function processFile(file: string): Promise<boolean> {
-	const source = await readFile(file, 'utf8');
+	const source = await readFile(file, 'utf8').catch((err: unknown) => {
+		if (isNotFoundError(err)) {
+			console.warn(`[blank-lines] path not found, skipping: ${file}`);
+
+			return null;
+		}
+
+		throw err;
+	});
+
+	if (source === null) {
+		return false;
+	}
+
 	const positions: number[] = [];
 
 	if (file.endsWith('.vue')) {
@@ -246,24 +268,31 @@ async function processFile(file: string): Promise<boolean> {
 	return true;
 }
 
-const files = [...new Set(await collectFiles(positionalPaths))];
+async function main(): Promise<void> {
+	const files = [...new Set(await collectFiles(positionalPaths))];
 
-let changedCount = 0;
+	let changedCount = 0;
 
-for (const file of files) {
-	const changed = await processFile(file);
+	for (const file of files) {
+		const changed = await processFile(file);
 
-	if (!changed) {
-		continue;
+		if (!changed) {
+			continue;
+		}
+
+		changedCount++;
+		console.log(`[blank-lines] ${check ? 'would change' : 'updated'} ${file}`);
 	}
 
-	changedCount++;
-	console.log(`[blank-lines] ${check ? 'would change' : 'updated'} ${file}`);
+	if (check && changedCount > 0) {
+		console.error(`[blank-lines] ${changedCount} file(s) need blank-line edits. Run "pnpm format" to fix.`);
+		process.exit(1);
+	}
+
+	console.log(`[blank-lines] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${check ? 'would change' : 'changed'}`);
 }
 
-if (check && changedCount > 0) {
-	console.error(`[blank-lines] ${changedCount} file(s) need blank-line edits. Run "pnpm format" to fix.`);
+main().catch((err: unknown) => {
+	console.error(err);
 	process.exit(1);
-}
-
-console.log(`[blank-lines] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${check ? 'would change' : 'changed'}`);
+});

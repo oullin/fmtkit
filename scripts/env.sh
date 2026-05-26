@@ -2,7 +2,7 @@
 
 export APP="${APP:-go-fmt}"
 export GO_WORKDIR="${GO_WORKDIR:-packages/driver}"
-export CMD="${CMD:-./cmd/fmt}"
+export CMD="${CMD:-./cmd/fmt-go}"
 export VERSION="${VERSION:-dev}"
 export CGO_ENABLED="${CGO_ENABLED:-0}"
 

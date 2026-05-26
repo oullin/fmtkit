@@ -25,7 +25,7 @@ jobs:
                     - formatter
                     - vet
                     - driver
-                    - support
+                    - devx
 
         steps:
             - uses: actions/checkout@v6
@@ -42,7 +42,7 @@ jobs:
                   version: 10.33.0
 
             - uses: actions/setup-go@v6
-              if: matrix.workspace != 'support'
+              if: matrix.workspace != 'devx'
               name: Install Go
               with:
                   go-version-file: go.work

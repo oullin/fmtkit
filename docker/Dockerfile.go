@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOPATH=/tmp/go \
 	go install -trimpath -ldflags="-s -w" golang.org/x/tools/cmd/goimports@v0.43.0 && \
 	find /tmp/go/bin -name goimports -exec cp {} /out/goimports \;
 
-FROM golang:1.25-alpine
+FROM golang:1.26-alpine
 
 RUN apk add --no-cache bash git
 

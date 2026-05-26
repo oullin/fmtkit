@@ -11,6 +11,8 @@ if [[ ${#args[@]} -eq 0 ]]; then
 	args=(.)
 fi
 
+git config --global --add safe.directory "$PWD" >/dev/null 2>&1 || true
+
 "$tsx_bin" "${support_dir}/blank-lines.ts" "${args[@]}"
 
 git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \

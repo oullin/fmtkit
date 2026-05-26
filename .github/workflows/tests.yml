@@ -69,6 +69,9 @@ jobs:
             - uses: actions/checkout@v6
               name: Checkout repository
 
+            - name: Shell - Run entrypoint tests
+              run: ./scripts/test-entrypoints.sh
+
             - uses: actions/setup-go@v6
               name: Install Go
               with:

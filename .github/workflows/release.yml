@@ -64,6 +64,9 @@ jobs:
         steps:
             - uses: actions/checkout@v6
 
+            - name: Shell - Run entrypoint tests
+              run: ./scripts/test-entrypoints.sh
+
             - uses: actions/setup-go@v6
               with:
                   go-version-file: go.work

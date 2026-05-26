@@ -1,7 +1,7 @@
 import { parseSync } from 'oxc-parser';
-import { collectStatementLists, getEnd, getStart } from './ast';
-import { needsBlankLine } from './rules';
-import type { Node } from './types';
+import { collectStatementLists, getEnd, getStart } from '#devx/ast';
+import { needsBlankLine } from '#devx/rules';
+import type { Node } from '#devx/types';
 
 function countNewlines(source: string, from: number, to: number): number {
 	let count = 0;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { processSegment } from '../segment';
+import { processSegment } from '#devx/segment';
 
 interface Case {
 	name: string;

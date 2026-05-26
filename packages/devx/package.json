@@ -1,6 +1,17 @@
 {
 	"name": "devx",
 	"private": true,
+	"imports": {
+		"#devx/ast": "./scripts/ast.ts",
+		"#devx/blank-line-inserter": "./scripts/blank-line-inserter.ts",
+		"#devx/class-reorder": "./scripts/class-reorder.ts",
+		"#devx/cli": "./scripts/cli.ts",
+		"#devx/edits": "./scripts/edits.ts",
+		"#devx/files": "./scripts/files.ts",
+		"#devx/rules": "./scripts/rules.ts",
+		"#devx/segment": "./scripts/segment.ts",
+		"#devx/types": "./scripts/types.ts"
+	},
 	"scripts": {
 		"blank-lines": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts",
 		"blank-lines:check": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts --check",

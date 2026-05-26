@@ -1,7 +1,7 @@
 import { parseSync } from 'oxc-parser';
-import { collectClassBodies, getEnd, getStart } from './ast';
-import { classifyMember } from './rules';
-import type { Edit, Node } from './types';
+import { collectClassBodies, getEnd, getStart } from '#devx/ast';
+import { classifyMember } from '#devx/rules';
+import type { Edit, Node } from '#devx/types';
 
 function containsComment(s: string): boolean {
 	return /\/\/|\/\*/.test(s);

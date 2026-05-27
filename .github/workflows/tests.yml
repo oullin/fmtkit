@@ -1,6 +1,9 @@
 name: Tests
 
 on:
+    push:
+        branches:
+            - main
     pull_request:
         branches:
             - main
@@ -16,7 +19,7 @@ env:
 
 jobs:
     check:
-        if: github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main'
+        if: github.event_name == 'push' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
@@ -117,4 +120,5 @@ jobs:
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   files: packages/formatter/coverage.out
+                  override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
                   fail_ci_if_error: false

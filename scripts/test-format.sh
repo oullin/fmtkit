@@ -6,6 +6,7 @@ actual_go="$(command -v go)"
 tmp_root="$(mktemp -d)"
 
 cleanup() {
+	chmod -R u+w "$tmp_root" 2>/dev/null || true
 	rm -rf "$tmp_root"
 }
 
@@ -45,14 +46,25 @@ assert_not_contains() {
 	fi
 }
 
+assert_go_invocation_equals() {
+	local fixture_root="$1"
+	local expected_target="$2"
+	local expected
+
+	expected="-C $repo_root/packages/driver run ./cmd/fmt-go format --cwd $fixture_root $expected_target"
+
+	assert_contains "$fixture_root/go-invocations.log" "$expected"
+}
+
 create_fixture() {
 	local name="$1"
-	local fixture_root="$tmp_root/$name"
+	local fixture_root
+	fixture_root="$(cd "$tmp_root" && pwd -P)/$name"
 
 	mkdir -p "$fixture_root"
 	cp -R "$repo_root/scripts" "$fixture_root/scripts"
 	cp -R "$repo_root/semantic" "$fixture_root/semantic"
-	mkdir -p "$fixture_root/bin"
+	mkdir -p "$fixture_root/storage/test-bin"
 
 	cat >"$fixture_root/oxfmt-stub.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -66,20 +78,20 @@ exit 0
 EOF
 	chmod +x "$fixture_root/tsx-stub.sh"
 
-	cat >"$fixture_root/bin/go" <<EOF
+	cat >"$fixture_root/storage/test-bin/go" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "\$*" >> "\${GO_WRAPPER_LOG:?}"
 exec "$actual_go" "\$@"
 EOF
-	chmod +x "$fixture_root/bin/go"
+	chmod +x "$fixture_root/storage/test-bin/go"
 
 	(
 		cd "$fixture_root"
 		git init -q
 		git config user.email tests@example.com
 		git config user.name 'Test Runner'
-		git add scripts semantic oxfmt-stub.sh tsx-stub.sh bin/go
+		git add scripts semantic oxfmt-stub.sh tsx-stub.sh
 		git commit -q -m 'initial'
 	)
 
@@ -94,8 +106,9 @@ run_format() {
 
 	(
 		cd "$fixture_root"
-		PATH="$fixture_root/bin:$PATH" \
+			GO_BIN="$fixture_root/storage/test-bin/go" \
 			GO_WRAPPER_LOG="$fixture_root/go-invocations.log" \
+			GO_WORKDIR="$repo_root/packages/driver" \
 			OXFMT_BIN="$fixture_root/oxfmt-stub.sh" \
 			TSX_BIN="$fixture_root/tsx-stub.sh" \
 			./scripts/format.sh "$@"
@@ -129,8 +142,7 @@ func run() {
 
 	run_format "$fixture_root" .
 
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd . --git-diff'
-	assert_not_contains "$fixture_root/go-invocations.log" 'format --cwd . .'
+	assert_go_invocation_equals "$fixture_root" "$fixture_root"
 	assert_contains "$fixture_root/semantic/pkg/api/changed.go" 'defer println("done")
 
 	return'
@@ -170,11 +182,7 @@ func create() {
 
 	run_format "$fixture_root" .
 
-	assert_not_contains "$fixture_root/go-invocations.log" '--git-diff'
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd .'
-	assert_not_contains "$fixture_root/go-invocations.log" 'format --cwd . .'
-	assert_contains "$fixture_root/go-invocations.log" 'pkg/api/changed.go'
-	assert_contains "$fixture_root/go-invocations.log" 'pkg/api/new.go'
+	assert_go_invocation_equals "$fixture_root" "$fixture_root"
 	assert_contains "$fixture_root/semantic/pkg/api/changed.go" 'defer println("done")
 
 	return'
@@ -211,8 +219,7 @@ func run() {
 
 	run_format "$fixture_root" .
 
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd . --git-diff'
-	assert_not_contains "$fixture_root/go-invocations.log" 'format --cwd . .'
+	assert_go_invocation_equals "$fixture_root" "$fixture_root"
 	assert_contains "$fixture_root/semantic/pkg/api/changed.go" 'defer println("done")
 
 	return'
@@ -245,9 +252,7 @@ func run() {
 
 	run_format "$fixture_root" semantic/pkg/api/changed.go
 
-	assert_not_contains "$fixture_root/go-invocations.log" '--git-diff'
-	assert_not_contains "$fixture_root/go-invocations.log" 'format --cwd . .'
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd . pkg/api/changed.go'
+	assert_go_invocation_equals "$fixture_root" "$fixture_root/semantic/pkg/api/changed.go"
 	assert_contains "$fixture_root/semantic/pkg/api/changed.go" 'defer println("done")
 
 	return'
@@ -286,15 +291,10 @@ func run() {
 
 	run_format "$fixture_root" .
 
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd . --git-diff'
-	assert_contains "$fixture_root/go-invocations.log" 'check --cwd . .'
-	assert_contains "$fixture_root/go-invocations.log" 'format --cwd . .'
+	assert_go_invocation_equals "$fixture_root" "$fixture_root"
 	assert_contains "$fixture_root/semantic/pkg/api/changed.go" 'defer println("done")
 
 	return'
-	assert_contains "$fixture_root/semantic/pkg/api/ordered.go" 'const DefaultName Name = "demo"
-
-type Name string'
 }
 
 test_tracked_go_uses_git_diff

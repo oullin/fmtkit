@@ -83,10 +83,12 @@ summarize_ts_format() {
 	local missing_count
 	local blank_lines_summary
 	local oxfmt_summary
+	local validation_summary
 
 	missing_count="$(grep -c '^\[blank-lines\] path not found, skipping:' "$log_file" || true)"
 	blank_lines_summary="$(grep '^\[blank-lines\] processed ' "$log_file" | tail -n 1 | sed 's/^\[blank-lines\] //' || true)"
 	oxfmt_summary="$(grep '^Finished in ' "$log_file" | tail -n 1 || true)"
+	validation_summary="$(grep '^\[validate-syntax\] checked ' "$log_file" | tail -n 1 | sed 's/^\[validate-syntax\] //' || true)"
 
 	if [[ -n "$blank_lines_summary" ]]; then
 		detail 'blank-lines' "$blank_lines_summary"
@@ -98,6 +100,10 @@ summarize_ts_format() {
 
 	if [[ -n "$oxfmt_summary" ]]; then
 		detail 'oxfmt' "$oxfmt_summary"
+	fi
+
+	if [[ -n "$validation_summary" ]]; then
+		detail 'validated' "$validation_summary"
 	fi
 }
 

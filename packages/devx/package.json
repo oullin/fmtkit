@@ -22,17 +22,20 @@
 		"#devx/rules.js": "./scripts/rules.ts",
 		"#devx/segment": "./scripts/segment.ts",
 		"#devx/segment.js": "./scripts/segment.ts",
+		"#devx/source-files": "./scripts/source-files.ts",
+		"#devx/source-files.js": "./scripts/source-files.ts",
 		"#devx/types": "./scripts/types.ts"
 	},
 	"scripts": {
 		"blank-lines": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts",
 		"blank-lines:check": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts --check",
+		"validate-syntax": "cd ../.. && tsx packages/devx/scripts/validate-syntax.ts",
 		"lint": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxlint --fix",
 		"lint:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxlint",
 		"oxfmt": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern",
 		"oxfmt:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
 		"check": "pnpm blank-lines:check && pnpm lint:check && pnpm oxfmt:check",
-		"test": "tsx --test scripts/blank-lines.test.ts scripts/__tests__/*.test.ts",
+		"test": "tsx --test scripts/*.test.ts scripts/__tests__/*.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {

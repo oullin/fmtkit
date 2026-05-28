@@ -21,6 +21,8 @@
 		"#devx/rules.js": "./rules.ts",
 		"#devx/segment": "./segment.ts",
 		"#devx/segment.js": "./segment.ts",
+		"#devx/source-files": "./source-files.ts",
+		"#devx/source-files.js": "./source-files.ts",
 		"#devx/types": "./types.ts"
 	}
 }

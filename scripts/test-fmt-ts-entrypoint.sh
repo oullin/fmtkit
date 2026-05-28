@@ -52,7 +52,7 @@ while IFS= read -r -d "" file; do
 	printf "oxfmt-file %s\n" "$file" >> "'"$log_file"'"
 done'
 
-touch "$support_dir/blank-lines.ts"
+touch "$support_dir/blank-lines.ts" "$support_dir/validate-syntax.ts"
 
 (
 	cd "$workdir"
@@ -61,7 +61,7 @@ touch "$support_dir/blank-lines.ts"
 		"$repo_root/cmd/fmt-ts" .
 )
 
-expected=$'tsx '"$support_dir"$'/blank-lines.ts .\ntsx-config 1 safe.directory *\ngit ls-files --cached --others --exclude-standard -z -- .\ngit-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts'
+expected=$'tsx '"$support_dir"$'/blank-lines.ts .\ntsx-config 1 safe.directory *\ngit ls-files --cached --others --exclude-standard -z -- .\ngit-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts\ntsx '"$support_dir"$'/validate-syntax.ts .\ntsx-config 1 safe.directory *'
 actual="$(<"$log_file")"
 
 if [[ "$actual" != "$expected" ]]; then

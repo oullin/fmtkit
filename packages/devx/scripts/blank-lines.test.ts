@@ -61,6 +61,35 @@ test('adds expected blank lines in Vue script blocks', async () => {
 	);
 });
 
+test('keeps adjacent computed declarations syntactically valid', async () => {
+	await withFixture(
+		{
+			'useAppController.ts': [
+				'import { computed, ref } from "vue";',
+				'',
+				'export function useAppController() {',
+				'\tconst searchQuery = ref("");',
+				'\tconst debouncedSearch = ref("");',
+				'\tconst normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase());',
+				'\tconst normalizedDebouncedSearch = computed(() => debouncedSearch.value.trim().toLowerCase());',
+				'',
+				'\treturn { normalizedSearch, normalizedDebouncedSearch };',
+				'}',
+				'',
+			].join('\n'),
+		},
+		async (dir) => {
+			run(tsx, [script, '.'], dir);
+			run(tsx, [script, '.'], dir);
+
+			const output = await readFile(join(dir, 'useAppController.ts'), 'utf8');
+
+			assert.doesNotMatch(output, /\);\);/);
+			assert.match(output, /const normalizedDebouncedSearch = computed\(\(\) => debouncedSearch\.value\.trim\(\)\.toLowerCase\(\)\);/);
+		},
+	);
+});
+
 test('ignores untracked ignored files and declaration files', async () => {
 	await withFixture(
 		{

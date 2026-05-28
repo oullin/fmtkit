@@ -19,3 +19,5 @@ export GIT_CONFIG_VALUE_0="*"
 
 git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \
 	| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern
+
+"$tsx_bin" "${support_dir}/validate-syntax.ts" "${args[@]}"

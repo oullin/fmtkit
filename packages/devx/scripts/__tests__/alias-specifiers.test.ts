@@ -58,6 +58,7 @@ function visit(node: unknown, fn: (node: Node) => void): void {
 
 async function listTypeScriptFiles(dir: string): Promise<string[]> {
 	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+
 	const files: string[] = [];
 
 	for (const entry of entries) {
@@ -106,10 +107,12 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 
 test('script module specifiers use aliases instead of relative paths', async () => {
 	const files = await listTypeScriptFiles(scriptsDir);
+
 	const violations: string[] = [];
 
 	for (const file of files) {
 		const source = await readFile(file, 'utf8');
+
 		const specifiers = collectModuleSpecifiers(file, source);
 
 		for (const specifier of specifiers) {

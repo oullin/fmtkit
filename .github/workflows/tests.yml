@@ -19,7 +19,6 @@ env:
 
 jobs:
     check:
-        if: github.event_name == 'push' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
         runs-on: ubuntu-latest
         strategy:
             fail-fast: false
@@ -109,6 +108,9 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
+            - uses: actions/checkout@v6
+              name: Checkout repository
+
             - uses: actions/download-artifact@v4
               name: Download coverage artifact
               with:

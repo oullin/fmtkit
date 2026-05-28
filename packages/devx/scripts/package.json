@@ -2,13 +2,25 @@
 	"type": "module",
 	"imports": {
 		"#devx/ast": "./ast.ts",
+		"#devx/ast.js": "./ast.ts",
 		"#devx/blank-line-inserter": "./blank-line-inserter.ts",
+		"#devx/blank-line-inserter.js": "./blank-line-inserter.ts",
+		"#devx/body-wrapper": "./body-wrapper.ts",
+		"#devx/body-wrapper.js": "./body-wrapper.ts",
 		"#devx/class-reorder": "./class-reorder.ts",
+		"#devx/class-reorder.js": "./class-reorder.ts",
+		"#devx/declaration-reorder": "./declaration-reorder.ts",
+		"#devx/declaration-reorder.js": "./declaration-reorder.ts",
 		"#devx/cli": "./cli.ts",
+		"#devx/cli.js": "./cli.ts",
 		"#devx/edits": "./edits.ts",
+		"#devx/edits.js": "./edits.ts",
 		"#devx/files": "./files.ts",
+		"#devx/files.js": "./files.ts",
 		"#devx/rules": "./rules.ts",
+		"#devx/rules.js": "./rules.ts",
 		"#devx/segment": "./segment.ts",
+		"#devx/segment.js": "./segment.ts",
 		"#devx/types": "./types.ts"
 	}
 }

@@ -16,6 +16,7 @@ export async function dirExists(dir: string): Promise<boolean> {
 
 export async function listSourceFiles(dir: string): Promise<string[]> {
 	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+
 	const files: string[] = [];
 
 	for (const entry of entries) {
@@ -35,12 +36,14 @@ export async function listSourceFiles(dir: string): Promise<string[]> {
 
 export async function processFile(file: string, check: boolean): Promise<boolean> {
 	const original = await readFile(file, 'utf8');
+
 	let updated = original;
 
 	if (file.endsWith('.vue')) {
 		const segments: { content: string; start: number; virtualName: string }[] = [];
 
 		VUE_SCRIPT_REGEX.lastIndex = 0;
+
 		let match: RegExpExecArray | null;
 
 		while ((match = VUE_SCRIPT_REGEX.exec(original)) !== null) {

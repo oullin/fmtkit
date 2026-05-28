@@ -20,7 +20,11 @@ function lineIndent(source: string, pos: number): string {
 }
 
 function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null {
-	if (body.type === 'BlockStatement' || body.type === 'IfStatement') {
+	if (body.type === 'BlockStatement') {
+		return null;
+	}
+
+	if (body.type === 'IfStatement' && owner.type === 'IfStatement' && owner.alternate === body) {
 		return null;
 	}
 

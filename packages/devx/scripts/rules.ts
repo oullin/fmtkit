@@ -126,6 +126,10 @@ function containsAwait(node: Node): boolean {
 		return true;
 	}
 
+	if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
+		return false;
+	}
+
 	for (const value of Object.values(node)) {
 		if (!value || typeof value !== 'object') {
 			continue;

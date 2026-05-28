@@ -36,7 +36,64 @@ function isSideEffectSafeExpression(node: Node | undefined): boolean {
 		return true;
 	}
 
-	return ['ArrayExpression', 'ArrowFunctionExpression', 'FunctionExpression', 'Literal', 'ObjectExpression', 'TemplateLiteral'].includes(node.type);
+	switch (node.type) {
+		case 'ArrowFunctionExpression':
+
+		case 'FunctionExpression':
+
+		case 'Identifier':
+
+		case 'Literal':
+			return true;
+
+		case 'ArrayExpression': {
+			const elements = node.elements as (Node | null)[] | undefined;
+
+			return (
+				Array.isArray(elements) &&
+				elements.every((element) => {
+					return element === null || isSideEffectSafeExpression(element);
+				})
+			);
+		}
+
+		case 'ObjectExpression': {
+			const properties = node.properties as Node[] | undefined;
+
+			return (
+				Array.isArray(properties) &&
+				properties.every((property) => {
+					if (property.type === 'SpreadElement') {
+						return isSideEffectSafeExpression(property.argument as Node | undefined);
+					}
+
+					if (property.type !== 'ObjectProperty' && property.type !== 'Property') {
+						return false;
+					}
+
+					const computed = Boolean((property as { computed?: unknown }).computed);
+					const key = property.key as Node | undefined;
+					const value = property.value as Node | undefined;
+
+					return (!computed || isSideEffectSafeExpression(key)) && isSideEffectSafeExpression(value);
+				})
+			);
+		}
+
+		case 'TemplateLiteral': {
+			const expressions = node.expressions as Node[] | undefined;
+
+			return (
+				Array.isArray(expressions) &&
+				expressions.every((expression) => {
+					return isSideEffectSafeExpression(expression);
+				})
+			);
+		}
+
+		default:
+			return false;
+	}
 }
 
 function isSafeConstDeclaration(node: Node): boolean {
@@ -49,7 +106,9 @@ function isSafeConstDeclaration(node: Node): boolean {
 	return (
 		Array.isArray(declarations) &&
 		declarations.every((declaration) => {
-			return isSideEffectSafeExpression(declaration.init as Node | undefined);
+			const id = declaration.id as Node | undefined;
+
+			return id?.type === 'Identifier' && isSideEffectSafeExpression(declaration.init as Node | undefined);
 		})
 	);
 }

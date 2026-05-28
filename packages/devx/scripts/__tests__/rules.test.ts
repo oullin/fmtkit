@@ -57,9 +57,34 @@ const cases: Case[] = [
 		].join('\n'),
 	},
 	{
+		name: 'nested if statement bodies are wrapped except else-if chains',
+		input: ['function run() {', '\tif (a) if (b) c();', '\tfor (const item of items) if (item.ready) consume(item);', '}', ''].join('\n'),
+		expected: [
+			'function run() {',
+			'\tif (a) {',
+			'\t\tif (b) {',
+			'\t\t\tc();',
+			'\t\t}',
+			'\t}',
+			'',
+			'\tfor (const item of items) {',
+			'\t\tif (item.ready) {',
+			'\t\t\tconsume(item);',
+			'\t\t}',
+			'\t}',
+			'}',
+			'',
+		].join('\n'),
+	},
+	{
 		name: 'await statements are isolated from adjacent code',
 		input: ['async function run() {', '\tconst before = 1;', '\tawait work();', '\tconst after = 2;', '}', ''].join('\n'),
 		expected: ['async function run() {', '\tconst before = 1;', '', '\tawait work();', '', '\tconst after = 2;', '}', ''].join('\n'),
+	},
+	{
+		name: 'await inside nested functions does not isolate parent statements',
+		input: ['function run() {', '\tconst onClick = async () => await work();', '\tconst after = 1;', '}', ''].join('\n'),
+		expected: ['function run() {', '\tconst onClick = async () => await work();', '\tconst after = 1;', '}', ''].join('\n'),
 	},
 	{
 		name: 'Vue primitive const declarations get a blank line above',
@@ -70,6 +95,16 @@ const cases: Case[] = [
 		name: 'multiline imports and consts move last in their groups',
 		input: ['import { z } from "z";', 'import {', '\ta,', '} from "a";', 'import { y } from "y";', 'const b = 1;', 'const a = {', '\tx: 1,', '};', 'const c = 2;', ''].join('\n'),
 		expected: ['import { z } from "z";', 'import { y } from "y";', '', 'import {', '\ta,', '} from "a";', '', 'const b = 1;', 'const c = 2;', '', 'const a = {', '\tx: 1,', '};', ''].join('\n'),
+	},
+	{
+		name: 'multiline consts with nested side effects keep their order',
+		input: ['const config = {', '\tvalue: makeValue(),', '};', 'const next = 1;', ''].join('\n'),
+		expected: ['const config = {', '\tvalue: makeValue(),', '};', '', 'const next = 1;', ''].join('\n'),
+	},
+	{
+		name: 'multiline destructuring consts keep their order',
+		input: ['const { value } = {', '\tvalue: 1,', '};', 'const next = value;', ''].join('\n'),
+		expected: ['const { value } = {', '\tvalue: 1,', '};', '', 'const next = value;', ''].join('\n'),
 	},
 ];
 

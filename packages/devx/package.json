@@ -38,6 +38,7 @@
 		"oxfmt:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
 		"check": "pnpm blank-lines:check && pnpm lint:check && pnpm oxfmt:check",
 		"test": "tsx --test scripts/*.test.ts scripts/__tests__/*.test.ts",
+		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=90 scripts/*.test.ts scripts/__tests__/*.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {

@@ -86,3 +86,18 @@ test('fails with a clear diagnostic for corrupted formatter output', async () =>
 		},
 	);
 });
+
+test('skips missing paths and ignores non-source arguments', async () => {
+	await withFixture(
+		{
+			'notes.md': '# Notes\n',
+		},
+		async (dir) => {
+			const result = spawnSync(process.execPath, [tsx, script, 'missing.ts', 'notes.md'], { cwd: dir, encoding: 'utf8' });
+
+			assert.equal(result.status, 0, result.stderr || result.stdout);
+			assert.match(result.stderr, /\[validate-syntax\] path not found, skipping: missing\.ts/);
+			assert.match(result.stdout, /\[validate-syntax\] checked 1 file\(s\)/);
+		},
+	);
+});

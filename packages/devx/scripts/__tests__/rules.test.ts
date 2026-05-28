@@ -92,6 +92,26 @@ const cases: Case[] = [
 		expected: ['function setupState() {', '\tconst before = 1;', '', '\tconst value = computed(() => 1);', '\tconst after = 2;', '}', ''].join('\n'),
 	},
 	{
+		name: 'expression followed by let gets a blank line',
+		input: ['function run() {', '\tdoWork();', '\tlet value = 1;', '\tlet next = 2;', '}', ''].join('\n'),
+		expected: ['function run() {', '\tdoWork();', '', '\tlet value = 1;', '\tlet next = 2;', '}', ''].join('\n'),
+	},
+	{
+		name: 'let followed by expression gets a blank line',
+		input: ['function run() {', '\tlet value = 1;', '\tlet next = 2;', '\tdoWork(value + next);', '}', ''].join('\n'),
+		expected: ['function run() {', '\tlet value = 1;', '\tlet next = 2;', '', '\tdoWork(value + next);', '}', ''].join('\n'),
+	},
+	{
+		name: 'const followed by let gets a blank line',
+		input: ['function run() {', '\tconst before = 1;', '\tlet value = before;', '}', ''].join('\n'),
+		expected: ['function run() {', '\tconst before = 1;', '', '\tlet value = before;', '}', ''].join('\n'),
+	},
+	{
+		name: 'consecutive lets stay tight',
+		input: ['function run() {', '\tlet value = 1;', '\tlet next = 2;', '\treturn value + next;', '}', ''].join('\n'),
+		expected: ['function run() {', '\tlet value = 1;', '\tlet next = 2;', '', '\treturn value + next;', '}', ''].join('\n'),
+	},
+	{
 		name: 'multiline imports and consts move last in their groups',
 		input: ['import { z } from "z";', 'import {', '\ta,', '} from "a";', 'import { y } from "y";', 'const b = 1;', 'const a = {', '\tx: 1,', '};', 'const c = 2;', ''].join('\n'),
 		expected: ['import { z } from "z";', 'import { y } from "y";', '', 'import {', '\ta,', '} from "a";', '', 'const b = 1;', 'const c = 2;', '', 'const a = {', '\tx: 1,', '};', ''].join('\n'),

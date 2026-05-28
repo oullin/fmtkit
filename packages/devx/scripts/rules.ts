@@ -121,6 +121,10 @@ function isConstDeclaration(node: Node): boolean {
 	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'const';
 }
 
+function isLetDeclaration(node: Node): boolean {
+	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'let';
+}
+
 function containsAwait(node: Node): boolean {
 	if (node.type === 'AwaitExpression') {
 		return true;
@@ -177,6 +181,10 @@ export function needsBlankLine(prev: Node, next: Node): boolean {
 	}
 
 	if (isConstDeclaration(prev) !== isConstDeclaration(next)) {
+		return true;
+	}
+
+	if (isLetDeclaration(prev) !== isLetDeclaration(next)) {
 		return true;
 	}
 

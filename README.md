@@ -382,6 +382,25 @@ func run() {
 }
 ```
 
+**Blank line after `t.Helper()`**
+
+Standalone `t.Helper()` calls are followed by a blank line when another statement follows immediately.
+
+```go
+// before
+func helper(t *testing.T) {
+    t.Helper()
+    value := 1
+}
+
+// after
+func helper(t *testing.T) {
+    t.Helper()
+
+    value := 1
+}
+```
+
 **Blank lines before top-level `routes.*` calls**
 
 Top-level route registration calls on a `routes` registry are separated with a blank line before each later `routes.Add(...)` or `routes.Group(...)` call.

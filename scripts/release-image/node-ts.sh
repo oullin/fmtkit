@@ -12,7 +12,7 @@ verify_node_ts_image() {
 	release_image_run_in_workdir "$tmpdir" "$image" .
 	assert_file_contains "${tmpdir}/sample.ts" 'const value = { name: "demo" };'
 
-	if release_image_run "$image" go version >/dev/null 2>&1; then
-		release_image_fail "node-ts image unexpectedly accepts Go CLI commands: ${image}"
+	if release_image_run --entrypoint sh "$image" -c 'command -v go' >/dev/null 2>&1; then
+		release_image_fail "node-ts image unexpectedly ships a Go toolchain: ${image}"
 	fi
 }

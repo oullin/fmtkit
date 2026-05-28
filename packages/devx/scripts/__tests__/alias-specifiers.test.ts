@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseSync } from 'oxc-parser';
@@ -14,7 +14,8 @@ type Node = {
 	[key: string]: unknown;
 };
 
-const scriptsDir = fileURLToPath(new URL('..', import.meta.url));
+const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
+const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#devx/ast')));
 
 function isRelativeSpecifier(value: string): boolean {
 	return value.startsWith('./') || value.startsWith('../');
@@ -56,13 +57,23 @@ function visit(node: unknown, fn: (node: Node) => void): void {
 	}
 }
 
-async function listTypeScriptFiles(dir: string): Promise<string[]> {
+function isSourceFile(name: string): boolean {
+	for (const extension of sourceExtensions) {
+		if (name.endsWith(extension)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+async function listSourceFiles(dir: string): Promise<string[]> {
 	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
 
 	const files: string[] = [];
 
 	for (const entry of entries) {
-		if (!entry.isFile() || !entry.name.endsWith('.ts')) {
+		if (!entry.isFile() || !isSourceFile(entry.name)) {
 			continue;
 		}
 
@@ -106,7 +117,7 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 }
 
 test('script module specifiers use aliases instead of relative paths', async () => {
-	const files = await listTypeScriptFiles(scriptsDir);
+	const files = await listSourceFiles(scriptsDir);
 
 	const violations: string[] = [];
 

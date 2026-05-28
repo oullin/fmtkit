@@ -4,6 +4,8 @@
 	"imports": {
 		"#devx/ast": "./scripts/ast.ts",
 		"#devx/ast.js": "./scripts/ast.ts",
+		"#devx/blank-lines": "./scripts/blank-lines.ts",
+		"#devx/blank-lines.js": "./scripts/blank-lines.ts",
 		"#devx/blank-line-inserter": "./scripts/blank-line-inserter.ts",
 		"#devx/blank-line-inserter.js": "./scripts/blank-line-inserter.ts",
 		"#devx/body-wrapper": "./scripts/body-wrapper.ts",
@@ -22,7 +24,9 @@
 		"#devx/rules.js": "./scripts/rules.ts",
 		"#devx/segment": "./scripts/segment.ts",
 		"#devx/segment.js": "./scripts/segment.ts",
-		"#devx/types": "./scripts/types.ts"
+		"#devx/types": "./scripts/types.ts",
+		"#devx/validate-syntax": "./scripts/validate-syntax.ts",
+		"#devx/validate-syntax.js": "./scripts/validate-syntax.ts"
 	},
 	"scripts": {
 		"blank-lines": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts",

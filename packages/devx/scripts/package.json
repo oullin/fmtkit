@@ -3,6 +3,8 @@
 	"imports": {
 		"#devx/ast": "./ast.ts",
 		"#devx/ast.js": "./ast.ts",
+		"#devx/blank-lines": "./blank-lines.ts",
+		"#devx/blank-lines.js": "./blank-lines.ts",
 		"#devx/blank-line-inserter": "./blank-line-inserter.ts",
 		"#devx/blank-line-inserter.js": "./blank-line-inserter.ts",
 		"#devx/body-wrapper": "./body-wrapper.ts",
@@ -21,6 +23,8 @@
 		"#devx/rules.js": "./rules.ts",
 		"#devx/segment": "./segment.ts",
 		"#devx/segment.js": "./segment.ts",
-		"#devx/types": "./types.ts"
+		"#devx/types": "./types.ts",
+		"#devx/validate-syntax": "./validate-syntax.ts",
+		"#devx/validate-syntax.js": "./validate-syntax.ts"
 	}
 }

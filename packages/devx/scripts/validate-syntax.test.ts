@@ -6,9 +6,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const script = join(repoRoot, 'packages/devx/scripts/validate-syntax.ts');
-const tsx = join(repoRoot, 'packages/devx/node_modules/.bin/tsx');
+const script = fileURLToPath(import.meta.resolve('#devx/validate-syntax'));
+const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-validate-syntax-'));
@@ -35,7 +34,7 @@ test('accepts valid TypeScript and Vue script blocks', async () => {
 			'Valid.vue': '<script setup lang="ts">\nconst value = 1;\n</script>\n<template>{{ value }}</template>\n',
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, 'valid.ts', 'Valid.vue'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(process.execPath, [tsx, script, 'valid.ts', 'Valid.vue'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 0, result.stderr || result.stdout);
 			assert.match(result.stdout, /\[validate-syntax\] checked 2 file\(s\)/);
@@ -50,7 +49,7 @@ test('accepts Vue TSX and JSX script blocks', async () => {
 			'Legacy.vue': "<script lang='jsx'>\nconst view = <section>Ready</section>;\n</script>\n",
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, 'Component.vue', 'Legacy.vue'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(process.execPath, [tsx, script, 'Component.vue', 'Legacy.vue'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 0, result.stderr || result.stdout);
 			assert.match(result.stdout, /\[validate-syntax\] checked 2 file\(s\)/);
@@ -64,7 +63,7 @@ test('reports Vue syntax errors on original file lines', async () => {
 			'Broken.vue': '<template>\n\t<div />\n</template>\n<script setup lang="ts">\nconst broken = ;\n</script>\n',
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, 'Broken.vue'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(process.execPath, [tsx, script, 'Broken.vue'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, /\[validate-syntax\].*Broken\.vue/);
@@ -79,7 +78,7 @@ test('fails with a clear diagnostic for corrupted formatter output', async () =>
 			'useAppController.ts': 'const normalizedDebouncedSearch = computed(() => debouncedSearch.value.trim().toLowerCase()););\n',
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, 'useAppController.ts'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(process.execPath, [tsx, script, 'useAppController.ts'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, /\[validate-syntax\].*useAppController\.ts/);

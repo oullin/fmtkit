@@ -3,6 +3,7 @@ import { parseSync } from 'oxc-parser';
 
 const cwd = process.cwd();
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
+const VUE_SCRIPT_LANG_REGEX = /\blang\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i;
 
 type ParseError = {
 	message?: unknown;
@@ -31,6 +32,17 @@ function formatError(file: string, error: ParseError): string {
 	return `[validate-syntax] ${file}: syntax validation failed`;
 }
 
+function scriptExtension(openingTag: string): 'ts' | 'tsx' {
+	const match = openingTag.match(VUE_SCRIPT_LANG_REGEX);
+	const lang = match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+
+	return lang.toLowerCase() === 'tsx' || lang.toLowerCase() === 'jsx' ? 'tsx' : 'ts';
+}
+
+function scriptPrefix(content: string, scriptStart: number): string {
+	return content.slice(0, scriptStart).replace(/[^\r\n]/g, ' ');
+}
+
 function validateVue(file: string, content: string): string[] {
 	const failures: string[] = [];
 
@@ -39,8 +51,11 @@ function validateVue(file: string, content: string): string[] {
 	let match: RegExpExecArray | null;
 
 	while ((match = VUE_SCRIPT_REGEX.exec(content)) !== null) {
+		const openingTag = match[1];
 		const script = match[2];
-		const errors = parseErrors(`${file}.script.ts`, script);
+		const scriptStart = match.index + openingTag.length;
+		const virtualContent = scriptPrefix(content, scriptStart) + script;
+		const errors = parseErrors(`${file}.script.${scriptExtension(openingTag)}`, virtualContent);
 
 		for (const error of errors) {
 			failures.push(formatError(file, error));

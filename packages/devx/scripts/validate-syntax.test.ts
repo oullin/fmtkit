@@ -43,6 +43,36 @@ test('accepts valid TypeScript and Vue script blocks', async () => {
 	);
 });
 
+test('accepts Vue TSX and JSX script blocks', async () => {
+	await withFixture(
+		{
+			'Component.vue': '<script setup lang="tsx">\nconst view = <section>Ready</section>;\n</script>\n',
+			'Legacy.vue': "<script lang='jsx'>\nconst view = <section>Ready</section>;\n</script>\n",
+		},
+		async (dir) => {
+			const result = spawnSync(tsx, [script, 'Component.vue', 'Legacy.vue'], { cwd: dir, encoding: 'utf8' });
+
+			assert.equal(result.status, 0, result.stderr || result.stdout);
+			assert.match(result.stdout, /\[validate-syntax\] checked 2 file\(s\)/);
+		},
+	);
+});
+
+test('reports Vue syntax errors on original file lines', async () => {
+	await withFixture(
+		{
+			'Broken.vue': '<template>\n\t<div />\n</template>\n<script setup lang="ts">\nconst broken = ;\n</script>\n',
+		},
+		async (dir) => {
+			const result = spawnSync(tsx, [script, 'Broken.vue'], { cwd: dir, encoding: 'utf8' });
+
+			assert.equal(result.status, 1);
+			assert.match(result.stderr, /\[validate-syntax\].*Broken\.vue/);
+			assert.match(result.stderr, /5 \| const broken = ;/);
+		},
+	);
+});
+
 test('fails with a clear diagnostic for corrupted formatter output', async () => {
 	await withFixture(
 		{

@@ -34,6 +34,43 @@ const cases: Case[] = [
 		input: ['namespace Utils {', '\texport const value = 1;', '}', 'function consume() {', '\treturn Utils.value;', '}', ''].join('\n'),
 		expected: ['namespace Utils {', '\texport const value = 1;', '}', '', 'function consume() {', '\treturn Utils.value;', '}', ''].join('\n'),
 	},
+	{
+		name: 'inline statement bodies are wrapped',
+		input: ['function run() {', '\tif (a) b(); else if (c) d(); else e();', '\tfor (const item of items) consume(item);', '\tconst fn = (value: number) => value + 1;', '}', ''].join('\n'),
+		expected: [
+			'function run() {',
+			'\tif (a) {',
+			'\t\tb();',
+			'\t} else if (c) {',
+			'\t\td();',
+			'\t} else {',
+			'\t\te();',
+			'\t}',
+			'',
+			'\tfor (const item of items) {',
+			'\t\tconsume(item);',
+			'\t}',
+			'',
+			'\tconst fn = (value: number) => value + 1;',
+			'}',
+			'',
+		].join('\n'),
+	},
+	{
+		name: 'await statements are isolated from adjacent code',
+		input: ['async function run() {', '\tconst before = 1;', '\tawait work();', '\tconst after = 2;', '}', ''].join('\n'),
+		expected: ['async function run() {', '\tconst before = 1;', '', '\tawait work();', '', '\tconst after = 2;', '}', ''].join('\n'),
+	},
+	{
+		name: 'Vue primitive const declarations get a blank line above',
+		input: ['function setupState() {', '\tconst before = 1;', '\tconst value = computed(() => 1);', '\tconst after = 2;', '}', ''].join('\n'),
+		expected: ['function setupState() {', '\tconst before = 1;', '', '\tconst value = computed(() => 1);', '\tconst after = 2;', '}', ''].join('\n'),
+	},
+	{
+		name: 'multiline imports and consts move last in their groups',
+		input: ['import { z } from "z";', 'import {', '\ta,', '} from "a";', 'import { y } from "y";', 'const b = 1;', 'const a = {', '\tx: 1,', '};', 'const c = 2;', ''].join('\n'),
+		expected: ['import { z } from "z";', 'import { y } from "y";', '', 'import {', '\ta,', '} from "a";', '', 'const b = 1;', 'const c = 2;', '', 'const a = {', '\tx: 1,', '};', ''].join('\n'),
+	},
 ];
 
 describe('blank-line rules', () => {

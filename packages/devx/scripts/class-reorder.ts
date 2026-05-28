@@ -52,7 +52,10 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	}
 
 	const desired = [...properties, ...ctors, ...methods];
-	const isSameOrder = desired.every((m, i) => m === members[i]);
+
+	const isSameOrder = desired.every((m, i) => {
+		return m === members[i];
+	});
 
 	if (isSameOrder) {
 		return null;
@@ -78,7 +81,11 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	}
 
 	const indent = indentMatch[1];
-	const memberSlices = desired.map((m) => source.slice(getStart(m), getEnd(m)));
+
+	const memberSlices = desired.map((m) => {
+		return source.slice(getStart(m), getEnd(m));
+	});
+
 	const lastOriginal = members[members.length - 1];
 	const closing = source.slice(getEnd(lastOriginal), bodyEnd - 1);
 	const replacement = `\n${indent}${memberSlices.join(`\n${indent}`)}${closing}`;

@@ -54,7 +54,10 @@ export function computeInsertPositions(content: string, virtualName: string, bas
 }
 
 export function insertBlankLines(content: string, positions: number[]): string {
-	const sorted = [...new Set(positions)].sort((a, b) => b - a);
+	const sorted = [...new Set(positions)].sort((a, b) => {
+		return b - a;
+	});
+
 	let out = content;
 
 	for (const pos of sorted) {

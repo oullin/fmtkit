@@ -27,6 +27,7 @@ async function withFixture(files: Record<string, string>, fn: (dir: string) => P
 		}
 
 		run('git', ['add', '.'], dir);
+
 		await fn(dir);
 	} finally {
 		await rm(dir, { recursive: true, force: true });
@@ -53,8 +54,9 @@ test('adds expected blank lines in Vue script blocks', async () => {
 
 			const output = await readFile(join(dir, 'AgentDock.vue'), 'utf8');
 
-			assert.match(output, /const id = hoveredId\.value;\n\n    if \(!id\) return null;\n\n    if \(id in systemLabels\)/);
-			assert.match(output, /shortcut: undefined \};\n\n    return props\.items/);
+			assert.match(output, /const hoveredItem = computed\(\(\) => \{\n    const id = hoveredId\.value;\n\n    if \(!id\) \{/);
+			assert.match(output, /return null;\n    \}\n\n    if \(id in systemLabels\) \{/);
+			assert.match(output, /shortcut: undefined \};\n    \}\n\n    return props\.items/);
 		},
 	);
 });
@@ -71,10 +73,12 @@ test('ignores untracked ignored files and declaration files', async () => {
 			run(tsx, [script, '.'], dir);
 
 			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
+
 			const ignored = await readFile(join(dir, 'ignored.ts'), 'utf8');
+
 			const types = await readFile(join(dir, 'types.d.ts'), 'utf8');
 
-			assert.match(tracked, /const value = 1;\n\n\tif \(value\) return value;\n\n\treturn 0;/);
+			assert.match(tracked, /const value = 1;\n\n\tif \(value\) \{\n\t\treturn value;\n\t\}\n\n\treturn 0;/);
 			assert.doesNotMatch(ignored, /const value = 1;\n\n\tif/);
 			assert.doesNotMatch(types, /value: string;\n\ndeclare function/);
 		},
@@ -95,6 +99,22 @@ test('skips tracked files missing from the working tree', async () => {
 			const kept = await readFile(join(dir, 'kept.ts'), 'utf8');
 
 			assert.match(kept, /const value = 1;\n\n\treturn value;/);
+		},
+	);
+});
+
+test('CLI uses modular formatter for body wrapping and declaration ordering', async () => {
+	await withFixture(
+		{
+			'tracked.ts': ['import {', '\ta,', '} from "a";', 'import { b } from "b";', 'function run() {', '\tif (ready) done();', '}', ''].join('\n'),
+		},
+		async (dir) => {
+			run(tsx, [script, '.'], dir);
+
+			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
+
+			assert.match(tracked, /import \{ b \} from "b";\n\nimport \{\n\ta,\n\} from "a";/);
+			assert.match(tracked, /if \(ready\) \{\n\t\tdone\(\);\n\t\}/);
 		},
 	);
 });

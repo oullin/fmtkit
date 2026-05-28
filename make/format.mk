@@ -16,6 +16,7 @@ format-run:
 		dockerfile='$(strip $(FORMATTER_DOCKERFILE))'; \
 		policy='$(strip $(FORMATTER_BUILD))'; \
 		expected_version='go-fmt $(strip $(VERSION))'; \
+		expected_fingerprint='$(strip $(FORMATTER_FINGERPRINT))'; \
 		build_reason=''; \
 		printf '\n%s==>%s %sEnsuring formatter image%s\n' "$$cyan" "$$reset" "$$bold" "$$reset"; \
 		printf '    %s%-12s%s %s\n' "$$dim" image "$$reset" "$$image"; \
@@ -30,6 +31,13 @@ format-run:
 						build_reason='version changed'; \
 						printf '    %s%-12s%s %s\n' "$$dim" current "$$reset" "$${image_version:-unknown}"; \
 						printf '    %s%-12s%s %s\n' "$$dim" expected "$$reset" "$$expected_version"; \
+					else \
+						image_fingerprint="$$(docker image inspect "$$image" --format '{{ index .Config.Labels "local.go-fmt.formatter-fingerprint" }}' 2>/dev/null || true)"; \
+						if [[ "$$image_fingerprint" != "$$expected_fingerprint" ]]; then \
+							build_reason='support changed'; \
+							printf '    %s%-12s%s %s\n' "$$dim" current "$$reset" "$${image_fingerprint:-unknown}"; \
+							printf '    %s%-12s%s %s\n' "$$dim" expected "$$reset" "$$expected_fingerprint"; \
+						fi; \
 					fi; \
 				fi; \
 				;; \
@@ -55,7 +63,7 @@ format-run:
 		elif [[ -n "$$build_reason" ]]; then \
 			printf '    %s%-12s%s %s\n' "$$dim" reason "$$reset" "$$build_reason"; \
 			build_log="$$(mktemp)"; \
-			if docker build --build-arg VERSION='$(strip $(VERSION))' -f "$$dockerfile" -t "$$image" . >"$$build_log" 2>&1; then \
+			if docker build --build-arg VERSION='$(strip $(VERSION))' --label "local.go-fmt.formatter-fingerprint=$$expected_fingerprint" -f "$$dockerfile" -t "$$image" . >"$$build_log" 2>&1; then \
 				printf '    %s%-12s%s %s%s%s\n' "$$green" status "$$reset" "$$green" built "$$reset"; \
 				rm -f "$$build_log"; \
 			else \

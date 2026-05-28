@@ -109,6 +109,9 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
+            - uses: actions/checkout@v6
+              name: Checkout repository
+
             - uses: actions/download-artifact@v4
               name: Download coverage artifact
               with:

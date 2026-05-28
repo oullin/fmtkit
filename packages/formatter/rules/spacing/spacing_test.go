@@ -1,11 +1,19 @@
 package spacing
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestName(t *testing.T) {
+	if got := New().Name(); got != "spacing" {
+		t.Fatalf("expected spacing name, got %q", got)
+	}
+}
 
 func TestApplyFindsMissingBlankLineAfterIf(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
@@ -363,6 +371,96 @@ func run() {
 
 	if !strings.Contains(string(formatted), "rand.Int()\n\n\tprintln(\"done\")") {
 		t.Fatalf("expected blank line after rand call, got:\n%s", formatted)
+	}
+}
+
+func TestApplyFormatsBlankLineAfterTestingHelperCall(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "testing"
+
+func helper(t *testing.T) {
+	t.Helper()
+	value := 1
+	_ = value
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(violations))
+	}
+
+	if !strings.Contains(violations[0].Message, "after t.Helper call") {
+		t.Fatalf("unexpected message %q", violations[0].Message)
+	}
+
+	if !strings.Contains(string(formatted), "t.Helper()\n\n\tvalue := 1") {
+		t.Fatalf("expected blank line after t.Helper call, got:\n%s", formatted)
+	}
+}
+
+func TestApplyKeepsExistingBlankLineAfterTestingHelperCall(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "testing"
+
+func helper(t *testing.T) {
+	t.Helper()
+
+	value := 1
+	_ = value
+}
+`)
+
+	original := string(mustReadFile(t, path))
+	violations, formatted, err := New().Apply(path, []byte(original))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations, got %d", len(violations))
+	}
+
+	if string(formatted) != original {
+		t.Fatalf("expected unchanged output, got:\n%s", formatted)
+	}
+}
+
+func TestApplyIgnoresNestedTestingHelperCall(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "testing"
+
+func helper(t *testing.T) {
+	wrap(t.Helper())
+	value := 1
+	_ = value
+}
+
+func wrap(any) {}
+`)
+
+	original := string(mustReadFile(t, path))
+	violations, formatted, err := New().Apply(path, []byte(original))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations, got %d", len(violations))
+	}
+
+	if string(formatted) != original {
+		t.Fatalf("expected unchanged output, got:\n%s", formatted)
 	}
 }
 
@@ -1343,6 +1441,146 @@ func run(values []int) {
 
 	if !strings.Contains(string(formatted), "println(\"start\")\n\n\tslices := sliceOps{}\n\n\tslices.Sort(values)") {
 		t.Fatalf("expected generic call spacing, got:\n%s", formatted)
+	}
+}
+
+func TestApplyFormatsMultiValueVarAssignedIIFE(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+func run() {
+	var first, second = 1, func() int {
+		return 2
+	}()
+	println(first, second)
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	found := false
+
+	for _, violation := range violations {
+		if strings.Contains(violation.Message, "after anonymous function assignment") {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Fatalf("expected anonymous function assignment violation, got %#v", violations)
+	}
+
+	if !strings.Contains(string(formatted), "}()\n\n\tprintln(first, second)") {
+		t.Fatalf("expected blank line after multi-value IIFE assignment, got:\n%s", formatted)
+	}
+}
+
+func TestHasOutOfOrderTypeDecls(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want bool
+	}{
+		{
+			name: "ordered",
+			src: `package sample
+
+type config struct{}
+
+func run() {}
+`,
+			want: false,
+		},
+		{
+			name: "out of order",
+			src: `package sample
+
+func run() {}
+
+type config struct{}
+`,
+			want: true,
+		},
+		{
+			name: "embed anchor resets segment",
+			src: `package sample
+
+import "embed"
+
+//go:embed foo.txt
+var rootTemplateFS embed.FS
+
+type config struct{}
+`,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), "sample.go", tt.src, parser.ParseComments)
+
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+
+			if got := hasOutOfOrderTypeDecls(file); got != tt.want {
+				t.Fatalf("expected %v, got %v", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestCollapseEmbedSpacingVarDeclStarts(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "var keyword",
+			src:  "package sample\n\n//go:embed foo.txt\n\nvar rootTemplateFS embed.FS\n",
+			want: "package sample\n\n//go:embed foo.txt\nvar rootTemplateFS embed.FS\n",
+		},
+		{
+			name: "var group",
+			src:  "package sample\n\n//go:embed foo.txt\n\nvar (\n\trootTemplateFS embed.FS\n)\n",
+			want: "package sample\n\n//go:embed foo.txt\nvar (\n\trootTemplateFS embed.FS\n)\n",
+		},
+		{
+			name: "not var declaration",
+			src:  "package sample\n\n//go:embed foo.txt\n\nvariant := true\n",
+			want: "package sample\n\n//go:embed foo.txt\n\nvariant := true\n",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(collapseEmbedSpacing([]byte(tt.src))); got != tt.want {
+				t.Fatalf("unexpected collapsed source:\n%s", got)
+			}
+		})
+	}
+}
+
+func TestLineStartOffsetBounds(t *testing.T) {
+	starts := buildLineStarts([]byte("first\nsecond\nthird"))
+
+	if got := lineStartOffset(starts, 0); got != 0 {
+		t.Fatalf("expected line 0 offset 0, got %d", got)
+	}
+
+	if got := lineStartOffset(starts, 99); got != len("first\nsecond\n") {
+		t.Fatalf("expected final line offset, got %d", got)
 	}
 }
 

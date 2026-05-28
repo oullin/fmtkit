@@ -218,6 +218,10 @@ func statementGapRule(current ast.Stmt, next ast.Stmt, aliases importAliases, fs
 }
 
 func requiresTrailingBlankLine(current ast.Stmt, next ast.Stmt, aliases importAliases, fset *token.FileSet) (string, bool) {
+	if isTestingHelperCall(current) {
+		return "t.Helper call", true
+	}
+
 	if isAnonymousFuncAssignmentStmt(current, fset) {
 		return "anonymous function assignment", true
 	}
@@ -284,6 +288,18 @@ func routeRegistryCallLabel(stmt ast.Stmt) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func isTestingHelperCall(stmt ast.Stmt) bool {
+	selector, ok := selectorCall(stmt)
+
+	if !ok || selector.Sel.Name != "Helper" {
+		return false
+	}
+
+	receiver, ok := selector.X.(*ast.Ident)
+
+	return ok && receiver.Name == "t"
 }
 
 func statementLabel(stmt ast.Stmt, aliases importAliases) string {

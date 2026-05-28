@@ -26,19 +26,15 @@ write_executable() {
 	chmod +x "$path"
 }
 
-write_executable "$bin_dir/git" '#!/usr/bin/env bash
+write_executable "$bin_dir/fmt-sources" '#!/usr/bin/env bash
 set -euo pipefail
-printf "git %s\n" "$*" >> "'"$log_file"'"
-printf "git-config %s %s %s\n" "${GIT_CONFIG_COUNT:-}" "${GIT_CONFIG_KEY_0:-}" "${GIT_CONFIG_VALUE_0:-}" >> "'"$log_file"'"
-if [[ "${1:-}" == "config" ]]; then
+printf "fmt-sources %s\n" "$*" >> "'"$log_file"'"
+printf "fmt-sources-config %s %s %s\n" "${GIT_CONFIG_COUNT:-}" "${GIT_CONFIG_KEY_0:-}" "${GIT_CONFIG_VALUE_0:-}" >> "'"$log_file"'"
+if [[ "${1:-}" == "--include-declarations" ]]; then
+	printf "sample.ts\0types.d.ts\0"
 	exit 0
 fi
-if [[ "${1:-}" == "ls-files" ]]; then
-	printf "sample.ts\0"
-	exit 0
-fi
-printf "unexpected git command: %s\n" "$*" >&2
-exit 1'
+printf "sample.ts\0"'
 
 write_executable "$support_dir/node_modules/.bin/tsx" '#!/usr/bin/env bash
 set -euo pipefail
@@ -52,16 +48,17 @@ while IFS= read -r -d "" file; do
 	printf "oxfmt-file %s\n" "$file" >> "'"$log_file"'"
 done'
 
-touch "$support_dir/blank-lines.ts"
+touch "$support_dir/blank-lines.ts" "$support_dir/validate-syntax.ts"
 
 (
 	cd "$workdir"
 	PATH="$bin_dir:$PATH" \
 		GO_FMT_SUPPORT_DIR="$support_dir" \
+		GO_FMT_SOURCES_BIN="$bin_dir/fmt-sources" \
 		"$repo_root/cmd/fmt-ts" .
 )
 
-expected=$'tsx '"$support_dir"$'/blank-lines.ts .\ntsx-config 1 safe.directory *\ngit ls-files --cached --others --exclude-standard -z -- .\ngit-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts'
+expected=$'fmt-sources .\nfmt-sources-config 1 safe.directory *\nfmt-sources --include-declarations .\nfmt-sources-config 1 safe.directory *\ntsx '"$support_dir"$'/blank-lines.ts sample.ts\ntsx-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts\ntsx '"$support_dir"$'/validate-syntax.ts sample.ts types.d.ts\ntsx-config 1 safe.directory *'
 actual="$(<"$log_file")"
 
 if [[ "$actual" != "$expected" ]]; then

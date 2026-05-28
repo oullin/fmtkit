@@ -13,7 +13,7 @@ RELEASE_PLATFORMS ?= darwin/amd64 darwin/arm64 linux/amd64 linux/arm64## Space-s
 FORMATTER_IMAGE ?= go-fmt-full:local## Local Docker image used by make format-all
 FORMATTER_DOCKERFILE ?= docker/Dockerfile.full## Dockerfile used for the local formatter image
 FORMATTER_BUILD ?= auto## Formatter image build policy: auto, always, or never
-FORMATTER_FINGERPRINT ?= $(shell { printf '%s\n' '$(FORMATTER_DOCKERFILE)' package.json pnpm-lock.yaml cmd/fmt-ts cmd/fmt-all packages/devx/package.json packages/devx/scripts/package.json; find packages/devx/scripts -maxdepth 1 -type f -name '*.ts' -print; } | sort | while IFS= read -r f; do [ -f "$$f" ] && shasum -a 256 "$$f"; done | shasum -a 256 | awk '{print $$1}')## Fingerprint used to invalidate cached local formatter images
+FORMATTER_FINGERPRINT ?= $(shell { printf '%s\n' '$(FORMATTER_DOCKERFILE)' package.json pnpm-lock.yaml cmd/fmt-ts cmd/fmt-ts-files.sh cmd/fmt-all packages/devx/package.json packages/devx/scripts/package.json; find packages/devx/scripts -maxdepth 1 -type f -name '*.ts' -print; } | sort | while IFS= read -r f; do [ -f "$$f" ] && shasum -a 256 "$$f"; done | shasum -a 256 | awk '{print $$1}')## Fingerprint used to invalidate cached local formatter images
 GO_IMAGE ?= go-fmt-go:local## Local Go-only Docker image
 NODE_TS_IMAGE ?= go-fmt-node-ts:local## Local Node/TS-only Docker image
 FULL_IMAGE ?= go-fmt-full:local## Local full Docker image

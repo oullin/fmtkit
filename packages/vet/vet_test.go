@@ -58,7 +58,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 	workspaceFile := filepath.Join(workspaceRoot, "go.work")
 	moduleFile := filepath.Join(moduleRoot, "go.mod")
 
-	testutil.WriteFile(t, workspaceFile, "go 1.25.0\n")
+	testutil.WriteFile(t, workspaceFile, "go 1.26.0\n")
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
 	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
@@ -127,7 +127,7 @@ func run() {
 	println("ok")
 }
 `)
-	testutil.WriteGoWork(t, workspaceRoot, `go 1.25.0
+	testutil.WriteGoWork(t, workspaceRoot, `go 1.26.0
 
 use (
 	./module-a

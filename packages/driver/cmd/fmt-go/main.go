@@ -30,6 +30,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return cli.
 			NewRunner(stdout, stderr).
 			Run(cli.FormatMode, args[1:])
+	case "sources":
+		return cli.RunSources(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		fmt.Fprintf(stdout, "go-fmt %s\n", version)
 
@@ -50,4 +52,5 @@ func run(args []string, stdout, stderr io.Writer) int {
 func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "go-fmt check [--host-path /absolute/host/path] [paths...]\n\n")
 	fmt.Fprintf(w, "go-fmt format [--host-path /absolute/host/path] [paths...]\n\n")
+	fmt.Fprintf(w, "go-fmt sources [--include-declarations] [paths...]\n\n")
 }

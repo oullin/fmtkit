@@ -7,6 +7,7 @@
 		"format-all": "make format-all",
 		"lint": "./scripts/with-storage-env.sh pnpm --filter devx run lint:check",
 		"test": "./scripts/with-storage-env.sh pnpm turbo run test --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver --filter=devx",
+		"test:coverage": "./scripts/test-coverage.sh",
 		"typecheck": "./scripts/with-storage-env.sh pnpm --filter devx run typecheck",
 		"vet": "./scripts/with-storage-env.sh pnpm turbo run vet --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver"
 	},

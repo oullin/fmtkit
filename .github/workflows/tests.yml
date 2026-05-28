@@ -63,6 +63,10 @@ jobs:
             - name: Check ${{ matrix.workspace }}
               run: ./scripts/with-storage-env.sh pnpm turbo run check --cache-dir=storage/.cache/turbo --filter=${{ matrix.workspace }}
 
+            - name: TypeScript - Run devx tests with coverage
+              if: matrix.workspace == 'devx'
+              run: ./scripts/with-storage-env.sh pnpm --filter devx run test:coverage
+
     test:
         needs: check
         runs-on: ubuntu-latest

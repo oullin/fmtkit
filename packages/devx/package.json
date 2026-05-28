@@ -4,6 +4,8 @@
 	"imports": {
 		"#devx/ast": "./scripts/ast.ts",
 		"#devx/ast.js": "./scripts/ast.ts",
+		"#devx/blank-lines": "./scripts/blank-lines.ts",
+		"#devx/blank-lines.js": "./scripts/blank-lines.ts",
 		"#devx/blank-line-inserter": "./scripts/blank-line-inserter.ts",
 		"#devx/blank-line-inserter.js": "./scripts/blank-line-inserter.ts",
 		"#devx/body-wrapper": "./scripts/body-wrapper.ts",
@@ -22,17 +24,21 @@
 		"#devx/rules.js": "./scripts/rules.ts",
 		"#devx/segment": "./scripts/segment.ts",
 		"#devx/segment.js": "./scripts/segment.ts",
-		"#devx/types": "./scripts/types.ts"
+		"#devx/types": "./scripts/types.ts",
+		"#devx/validate-syntax": "./scripts/validate-syntax.ts",
+		"#devx/validate-syntax.js": "./scripts/validate-syntax.ts"
 	},
 	"scripts": {
 		"blank-lines": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts",
 		"blank-lines:check": "cd ../.. && tsx packages/devx/scripts/blank-lines.ts --check",
+		"validate-syntax": "cd ../.. && tsx packages/devx/scripts/validate-syntax.ts",
 		"lint": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxlint --fix",
 		"lint:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxlint",
 		"oxfmt": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --write --no-error-on-unmatched-pattern",
 		"oxfmt:check": "cd ../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/devx/node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern",
 		"check": "pnpm blank-lines:check && pnpm lint:check && pnpm oxfmt:check",
-		"test": "tsx --test scripts/blank-lines.test.ts scripts/__tests__/*.test.ts",
+		"test": "tsx --test scripts/*.test.ts scripts/__tests__/*.test.ts",
+		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=90 scripts/*.test.ts scripts/__tests__/*.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {

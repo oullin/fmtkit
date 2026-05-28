@@ -6,9 +6,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-const script = join(repoRoot, 'packages/devx/scripts/blank-lines.ts');
-const tsx = join(repoRoot, 'packages/devx/node_modules/.bin/tsx');
+const script = fileURLToPath(import.meta.resolve('#devx/blank-lines'));
+const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 function run(command: string, args: string[], cwd: string): void {
 	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
@@ -50,13 +49,42 @@ test('adds expected blank lines in Vue script blocks', async () => {
 			].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(process.execPath, [tsx, script, 'AgentDock.vue'], dir);
 
 			const output = await readFile(join(dir, 'AgentDock.vue'), 'utf8');
 
 			assert.match(output, /const hoveredItem = computed\(\(\) => \{\n    const id = hoveredId\.value;\n\n    if \(!id\) \{/);
 			assert.match(output, /return null;\n    \}\n\n    if \(id in systemLabels\) \{/);
 			assert.match(output, /shortcut: undefined \};\n    \}\n\n    return props\.items/);
+		},
+	);
+});
+
+test('keeps adjacent computed declarations syntactically valid', async () => {
+	await withFixture(
+		{
+			'useAppController.ts': [
+				'import { computed, ref } from "vue";',
+				'',
+				'export function useAppController() {',
+				'\tconst searchQuery = ref("");',
+				'\tconst debouncedSearch = ref("");',
+				'\tconst normalizedSearch = computed(() => searchQuery.value.trim().toLowerCase());',
+				'\tconst normalizedDebouncedSearch = computed(() => debouncedSearch.value.trim().toLowerCase());',
+				'',
+				'\treturn { normalizedSearch, normalizedDebouncedSearch };',
+				'}',
+				'',
+			].join('\n'),
+		},
+		async (dir) => {
+			run(process.execPath, [tsx, script, 'useAppController.ts'], dir);
+			run(process.execPath, [tsx, script, 'useAppController.ts'], dir);
+
+			const output = await readFile(join(dir, 'useAppController.ts'), 'utf8');
+
+			assert.doesNotMatch(output, /\);\);/);
+			assert.match(output, /const normalizedDebouncedSearch = computed\(\(\) => debouncedSearch\.value\.trim\(\)\.toLowerCase\(\)\);/);
 		},
 	);
 });
@@ -70,7 +98,7 @@ test('ignores untracked ignored files and declaration files', async () => {
 			'types.d.ts': ['declare const value: string;', 'declare function run(): string;', ''].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(process.execPath, [tsx, script, 'tracked.ts', 'types.d.ts'], dir);
 
 			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 
@@ -94,7 +122,7 @@ test('skips tracked files missing from the working tree', async () => {
 		async (dir) => {
 			await unlink(join(dir, 'deleted.ts'));
 
-			run(tsx, [script, '.'], dir);
+			run(process.execPath, [tsx, script, 'deleted.ts', 'kept.ts'], dir);
 
 			const kept = await readFile(join(dir, 'kept.ts'), 'utf8');
 
@@ -109,7 +137,7 @@ test('CLI uses modular formatter for body wrapping and declaration ordering', as
 			'tracked.ts': ['import {', '\ta,', '} from "a";', 'import { b } from "b";', 'function run() {', '\tif (ready) done();', '}', ''].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(process.execPath, [tsx, script, 'tracked.ts'], dir);
 
 			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 

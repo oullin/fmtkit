@@ -1,6 +1,6 @@
 module github.com/oullin/go-fmt/packages/formatter
 
-go 1.25.0
+go 1.26.0
 
 require golang.org/x/tools v0.43.0
 

@@ -1,7 +1,7 @@
 # go-fmt
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/oullin/go-fmt/packages/driver.svg)](https://pkg.go.dev/github.com/oullin/go-fmt/packages/driver)
-[![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.25)
+[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
 [![Tests](https://github.com/oullin/go-fmt/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/go-fmt/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/go-fmt/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/go-fmt/actions/workflows/release.yml)
 [![Codecov](https://codecov.io/gh/oullin/go-fmt/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/go-fmt)
@@ -62,7 +62,7 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 
 ### Install with Go
 
-Requires Go 1.25 or newer.
+Requires Go 1.26 or newer.
 
 ```bash
 go install github.com/oullin/go-fmt/packages/driver/cmd/fmt-go@latest
@@ -545,7 +545,7 @@ Compact JSON for AI agents and CI integrations:
 
 ### Prerequisites
 
-- Go 1.25 or newer
+- Go 1.26 or newer
 - Node.js 25.8.2 with `pnpm` 10.33.0 for repo-local Make and Turbo workflows
 - Docker Desktop or another Docker runtime if you use the published image
 

@@ -25,7 +25,7 @@ func WriteGoFile(t *testing.T, path string, content string) {
 
 func WriteGoMod(t *testing.T, dir string, modulePath string) {
 	t.Helper()
-	WriteFile(t, filepath.Join(dir, "go.mod"), "module "+modulePath+"\n\ngo 1.25.0\n")
+	WriteFile(t, filepath.Join(dir, "go.mod"), "module "+modulePath+"\n\ngo 1.26.0\n")
 }
 
 func WriteGoWork(t *testing.T, dir string, content string) {

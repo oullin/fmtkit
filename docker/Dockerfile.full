@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 	go -C /src/packages/driver build -trimpath -ldflags="-s -w" -o /out/fmt-sources ./cmd/fmt-sources
 
-FROM golang:1.25-alpine AS gosdk
+FROM golang:1.26-alpine AS gosdk
 
 FROM node:25.8.2-alpine AS node-support
 

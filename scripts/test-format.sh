@@ -69,12 +69,16 @@ create_fixture() {
 
 	cat >"$fixture_root/oxfmt-stub.sh" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
+printf 'oxfmt %s\n' "$*" >> "${TOOL_WRAPPER_LOG:?}"
 exit 0
 EOF
 	chmod +x "$fixture_root/oxfmt-stub.sh"
 
 	cat >"$fixture_root/tsx-stub.sh" <<'EOF'
 #!/usr/bin/env bash
+set -euo pipefail
+printf 'tsx %s\n' "$*" >> "${TOOL_WRAPPER_LOG:?}"
 exit 0
 EOF
 	chmod +x "$fixture_root/tsx-stub.sh"
@@ -104,6 +108,7 @@ run_format() {
 	shift
 
 	: >"$fixture_root/go-invocations.log"
+	: >"$fixture_root/tool-invocations.log"
 
 	(
 		cd "$fixture_root"
@@ -111,6 +116,7 @@ run_format() {
 			GO_WRAPPER_LOG="$fixture_root/go-invocations.log" \
 			GO_WORKDIR="$repo_root/packages/driver" \
 			OXFMT_BIN="$fixture_root/oxfmt-stub.sh" \
+			TOOL_WRAPPER_LOG="$fixture_root/tool-invocations.log" \
 			TSX_BIN="$fixture_root/tsx-stub.sh" \
 			./scripts/format.sh "$@"
 	)
@@ -298,8 +304,32 @@ func run() {
 	return'
 }
 
+test_ts_only_target_runs_full_pipeline_without_go_files() {
+	local fixture_root
+	fixture_root="$(create_fixture ts-only-target)"
+
+	write_file "$fixture_root/src/app.ts" 'const value=1
+'
+
+	(
+		cd "$fixture_root"
+		git add "$fixture_root/src/app.ts"
+		git commit -q -m 'add tracked ts file'
+	)
+
+	run_format "$fixture_root" "$fixture_root/src/app.ts"
+
+	assert_go_invocation_equals "$fixture_root" "$fixture_root/src/app.ts"
+	assert_contains "$fixture_root/go-invocations.log" '-C /Users/gocanto/Sites/go-fmt/packages/driver run ./cmd/fmt-sources --cwd '
+	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/blank-lines.ts "
+	assert_contains "$fixture_root/tool-invocations.log" "$fixture_root/src/app.ts"
+	assert_contains "$fixture_root/tool-invocations.log" 'oxfmt --write --no-error-on-unmatched-pattern '
+	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/validate-syntax.ts "
+}
+
 test_tracked_go_uses_git_diff
 test_untracked_go_disables_git_diff_and_formats_both
 test_untracked_non_go_keeps_git_diff
 test_explicit_path_uses_explicit_args
 test_repo_root_falls_back_to_full_semantic_workspace
+test_ts_only_target_runs_full_pipeline_without_go_files

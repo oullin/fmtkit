@@ -1,3 +1,16 @@
+FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS source-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src/packages/driver
+COPY packages/driver/go.mod packages/driver/go.sum ./
+RUN go mod download
+
+COPY packages/driver /src/packages/driver
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+	go build -trimpath -ldflags="-s -w" -o /out/fmt-sources ./cmd/fmt-sources
+
 FROM node:25.8.2-alpine
 
 RUN apk add --no-cache bash git
@@ -10,8 +23,10 @@ RUN node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "o
 
 COPY packages/devx/scripts/*.ts /opt/go-fmt/support/
 COPY packages/devx/scripts/package.json /opt/go-fmt/support/package.json
+COPY --from=source-builder /out/fmt-sources /usr/local/bin/fmt-sources
 COPY cmd/fmt-ts /usr/local/bin/fmt-ts
-RUN chmod +x /usr/local/bin/fmt-ts
+COPY cmd/fmt-ts-files.sh /usr/local/bin/fmt-ts-files.sh
+RUN chmod +x /usr/local/bin/fmt-ts /usr/local/bin/fmt-ts-files.sh
 
 WORKDIR /work
 

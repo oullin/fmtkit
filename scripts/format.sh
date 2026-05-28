@@ -38,10 +38,24 @@ for raw_arg in "${args[@]}"; do
 	go_fmt_args+=("$(to_repo_path "$raw_arg")")
 done
 
+sources_workdir="$GO_WORKDIR"
+
+if [[ "$sources_workdir" != /* ]]; then
+	sources_workdir="$repo_root/$sources_workdir"
+fi
+
 ensure_storage_layout
 "$go_bin" -C "$GO_WORKDIR" run "$CMD" format --cwd "$repo_root" "${go_fmt_args[@]}"
 
-(cd "$repo_root" && "$tsx_bin" packages/devx/scripts/blank-lines.ts "${go_fmt_args[@]}")
-
-git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \
-	| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern
+(
+	cd "$repo_root"
+	GO_BIN="$go_bin" \
+		GO_FMT_SUPPORT_DIR="$repo_root/packages/devx" \
+		GO_FMT_SOURCES_GO_WORKDIR="$sources_workdir" \
+		GO_FMT_SOURCES_CWD="$repo_root" \
+		GO_FMT_BLANK_LINES_SCRIPT="$repo_root/packages/devx/scripts/blank-lines.ts" \
+		GO_FMT_VALIDATE_SYNTAX_SCRIPT="$repo_root/packages/devx/scripts/validate-syntax.ts" \
+		TSX_BIN="$tsx_bin" \
+		OXFMT_BIN="$oxfmt_bin" \
+		"$repo_root/cmd/fmt-ts-files.sh" "${go_fmt_args[@]}"
+)

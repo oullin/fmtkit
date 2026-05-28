@@ -1,5 +1,4 @@
 import { processFile } from '#devx/files';
-import { collectSourceFiles } from '#devx/source-files';
 
 const cwd = process.cwd();
 const rawArgs = process.argv.slice(2);
@@ -13,8 +12,12 @@ function isNotFoundError(err: unknown): boolean {
 	return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
 }
 
+function isTargetFile(path: string): boolean {
+	return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || path.endsWith('.vue');
+}
+
 async function main(): Promise<void> {
-	const files = await collectSourceFiles(positionalPaths, false, 'blank-lines');
+	const files = positionalPaths.filter(isTargetFile);
 
 	let changedCount = 0;
 

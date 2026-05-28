@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { parseSync } from 'oxc-parser';
-import { collectSourceFiles } from '#devx/source-files';
 
 const cwd = process.cwd();
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
@@ -76,7 +75,9 @@ async function validateFile(file: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-	const files = await collectSourceFiles(process.argv.slice(2), true, 'validate-syntax');
+	const files = process.argv.slice(2).filter((file) => {
+		return file.endsWith('.ts') || file.endsWith('.vue');
+	});
 
 	const failures: string[] = [];
 

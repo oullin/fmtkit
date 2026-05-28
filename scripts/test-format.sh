@@ -62,6 +62,7 @@ create_fixture() {
 	fixture_root="$(cd "$tmp_root" && pwd -P)/$name"
 
 	mkdir -p "$fixture_root"
+	cp -R "$repo_root/cmd" "$fixture_root/cmd"
 	cp -R "$repo_root/scripts" "$fixture_root/scripts"
 	cp -R "$repo_root/semantic" "$fixture_root/semantic"
 	mkdir -p "$fixture_root/storage/test-bin"
@@ -91,7 +92,7 @@ EOF
 		git init -q
 		git config user.email tests@example.com
 		git config user.name 'Test Runner'
-		git add scripts semantic oxfmt-stub.sh tsx-stub.sh
+		git add cmd scripts semantic oxfmt-stub.sh tsx-stub.sh
 		git commit -q -m 'initial'
 	)
 

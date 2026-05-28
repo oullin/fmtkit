@@ -35,7 +35,7 @@ test('accepts valid TypeScript and Vue script blocks', async () => {
 			'Valid.vue': '<script setup lang="ts">\nconst value = 1;\n</script>\n<template>{{ value }}</template>\n',
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, '.'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(tsx, [script, 'valid.ts', 'Valid.vue'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 0, result.stderr || result.stdout);
 			assert.match(result.stdout, /\[validate-syntax\] checked 2 file\(s\)/);
@@ -49,7 +49,7 @@ test('fails with a clear diagnostic for corrupted formatter output', async () =>
 			'useAppController.ts': 'const normalizedDebouncedSearch = computed(() => debouncedSearch.value.trim().toLowerCase()););\n',
 		},
 		async (dir) => {
-			const result = spawnSync(tsx, [script, '.'], { cwd: dir, encoding: 'utf8' });
+			const result = spawnSync(tsx, [script, 'useAppController.ts'], { cwd: dir, encoding: 'utf8' });
 
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, /\[validate-syntax\].*useAppController\.ts/);

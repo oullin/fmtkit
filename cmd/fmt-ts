@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-support_dir="${GO_FMT_SUPPORT_DIR:-/opt/go-fmt/support}"
-tsx_bin="${support_dir}/node_modules/.bin/tsx"
-oxfmt_bin="${support_dir}/node_modules/.bin/oxfmt"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fmt_ts_files="${GO_FMT_TS_FILES_SH:-${script_dir}/fmt-ts-files.sh}"
 
 declare -a args=("$@")
 
@@ -15,9 +14,4 @@ export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=safe.directory
 export GIT_CONFIG_VALUE_0="*"
 
-"$tsx_bin" "${support_dir}/blank-lines.ts" "${args[@]}"
-
-git ls-files --cached --others --exclude-standard -z -- "${args[@]}" \
-	| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern
-
-"$tsx_bin" "${support_dir}/validate-syntax.ts" "${args[@]}"
+"$fmt_ts_files" "${args[@]}"

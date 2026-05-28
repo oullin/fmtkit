@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -244,6 +245,49 @@ func TestRunWithHostPathRejectsPositionalPaths(t *testing.T) {
 	}
 }
 
+func TestRunSourcesEmitsNullDelimitedTypeScriptFiles(t *testing.T) {
+	dir := t.TempDir()
+	canonicalDir, err := filepath.EvalSymlinks(dir)
+
+	if err != nil {
+		t.Fatalf("canonical temp dir: %v", err)
+	}
+
+	runCommand(t, dir, "git", "init", "-q")
+	runCommand(t, dir, "git", "config", "user.email", "tests@example.com")
+	runCommand(t, dir, "git", "config", "user.name", "Test Runner")
+
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "src", "app.ts"), []byte("const value = 1;\n"), 0o644); err != nil {
+		t.Fatalf("write app: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "src", "types.d.ts"), []byte("declare const value: string;\n"), 0o644); err != nil {
+		t.Fatalf("write types: %v", err)
+	}
+
+	runCommand(t, dir, "git", "add", ".")
+
+	exitCode, stdout, stderr := runCLI(t, dir, "sources", "--include-declarations", "src")
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+
+	want := filepath.Join(canonicalDir, "src", "app.ts") + "\x00" + filepath.Join(canonicalDir, "src", "types.d.ts") + "\x00"
+
+	if stdout != want {
+		t.Fatalf("unexpected stdout\nwant: %q\n got: %q", want, stdout)
+	}
+}
+
 func TestPrintUsage(t *testing.T) {
 	tests := []struct {
 		name string
@@ -287,6 +331,17 @@ func TestPrintUsage(t *testing.T) {
 				t.Errorf("expected stderr to contain unknown subcommand error, got %q", stderr)
 			}
 		})
+	}
+}
+
+func runCommand(t *testing.T, dir string, name string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
 	}
 }
 

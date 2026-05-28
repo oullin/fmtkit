@@ -50,7 +50,7 @@ test('adds expected blank lines in Vue script blocks', async () => {
 			].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(tsx, [script, 'AgentDock.vue'], dir);
 
 			const output = await readFile(join(dir, 'AgentDock.vue'), 'utf8');
 
@@ -79,8 +79,8 @@ test('keeps adjacent computed declarations syntactically valid', async () => {
 			].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
-			run(tsx, [script, '.'], dir);
+			run(tsx, [script, 'useAppController.ts'], dir);
+			run(tsx, [script, 'useAppController.ts'], dir);
 
 			const output = await readFile(join(dir, 'useAppController.ts'), 'utf8');
 
@@ -99,7 +99,7 @@ test('ignores untracked ignored files and declaration files', async () => {
 			'types.d.ts': ['declare const value: string;', 'declare function run(): string;', ''].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(tsx, [script, 'tracked.ts', 'types.d.ts'], dir);
 
 			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 
@@ -123,7 +123,7 @@ test('skips tracked files missing from the working tree', async () => {
 		async (dir) => {
 			await unlink(join(dir, 'deleted.ts'));
 
-			run(tsx, [script, '.'], dir);
+			run(tsx, [script, 'deleted.ts', 'kept.ts'], dir);
 
 			const kept = await readFile(join(dir, 'kept.ts'), 'utf8');
 
@@ -138,7 +138,7 @@ test('CLI uses modular formatter for body wrapping and declaration ordering', as
 			'tracked.ts': ['import {', '\ta,', '} from "a";', 'import { b } from "b";', 'function run() {', '\tif (ready) done();', '}', ''].join('\n'),
 		},
 		async (dir) => {
-			run(tsx, [script, '.'], dir);
+			run(tsx, [script, 'tracked.ts'], dir);
 
 			const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 

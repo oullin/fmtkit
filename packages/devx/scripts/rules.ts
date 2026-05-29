@@ -1,10 +1,24 @@
 import type { Node } from '#devx/types';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
+const LOOP_STATEMENTS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement']);
 const TS_TYPE_DECLARATION_TYPES = new Set(['TSTypeAliasDeclaration', 'TSInterfaceDeclaration', 'TSEnumDeclaration', 'TSModuleDeclaration']);
 const CLASS_METHOD_TYPES = new Set(['MethodDefinition', 'TSAbstractMethodDefinition']);
 const CLASS_PROPERTY_TYPES = new Set(['PropertyDefinition', 'TSAbstractPropertyDefinition', 'AccessorProperty', 'TSIndexSignature', 'StaticBlock']);
 const BLANK_LINE_ABOVE_TYPES = new Set(['SwitchStatement', 'SwitchCase', 'FunctionDeclaration', 'ClassDeclaration', 'TSEnumDeclaration', 'TSModuleDeclaration']);
+
+const STRUCTURED_PREVIOUS_STATEMENTS = new Set([
+	'ClassDeclaration',
+	'DoWhileStatement',
+	'ForInStatement',
+	'ForOfStatement',
+	'ForStatement',
+	'FunctionDeclaration',
+	'IfStatement',
+	'SwitchStatement',
+	'TryStatement',
+	'WhileStatement',
+]);
 
 const VUE_PRIMITIVE_CALLS = new Set([
 	'computed',
@@ -109,6 +123,24 @@ function isTypeDeclarationAbove(prev: Node): boolean {
 	return false;
 }
 
+function isLoopStatement(node: Node): boolean {
+	return LOOP_STATEMENTS.has(node.type);
+}
+
+function isStructuredPreviousStatement(prev: Node): boolean {
+	if (STRUCTURED_PREVIOUS_STATEMENTS.has(prev.type)) {
+		return true;
+	}
+
+	if (prev.type === 'ExportNamedDeclaration' || prev.type === 'ExportDefaultDeclaration') {
+		const declType = (prev.declaration as Node | undefined)?.type;
+
+		return Boolean(declType && STRUCTURED_PREVIOUS_STATEMENTS.has(declType));
+	}
+
+	return isTypeDeclarationAbove(prev);
+}
+
 function isClassMethodPair(prev: Node, next: Node): boolean {
 	return CLASS_METHOD_TYPES.has(prev.type) && CLASS_METHOD_TYPES.has(next.type);
 }
@@ -162,6 +194,10 @@ export function needsBlankLine(prev: Node, next: Node): boolean {
 
 	if (needsBlankLineAbove(next)) {
 		return true;
+	}
+
+	if (isLoopStatement(next)) {
+		return !isStructuredPreviousStatement(prev);
 	}
 
 	if (isClassMethodPair(prev, next)) {

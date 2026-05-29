@@ -86,6 +86,35 @@ func run(v int) {
 	}
 }
 
+func TestApplyChecksSelectCommunicationBodies(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+func run(ch <-chan int) {
+	select {
+	case value := <-ch:
+		if value > 0 {
+			println(value)
+		}
+		println("next")
+	}
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(violations))
+	}
+
+	if !strings.Contains(string(formatted), "}\n\n\t\tprintln(\"next\")") {
+		t.Fatalf("expected blank line inside select communication body, got:\n%s", formatted)
+	}
+}
+
 func TestApplyFindsVarSpacing(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
 
@@ -1175,6 +1204,54 @@ type runtime struct{}
 	}
 }
 
+func TestApplyRepairsMultipleDetachedGoEmbedDirectives(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "embed"
+
+//go:embed first.txt
+
+type runtime struct{}
+
+var firstFS embed.FS
+
+//go:embed second.txt
+
+func run() {}
+
+var secondFS embed.FS
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 2 {
+		t.Fatalf("expected 2 violations, got %d", len(violations))
+	}
+
+	expected := `package sample
+
+import "embed"
+
+//go:embed first.txt
+var firstFS embed.FS
+
+type runtime struct{}
+
+//go:embed second.txt
+var secondFS embed.FS
+
+func run() {}
+`
+
+	if string(formatted) != expected {
+		t.Fatalf("expected repaired go:embed placements, got:\n%s", formatted)
+	}
+}
+
 func TestApplyKeepsAttachedGoEmbedDirectiveUnchanged(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
 
@@ -1259,8 +1336,6 @@ func TestApplyPreservesImportsBeforeAnchoredDecls(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1316,8 +1391,6 @@ func TestIsEmbedDirectiveTextRejectsInvalidPrefixes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -1522,8 +1595,6 @@ type config struct{}
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			file, err := parser.ParseFile(token.NewFileSet(), "sample.go", tt.src, parser.ParseComments)
 
@@ -1562,8 +1633,6 @@ func TestCollapseEmbedSpacingVarDeclStarts(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			if got := string(collapseEmbedSpacing([]byte(tt.src))); got != tt.want {
 				t.Fatalf("unexpected collapsed source:\n%s", got)

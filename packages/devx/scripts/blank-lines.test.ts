@@ -131,6 +131,71 @@ test('skips tracked files missing from the working tree', async () => {
 	);
 });
 
+test('adds blank lines above loops after simple statements only', async () => {
+	await withFixture(
+		{
+			'loops.ts': [
+				'function run(items: string[], map: Record<string, string>) {',
+				'\tlet count = 0;',
+				'\tcount++;',
+				'\tfor (; count < 1; count++) {',
+				'\t\tcount++;',
+				'\t}',
+				'\tcount++;',
+				'\tfor (const item of items) {',
+				'\t\tconsole.log(item);',
+				'\t}',
+				'\tcount++;',
+				'\tfor (const key in map) {',
+				'\t\tconsole.log(key);',
+				'\t}',
+				'\tcount++;',
+				'\twhile (count < 3) {',
+				'\t\tcount++;',
+				'\t}',
+				'\tcount++;',
+				'\tdo {',
+				'\t\tcount++;',
+				'\t} while (count < 4);',
+				'\tfunction local() {',
+				'\t\treturn count;',
+				'\t}',
+				'\tfor (; count < local(); count++) {',
+				'\t\tcount++;',
+				'\t}',
+				'\tif (count > 10) {',
+				'\t\tcount--;',
+				'\t}',
+				'\twhile (count > 0) {',
+				'\t\tcount--;',
+				'\t}',
+				'\ttype LoopCount = number;',
+				'\twhile (count < Number.MAX_SAFE_INTEGER) {',
+				'\t\tconst typedCount: LoopCount = count;',
+				'\t\tcount = typedCount + 1;',
+				'\t}',
+				'}',
+				'',
+			].join('\n'),
+		},
+		async (dir) => {
+			run(process.execPath, [tsx, script, 'loops.ts'], dir);
+			run(process.execPath, [tsx, script, 'loops.ts'], dir);
+
+			const output = await readFile(join(dir, 'loops.ts'), 'utf8');
+
+			assert.match(output, /count\+\+;\n\n\tfor \(; count < 1; count\+\+\) \{/);
+			assert.match(output, /count\+\+;\n\n\tfor \(const item of items\) \{/);
+			assert.match(output, /count\+\+;\n\n\tfor \(const key in map\) \{/);
+			assert.match(output, /count\+\+;\n\n\twhile \(count < 3\) \{/);
+			assert.match(output, /count\+\+;\n\n\tdo \{/);
+			assert.match(output, /function local\(\) \{\n\t\treturn count;\n\t}\n\tfor \(; count < local\(\); count\+\+\) \{/);
+			assert.match(output, /if \(count > 10\) \{\n\t\tcount--;\n\t}\n\twhile \(count > 0\) \{/);
+			assert.match(output, /type LoopCount = number;\n\n\twhile \(count < Number\.MAX_SAFE_INTEGER\) \{/);
+		},
+	);
+});
+
 test('CLI uses modular formatter for body wrapping and declaration ordering', async () => {
 	await withFixture(
 		{

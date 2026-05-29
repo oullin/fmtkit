@@ -43,20 +43,20 @@ If `fmt-go` is not on your `PATH` after `go install`, add the Go bin directory: 
 
 ## Usage
 
-| Command            | What it does                              |
-| ------------------ | ----------------------------------------- |
-| `check [paths...]` | Reports violations without writing.       |
-| `format [paths...]`| Rewrites files in place.                  |
+| Command             | What it does                        |
+| ------------------- | ----------------------------------- |
+| `check [paths...]`  | Reports violations without writing. |
+| `format [paths...]` | Rewrites files in place.            |
 
 Both default to `.` when no paths are given. Both run `go vet ./...` automatically when the working directory is inside a Go module or workspace.
 
-| Flag         | Default | Description                                                          |
-| ------------ | ------- | -------------------------------------------------------------------- |
-| `--config`   | auto    | Path to a `config.yml`. Auto-detected if omitted.                    |
-| `--cwd`      | `.`     | Base path for config discovery and relative output paths.            |
-| `--format`   | `text`  | Output mode: `text`, `json`, or `agent`.                             |
-| `--jobs`     | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `GO_FMT_JOBS`. |
-| `--host-path`| off     | Absolute host path under `HOST_PROJECT_PATH` (Docker host-mount flow).|
+| Flag          | Default | Description                                                              |
+| ------------- | ------- | ------------------------------------------------------------------------ |
+| `--config`    | auto    | Path to a `config.yml`. Auto-detected if omitted.                        |
+| `--cwd`       | `.`     | Base path for config discovery and relative output paths.                |
+| `--format`    | `text`  | Output mode: `text`, `json`, or `agent`.                                 |
+| `--jobs`      | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `GO_FMT_JOBS`. |
+| `--host-path` | off     | Absolute host path under `HOST_PROJECT_PATH` (Docker host-mount flow).   |
 
 A handful of common invocations:
 
@@ -98,16 +98,16 @@ not_name:
 concurrency: 0
 ```
 
-| Field                   | Type | Default                          | Description                                  |
-| ----------------------- | ---- | -------------------------------- | -------------------------------------------- |
-| `rules.spacing.enabled` | bool | `true`                           | Enables the spacing rule.                    |
-| `vet.enabled`           | bool | `true`                           | Runs `go vet ./...` after formatting.        |
-| `formatters.gofmt`      | bool | `true`                           | Runs `gofmt` after the rules.                |
-| `formatters.goimports`  | bool | `true`                           | Runs `goimports` after `gofmt`.              |
-| `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names skipped during traversal.    |
-| `not_path`              | list | empty                            | Substrings matched against full file paths.  |
-| `not_name`              | list | empty                            | Globs matched against file names.            |
-| `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).      |
+| Field                   | Type | Default                          | Description                                 |
+| ----------------------- | ---- | -------------------------------- | ------------------------------------------- |
+| `rules.spacing.enabled` | bool | `true`                           | Enables the spacing rule.                   |
+| `vet.enabled`           | bool | `true`                           | Runs `go vet ./...` after formatting.       |
+| `formatters.gofmt`      | bool | `true`                           | Runs `gofmt` after the rules.               |
+| `formatters.goimports`  | bool | `true`                           | Runs `goimports` after `gofmt`.             |
+| `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names skipped during traversal.   |
+| `not_path`              | list | empty                            | Substrings matched against full file paths. |
+| `not_name`              | list | empty                            | Globs matched against file names.           |
+| `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).     |
 
 ## What it formats
 
@@ -123,13 +123,13 @@ Full catalogue with before/after examples: [docs/spacing.md](docs/spacing.md).
 
 When given directories, the engine walks recursively for `.go` files and always skips:
 
-| Skipped                              | Reason                                  |
-| ------------------------------------ | --------------------------------------- |
-| Hidden directories                   | Convention, not source code.            |
-| `.git/`, `vendor/`                   | Repository and dependency metadata.     |
-| `*.gen.go`                           | Generated code by convention.           |
-| Files starting `// Code generated`   | Go's standard generated-file marker.    |
-| `exclude` / `not_path` / `not_name`  | User-defined exclusions.                |
+| Skipped                             | Reason                               |
+| ----------------------------------- | ------------------------------------ |
+| Hidden directories                  | Convention, not source code.         |
+| `.git/`, `vendor/`                  | Repository and dependency metadata.  |
+| `*.gen.go`                          | Generated code by convention.        |
+| Files starting `// Code generated`  | Go's standard generated-file marker. |
+| `exclude` / `not_path` / `not_name` | User-defined exclusions.             |
 
 ## Output formats
 
@@ -149,19 +149,17 @@ When given directories, the engine walks recursively for `.go` files and always 
 
 ```json
 {
-    "result": "fail",
-    "files": 1,
-    "changed": 1,
-    "results": [
-        {
-            "file": "main.go",
-            "applied": ["spacing"],
-            "violations": [
-                { "rule": "spacing", "line": 5, "message": "missing blank line before if statement" }
-            ],
-            "changed": true
-        }
-    ]
+	"result": "fail",
+	"files": 1,
+	"changed": 1,
+	"results": [
+		{
+			"file": "main.go",
+			"applied": ["spacing"],
+			"violations": [{ "rule": "spacing", "line": 5, "message": "missing blank line before if statement" }],
+			"changed": true
+		}
+	]
 }
 ```
 
@@ -169,12 +167,10 @@ When given directories, the engine walks recursively for `.go` files and always 
 
 ```json
 {
-    "result": "fail",
-    "summary": { "files": 1, "changed": 1, "violations": 1 },
-    "changed": [{ "file": "main.go", "steps": ["spacing"] }],
-    "violations": [
-        { "file": "main.go", "rule": "spacing", "line": 5, "message": "missing blank line before if statement" }
-    ]
+	"result": "fail",
+	"summary": { "files": 1, "changed": 1, "violations": 1 },
+	"changed": [{ "file": "main.go", "steps": ["spacing"] }],
+	"violations": [{ "file": "main.go", "rule": "spacing", "line": 5, "message": "missing blank line before if statement" }]
 }
 ```
 
@@ -182,12 +178,12 @@ When given directories, the engine walks recursively for `.go` files and always 
 
 Published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
 
-| Tag                              | Contents                              | Entrypoint |
-| -------------------------------- | ------------------------------------- | ---------- |
-| `latest`, `<tag>`                | Full Go + TS/Vue formatter (alias).   | `fmt-all`  |
-| `latest-full`, `<tag>-full`      | Full Go + TS/Vue formatter.           | `fmt-all`  |
-| `latest-go`, `<tag>-go`          | Go formatter CLI only.                | `fmt-go`   |
-| `latest-node-ts`, `<tag>-node-ts`| TS/Vue formatter only.                | `fmt-ts`   |
+| Tag                               | Contents                            | Entrypoint |
+| --------------------------------- | ----------------------------------- | ---------- |
+| `latest`, `<tag>`                 | Full Go + TS/Vue formatter (alias). | `fmt-all`  |
+| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter.         | `fmt-all`  |
+| `latest-go`, `<tag>-go`           | Go formatter CLI only.              | `fmt-go`   |
+| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only.              | `fmt-ts`   |
 
 ## Exit codes
 

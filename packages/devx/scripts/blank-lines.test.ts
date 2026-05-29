@@ -169,6 +169,11 @@ test('adds blank lines above loops after simple statements only', async () => {
 				'\twhile (count > 0) {',
 				'\t\tcount--;',
 				'\t}',
+				'\ttype LoopCount = number;',
+				'\twhile (count < Number.MAX_SAFE_INTEGER) {',
+				'\t\tconst typedCount: LoopCount = count;',
+				'\t\tcount = typedCount + 1;',
+				'\t}',
 				'}',
 				'',
 			].join('\n'),
@@ -186,6 +191,7 @@ test('adds blank lines above loops after simple statements only', async () => {
 			assert.match(output, /count\+\+;\n\n\tdo \{/);
 			assert.match(output, /function local\(\) \{\n\t\treturn count;\n\t}\n\tfor \(; count < local\(\); count\+\+\) \{/);
 			assert.match(output, /if \(count > 10\) \{\n\t\tcount--;\n\t}\n\twhile \(count > 0\) \{/);
+			assert.match(output, /type LoopCount = number;\n\n\twhile \(count < Number\.MAX_SAFE_INTEGER\) \{/);
 		},
 	);
 });

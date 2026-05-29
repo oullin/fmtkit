@@ -138,7 +138,7 @@ function isStructuredPreviousStatement(prev: Node): boolean {
 		return Boolean(declType && STRUCTURED_PREVIOUS_STATEMENTS.has(declType));
 	}
 
-	return isTypeDeclarationAbove(prev);
+	return false;
 }
 
 function isClassMethodPair(prev: Node, next: Node): boolean {

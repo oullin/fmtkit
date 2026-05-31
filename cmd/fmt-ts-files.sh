@@ -4,6 +4,7 @@ set -euo pipefail
 support_dir="${GO_FMT_SUPPORT_DIR:-/opt/go-fmt/support}"
 tsx_bin="${TSX_BIN:-${support_dir}/node_modules/.bin/tsx}"
 oxfmt_bin="${OXFMT_BIN:-${support_dir}/node_modules/.bin/oxfmt}"
+oxfmtrc="${GO_FMT_OXFMTRC:-${support_dir}/.oxfmtrc.json}"
 blank_lines_script="${GO_FMT_BLANK_LINES_SCRIPT:-${support_dir}/blank-lines.ts}"
 validate_syntax_script="${GO_FMT_VALIDATE_SYNTAX_SCRIPT:-${support_dir}/validate-syntax.ts}"
 
@@ -58,9 +59,22 @@ else
 	"$tsx_bin" "$blank_lines_script"
 fi
 
+# Fall back to the bundled config only when the project has no oxfmt config of
+# its own; a project-local config (.oxfmtrc.json, .ts, .js, …) takes precedence
+# via oxfmt's native auto-discovery.
+detect_dir="${GO_FMT_SOURCES_CWD:-$PWD}"
+declare -a oxfmt_config_args=()
+shopt -s nullglob
+project_configs=("$detect_dir"/.oxfmtrc.*)
+shopt -u nullglob
+
+if [[ ${#project_configs[@]} -eq 0 && -f "$oxfmtrc" ]]; then
+	oxfmt_config_args=(--config "$oxfmtrc")
+fi
+
 if [[ ${#format_files[@]} -gt 0 ]]; then
 	printf '%s\0' "${format_files[@]}" \
-		| xargs -0 "$oxfmt_bin" --write --no-error-on-unmatched-pattern
+		| xargs -0 "$oxfmt_bin" "${oxfmt_config_args[@]}" --write --no-error-on-unmatched-pattern
 fi
 
 if [[ ${#syntax_files[@]} -gt 0 ]]; then

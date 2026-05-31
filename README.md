@@ -109,6 +109,12 @@ concurrency: 0
 | `not_name`              | list | empty                            | Globs matched against file names.           |
 | `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).     |
 
+### TS/Vue formatting (`.oxfmtrc.json`)
+
+The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources. The images ship a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
+
+A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `GO_FMT_OXFMTRC` environment variable, matching the other `GO_FMT_*` knobs.
+
 ## What it formats
 
 The built-in spacing rule, in summary:

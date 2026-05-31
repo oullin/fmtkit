@@ -47,5 +47,9 @@ assert_file_contains() {
 	local file="$1"
 	local expected="$2"
 
-	grep -Fq "$expected" "$file"
+	if [ ! -f "$file" ]; then
+		release_image_fail "file not found: ${file}"
+	elif ! grep -Fq "$expected" "$file"; then
+		release_image_fail "expected ${file} to contain: ${expected}"
+	fi
 }

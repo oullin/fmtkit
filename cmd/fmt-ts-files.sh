@@ -33,25 +33,32 @@ fi
 declare -a format_files=()
 declare -a syntax_files=()
 
+# Capture the source listings through temp files rather than process
+# substitution: a `while … done < <(cmd)` loop swallows cmd's exit status, so a
+# failing sources_cmd would silently yield an empty list and pass. Writing to a
+# file lets set -e catch the failure.
+tmp_format="$(mktemp)"
+tmp_syntax="$(mktemp)"
+trap 'rm -f "$tmp_format" "$tmp_syntax"' EXIT
+
+if [[ ${#sources_args[@]} -gt 0 ]]; then
+	"${sources_cmd[@]}" "${sources_args[@]}" "${args[@]}" > "$tmp_format"
+	"${sources_cmd[@]}" "${sources_args[@]}" --include-declarations "${args[@]}" > "$tmp_syntax"
+else
+	"${sources_cmd[@]}" "${args[@]}" > "$tmp_format"
+	"${sources_cmd[@]}" --include-declarations "${args[@]}" > "$tmp_syntax"
+fi
+
 while IFS= read -r -d '' file; do
 	format_files+=("$file")
-done < <(
-	if [[ ${#sources_args[@]} -gt 0 ]]; then
-		"${sources_cmd[@]}" "${sources_args[@]}" "${args[@]}"
-	else
-		"${sources_cmd[@]}" "${args[@]}"
-	fi
-)
+done < "$tmp_format"
 
 while IFS= read -r -d '' file; do
 	syntax_files+=("$file")
-done < <(
-	if [[ ${#sources_args[@]} -gt 0 ]]; then
-		"${sources_cmd[@]}" "${sources_args[@]}" --include-declarations "${args[@]}"
-	else
-		"${sources_cmd[@]}" --include-declarations "${args[@]}"
-	fi
-)
+done < "$tmp_syntax"
+
+rm -f "$tmp_format" "$tmp_syntax"
+trap - EXIT
 
 if [[ ${#format_files[@]} -gt 0 ]]; then
 	"$tsx_bin" "$blank_lines_script" "${format_files[@]}"
@@ -74,7 +81,7 @@ fi
 
 if [[ ${#format_files[@]} -gt 0 ]]; then
 	printf '%s\0' "${format_files[@]}" \
-		| xargs -0 "$oxfmt_bin" "${oxfmt_config_args[@]}" --write --no-error-on-unmatched-pattern
+		| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
 fi
 
 if [[ ${#syntax_files[@]} -gt 0 ]]; then

@@ -2,11 +2,9 @@
 set -euo pipefail
 
 usage() {
-	printf 'usage: %s <format|format-all|lint|lint-all|go|ts|check|version|help> [args...]\n' "${0##*/}" >&2
-	printf '  format [paths...]                        run TS/Vue support, then Go formatting\n' >&2
+	printf 'usage: %s <format|format-all|go|ts|check|version|help> [args...]\n' "${0##*/}" >&2
+	printf '  format [paths...]                        run TS/Vue support + lint, then Go formatting\n' >&2
 	printf '  format-all                               run the full formatter pipeline against .\n' >&2
-	printf '  lint [paths...]                          run oxlint over TS/Vue files\n' >&2
-	printf '  lint-all                                 run oxlint over every TS/Vue file in .\n' >&2
 	printf '  go [check|format|version|help] [args...] run the Go formatter CLI\n' >&2
 	printf '  ts [paths...]                            run TS/Vue blank-line support and oxfmt\n' >&2
 	printf '  check|version|help [args...]             run the matching Go formatter CLI command\n' >&2
@@ -166,20 +164,9 @@ run_format_pipeline() {
 	section 'Formatting target(s)'
 	detail 'paths' "$*"
 	run_logged 'Running TS/Vue formatting' summarize_ts_format "$format_ts_bin" "$@"
+	run_logged 'Running TS/Vue lint' summarize_ts_lint "$lint_ts_bin" "$@"
 	run_logged 'Running Go formatting' summarize_go_format "$go_fmt_bin" format "$@"
 	section 'Formatting complete'
-	success_detail 'status' 'done'
-}
-
-run_lint_pipeline() {
-	if [[ $# -eq 0 ]]; then
-		set -- .
-	fi
-
-	section 'Linting target(s)'
-	detail 'paths' "$*"
-	run_logged 'Running TS/Vue lint' summarize_ts_lint "$lint_ts_bin" "$@"
-	section 'Linting complete'
 	success_detail 'status' 'done'
 }
 
@@ -194,17 +181,6 @@ case "$mode" in
 		fi
 
 		run_format_pipeline .
-		;;
-	lint)
-		run_lint_pipeline "$@"
-		;;
-	lint-all)
-		if [[ $# -ne 0 ]]; then
-			usage
-			exit 2
-		fi
-
-		run_lint_pipeline .
 		;;
 	go)
 		exec "$go_fmt_bin" "$@"

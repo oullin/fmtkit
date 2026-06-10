@@ -27,6 +27,9 @@ printf '%s %s\n' "$name" "\$*" >> "$log_file"
 		printf '[blank-lines] processed 3 file(s) in /work, 0 changed\n'
 		printf 'Finished in 10ms on 3 files using 8 threads.\n'
 		;;
+		fmt-lint)
+		printf 'Found 0 warnings and 0 errors.\n'
+		;;
 		fmt-go)
 		if [[ "\${1:-}" == "format" ]]; then
 			printf '\nFormatter\n\n'
@@ -89,19 +92,23 @@ run_entrypoint() {
 
 	GO_FMT_BIN="$tmp_root/fmt-go-stub" \
 		FORMAT_TS_BIN="$tmp_root/fmt-ts-stub" \
+		FORMAT_LINT_BIN="$tmp_root/fmt-lint-stub" \
 		"$repo_root/cmd/fmt-all" "$@" >"$stdout_file" 2>"$stderr_file"
 }
 
 write_stub "$tmp_root/fmt-go-stub" fmt-go
 write_stub "$tmp_root/fmt-ts-stub" fmt-ts
+write_stub "$tmp_root/fmt-lint-stub" fmt-lint
 
 run_entrypoint format .
-assert_log_equals $'fmt-ts .\nfmt-go format .'
+assert_log_equals $'fmt-ts .\nfmt-lint .\nfmt-go format .'
 assert_contains "$stderr_file" '==> Formatting target(s)'
 assert_contains "$stderr_file" 'paths        .'
 assert_contains "$stderr_file" '==> Running TS/Vue formatting'
 assert_contains "$stderr_file" 'blank-lines  processed 3 file(s) in /work, 0 changed'
 assert_contains "$stderr_file" 'oxfmt        Finished in 10ms on 3 files using 8 threads.'
+assert_contains "$stderr_file" '==> Running TS/Vue lint'
+assert_contains "$stderr_file" 'oxlint       Found 0 warnings and 0 errors.'
 assert_contains "$stderr_file" '==> Running Go formatting'
 assert_contains "$stderr_file" 'go-fmt'
 assert_contains "$stderr_file" 'Formatted 2 file(s).'
@@ -114,7 +121,7 @@ assert_contains "$stderr_file" 'status'
 assert_contains "$stderr_file" 'done'
 
 run_entrypoint format-all
-assert_log_equals $'fmt-ts .\nfmt-go format .'
+assert_log_equals $'fmt-ts .\nfmt-lint .\nfmt-go format .'
 
 run_entrypoint go format .
 assert_log_equals 'fmt-go format .'
@@ -135,4 +142,4 @@ if run_entrypoint unknown; then
 	exit 1
 fi
 
-assert_contains "$stderr_file" 'usage: fmt-all <format|format-all|lint|lint-all|go|ts|check|version|help> [args...]'
+assert_contains "$stderr_file" 'usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]'

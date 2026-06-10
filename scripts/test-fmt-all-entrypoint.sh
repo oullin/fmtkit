@@ -135,4 +135,4 @@ if run_entrypoint unknown; then
 	exit 1
 fi
 
-assert_contains "$stderr_file" 'usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]'
+assert_contains "$stderr_file" 'usage: fmt-all <format|format-all|lint|lint-all|go|ts|check|version|help> [args...]'

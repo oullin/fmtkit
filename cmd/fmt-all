@@ -2,9 +2,11 @@
 set -euo pipefail
 
 usage() {
-	printf 'usage: %s <format|format-all|go|ts|check|version|help> [args...]\n' "${0##*/}" >&2
+	printf 'usage: %s <format|format-all|lint|lint-all|go|ts|check|version|help> [args...]\n' "${0##*/}" >&2
 	printf '  format [paths...]                        run TS/Vue support, then Go formatting\n' >&2
 	printf '  format-all                               run the full formatter pipeline against .\n' >&2
+	printf '  lint [paths...]                          run oxlint over TS/Vue files\n' >&2
+	printf '  lint-all                                 run oxlint over every TS/Vue file in .\n' >&2
 	printf '  go [check|format|version|help] [args...] run the Go formatter CLI\n' >&2
 	printf '  ts [paths...]                            run TS/Vue blank-line support and oxfmt\n' >&2
 	printf '  check|version|help [args...]             run the matching Go formatter CLI command\n' >&2
@@ -20,6 +22,7 @@ shift
 
 go_fmt_bin="${GO_FMT_BIN:-/usr/local/bin/fmt-go}"
 format_ts_bin="${FORMAT_TS_BIN:-/usr/local/bin/fmt-ts}"
+lint_ts_bin="${FORMAT_LINT_BIN:-/usr/local/bin/fmt-lint}"
 
 bold=''
 dim=''
@@ -63,14 +66,16 @@ run_logged() {
 
 	section "$label"
 
-	if "$@" >"$log_file" 2>&1; then
+	local status=0
+	"$@" >"$log_file" 2>&1 || status="$?"
+
+	if [[ "$status" -eq 0 ]]; then
 		"$summary" "$log_file"
 		rm -f "$log_file"
 
 		return 0
 	fi
 
-	local status="$?"
 	failure "$label failed"
 	cat "$log_file" >&2
 	rm -f "$log_file"
@@ -136,6 +141,23 @@ summarize_go_format() {
 	fi
 }
 
+summarize_ts_lint() {
+	local log_file="$1"
+	local skipped_summary
+	local warnings_summary
+
+	skipped_summary="$(grep '^\[lint\] no TS/Vue files to lint\.' "$log_file" | tail -n 1 | sed 's/^\[lint\] //' || true)"
+	warnings_summary="$(grep -E 'Found [0-9]+ warning|[0-9]+ error' "$log_file" | tail -n 1 || true)"
+
+	if [[ -n "$skipped_summary" ]]; then
+		detail 'oxlint' "$skipped_summary"
+	elif [[ -n "$warnings_summary" ]]; then
+		detail 'oxlint' "$warnings_summary"
+	else
+		detail 'oxlint' 'no issues found'
+	fi
+}
+
 run_format_pipeline() {
 	if [[ $# -eq 0 ]]; then
 		set -- .
@@ -146,6 +168,18 @@ run_format_pipeline() {
 	run_logged 'Running TS/Vue formatting' summarize_ts_format "$format_ts_bin" "$@"
 	run_logged 'Running Go formatting' summarize_go_format "$go_fmt_bin" format "$@"
 	section 'Formatting complete'
+	success_detail 'status' 'done'
+}
+
+run_lint_pipeline() {
+	if [[ $# -eq 0 ]]; then
+		set -- .
+	fi
+
+	section 'Linting target(s)'
+	detail 'paths' "$*"
+	run_logged 'Running TS/Vue lint' summarize_ts_lint "$lint_ts_bin" "$@"
+	section 'Linting complete'
 	success_detail 'status' 'done'
 }
 
@@ -160,6 +194,17 @@ case "$mode" in
 		fi
 
 		run_format_pipeline .
+		;;
+	lint)
+		run_lint_pipeline "$@"
+		;;
+	lint-all)
+		if [[ $# -ne 0 ]]; then
+			usage
+			exit 2
+		fi
+
+		run_lint_pipeline .
 		;;
 	go)
 		exec "$go_fmt_bin" "$@"

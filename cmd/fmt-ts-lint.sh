@@ -29,15 +29,25 @@ fi
 
 declare -a lint_files=()
 
+# Capture the source listing through a temp file rather than process
+# substitution: a `while … done < <(cmd)` loop swallows cmd's exit status, so a
+# failing sources_cmd would silently yield an empty list and pass. Writing to a
+# file lets set -e catch the failure.
+tmp_sources="$(mktemp)"
+trap 'rm -f "$tmp_sources"' EXIT
+
+if [[ ${#sources_args[@]} -gt 0 ]]; then
+	"${sources_cmd[@]}" "${sources_args[@]}" "${args[@]}" > "$tmp_sources"
+else
+	"${sources_cmd[@]}" "${args[@]}" > "$tmp_sources"
+fi
+
 while IFS= read -r -d '' file; do
 	lint_files+=("$file")
-done < <(
-	if [[ ${#sources_args[@]} -gt 0 ]]; then
-		"${sources_cmd[@]}" "${sources_args[@]}" "${args[@]}"
-	else
-		"${sources_cmd[@]}" "${args[@]}"
-	fi
-)
+done < "$tmp_sources"
+
+rm -f "$tmp_sources"
+trap - EXIT
 
 if [[ ${#lint_files[@]} -eq 0 ]]; then
 	echo "[lint] no TS/Vue files to lint."
@@ -49,8 +59,15 @@ fi
 # via oxlint's native auto-discovery.
 detect_dir="${GO_FMT_SOURCES_CWD:-$PWD}"
 declare -a oxlint_config_args=()
+# Match both the extensioned configs (.oxlintrc.json/.jsonc/…) and the
+# extensionless .oxlintrc. nullglob strips the glob when nothing matches, but
+# the literal .oxlintrc (no metacharacters) survives even when absent, so the
+# -f guard below filters to configs that actually exist on disk.
 shopt -s nullglob
-project_configs=("$detect_dir"/.oxlintrc.*)
+declare -a project_configs=()
+for candidate in "$detect_dir"/.oxlintrc "$detect_dir"/.oxlintrc.*; do
+	[[ -f "$candidate" ]] && project_configs+=("$candidate")
+done
 shopt -u nullglob
 
 if [[ ${#project_configs[@]} -eq 0 && -f "$oxlintrc" ]]; then

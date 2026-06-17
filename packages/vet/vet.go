@@ -23,13 +23,18 @@ type ErrorResult struct {
 
 // Report summarizes the automatic go vet run.
 type Report struct {
-	Root   string        `json:"root,omitempty"`
-	Errors []ErrorResult `json:"errors,omitempty"`
+	Root    string        `json:"root,omitempty"`
+	Skipped bool          `json:"skipped,omitempty"`
+	Errors  []ErrorResult `json:"errors,omitempty"`
 }
 
 // Default returns the default vet configuration.
 func Default() Config {
 	return Config{Enabled: true}
+}
+
+var lookGoPath = func() (string, error) {
+	return exec.LookPath("go")
 }
 
 var goEnvOutput = func(workRoot string, keys ...string) ([]byte, error) {
@@ -51,6 +56,10 @@ var goListModulesOutput = func(root string) ([]byte, error) {
 func Run(workRoot string, cfg Config) Report {
 	if !cfg.Enabled {
 		return Report{}
+	}
+
+	if _, err := lookGoPath(); err != nil {
+		return Report{Skipped: true}
 	}
 
 	root, err := discoverVetRoot(workRoot)

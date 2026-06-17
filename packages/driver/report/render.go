@@ -54,7 +54,7 @@ func combinedResult(report Combined) string {
 
 func vetStatus(report vet.Report) string {
 	switch {
-	case report.Root == "":
+	case report.Skipped || report.Root == "":
 		return "skipped"
 	case report.ErrorCount() > 0:
 		return "fail"

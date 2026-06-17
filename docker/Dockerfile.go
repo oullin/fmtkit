@@ -31,6 +31,15 @@ FROM golang:1.26-alpine
 
 RUN apk add --no-cache bash git
 
+# Strip Go SDK parts neither `goimports` nor `go vet` uses at runtime: Go's own
+# test suite, API compatibility data, docs, std-library test fixtures, and tool
+# binaries only used by `go fix`/`go test -cover`/PGO.
+RUN cd /usr/local/go && \
+	rm -rf test api doc misc && \
+	find src -type d -name testdata -prune -exec rm -rf {} + && \
+	find src -type f -name '*_test.go' -delete && \
+	rm -f pkg/tool/*/fix pkg/tool/*/cover pkg/tool/*/preprofile
+
 WORKDIR /work
 
 ENV GOCACHE="/work/storage/.cache/go-build" \

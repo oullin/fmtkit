@@ -31,6 +31,17 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 
 FROM golang:1.26-alpine AS gosdk
 
+# The runtime needs `go` for goimports (resolves imports via `go env`/std-lib scan)
+# and `go vet` (compiles packages for analysis). Strip the parts neither uses at
+# runtime: Go's own test suite, API compatibility data, docs, and the std-library
+# test fixtures (`testdata` dirs and `*_test.go`, which are never compiled when
+# building or vetting userland packages).
+RUN cd /usr/local/go && \
+	rm -rf test api doc misc && \
+	find src -type d -name testdata -prune -exec rm -rf {} + && \
+	find src -type f -name '*_test.go' -delete && \
+	rm -f pkg/tool/*/fix pkg/tool/*/cover pkg/tool/*/preprofile
+
 FROM node:25.8.2-alpine AS node-support
 
 RUN apk add --no-cache bash git

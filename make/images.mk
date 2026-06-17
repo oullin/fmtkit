@@ -9,13 +9,16 @@ image-full: ## Build the local full Go + TS formatter image
 
 docker-clean: ## Remove go-fmt's local images, fingerprinted images, and cache volume
 	@# Stop and remove containers created from go-fmt local images.
-	-@docker ps -aq --filter ancestor='$(strip $(GO_IMAGE))' \
+	@# Guard with a non-empty check instead of `xargs -r` (a GNU extension absent on BSD/macOS).
+	-@containers=$$(docker ps -aq --filter ancestor='$(strip $(GO_IMAGE))' \
 		--filter ancestor='$(strip $(NODE_TS_IMAGE))' \
-		--filter ancestor='$(strip $(FULL_IMAGE))' | xargs -r docker rm -f
+		--filter ancestor='$(strip $(FULL_IMAGE))'); \
+		if [ -n "$$containers" ]; then echo "$$containers" | xargs docker rm -f; fi
 	@# Remove the local build images.
 	-@docker rmi -f '$(strip $(GO_IMAGE))' '$(strip $(NODE_TS_IMAGE))' '$(strip $(FULL_IMAGE))' 2>/dev/null
 	@# Remove any image carrying the project fingerprint label (stale cached builds).
-	-@docker images -q --filter label=local.go-fmt.formatter-fingerprint | sort -u | xargs -r docker rmi -f
+	-@images=$$(docker images -q --filter label=local.go-fmt.formatter-fingerprint | sort -u); \
+		if [ -n "$$images" ]; then echo "$$images" | xargs docker rmi -f; fi
 	@# Remove the shared cache volume.
 	-@docker volume rm '$(strip $(GO_FMT_CACHE_VOLUME))' 2>/dev/null
 	@# Drop dangling images left behind by go-fmt rebuilds.

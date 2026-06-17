@@ -37,16 +37,27 @@ var lookGoPath = func() (string, error) {
 	return exec.LookPath("go")
 }
 
+// goBinary resolves the go executable via lookGoPath so the toolchain location is
+// sourced consistently (and honours the lookGoPath stub in tests), falling back to
+// the bare "go" name when resolution fails.
+func goBinary() string {
+	if path, err := lookGoPath(); err == nil {
+		return path
+	}
+
+	return "go"
+}
+
 var goEnvOutput = func(workRoot string, keys ...string) ([]byte, error) {
 	args := append([]string{"env"}, keys...)
-	cmd := exec.Command("go", args...)
+	cmd := exec.Command(goBinary(), args...)
 	cmd.Dir = workRoot
 
 	return cmd.Output()
 }
 
 var goListModulesOutput = func(root string) ([]byte, error) {
-	cmd := exec.Command("go", "list", "-f", "{{.Dir}}", "-m")
+	cmd := exec.Command(goBinary(), "list", "-f", "{{.Dir}}", "-m")
 	cmd.Dir = root
 
 	return cmd.Output()
@@ -217,7 +228,7 @@ func runGoVet(root string) *ErrorResult {
 		return nil
 	}
 
-	cmd := exec.Command("go", "vet", "./...")
+	cmd := exec.Command(goBinary(), "vet", "./...")
 	cmd.Dir = root
 
 	out, err := cmd.CombinedOutput()

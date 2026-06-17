@@ -51,6 +51,24 @@ func TestRunSkipsWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestRunSkipsWhenGoToolchainUnavailable(t *testing.T) {
+	restore := stubLookGoPath(t, func() (string, error) {
+		return "", exec.ErrNotFound
+	})
+
+	defer restore()
+
+	report := Run(t.TempDir(), Default())
+
+	if !report.Skipped {
+		t.Fatalf("expected skipped report, got %#v", report)
+	}
+
+	if report.Root != "" || report.ErrorCount() != 0 {
+		t.Fatalf("expected empty skipped report, got %#v", report)
+	}
+}
+
 func TestRunPrefersWorkspace(t *testing.T) {
 	workRoot := t.TempDir()
 	workspaceRoot := t.TempDir()
@@ -238,6 +256,17 @@ func TestGoEnvWrapsGenericErrors(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "resolve go GOWORK GOMOD: boom") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func stubLookGoPath(t *testing.T, fn func() (string, error)) func() {
+	t.Helper()
+
+	previous := lookGoPath
+	lookGoPath = fn
+
+	return func() {
+		lookGoPath = previous
 	}
 }
 

@@ -135,7 +135,13 @@ func renderFormatterText(w io.Writer, cwd, mode string, report formatterengine.R
 func renderVetText(w io.Writer, cwd string, report Combined) error {
 	switch vetStatus(report.Vet) {
 	case "skipped":
-		if _, err := color.New(color.FgYellow).Fprintf(w, "  Skipped automatic go vet ./... because no Go module or workspace was detected.\n\n"); err != nil {
+		reason := "no Go module or workspace was detected"
+
+		if report.Vet.Skipped {
+			reason = "the Go toolchain is not available"
+		}
+
+		if _, err := color.New(color.FgYellow).Fprint(w, "  Skipped automatic go vet ./... because "+reason+".\n\n"); err != nil {
 			return err
 		}
 	case "pass":

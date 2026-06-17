@@ -1,0 +1,43 @@
+name: Cleanup Old Container Images
+
+# Prunes stale go-fmt container versions from GHCR so old release tags do not
+# accumulate forever. Protects every `latest*` tag and the 2 most recent
+# versions; only deletes versions older than the cut-off beyond those.
+#
+# Requires a PAT secret `GHCR_CLEANUP_TOKEN` with `packages:delete` scope:
+# the default GITHUB_TOKEN cannot use tag-filter operators (e.g. `!latest*`).
+# Scheduled runs delete for real; manual runs default to a dry-run preview.
+
+on:
+    schedule:
+        - cron: '0 4 * * 1' # Mondays 04:00 UTC
+    workflow_dispatch:
+        inputs:
+            dry-run:
+                description: Only list what would be deleted, without deleting
+                type: boolean
+                default: true
+
+permissions:
+    packages: write
+
+concurrency:
+    group: cleanup-images
+    cancel-in-progress: false
+
+jobs:
+    cleanup:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Prune old go-fmt image versions
+              uses: snok/container-retention-policy@v3.1.0
+              with:
+                  account: oullin # change to "user" if oullin is a personal account
+                  token: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+                  image-names: go-fmt
+                  image-tags: '!latest*' # never delete latest, latest-go, latest-node-ts, latest-full
+                  tag-selection: both
+                  cut-off: 12w
+                  keep-n-most-recent: 2
+                  dry-run: ${{ github.event_name == 'schedule' && 'false' || inputs.dry-run }}

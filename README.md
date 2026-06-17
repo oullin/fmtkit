@@ -191,6 +191,33 @@ Published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
 | `latest-go`, `<tag>-go`           | Go formatter CLI only.              | `fmt-go`   |
 | `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only.              | `fmt-ts`   |
 
+The Go-containing images bundle a trimmed Go SDK (Go's own test suite, API data,
+std-library test fixtures, and unused tool binaries are stripped) because both
+`goimports` and `go vet` invoke the `go` toolchain at runtime. If the toolchain
+is ever absent, `go vet` is skipped gracefully rather than failing.
+
+### Docker maintenance
+
+Reclaim space taken by go-fmt's own Docker artifacts (local `*:local` images,
+fingerprinted build images, and the `go-fmt-cache` volume) without touching
+unrelated Docker state:
+
+```bash
+make docker-clean
+```
+
+The global Docker **build cache** is shared across all projects and cannot be
+pruned per project. Cap it so it can't grow unbounded by adding this to
+`~/.docker/daemon.json` and restarting Docker:
+
+```json
+{ "builder": { "gc": { "enabled": true, "defaultKeepStorage": "20GB" } } }
+```
+
+go-fmt's own run scripts already use `docker run --rm`, so normal usage leaves no
+stopped containers behind. Old `ghcr.io/oullin/go-fmt` tags on the registry are
+pruned automatically by the `Cleanup Old Container Images` workflow.
+
 ## Exit codes
 
 | Command  | Code | Meaning                              |

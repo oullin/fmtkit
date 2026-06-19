@@ -3,11 +3,11 @@
 export APP="${APP:-go-fmt}"
 export GO_WORKDIR="${GO_WORKDIR:-packages/driver}"
 export CMD="${CMD:-./cmd/fmt-go}"
-export VERSION="${VERSION:-dev}"
 export CGO_ENABLED="${CGO_ENABLED:-0}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export REPO_ROOT="${REPO_ROOT:-$(cd "${script_dir}/.." && pwd -P)}"
+export VERSION="${VERSION:-$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)}"
 export STORAGE_DIR="${STORAGE_DIR:-${REPO_ROOT}/storage}"
 export CACHE_DIR="${CACHE_DIR:-${STORAGE_DIR}/.cache}"
 export BUILD_DIR="${BUILD_DIR:-storage/bin}"
@@ -17,7 +17,6 @@ export DIST_TEST_DIR="${DIST_TEST_DIR:-storage/dist-test}"
 export GOCACHE="${GOCACHE:-${CACHE_DIR}/go-build}"
 export GOPATH="${GOPATH:-${CACHE_DIR}/gopath}"
 export GOMODCACHE="${GOMODCACHE:-${GOPATH}/pkg/mod}"
-export TURBO_CACHE_DIR="${TURBO_CACHE_DIR:-${CACHE_DIR}/turbo}"
 
 repo_path() {
 	local path="$1"
@@ -79,30 +78,6 @@ assert_no_legacy_artifacts() {
 	done
 }
 
-assert_no_package_turbo_dirs() {
-	local leaked_turbo_dir
-
-	leaked_turbo_dir="$(find "${REPO_ROOT}/packages" -type d -name .turbo -print -quit 2>/dev/null || true)"
-	if [[ -n "$leaked_turbo_dir" ]]; then
-		printf 'package-local turbo artifacts are not allowed outside %s: %s\n' "$TURBO_CACHE_DIR" "$leaked_turbo_dir" >&2
-		exit 1
-	fi
-}
-
-cleanup_package_turbo_logs() {
-	local turbo_dir
-	local relative_dir
-	local target_dir
-
-	while IFS= read -r turbo_dir; do
-		relative_dir="${turbo_dir#${REPO_ROOT}/}"
-		target_dir="$(canonical_path "${TURBO_CACHE_DIR}/logs/${relative_dir%/.turbo}")"
-		mkdir -p "$target_dir"
-		find "$turbo_dir" -maxdepth 1 -type f -exec mv {} "$target_dir"/ \;
-		rm -rf "$turbo_dir"
-	done < <(find "${REPO_ROOT}/packages" -type d -name .turbo -print 2>/dev/null)
-}
-
 ensure_storage_layout() {
 	assert_under_storage "BUILD_DIR" "$BUILD_DIR"
 	assert_under_storage "BIN" "$BIN"
@@ -111,7 +86,6 @@ ensure_storage_layout() {
 	assert_under_storage "GOCACHE" "$GOCACHE"
 	assert_under_storage "GOPATH" "$GOPATH"
 	assert_under_storage "GOMODCACHE" "$GOMODCACHE"
-	assert_under_storage "TURBO_CACHE_DIR" "$TURBO_CACHE_DIR"
 
 	mkdir -p \
 		"${STORAGE_DIR}" \
@@ -122,7 +96,6 @@ ensure_storage_layout() {
 		"$(canonical_path "$GOCACHE")" \
 		"$(canonical_path "$GOPATH")" \
 		"$(canonical_path "$GOMODCACHE")" \
-		"$(canonical_path "$TURBO_CACHE_DIR")" \
 		"$(dirname "$(canonical_path "$BIN")")"
 
 	assert_no_legacy_artifacts

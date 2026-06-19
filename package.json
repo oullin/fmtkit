@@ -2,17 +2,13 @@
 	"name": "go-fmt-monorepo",
 	"private": true,
 	"scripts": {
-		"build": "pnpm --filter driver run build",
-		"format": "make format",
-		"format-all": "make format-all",
-		"lint": "./scripts/with-storage-env.sh pnpm --filter devx run lint:check",
-		"test": "./scripts/with-storage-env.sh pnpm turbo run test --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver --filter=devx",
-		"test:coverage": "./scripts/test-coverage.sh",
-		"typecheck": "./scripts/with-storage-env.sh pnpm --filter devx run typecheck",
-		"vet": "./scripts/with-storage-env.sh pnpm turbo run vet --cache-dir=storage/.cache/turbo --filter=formatter --filter=vet --filter=driver"
+		"build": "./scripts/build.sh",
+		"lint": "vp run --filter devx --fail-if-no-match lint:check",
+		"test": "vp run --filter formatter --filter vet --filter driver --filter devx --fail-if-no-match test",
+		"typecheck": "vp run --filter devx --fail-if-no-match typecheck"
 	},
 	"devDependencies": {
-		"turbo": "2.5.8"
+		"vite-plus": "0.2.1"
 	},
 	"packageManager": "pnpm@10.33.0"
 }

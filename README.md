@@ -203,8 +203,11 @@ fingerprinted build images, and the `go-fmt-cache` volume) without touching
 unrelated Docker state:
 
 ```bash
-make docker-clean
+vp run docker:clean
 ```
+
+`make docker-clean` is available as a Docker compatibility alias for the same
+cleanup flow.
 
 The global Docker **build cache** is shared across all projects and cannot be
 pruned per project. Cap it so it can't grow unbounded by adding this to
@@ -229,19 +232,46 @@ pruned automatically by the `Cleanup Old Container Images` workflow.
 
 ## Development
 
-You will need Go 1.26+, Node.js 25.8.2 with pnpm 10.33.0, and a Docker runtime if you plan to touch the published images. Install the workspace once with `nvm use && pnpm install`.
+You will need Go 1.26+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
 
 ```bash
-make help          # see every target and override variable
-make build         # build the local fmt-go binary into storage/bin
-make test          # run all package tests
-make test-race     # tests with the race detector (forces CGO_ENABLED=1)
-make vet           # run go vet across the workspace
-make format        # run the Dockerised formatter against ARGS (default ".")
-make format-all    # run the formatter against the whole repository
-make install       # install fmt-go from the local source tree
-make release       # build cross-platform binaries into storage/dist
+curl -fsSL https://vite.plus -o install-vp.sh
+sh install-vp.sh
+vp install
 ```
+
+Use Vite+ tasks for day-to-day development:
+
+```bash
+vp run build             # build the local fmt-go binary into storage/bin
+vp run check             # run package checks across the workspace
+vp run test              # run all package tests
+vp run test-race         # tests with the race detector (forces CGO_ENABLED=1)
+vp run vet               # run go vet across the Go workspace packages
+vp run format:local -- . # run the local formatter pipeline
+vp run format:docker -- . # run the Dockerized formatter pipeline
+vp run install-cli       # install fmt-go from the local source tree
+vp run release           # build cross-platform binaries into storage/dist
+```
+
+### Docker compatibility Makefile
+
+Vite+ is the default developer interface. The root `Makefile` remains as a
+Docker compatibility shim for the existing Docker-first workflow:
+
+```bash
+make format       # Dockerized formatter against ARGS (default ".")
+make format-all   # Dockerized formatter against the whole repository
+make check        # Dockerized go-fmt check against ARGS (default ".")
+make image-go     # build the local Go-only formatter image
+make image-node-ts
+make image-full
+make docker-clean
+```
+
+External consumers do not need this Makefile. They can keep using
+`scripts/go-fmt-host.sh` or the published `ghcr.io/oullin/go-fmt` tags
+(`latest`, `latest-go`, `latest-node-ts`, and `latest-full`).
 
 Package layout:
 

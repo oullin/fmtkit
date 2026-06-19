@@ -10,6 +10,11 @@ if [[ ! -f "$template" ]]; then
 	exit 1
 fi
 
+if [[ -f "$target" ]] && grep -qx 'include tooling/docker/Makefile' "$target"; then
+	printf 'Docker compatibility Makefile is already available at %s\n' "$target"
+	exit 0
+fi
+
 if [[ -e "$target" && "${FORCE:-0}" != 1 ]]; then
 	printf 'refusing to overwrite existing Makefile: %s\n' "$target" >&2
 	printf 'Set FORCE=1 to replace it.\n' >&2

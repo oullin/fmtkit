@@ -206,8 +206,8 @@ unrelated Docker state:
 vp run docker:clean
 ```
 
-If you installed the optional Docker compatibility Makefile, `make docker-clean`
-is available as a local alias for the same cleanup flow.
+`make docker-clean` is available as a Docker compatibility alias for the same
+cleanup flow.
 
 The global Docker **build cache** is shared across all projects and cannot be
 pruned per project. Cap it so it can't grow unbounded by adding this to
@@ -256,15 +256,8 @@ vp run release           # build cross-platform binaries into storage/dist
 
 ### Docker compatibility Makefile
 
-Vite+ is the default developer interface. If you prefer the old Docker-first
-Make workflow for this checkout, install a local compatibility Makefile:
-
-```bash
-./scripts/install-docker-makefile.sh
-```
-
-The generated `Makefile` is intentionally ignored by Git. It offers Docker-only
-targets for this repo:
+Vite+ is the default developer interface. The root `Makefile` remains as a
+Docker compatibility shim for the existing Docker-first workflow:
 
 ```bash
 make format       # Dockerized formatter against ARGS (default ".")

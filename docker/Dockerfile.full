@@ -59,8 +59,7 @@ COPY --from=gosdk /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}" \
 	GOCACHE="/work/storage/.cache/go-build" \
 	GOPATH="/work/storage/.cache/gopath" \
-	GOMODCACHE="/work/storage/.cache/gopath/pkg/mod" \
-	TURBO_CACHE_DIR="/work/storage/.cache/turbo"
+	GOMODCACHE="/work/storage/.cache/gopath/pkg/mod"
 
 COPY --from=builder /out/fmt-go /usr/local/bin/fmt-go
 COPY --from=builder /out/fmt-sources /usr/local/bin/fmt-sources

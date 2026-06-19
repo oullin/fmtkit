@@ -11,6 +11,10 @@ go_bin="${GO_BIN:-go}"
 declare -a args=("$@")
 declare -a go_fmt_args=()
 
+if [[ "${args[0]:-}" == "--" ]]; then
+	args=("${args[@]:1}")
+fi
+
 if [[ ${#args[@]} -eq 0 ]]; then
 	args=(.)
 fi

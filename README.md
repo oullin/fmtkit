@@ -235,7 +235,8 @@ pruned automatically by the `Cleanup Old Container Images` workflow.
 You will need Go 1.26+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
 
 ```bash
-curl -fsSL https://vite.plus | bash
+curl -fsSL https://vite.plus -o install-vp.sh
+sh install-vp.sh
 vp install
 ```
 

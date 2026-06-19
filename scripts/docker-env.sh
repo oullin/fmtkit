@@ -26,7 +26,7 @@ formatter_fingerprint() {
 			.oxlintrc.json \
 			packages/devx/package.json \
 			packages/devx/scripts/package.json
-		find "$REPO_ROOT/packages/devx/scripts" -maxdepth 1 -type f -name '*.ts' -print | sed "s#^$REPO_ROOT/##"
+		(cd "$REPO_ROOT" && find packages/devx/scripts -maxdepth 1 -type f -name '*.ts')
 	} | sort | while IFS= read -r file; do
 		[[ -f "$REPO_ROOT/$file" ]] && shasum -a 256 "$REPO_ROOT/$file"
 	done | shasum -a 256 | awk '{print $1}'

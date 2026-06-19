@@ -40,7 +40,6 @@ export default defineConfig({
 			tasks: true,
 		},
 		tasks: {
-			build: './scripts/build.sh',
 			check: `vp run ${workspacePackages} check`,
 			'check:docker': './scripts/format-docker.sh check',
 			'docker:clean': './scripts/docker-image.sh clean',
@@ -51,14 +50,11 @@ export default defineConfig({
 			'image:go': './scripts/docker-image.sh go',
 			'image:node-ts': './scripts/docker-image.sh node-ts',
 			'install-cli': './scripts/with-storage-env.sh go -C packages/driver install ./cmd/fmt-go',
-			lint: 'vp run --filter devx --fail-if-no-match lint:check',
 			release: './scripts/release.sh',
-			test: `vp run ${workspacePackages} test`,
 			'test:coverage': './scripts/test-coverage.sh',
 			'test:entrypoints': './scripts/test-entrypoints.sh',
 			'test-race':
 				'CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/formatter test ./... -race -v && CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/vet test ./... -race -v && CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/driver test ./... -race -v',
-			typecheck: 'vp run --filter devx --fail-if-no-match typecheck',
 			vet: `vp run ${goPackages} vet`,
 		},
 	},

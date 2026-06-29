@@ -49,6 +49,12 @@ function lineIndent(source: string, pos: number): string {
 	return match?.[0] ?? '';
 }
 
+function detectIndent(content: string): string {
+	const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
+
+	return match?.[0] ?? '\t';
+}
+
 function hasCommentBetween(comments: Node[], from: number, to: number): boolean {
 	return comments.some((comment) => {
 		const start = getStart(comment);
@@ -141,6 +147,7 @@ export function computeFluentChainEdits(content: string, virtualName: string): E
 	const parsed = parseSync(virtualName, content) as unknown as ParseResult;
 	const comments = parsed.comments ?? [];
 	const edits = new Map<string, Edit>();
+	const indentStep = detectIndent(content);
 
 	visit(parsed.program, (node) => {
 		if (node.type !== 'CallExpression') {
@@ -159,7 +166,7 @@ export function computeFluentChainEdits(content: string, virtualName: string): E
 			return;
 		}
 
-		const indent = `${lineIndent(content, baseStart)}\t`;
+		const indent = `${lineIndent(content, baseStart)}${indentStep}`;
 
 		for (const link of chain.links) {
 			const replacement = `\n${indent}${link.operator}`;
@@ -190,6 +197,29 @@ export function formatFluentChains(content: string, virtualName: string): string
 	return formatExpandedCalls(drizzleFormatted, virtualName);
 }
 
+function scriptAttribute(openTag: string, name: string): string | null {
+	const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+	const match = openTag.match(pattern);
+
+	return match ? (match[1] ?? match[2] ?? match[3]).toLowerCase() : null;
+}
+
+function isJavaScriptOrTypeScript(openTag: string): boolean {
+	const lang = scriptAttribute(openTag, 'lang');
+
+	if (lang) {
+		return ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript'].includes(lang);
+	}
+
+	const type = scriptAttribute(openTag, 'type');
+
+	if (type) {
+		return type === 'module' || type.includes('javascript') || type.includes('ecmascript');
+	}
+
+	return true;
+}
+
 function processVueFile(original: string, file: string): string {
 	let updated = original;
 
@@ -201,6 +231,11 @@ function processVueFile(original: string, file: string): string {
 
 	while ((match = VUE_SCRIPT_REGEX.exec(original)) !== null) {
 		const openTag = match[1];
+
+		if (!isJavaScriptOrTypeScript(openTag)) {
+			continue;
+		}
+
 		const content = match[2];
 		const contentStart = match.index + openTag.length;
 		const virtualName = `${file}.script.ts`;

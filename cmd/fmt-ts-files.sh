@@ -80,16 +80,22 @@ if [[ ${#project_configs[@]} -eq 0 && -f "$oxfmtrc" ]]; then
 	oxfmt_config_args=(--config "$oxfmtrc")
 fi
 
-if [[ ${#format_files[@]} -gt 0 ]]; then
-	printf '%s\0' "${format_files[@]}" \
-		| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
-fi
+run_oxfmt() {
+	if [[ ${#format_files[@]} -gt 0 ]]; then
+		printf '%s\0' "${format_files[@]}" \
+			| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
+	fi
+}
+
+run_oxfmt
 
 if [[ ${#format_files[@]} -gt 0 ]]; then
 	"$tsx_bin" "$fluent_chains_script" "${format_files[@]}"
 else
 	"$tsx_bin" "$fluent_chains_script"
 fi
+
+run_oxfmt
 
 if [[ ${#syntax_files[@]} -gt 0 ]]; then
 	"$tsx_bin" "$validate_syntax_script" "${syntax_files[@]}"

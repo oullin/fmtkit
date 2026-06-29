@@ -7,45 +7,26 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { formatFluentChains } from '#devx/fluent-chains';
 
-const script = fileURLToPath(
-	import.meta.resolve('#devx/fluent-chains'),
-);
-const tsx = fileURLToPath(
-	import.meta.resolve('tsx/cli'),
-);
+const script = fileURLToPath(import.meta.resolve('#devx/fluent-chains'));
+const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 function run(command: string, args: string[], cwd: string): void {
-	const result = spawnSync(
-		command,
-		args,
-		{ cwd, encoding: 'utf8' },
-	);
+	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
 
 	assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(
-		join(
-			tmpdir(),
-			'go-fmt-fluent-chains-',
-		),
-	);
+	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-fluent-chains-'));
 
 	try {
 		for (const [file, content] of Object.entries(files)) {
-			await writeFile(
-				join(dir, file),
-				content,
-			);
+			await writeFile(join(dir, file), content);
 		}
 
 		await fn(dir);
 	} finally {
-		await rm(
-			dir,
-			{ recursive: true, force: true },
-		);
+		await rm(dir, { recursive: true, force: true });
 	}
 }
 
@@ -72,6 +53,13 @@ describe('fluent chain formatter', () => {
 		const input = ['const routes = createRouter()', "\t.use('*', bindEnv)", "\t.get('/', getMe);", ''].join('\n');
 
 		assert.equal(formatFluentChains(formatFluentChains(input, 'fixture.ts'), 'fixture.ts'), input);
+	});
+
+	it('uses the file indentation style for split chains', () => {
+		const input = ['function routes() {', "  return createRouter().use('*', bindEnv).get('/', getMe);", '}', ''].join('\n');
+		const expected = ['function routes() {', '  return createRouter()', "    .use('*', bindEnv)", "    .get('/', getMe);", '}', ''].join('\n');
+
+		assert.equal(formatFluentChains(input, 'fixture.ts'), expected);
 	});
 
 	it('leaves short value transform chains unchanged', () => {
@@ -104,24 +92,39 @@ describe('fluent chain formatter', () => {
 				].join('\n'),
 			},
 			async (dir) => {
-				run(
-					process.execPath,
-					[tsx, script, 'DashboardRoute.vue'],
-					dir,
-				);
-				run(
-					process.execPath,
-					[tsx, script, 'DashboardRoute.vue'],
-					dir,
-				);
+				run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
+				run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
 
-				const output = await readFile(
-					join(dir, 'DashboardRoute.vue'),
-					'utf8',
-				);
+				const output = await readFile(join(dir, 'DashboardRoute.vue'), 'utf8');
 
 				assert.match(output, /createRouter<\{ Bindings: WorkerEnv; Variables: IdentityVariables \}>\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)/);
 				assert.match(output, /\.get\('\/', getMe\)\n\t\.get\('\/sessions', getSessions\);/);
+			},
+		);
+	});
+
+	it('skips non-JavaScript Vue script blocks through the CLI', async () => {
+		const jsonLd = '{"@context":"https://schema.org","@type":"WebSite","url":"https://example.com"}';
+
+		await withFixture(
+			{
+				'StructuredData.vue': [
+					'<script type="application/ld+json">',
+					jsonLd,
+					'</script>',
+					'<script setup lang="ts">',
+					"export const meRoutes = createRouter().use('*', bindEnv).get('/', getMe);",
+					'</script>',
+					'',
+				].join('\n'),
+			},
+			async (dir) => {
+				run(process.execPath, [tsx, script, 'StructuredData.vue'], dir);
+
+				const output = await readFile(join(dir, 'StructuredData.vue'), 'utf8');
+
+				assert.ok(output.includes(['<script type="application/ld+json">', jsonLd, '</script>'].join('\n')));
+				assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.get\('\/', getMe\);/);
 			},
 		);
 	});
@@ -138,21 +141,10 @@ describe('fluent chain formatter', () => {
 				].join('\n'),
 			},
 			async (dir) => {
-				run(
-					process.execPath,
-					[tsx, script, 'DashboardData.vue'],
-					dir,
-				);
-				run(
-					process.execPath,
-					[tsx, script, 'DashboardData.vue'],
-					dir,
-				);
+				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
 
-				const output = await readFile(
-					join(dir, 'DashboardData.vue'),
-					'utf8',
-				);
+				const output = await readFile(join(dir, 'DashboardData.vue'), 'utf8');
 
 				assert.match(output, /\.where\(\n\t\tand\(\n\t\t\teq\(sessions\.userId, userId\),\n\t\t\tgt\(sessions\.expiresAt, now\),\n\t\t\),\n\t\);/);
 			},
@@ -172,21 +164,10 @@ describe('fluent chain formatter', () => {
 				].join('\n'),
 			},
 			async (dir) => {
-				run(
-					process.execPath,
-					[tsx, script, 'AuthProvider.vue'],
-					dir,
-				);
-				run(
-					process.execPath,
-					[tsx, script, 'AuthProvider.vue'],
-					dir,
-				);
+				run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
+				run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
 
-				const output = await readFile(
-					join(dir, 'AuthProvider.vue'),
-					'utf8',
-				);
+				const output = await readFile(join(dir, 'AuthProvider.vue'), 'utf8');
 
 				assert.match(output, /return betterAuth\(\n\t\tbuildAuthConfig\(env, db, mailer, app, options\),\n\t\) as unknown as SasuAuth;/);
 			},

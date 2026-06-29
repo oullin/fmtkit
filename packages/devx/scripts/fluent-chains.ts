@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
+import { formatDrizzleQueries } from '#devx/drizzle-queries';
 import { applyEdits } from '#devx/edits';
 import type { Edit, Node } from '#devx/types';
 
@@ -181,7 +182,9 @@ export function computeFluentChainEdits(content: string, virtualName: string): E
 export function formatFluentChains(content: string, virtualName: string): string {
 	const edits = computeFluentChainEdits(content, virtualName);
 
-	return edits.length > 0 ? applyEdits(content, edits) : content;
+	const fluentFormatted = edits.length > 0 ? applyEdits(content, edits) : content;
+
+	return formatDrizzleQueries(fluentFormatted, virtualName);
 }
 
 function processVueFile(original: string, file: string): string {

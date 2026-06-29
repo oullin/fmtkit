@@ -13,6 +13,8 @@
 		"#devx/class-reorder.js": "./class-reorder.ts",
 		"#devx/declaration-reorder": "./declaration-reorder.ts",
 		"#devx/declaration-reorder.js": "./declaration-reorder.ts",
+		"#devx/drizzle-queries": "./drizzle-queries.ts",
+		"#devx/drizzle-queries.js": "./drizzle-queries.ts",
 		"#devx/cli": "./cli.ts",
 		"#devx/cli.js": "./cli.ts",
 		"#devx/edits": "./edits.ts",

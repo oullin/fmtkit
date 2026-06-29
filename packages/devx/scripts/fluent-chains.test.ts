@@ -95,4 +95,26 @@ describe('fluent chain formatter', () => {
 			},
 		);
 	});
+
+	it('formats Drizzle queries in Vue script blocks through the CLI', async () => {
+		await withFixture(
+			{
+				'DashboardData.vue': [
+					'<script setup lang="ts">',
+					"import { and, eq, gt } from 'drizzle-orm';",
+					'const rows = await db.select().from(sessions).where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, now)));',
+					'</script>',
+					'',
+				].join('\n'),
+			},
+			async (dir) => {
+				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+
+				const output = await readFile(join(dir, 'DashboardData.vue'), 'utf8');
+
+				assert.match(output, /\.where\(\n\t\tand\(\n\t\t\teq\(sessions\.userId, userId\),\n\t\t\tgt\(sessions\.expiresAt, now\),\n\t\t\),\n\t\);/);
+			},
+		);
+	});
 });

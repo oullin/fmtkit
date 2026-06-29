@@ -54,6 +54,7 @@ ensure_storage_layout
 		GO_FMT_SOURCES_GO_WORKDIR="$sources_workdir" \
 		GO_FMT_SOURCES_CWD="$repo_root" \
 		GO_FMT_BLANK_LINES_SCRIPT="$repo_root/packages/devx/scripts/blank-lines.ts" \
+		GO_FMT_FLUENT_CHAINS_SCRIPT="$repo_root/packages/devx/scripts/fluent-chains.ts" \
 		GO_FMT_VALIDATE_SYNTAX_SCRIPT="$repo_root/packages/devx/scripts/validate-syntax.ts" \
 		TSX_BIN="$tsx_bin" \
 		OXFMT_BIN="$oxfmt_bin" \

@@ -19,6 +19,8 @@
 		"#devx/edits.js": "./edits.ts",
 		"#devx/files": "./files.ts",
 		"#devx/files.js": "./files.ts",
+		"#devx/fluent-chains": "./fluent-chains.ts",
+		"#devx/fluent-chains.js": "./fluent-chains.ts",
 		"#devx/rules": "./rules.ts",
 		"#devx/rules.js": "./rules.ts",
 		"#devx/segment": "./segment.ts",

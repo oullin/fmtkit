@@ -111,7 +111,7 @@ concurrency: 0
 
 ### TS/Vue formatting (`.oxfmtrc.json`)
 
-The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources. The images ship a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
+The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources, then applies project-specific syntax passes for blank lines and fluent builder chains. The images ship a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
 
 A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `GO_FMT_OXFMTRC` environment variable, matching the other `GO_FMT_*` knobs.
 

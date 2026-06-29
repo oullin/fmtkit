@@ -186,6 +186,7 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	});
 
 	const separator = `,\n${argIndent}`;
+
 	const trailingComma = canUseTrailingComma(
 		args.at(-1),
 	) ? ',' : '';
@@ -275,6 +276,7 @@ export function computeExpandedCallEdits(content: string, virtualName: string): 
 			content,
 			getStart(node),
 		);
+
 		const replacement = formatCallParens(content, node, comments, indent);
 		const current = content.slice(parens.open, parens.close + 1);
 

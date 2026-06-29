@@ -554,6 +554,7 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 		unwrapChainExpression(call.callee as Node | undefined),
 		imports,
 	);
+
 	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
 
 	if (!importedName || !MULTILINE_HELPERS.has(importedName) || args.length === 0) {

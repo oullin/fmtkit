@@ -233,6 +233,7 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 		.join('');
 
 	const firstStart = getStart(group[0]);
+
 	const lastEnd = getEnd(
 		group.at(-1)!,
 	);

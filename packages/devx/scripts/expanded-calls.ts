@@ -186,7 +186,6 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	});
 
 	const separator = `,\n${argIndent}`;
-
 	const trailingComma = canUseTrailingComma(args.at(-1)) ? ',' : '';
 
 	return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;

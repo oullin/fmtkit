@@ -324,6 +324,7 @@ test_ts_only_target_runs_full_pipeline_without_go_files() {
 	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/blank-lines.ts "
 	assert_contains "$fixture_root/tool-invocations.log" "$fixture_root/src/app.ts"
 	assert_contains "$fixture_root/tool-invocations.log" 'oxfmt --write --no-error-on-unmatched-pattern '
+	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/fluent-chains.ts "
 	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/validate-syntax.ts "
 }
 

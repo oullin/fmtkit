@@ -15,6 +15,7 @@ type Node = {
 };
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
+
 const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#devx/ast')));
 
 function isRelativeSpecifier(value: string): boolean {

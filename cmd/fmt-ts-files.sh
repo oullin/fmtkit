@@ -6,6 +6,7 @@ tsx_bin="${TSX_BIN:-${support_dir}/node_modules/.bin/tsx}"
 oxfmt_bin="${OXFMT_BIN:-${support_dir}/node_modules/.bin/oxfmt}"
 oxfmtrc="${GO_FMT_OXFMTRC:-${support_dir}/.oxfmtrc.json}"
 blank_lines_script="${GO_FMT_BLANK_LINES_SCRIPT:-${support_dir}/blank-lines.ts}"
+fluent_chains_script="${GO_FMT_FLUENT_CHAINS_SCRIPT:-${support_dir}/fluent-chains.ts}"
 validate_syntax_script="${GO_FMT_VALIDATE_SYNTAX_SCRIPT:-${support_dir}/validate-syntax.ts}"
 
 declare -a sources_cmd
@@ -79,10 +80,22 @@ if [[ ${#project_configs[@]} -eq 0 && -f "$oxfmtrc" ]]; then
 	oxfmt_config_args=(--config "$oxfmtrc")
 fi
 
+run_oxfmt() {
+	if [[ ${#format_files[@]} -gt 0 ]]; then
+		printf '%s\0' "${format_files[@]}" \
+			| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
+	fi
+}
+
+run_oxfmt
+
 if [[ ${#format_files[@]} -gt 0 ]]; then
-	printf '%s\0' "${format_files[@]}" \
-		| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
+	"$tsx_bin" "$fluent_chains_script" "${format_files[@]}"
+else
+	"$tsx_bin" "$fluent_chains_script"
 fi
+
+run_oxfmt
 
 if [[ ${#syntax_files[@]} -gt 0 ]]; then
 	"$tsx_bin" "$validate_syntax_script" "${syntax_files[@]}"

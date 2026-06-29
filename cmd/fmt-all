@@ -6,7 +6,7 @@ usage() {
 	printf '  format [paths...]                        run TS/Vue support + lint, then Go formatting\n' >&2
 	printf '  format-all                               run the full formatter pipeline against .\n' >&2
 	printf '  go [check|format|version|help] [args...] run the Go formatter CLI\n' >&2
-	printf '  ts [paths...]                            run TS/Vue blank-line support and oxfmt\n' >&2
+	printf '  ts [paths...]                            run TS/Vue formatting support and oxfmt\n' >&2
 	printf '  check|version|help [args...]             run the matching Go formatter CLI command\n' >&2
 }
 
@@ -85,11 +85,13 @@ summarize_ts_format() {
 	local log_file="$1"
 	local missing_count
 	local blank_lines_summary
+	local fluent_chains_summary
 	local oxfmt_summary
 	local validation_summary
 
 	missing_count="$(grep -c '^\[blank-lines\] path not found, skipping:' "$log_file" || true)"
 	blank_lines_summary="$(grep '^\[blank-lines\] processed ' "$log_file" | tail -n 1 | sed 's/^\[blank-lines\] //' || true)"
+	fluent_chains_summary="$(grep '^\[fluent-chains\] processed ' "$log_file" | tail -n 1 | sed 's/^\[fluent-chains\] //' || true)"
 	oxfmt_summary="$(grep '^Finished in ' "$log_file" | tail -n 1 || true)"
 	validation_summary="$(grep '^\[validate-syntax\] checked ' "$log_file" | tail -n 1 | sed 's/^\[validate-syntax\] //' || true)"
 
@@ -103,6 +105,10 @@ summarize_ts_format() {
 
 	if [[ -n "$oxfmt_summary" ]]; then
 		detail 'oxfmt' "$oxfmt_summary"
+	fi
+
+	if [[ -n "$fluent_chains_summary" ]]; then
+		detail 'fluent' "$fluent_chains_summary"
 	fi
 
 	if [[ -n "$validation_summary" ]]; then

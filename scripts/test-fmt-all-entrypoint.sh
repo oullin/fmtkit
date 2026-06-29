@@ -26,6 +26,7 @@ printf '%s %s\n' "$name" "\$*" >> "$log_file"
 		fmt-ts)
 		printf '[blank-lines] processed 3 file(s) in /work, 0 changed\n'
 		printf 'Finished in 10ms on 3 files using 8 threads.\n'
+		printf '[fluent-chains] processed 3 file(s) in /work, 1 changed\n'
 		;;
 		fmt-lint)
 		printf 'Found 0 warnings and 0 errors.\n'
@@ -107,6 +108,7 @@ assert_contains "$stderr_file" 'paths        .'
 assert_contains "$stderr_file" '==> Running TS/Vue formatting'
 assert_contains "$stderr_file" 'blank-lines  processed 3 file(s) in /work, 0 changed'
 assert_contains "$stderr_file" 'oxfmt        Finished in 10ms on 3 files using 8 threads.'
+assert_contains "$stderr_file" 'fluent       processed 3 file(s) in /work, 1 changed'
 assert_contains "$stderr_file" '==> Running TS/Vue lint'
 assert_contains "$stderr_file" 'oxlint       Found 0 warnings and 0 errors.'
 assert_contains "$stderr_file" '==> Running Go formatting'

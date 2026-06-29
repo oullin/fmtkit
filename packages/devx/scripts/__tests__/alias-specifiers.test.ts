@@ -15,7 +15,11 @@ type Node = {
 };
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
-const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#devx/ast')));
+const scriptsDir = dirname(
+	fileURLToPath(
+		import.meta.resolve('#devx/ast'),
+	),
+);
 
 function isRelativeSpecifier(value: string): boolean {
 	return value.startsWith('./') || value.startsWith('../');
@@ -68,7 +72,10 @@ function isSourceFile(name: string): boolean {
 }
 
 async function listSourceFiles(dir: string): Promise<string[]> {
-	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+	const entries = await readdir(
+		dir,
+		{ recursive: true, withFileTypes: true },
+	);
 
 	const files: string[] = [];
 

@@ -15,6 +15,8 @@
 		"#devx/declaration-reorder.js": "./declaration-reorder.ts",
 		"#devx/drizzle-queries": "./drizzle-queries.ts",
 		"#devx/drizzle-queries.js": "./drizzle-queries.ts",
+		"#devx/expanded-calls": "./expanded-calls.ts",
+		"#devx/expanded-calls.js": "./expanded-calls.ts",
 		"#devx/cli": "./cli.ts",
 		"#devx/cli.js": "./cli.ts",
 		"#devx/edits": "./edits.ts",

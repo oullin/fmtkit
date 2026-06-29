@@ -14,7 +14,6 @@ type DrizzleImports = {
 };
 
 const DRIZZLE_MODULE = 'drizzle-orm';
-
 const DRIZZLE_RECEIVERS = new Set(['db', 'tx']);
 
 const DRIZZLE_CHAIN_METHODS = new Set([
@@ -107,9 +106,7 @@ const DRIZZLE_HELPERS = new Set([
 ]);
 
 const MULTILINE_HELPERS = new Set(['and', 'or', 'not', 'exists', 'notExists']);
-
 const SET_OPERATION_HELPERS = new Set(['except', 'intersect', 'union', 'unionAll']);
-
 const DRIZZLE_OBJECT_KEYS = new Set(['columns', 'extras', 'limit', 'offset', 'onUpdate', 'orderBy', 'set', 'target', 'targetWhere', 'where', 'with']);
 
 function isDeclarationFile(virtualName: string): boolean {
@@ -482,7 +479,11 @@ function shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boole
 }
 
 function formatArrayExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(node), getEnd(node))) {
+	if (hasCommentInside(
+		comments,
+		getStart(node),
+		getEnd(node),
+	)) {
 		return sourceOf(source, node);
 	}
 
@@ -493,6 +494,7 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 	}
 
 	const nextIndent = `${indent}\t`;
+
 	const formatted = elements.map((element) => {
 		return element ? formatNode(source, element, imports, comments, nextIndent) : '';
 	});
@@ -501,7 +503,11 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 }
 
 function formatObjectExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(node), getEnd(node))) {
+	if (hasCommentInside(
+		comments,
+		getStart(node),
+		getEnd(node),
+	)) {
 		return sourceOf(source, node);
 	}
 
@@ -512,6 +518,7 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 	}
 
 	const nextIndent = `${indent}\t`;
+
 	const formatted = properties.map((property) => {
 		if (property.type !== 'Property') {
 			return sourceOf(source, property);
@@ -535,11 +542,18 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 }
 
 function formatHelperCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(call), getEnd(call))) {
+	if (hasCommentInside(
+		comments,
+		getStart(call),
+		getEnd(call),
+	)) {
 		return sourceOf(source, call);
 	}
 
-	const importedName = calleeName(unwrapChainExpression(call.callee as Node | undefined), imports);
+	const importedName = calleeName(
+		unwrapChainExpression(call.callee as Node | undefined),
+		imports,
+	);
 	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
 
 	if (!importedName || !MULTILINE_HELPERS.has(importedName) || args.length === 0) {
@@ -553,7 +567,11 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 }
 
 function formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(call), getEnd(call))) {
+	if (hasCommentInside(
+		comments,
+		getStart(call),
+		getEnd(call),
+	)) {
 		return sourceOf(source, call);
 	}
 
@@ -627,6 +645,7 @@ function rangesOverlap(a: Edit, b: Edit): boolean {
 
 function nonOverlappingEdits(edits: Edit[]): Edit[] {
 	const accepted: Edit[] = [];
+
 	const sorted = [...edits].sort((a, b) => {
 		return a.start - b.start || b.end - b.start - (a.end - a.start);
 	});

@@ -15,7 +15,10 @@ export async function dirExists(dir: string): Promise<boolean> {
 }
 
 export async function listSourceFiles(dir: string): Promise<string[]> {
-	const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+	const entries = await readdir(
+		dir,
+		{ recursive: true, withFileTypes: true },
+	);
 
 	const files: string[] = [];
 

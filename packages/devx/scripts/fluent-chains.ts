@@ -4,6 +4,7 @@ import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
 import { formatDrizzleQueries } from '#devx/drizzle-queries';
 import { applyEdits } from '#devx/edits';
+import { formatExpandedCalls } from '#devx/expanded-calls';
 import type { Edit, Node } from '#devx/types';
 
 const cwd = process.cwd();
@@ -100,6 +101,7 @@ function memberCallLink(source: string, member: Node, object: Node, comments: No
 
 function collectFluentChain(source: string, outer: Node, comments: Node[]): FluentChain | null {
 	let call: Node = outer;
+
 	const links: ChainLink[] = [];
 
 	while (call.type === 'CallExpression') {
@@ -183,12 +185,14 @@ export function formatFluentChains(content: string, virtualName: string): string
 	const edits = computeFluentChainEdits(content, virtualName);
 
 	const fluentFormatted = edits.length > 0 ? applyEdits(content, edits) : content;
+	const drizzleFormatted = formatDrizzleQueries(fluentFormatted, virtualName);
 
-	return formatDrizzleQueries(fluentFormatted, virtualName);
+	return formatExpandedCalls(drizzleFormatted, virtualName);
 }
 
 function processVueFile(original: string, file: string): string {
 	let updated = original;
+
 	const segments: { content: string; start: number; virtualName: string }[] = [];
 
 	VUE_SCRIPT_REGEX.lastIndex = 0;
@@ -219,6 +223,7 @@ function processVueFile(original: string, file: string): string {
 
 async function processFile(file: string, check: boolean): Promise<boolean> {
 	const original = await readFile(file, 'utf8');
+
 	const updated = file.endsWith('.vue') ? processVueFile(original, file) : formatFluentChains(original, file);
 
 	if (updated === original) {
@@ -235,6 +240,7 @@ async function processFile(file: string, check: boolean): Promise<boolean> {
 async function main(): Promise<void> {
 	const rawArgs = process.argv.slice(2);
 	const check = rawArgs.includes('--check');
+
 	const files = rawArgs
 		.filter((arg) => {
 			return arg !== '--check';

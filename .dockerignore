@@ -24,9 +24,6 @@ builds
 # Node (not needed for Go Docker build)
 node_modules
 tooling/node_modules
-packages/semantic/node_modules
-packages/correctness/node_modules
-packages/orchestrator/node_modules
 
 # Runtime / generated
 config.yml

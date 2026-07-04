@@ -64,7 +64,7 @@ create_fixture() {
 	mkdir -p "$fixture_root"
 	cp -R "$repo_root/cmd" "$fixture_root/cmd"
 	cp -R "$repo_root/scripts" "$fixture_root/scripts"
-	cp -R "$repo_root/semantic" "$fixture_root/semantic"
+	mkdir -p "$fixture_root/semantic"
 	mkdir -p "$fixture_root/storage/test-bin"
 
 	cat >"$fixture_root/oxfmt-stub.sh" <<'EOF'
@@ -96,7 +96,7 @@ EOF
 		git init -q
 		git config user.email tests@example.com
 		git config user.name 'Test Runner'
-		git add cmd scripts semantic oxfmt-stub.sh tsx-stub.sh
+		git add cmd scripts oxfmt-stub.sh tsx-stub.sh
 		git commit -q -m 'initial'
 	)
 
@@ -320,7 +320,7 @@ test_ts_only_target_runs_full_pipeline_without_go_files() {
 	run_format "$fixture_root" "$fixture_root/src/app.ts"
 
 	assert_go_invocation_equals "$fixture_root" "$fixture_root/src/app.ts"
-	assert_contains "$fixture_root/go-invocations.log" '-C /Users/gocanto/Sites/go-fmt/packages/driver run ./cmd/fmt-sources --cwd '
+	assert_contains "$fixture_root/go-invocations.log" "-C $repo_root/packages/driver run ./cmd/fmt-sources --cwd "
 	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/blank-lines.ts "
 	assert_contains "$fixture_root/tool-invocations.log" "$fixture_root/src/app.ts"
 	assert_contains "$fixture_root/tool-invocations.log" 'oxfmt --write --no-error-on-unmatched-pattern '

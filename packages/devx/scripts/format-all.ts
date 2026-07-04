@@ -87,7 +87,7 @@ export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => 
 	return results;
 }
 
-async function runPass(label: string, files: string[], check: boolean, processOne: (file: string, check: boolean) => Promise<boolean>): Promise<void> {
+export async function runPass(label: string, files: string[], check: boolean, processOne: (file: string, check: boolean) => Promise<boolean>): Promise<void> {
 	const outcomes = await mapPool(files, availableParallelism(), async (file): Promise<PassOutcome> => {
 		try {
 			return { file, changed: await processOne(file, check), missing: false };
@@ -125,7 +125,7 @@ async function runPass(label: string, files: string[], check: boolean, processOn
 	console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${check ? 'would change' : 'changed'}`);
 }
 
-function runOxfmt(options: CliOptions): Promise<void> {
+export function runOxfmt(options: CliOptions): Promise<void> {
 	if (options.check || !options.oxfmtBin || options.formatFiles.length === 0) {
 		return Promise.resolve();
 	}

@@ -11,12 +11,6 @@ func generateDiff(old, new string) string {
 
 	var diff strings.Builder
 
-	maxLen := len(oldLines)
-
-	if len(newLines) > maxLen {
-		maxLen = len(newLines)
-	}
-
 	i, j := 0, 0
 
 	for i < len(oldLines) || j < len(newLines) {
@@ -28,13 +22,13 @@ func generateDiff(old, new string) string {
 		}
 
 		if i < len(oldLines) && (j >= len(newLines) || oldLines[i] != newLines[j]) {
-			diff.WriteString(fmt.Sprintf("-%s\n", oldLines[i]))
+			fmt.Fprintf(&diff, "-%s\n", oldLines[i])
 
 			i++
 		}
 
 		if j < len(newLines) {
-			diff.WriteString(fmt.Sprintf("+%s\n", newLines[j]))
+			fmt.Fprintf(&diff, "+%s\n", newLines[j])
 
 			j++
 		}

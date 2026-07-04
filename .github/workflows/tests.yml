@@ -18,6 +18,40 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+    lint:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                module:
+                    - formatter
+                    - vet
+                    - driver
+
+        steps:
+            - uses: actions/checkout@v6
+              name: Checkout repository
+
+            - uses: actions/setup-go@v6
+              name: Install Go
+              with:
+                  go-version-file: go.work
+                  cache-dependency-path: |
+                      go.work
+                      go.work.sum
+                      packages/driver/go.mod
+                      packages/driver/go.sum
+                      packages/formatter/go.mod
+                      packages/formatter/go.sum
+                      packages/vet/go.mod
+                      packages/vet/go.sum
+
+            - uses: golangci/golangci-lint-action@v8
+              name: Lint ${{ matrix.module }}
+              with:
+                  version: v2.12.2
+                  working-directory: packages/${{ matrix.module }}
+
     check:
         runs-on: ubuntu-latest
         strategy:

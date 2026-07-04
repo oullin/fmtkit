@@ -1,5 +1,5 @@
-import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
+import { lineIndent, parseCleanly } from '#devx/pass-utils';
 import type { Edit, Node } from '#devx/types';
 
 const STATEMENT_BODY_KEYS: Record<string, string[]> = {
@@ -11,13 +11,6 @@ const STATEMENT_BODY_KEYS: Record<string, string[]> = {
 	WhileStatement: ['body'],
 	WithStatement: ['body'],
 };
-
-function lineIndent(source: string, pos: number): string {
-	const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
-	const match = source.slice(lineStart, pos).match(/^[ \t]*/);
-
-	return match?.[0] ?? '';
-}
 
 function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null {
 	if (body.type === 'BlockStatement') {
@@ -47,7 +40,12 @@ function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null
 }
 
 export function computeBodyWrapEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseSync(virtualName, content) as unknown as { program: Node };
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
 	const edits: Edit[] = [];
 
 	visit(parsed.program, (node) => {

@@ -1,8 +1,7 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { extractVueScripts, isJavaScriptOrTypeScript, writeFileAtomic } from '#devx/pass-utils';
 import { processSegment } from '#devx/segment';
-
-const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
 export async function dirExists(dir: string): Promise<boolean> {
 	try {
@@ -40,23 +39,12 @@ export async function processFile(file: string, check: boolean): Promise<boolean
 	let updated = original;
 
 	if (file.endsWith('.vue')) {
-		const segments: { content: string; start: number; virtualName: string }[] = [];
-
-		VUE_SCRIPT_REGEX.lastIndex = 0;
-
-		let match: RegExpExecArray | null;
-
-		while ((match = VUE_SCRIPT_REGEX.exec(original)) !== null) {
-			const openTag = match[1];
-			const content = match[2];
-			const contentStart = match.index + openTag.length;
-			const virtualName = `${file}.script.ts`;
-
-			segments.push({ content, start: contentStart, virtualName });
-		}
+		const segments = extractVueScripts(original).filter((segment) => {
+			return isJavaScriptOrTypeScript(segment.openTag);
+		});
 
 		for (const segment of [...segments].reverse()) {
-			const rewritten = processSegment(segment.content, segment.virtualName);
+			const rewritten = processSegment(segment.content, `${file}.script.ts`);
 
 			if (rewritten === segment.content) {
 				continue;
@@ -73,7 +61,7 @@ export async function processFile(file: string, check: boolean): Promise<boolean
 	}
 
 	if (!check) {
-		await writeFile(file, updated);
+		await writeFileAtomic(file, updated);
 	}
 
 	return true;

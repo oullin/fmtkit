@@ -14,26 +14,8 @@ export default defineConfig({
 		useTabs: true,
 		arrowParens: 'always',
 	},
-	lint: {
-		plugins: ['typescript'],
-		categories: {
-			correctness: 'error',
-		},
-		rules: {
-			'no-unused-vars': ['error', { args: 'after-used', argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
-			'no-self-compare': 'error',
-			'no-template-curly-in-string': 'error',
-			eqeqeq: ['error', 'always'],
-			'no-var': 'error',
-			'typescript/no-misused-new': 'error',
-			'typescript/no-extra-non-null-assertion': 'error',
-			'typescript/no-non-null-asserted-optional-chain': 'error',
-			'typescript/no-duplicate-enum-values': 'error',
-			'typescript/no-unsafe-declaration-merging': 'error',
-			'typescript/prefer-as-const': 'error',
-			'typescript/consistent-type-imports': 'error',
-		},
-	},
+	// Lint rules live in .oxlintrc.json (the single source of truth); the
+	// devx lint scripts invoke oxlint directly and discover it there.
 	run: {
 		cache: {
 			scripts: true,

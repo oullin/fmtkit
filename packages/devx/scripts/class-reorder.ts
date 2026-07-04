@@ -1,5 +1,5 @@
-import { parseSync } from 'oxc-parser';
 import { collectClassBodies, getEnd, getStart } from '#devx/ast';
+import { parseCleanly } from '#devx/pass-utils';
 import { classifyMember } from '#devx/rules';
 import type { Edit, Node } from '#devx/types';
 
@@ -98,7 +98,12 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 }
 
 export function computeReorderEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseSync(virtualName, content) as unknown as { program: Node };
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
 	const bodies = collectClassBodies(parsed.program);
 	const edits: Edit[] = [];
 

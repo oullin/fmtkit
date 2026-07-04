@@ -5,9 +5,7 @@ support_dir="${GO_FMT_SUPPORT_DIR:-/opt/go-fmt/support}"
 tsx_bin="${TSX_BIN:-${support_dir}/node_modules/.bin/tsx}"
 oxfmt_bin="${OXFMT_BIN:-${support_dir}/node_modules/.bin/oxfmt}"
 oxfmtrc="${GO_FMT_OXFMTRC:-${support_dir}/.oxfmtrc.json}"
-blank_lines_script="${GO_FMT_BLANK_LINES_SCRIPT:-${support_dir}/blank-lines.ts}"
-fluent_chains_script="${GO_FMT_FLUENT_CHAINS_SCRIPT:-${support_dir}/fluent-chains.ts}"
-validate_syntax_script="${GO_FMT_VALIDATE_SYNTAX_SCRIPT:-${support_dir}/validate-syntax.ts}"
+format_all_script="${GO_FMT_FORMAT_ALL_SCRIPT:-${support_dir}/format-all.ts}"
 
 declare -a sources_cmd
 
@@ -61,12 +59,6 @@ done < "$tmp_syntax"
 rm -f "$tmp_format" "$tmp_syntax"
 trap - EXIT
 
-if [[ ${#format_files[@]} -gt 0 ]]; then
-	"$tsx_bin" "$blank_lines_script" "${format_files[@]}"
-else
-	"$tsx_bin" "$blank_lines_script"
-fi
-
 # Fall back to the bundled config only when the project has no oxfmt config of
 # its own; a project-local config (.oxfmtrc.json, .ts, .js, …) takes precedence
 # via oxfmt's native auto-discovery.
@@ -77,28 +69,24 @@ project_configs=("$detect_dir"/.oxfmtrc.*)
 shopt -u nullglob
 
 if [[ ${#project_configs[@]} -eq 0 && -f "$oxfmtrc" ]]; then
-	oxfmt_config_args=(--config "$oxfmtrc")
+	oxfmt_config_args=(--oxfmt-config "$oxfmtrc")
 fi
 
-run_oxfmt() {
-	if [[ ${#format_files[@]} -gt 0 ]]; then
-		printf '%s\0' "${format_files[@]}" \
-			| xargs -0 "$oxfmt_bin" ${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"} --write --no-error-on-unmatched-pattern
-	fi
-}
+# format-all.ts runs the whole pipeline (blank-lines → oxfmt → fluent-chains
+# → oxfmt → validate-syntax) in one Node process instead of three tsx spawns.
+declare -a format_all_args=(--oxfmt-bin "$oxfmt_bin")
 
-run_oxfmt
+format_all_args+=(${oxfmt_config_args[@]+"${oxfmt_config_args[@]}"})
+format_all_args+=(--format-files)
 
 if [[ ${#format_files[@]} -gt 0 ]]; then
-	"$tsx_bin" "$fluent_chains_script" "${format_files[@]}"
-else
-	"$tsx_bin" "$fluent_chains_script"
+	format_all_args+=("${format_files[@]}")
 fi
 
-run_oxfmt
+format_all_args+=(--syntax-files)
 
 if [[ ${#syntax_files[@]} -gt 0 ]]; then
-	"$tsx_bin" "$validate_syntax_script" "${syntax_files[@]}"
-else
-	"$tsx_bin" "$validate_syntax_script"
+	format_all_args+=("${syntax_files[@]}")
 fi
+
+"$tsx_bin" "$format_all_script" "${format_all_args[@]}"

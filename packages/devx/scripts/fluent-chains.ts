@@ -1,19 +1,13 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
 import { formatDrizzleQueries } from '#devx/drizzle-queries';
 import { applyEdits } from '#devx/edits';
 import { formatExpandedCalls } from '#devx/expanded-calls';
+import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isNotFoundError, isTargetFile, lineIndent, parseCleanly, unwrapChainExpression, writeFileAtomic } from '#devx/pass-utils';
 import type { Edit, Node } from '#devx/types';
 
 const cwd = process.cwd();
-const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
-
-type ParseResult = {
-	program: Node;
-	comments?: Node[];
-};
 
 type ChainLink = {
 	start: number;
@@ -26,42 +20,10 @@ type FluentChain = {
 	links: ChainLink[];
 };
 
-function isNotFoundError(err: unknown): boolean {
-	return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
-}
-
-function isTargetFile(path: string): boolean {
-	return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || path.endsWith('.vue');
-}
-
-function unwrapChainExpression(node: Node | undefined): Node | undefined {
-	if (node?.type === 'ChainExpression') {
-		return node.expression as Node | undefined;
-	}
-
-	return node;
-}
-
-function lineIndent(source: string, pos: number): string {
-	const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
-	const match = source.slice(lineStart, pos).match(/^[ \t]*/);
-
-	return match?.[0] ?? '';
-}
-
 function detectIndent(content: string): string {
 	const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
 
 	return match?.[0] ?? '\t';
-}
-
-function hasCommentBetween(comments: Node[], from: number, to: number): boolean {
-	return comments.some((comment) => {
-		const start = getStart(comment);
-		const end = getEnd(comment);
-
-		return start >= from && end <= to;
-	});
 }
 
 function memberCallLink(source: string, member: Node, object: Node, comments: Node[]): ChainLink | null {
@@ -144,8 +106,13 @@ function collectFluentChain(source: string, outer: Node, comments: Node[]): Flue
 }
 
 export function computeFluentChainEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseSync(virtualName, content) as unknown as ParseResult;
-	const comments = parsed.comments ?? [];
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
+	const comments = parsed.comments;
 	const edits = new Map<string, Edit>();
 	const indentStep = detectIndent(content);
 
@@ -197,54 +164,15 @@ export function formatFluentChains(content: string, virtualName: string): string
 	return formatExpandedCalls(drizzleFormatted, virtualName);
 }
 
-function scriptAttribute(openTag: string, name: string): string | null {
-	const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
-	const match = openTag.match(pattern);
-
-	return match ? (match[1] ?? match[2] ?? match[3]).toLowerCase() : null;
-}
-
-function isJavaScriptOrTypeScript(openTag: string): boolean {
-	const lang = scriptAttribute(openTag, 'lang');
-
-	if (lang) {
-		return ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript'].includes(lang);
-	}
-
-	const type = scriptAttribute(openTag, 'type');
-
-	if (type) {
-		return type === 'module' || type.includes('javascript') || type.includes('ecmascript');
-	}
-
-	return true;
-}
-
 function processVueFile(original: string, file: string): string {
 	let updated = original;
 
-	const segments: { content: string; start: number; virtualName: string }[] = [];
-
-	VUE_SCRIPT_REGEX.lastIndex = 0;
-
-	let match: RegExpExecArray | null;
-
-	while ((match = VUE_SCRIPT_REGEX.exec(original)) !== null) {
-		const openTag = match[1];
-
-		if (!isJavaScriptOrTypeScript(openTag)) {
-			continue;
-		}
-
-		const content = match[2];
-		const contentStart = match.index + openTag.length;
-		const virtualName = `${file}.script.ts`;
-
-		segments.push({ content, start: contentStart, virtualName });
-	}
+	const segments = extractVueScripts(original).filter((segment) => {
+		return isJavaScriptOrTypeScript(segment.openTag);
+	});
 
 	for (const segment of [...segments].reverse()) {
-		const rewritten = formatFluentChains(segment.content, segment.virtualName);
+		const rewritten = formatFluentChains(segment.content, `${file}.script.ts`);
 
 		if (rewritten === segment.content) {
 			continue;
@@ -256,7 +184,7 @@ function processVueFile(original: string, file: string): string {
 	return updated;
 }
 
-async function processFile(file: string, check: boolean): Promise<boolean> {
+export async function processFluentChainsFile(file: string, check: boolean): Promise<boolean> {
 	const original = await readFile(file, 'utf8');
 
 	const updated = file.endsWith('.vue') ? processVueFile(original, file) : formatFluentChains(original, file);
@@ -266,7 +194,7 @@ async function processFile(file: string, check: boolean): Promise<boolean> {
 	}
 
 	if (!check) {
-		await writeFile(file, updated);
+		await writeFileAtomic(file, updated);
 	}
 
 	return true;
@@ -285,7 +213,7 @@ async function main(): Promise<void> {
 	let changedCount = 0;
 
 	for (const file of files) {
-		const changed = await processFile(file, check).catch((err: unknown) => {
+		const changed = await processFluentChainsFile(file, check).catch((err: unknown) => {
 			if (isNotFoundError(err)) {
 				console.warn(`[fluent-chains] path not found, skipping: ${file}`);
 

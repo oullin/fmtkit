@@ -15,7 +15,7 @@ Thumbs.db
 
 # Go caches
 # Storage-managed caches and build artifacts
-storage/bin/
+storage/bin*/
 storage/dist/
 storage/dist-test/
 storage/.cache/

@@ -126,13 +126,13 @@ export async function runPass(label: string, files: string[], check: boolean, pr
 }
 
 export function runOxfmt(options: CliOptions): Promise<void> {
-	if (options.check || !options.oxfmtBin || options.formatFiles.length === 0) {
+	if (!options.oxfmtBin || options.formatFiles.length === 0) {
 		return Promise.resolve();
 	}
 
 	const args = options.oxfmtConfig ? ['--config', options.oxfmtConfig] : [];
 
-	args.push('--write', '--no-error-on-unmatched-pattern', ...options.formatFiles);
+	args.push(options.check ? '--check' : '--write', '--no-error-on-unmatched-pattern', ...options.formatFiles);
 
 	const bin = options.oxfmtBin;
 
@@ -165,11 +165,18 @@ async function runValidate(files: string[]): Promise<void> {
 
 async function main(): Promise<void> {
 	const options = parseArgs(process.argv.slice(2));
-	const formatTargets = options.formatFiles.filter(isTargetFile);
 
-	const syntaxTargets = options.syntaxFiles.filter((file) => {
-		return file.endsWith('.ts') || file.endsWith('.vue');
-	});
+	// Deduplicate so a repeated input path can never be processed by two
+	// pool workers concurrently.
+	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
+
+	const syntaxTargets = [
+		...new Set(
+			options.syntaxFiles.filter((file) => {
+				return file.endsWith('.ts') || file.endsWith('.vue');
+			}),
+		),
+	];
 
 	await runPass('blank-lines', formatTargets, options.check, processBlankLinesFile);
 	await runOxfmt(options);

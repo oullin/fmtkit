@@ -83,10 +83,16 @@ test('runPass processes every file and skips missing ones', async () => {
 	assert.deepEqual(seen.sort(), ['a.ts', 'b.ts']);
 });
 
-test('runOxfmt resolves without spawning in check mode or without a binary', async () => {
-	await runOxfmt({ check: true, oxfmtBin: '/bin/false', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] });
-
+test('runOxfmt resolves without spawning when no binary or no files are given', async () => {
 	await runOxfmt({ check: false, oxfmtBin: null, oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] });
+
+	await runOxfmt({ check: false, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: [], syntaxFiles: [] });
+});
+
+test('runOxfmt spawns with --check in check mode and surfaces failures', async () => {
+	await runOxfmt({ check: true, oxfmtBin: 'true', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] });
+
+	await assert.rejects(runOxfmt({ check: true, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] }), /oxfmt exited/);
 });
 
 test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
@@ -114,6 +120,24 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 		const validateIndex = stdout.indexOf('[validate-syntax]');
 
 		assert.ok(blankIndex >= 0 && fluentIndex > blankIndex && validateIndex > fluentIndex, `unexpected pass order:\n${stdout}`);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test('format-all pipeline deduplicates repeated input paths', async () => {
+	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-format-all-dup-'));
+
+	try {
+		const file = join(dir, 'app.ts');
+
+		await writeFile(file, 'const one = 1;\n');
+
+		const { stdout } = await execFileAsync(tsxBin, [formatAllScript, '--format-files', file, file, '--syntax-files', file, file]);
+
+		assert.match(stdout, /\[blank-lines\] processed 1 file\(s\)/);
+
+		assert.match(stdout, /\[validate-syntax\] checked 1 file\(s\)/);
 	} finally {
 		await rm(dir, { recursive: true, force: true });
 	}

@@ -4,19 +4,15 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /src
-COPY go.work /src/go.work
-COPY packages/driver/go.mod packages/driver/go.sum /src/packages/driver/
-COPY packages/formatter/go.mod packages/formatter/go.sum /src/packages/formatter/
-COPY packages/vet/go.mod /src/packages/vet/
+COPY go.mod go.sum /src/
 RUN --mount=type=cache,target=/go/pkg/mod \
-	go -C /src/packages/driver mod download
+	go mod download
 
-COPY go.work.sum /src/go.work.sum
 COPY packages/driver /src/packages/driver
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/go/pkg/mod \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-	go -C /src/packages/driver build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./cmd/fmtkit-sources
+	go build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./packages/driver/cmd/fmtkit-sources
 
 FROM node:25.8.2-alpine
 

@@ -51,7 +51,7 @@ assert_go_invocation_equals() {
 	local expected_target="$2"
 	local expected
 
-	expected="-C $repo_root/packages/driver run ./cmd/fmtkit-go format --cwd $fixture_root $expected_target"
+	expected="-C $repo_root run ./packages/driver/cmd/fmtkit-go format --cwd $fixture_root $expected_target"
 
 	assert_contains "$fixture_root/go-invocations.log" "$expected"
 }
@@ -114,7 +114,7 @@ run_format() {
 		cd "$fixture_root"
 			GO_BIN="$fixture_root/storage/test-bin/go" \
 			GO_WRAPPER_LOG="$fixture_root/go-invocations.log" \
-			GO_WORKDIR="$repo_root/packages/driver" \
+			GO_WORKDIR="$repo_root" \
 			OXFMT_BIN="$fixture_root/oxfmt-stub.sh" \
 			TOOL_WRAPPER_LOG="$fixture_root/tool-invocations.log" \
 			TSX_BIN="$fixture_root/tsx-stub.sh" \
@@ -320,7 +320,7 @@ test_ts_only_target_runs_full_pipeline_without_go_files() {
 	run_format "$fixture_root" "$fixture_root/src/app.ts"
 
 	assert_go_invocation_equals "$fixture_root" "$fixture_root/src/app.ts"
-	assert_contains "$fixture_root/go-invocations.log" "-C $repo_root/packages/driver run ./cmd/fmtkit-sources --cwd "
+	assert_contains "$fixture_root/go-invocations.log" "-C $repo_root run ./packages/driver/cmd/fmtkit-sources --cwd "
 	assert_contains "$fixture_root/tool-invocations.log" "tsx $fixture_root/packages/devx/scripts/format-all.ts "
 	assert_contains "$fixture_root/tool-invocations.log" "--oxfmt-bin $fixture_root/oxfmt-stub.sh"
 	assert_contains "$fixture_root/tool-invocations.log" "$fixture_root/src/app.ts"

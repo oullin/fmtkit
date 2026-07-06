@@ -14,7 +14,7 @@ if [[ -n "${FMTKIT_SOURCES_BIN:-}" ]]; then
 elif [[ -x /usr/local/bin/fmtkit-sources ]]; then
 	sources_cmd=(/usr/local/bin/fmtkit-sources)
 else
-	sources_cmd=("${GO_BIN:-go}" -C "${FMTKIT_SOURCES_GO_WORKDIR:-packages/driver}" run "${FMTKIT_SOURCES_CMD:-./cmd/fmtkit-sources}")
+	sources_cmd=("${GO_BIN:-go}" -C "${FMTKIT_SOURCES_GO_WORKDIR:-.}" run "${FMTKIT_SOURCES_CMD:-./packages/driver/cmd/fmtkit-sources}")
 fi
 
 declare -a sources_args=()

@@ -27,7 +27,7 @@ jobs:
             matrix:
                 include:
                     - image: go
-                      dockerfile: ./infra/docker/Dockerfile.go
+                      dockerfile: ./infra/docker/Dockerfile.golang
                     - image: node-ts
                       dockerfile: ./infra/docker/Dockerfile.node-ts
                     - image: full

@@ -1,3 +1,4 @@
+import { isConstDeclaration } from '#devx/pass-utils';
 import type { Node } from '#devx/types';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
@@ -147,10 +148,6 @@ function isClassMethodPair(prev: Node, next: Node): boolean {
 
 function isPropertyToMethodTransition(prev: Node, next: Node): boolean {
 	return CLASS_PROPERTY_TYPES.has(prev.type) && CLASS_METHOD_TYPES.has(next.type);
-}
-
-function isConstDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'const';
 }
 
 function isLetDeclaration(node: Node): boolean {

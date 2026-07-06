@@ -48,7 +48,7 @@ while IFS= read -r -d "" file; do
 	printf "oxfmt-file %s\n" "$file" >> "'"$log_file"'"
 done'
 
-touch "$support_dir/blank-lines.ts" "$support_dir/fluent-chains.ts" "$support_dir/validate-syntax.ts"
+touch "$support_dir/format-all.ts"
 
 (
 	cd "$workdir"
@@ -58,7 +58,7 @@ touch "$support_dir/blank-lines.ts" "$support_dir/fluent-chains.ts" "$support_di
 		"$repo_root/cmd/fmt-ts" .
 )
 
-expected=$'fmt-sources .\nfmt-sources-config 1 safe.directory *\nfmt-sources --include-declarations .\nfmt-sources-config 1 safe.directory *\ntsx '"$support_dir"$'/blank-lines.ts sample.ts\ntsx-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts\ntsx '"$support_dir"$'/fluent-chains.ts sample.ts\ntsx-config 1 safe.directory *\noxfmt --write --no-error-on-unmatched-pattern sample.ts\ntsx '"$support_dir"$'/validate-syntax.ts sample.ts types.d.ts\ntsx-config 1 safe.directory *'
+expected=$'fmt-sources .\nfmt-sources-config 1 safe.directory *\nfmt-sources --include-declarations .\nfmt-sources-config 1 safe.directory *\ntsx '"$support_dir"$'/format-all.ts --oxfmt-bin '"$support_dir"$'/node_modules/.bin/oxfmt --format-files sample.ts --syntax-files sample.ts types.d.ts\ntsx-config 1 safe.directory *'
 actual="$(<"$log_file")"
 
 if [[ "$actual" != "$expected" ]]; then

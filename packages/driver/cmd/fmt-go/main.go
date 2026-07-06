@@ -33,7 +33,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "sources":
 		return cli.RunSources(args[1:], stdout, stderr)
 	case "version", "--version", "-version":
-		fmt.Fprintf(stdout, "go-fmt %s\n", version)
+		_, _ = fmt.Fprintf(stdout, "go-fmt %s\n", version)
 
 		return 0
 	case "help", "--help", "-h":
@@ -41,7 +41,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 		return 0
 	default:
-		fmt.Fprintf(stderr, "unknown subcommand - {%q}\n\n", args[0])
+		_, _ = fmt.Fprintf(stderr, "unknown subcommand - {%q}\n\n", args[0])
 
 		printUsage(stderr)
 
@@ -50,7 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func printUsage(w io.Writer) {
-	fmt.Fprintf(w, "go-fmt check [--host-path /absolute/host/path] [paths...]\n\n")
-	fmt.Fprintf(w, "go-fmt format [--host-path /absolute/host/path] [paths...]\n\n")
-	fmt.Fprintf(w, "go-fmt sources [--include-declarations] [paths...]\n\n")
+	_, _ = fmt.Fprintf(w, "go-fmt check [--host-path /absolute/host/path] [paths...]\n\n")
+	_, _ = fmt.Fprintf(w, "go-fmt format [--host-path /absolute/host/path] [paths...]\n\n")
+	_, _ = fmt.Fprintf(w, "go-fmt sources [--include-declarations] [paths...]\n\n")
 }

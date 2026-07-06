@@ -10,21 +10,31 @@ COPY packages/formatter/go.mod packages/formatter/go.sum /src/packages/formatter
 COPY packages/driver/go.mod packages/driver/go.sum /src/packages/driver/
 COPY packages/vet/go.mod /src/packages/vet/
 
-RUN go -C /src/packages/formatter mod download
-RUN go -C /src/packages/driver mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go -C /src/packages/formatter mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go -C /src/packages/driver mod download
 
-RUN mkdir -p /out && \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+	--mount=type=cache,target=/tmp/go/pkg/mod \
+	mkdir -p /out && \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOPATH=/tmp/go \
 	go install -trimpath -ldflags="-s -w" golang.org/x/tools/cmd/goimports@v0.43.0 && \
 	find /tmp/go/bin -name goimports -exec cp {} /out/goimports \;
 
-COPY . .
+COPY go.work.sum /src/go.work.sum
+COPY scripts /src/scripts
+COPY packages/formatter /src/packages/formatter
+COPY packages/vet /src/packages/vet
+COPY packages/driver /src/packages/driver
 
 RUN bash -lc 'source /src/scripts/env.sh && assert_no_legacy_artifacts'
 
 ARG VERSION=dev
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+	--mount=type=cache,target=/go/pkg/mod \
+	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmt-go ./cmd/fmt-go
 
 FROM golang:1.26-alpine

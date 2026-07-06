@@ -1,12 +1,7 @@
-import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
 import { applyEdits } from '#devx/edits';
+import { callParens as sharedCallParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf, unwrapChainExpression } from '#devx/pass-utils';
 import type { Edit, Node } from '#devx/types';
-
-type ParseResult = {
-	program: Node;
-	comments?: Node[];
-};
 
 type DrizzleImports = {
 	locals: Map<string, string>;
@@ -109,30 +104,6 @@ const MULTILINE_HELPERS = new Set(['and', 'or', 'not', 'exists', 'notExists']);
 const SET_OPERATION_HELPERS = new Set(['except', 'intersect', 'union', 'unionAll']);
 const DRIZZLE_OBJECT_KEYS = new Set(['columns', 'extras', 'limit', 'offset', 'onUpdate', 'orderBy', 'set', 'target', 'targetWhere', 'where', 'with']);
 
-function isDeclarationFile(virtualName: string): boolean {
-	return virtualName.endsWith('.d.ts');
-}
-
-function sourceOf(source: string, node: Node): string {
-	return source.slice(getStart(node), getEnd(node));
-}
-
-function lineIndent(source: string, pos: number): string {
-	const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
-	const match = source.slice(lineStart, pos).match(/^[ \t]*/);
-
-	return match?.[0] ?? '';
-}
-
-function hasCommentInside(comments: Node[], from: number, to: number): boolean {
-	return comments.some((comment) => {
-		const start = getStart(comment);
-		const end = getEnd(comment);
-
-		return start >= from && end <= to;
-	});
-}
-
 function localName(node: Node | undefined): string | null {
 	return node?.type === 'Identifier' ? (((node as { name?: unknown }).name as string | undefined) ?? null) : null;
 }
@@ -217,14 +188,6 @@ function collectDrizzleImports(program: Node): DrizzleImports {
 	}
 
 	return imports;
-}
-
-function unwrapChainExpression(node: Node | undefined): Node | undefined {
-	if (node?.type === 'ChainExpression') {
-		return node.expression as Node | undefined;
-	}
-
-	return node;
 }
 
 function chainHasQueryMember(node: Node | undefined): boolean {
@@ -362,27 +325,7 @@ function callDisplayName(source: string, call: Node, imports: DrizzleImports): s
 }
 
 function callParens(source: string, call: Node): { open: number; close: number } | null {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
-	const calleeEnd = callee ? getEnd(callee) : -1;
-	const callEnd = getEnd(call);
-
-	if (calleeEnd < 0 || callEnd < 0) {
-		return null;
-	}
-
-	const open = source.indexOf('(', calleeEnd);
-
-	if (open < 0 || open >= callEnd) {
-		return null;
-	}
-
-	const close = callEnd - 1;
-
-	if (source[close] !== ')') {
-		return null;
-	}
-
-	return { open, close };
+	return sharedCallParens(source, call, unwrapChainExpression(call.callee as Node | undefined));
 }
 
 function shouldFormatObjectExpression(node: Node): boolean {
@@ -479,7 +422,7 @@ function shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boole
 }
 
 function formatArrayExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(node), getEnd(node))) {
+	if (hasCommentBetween(comments, getStart(node), getEnd(node))) {
 		return sourceOf(source, node);
 	}
 
@@ -499,7 +442,7 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 }
 
 function formatObjectExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(node), getEnd(node))) {
+	if (hasCommentBetween(comments, getStart(node), getEnd(node))) {
 		return sourceOf(source, node);
 	}
 
@@ -534,7 +477,7 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 }
 
 function formatHelperCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(call), getEnd(call))) {
+	if (hasCommentBetween(comments, getStart(call), getEnd(call))) {
 		return sourceOf(source, call);
 	}
 
@@ -553,7 +496,7 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 }
 
 function formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentInside(comments, getStart(call), getEnd(call))) {
+	if (hasCommentBetween(comments, getStart(call), getEnd(call))) {
 		return sourceOf(source, call);
 	}
 
@@ -599,7 +542,7 @@ function formatCallArguments(source: string, call: Node, imports: DrizzleImports
 		return null;
 	}
 
-	if (hasCommentInside(comments, parens.open, parens.close)) {
+	if (hasCommentBetween(comments, parens.open, parens.close)) {
 		return null;
 	}
 
@@ -621,35 +564,18 @@ function formatCallArguments(source: string, call: Node, imports: DrizzleImports
 	};
 }
 
-function rangesOverlap(a: Edit, b: Edit): boolean {
-	return a.start < b.end && b.start < a.end;
-}
-
-function nonOverlappingEdits(edits: Edit[]): Edit[] {
-	const accepted: Edit[] = [];
-
-	const sorted = [...edits].sort((a, b) => {
-		return a.start - b.start || b.end - b.start - (a.end - a.start);
-	});
-
-	for (const edit of sorted) {
-		if (accepted.some((existing) => rangesOverlap(existing, edit))) {
-			continue;
-		}
-
-		accepted.push(edit);
-	}
-
-	return accepted.sort((a, b) => a.start - b.start);
-}
-
 export function computeDrizzleQueryEdits(content: string, virtualName: string): Edit[] {
 	if (isDeclarationFile(virtualName)) {
 		return [];
 	}
 
-	const parsed = parseSync(virtualName, content) as unknown as ParseResult;
-	const comments = parsed.comments ?? [];
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
+	const comments = parsed.comments;
 	const imports = collectDrizzleImports(parsed.program);
 
 	if (imports.locals.size === 0 && imports.namespaces.size === 0) {

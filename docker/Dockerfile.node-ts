@@ -5,10 +5,13 @@ ARG TARGETARCH
 
 WORKDIR /src/packages/driver
 COPY packages/driver/go.mod packages/driver/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go mod download
 
 COPY packages/driver /src/packages/driver
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+	--mount=type=cache,target=/go/pkg/mod \
+	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 	go build -trimpath -ldflags="-s -w" -o /out/fmt-sources ./cmd/fmt-sources
 
 FROM node:25.8.2-alpine
@@ -18,7 +21,8 @@ RUN apk add --no-cache bash git
 WORKDIR /opt/go-fmt/support
 
 COPY packages/devx/package.json /opt/go-fmt/support/package.json
-RUN node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "oxfmt", "tsx"]; console.log(deps.map((name) => `${name}@${p.devDependencies[name]}`).join(" "));' \
+RUN --mount=type=cache,target=/root/.npm \
+	node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "oxfmt", "tsx"]; console.log(deps.map((name) => `${name}@${p.devDependencies[name]}`).join(" "));' \
 	| xargs npm install --no-save
 
 COPY packages/devx/scripts/*.ts /opt/go-fmt/support/

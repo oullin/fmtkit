@@ -363,6 +363,10 @@ func TestProcessFileReportsReadRuleAndFormatterErrors(t *testing.T) {
 }
 
 func TestFormatFilesReportsWriteErrors(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions, so the read-only file stays writable")
+	}
+
 	root := t.TempDir()
 	path := filepath.Join(root, "sample.go")
 	testutil.WriteGoFile(t, path, "package sample\n")

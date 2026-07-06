@@ -80,6 +80,10 @@ func TestShouldSkipDirHonorsRootHiddenDirectory(t *testing.T) {
 }
 
 func TestCollectGoFilesReturnsWalkErrors(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions, so the blocked directory stays readable")
+	}
+
 	root := t.TempDir()
 	blocked := filepath.Join(root, "blocked")
 	testutil.WriteGoFile(t, filepath.Join(blocked, "sample.go"), "package sample\n")

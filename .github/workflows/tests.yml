@@ -18,6 +18,40 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+    lint:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                module:
+                    - formatter
+                    - vet
+                    - driver
+
+        steps:
+            - uses: actions/checkout@v6
+              name: Checkout repository
+
+            - uses: actions/setup-go@v6
+              name: Install Go
+              with:
+                  go-version-file: go.work
+                  cache-dependency-path: |
+                      go.work
+                      go.work.sum
+                      packages/driver/go.mod
+                      packages/driver/go.sum
+                      packages/formatter/go.mod
+                      packages/formatter/go.sum
+                      packages/vet/go.mod
+                      packages/vet/go.sum
+
+            - uses: golangci/golangci-lint-action@v8
+              name: Lint ${{ matrix.module }}
+              with:
+                  version: v2.12.2
+                  working-directory: packages/${{ matrix.module }}
+
     check:
         runs-on: ubuntu-latest
         strategy:
@@ -99,17 +133,31 @@ jobs:
             - name: Go - Run formatter tests with race detector and coverage
               run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
-            - name: Go - Run vet tests with race detector
-              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/vet test ./... -race -v
+            - name: Go - Run vet tests with race detector and coverage
+              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
-            - name: Go - Run driver tests with race detector
-              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/driver test ./... -race -v
+            - name: Go - Run driver tests with race detector and coverage
+              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - uses: actions/upload-artifact@v4
-              name: Upload coverage artifact
+              name: Upload formatter coverage artifact
               with:
                   name: formatter-coverage
                   path: packages/formatter/coverage.out
+                  if-no-files-found: error
+
+            - uses: actions/upload-artifact@v4
+              name: Upload vet coverage artifact
+              with:
+                  name: vet-coverage
+                  path: packages/vet/coverage.out
+                  if-no-files-found: error
+
+            - uses: actions/upload-artifact@v4
+              name: Upload driver coverage artifact
+              with:
+                  name: driver-coverage
+                  path: packages/driver/coverage.out
                   if-no-files-found: error
 
     coverage:
@@ -121,15 +169,46 @@ jobs:
               name: Checkout repository
 
             - uses: actions/download-artifact@v4
-              name: Download coverage artifact
+              name: Download formatter coverage artifact
               with:
                   name: formatter-coverage
                   path: packages/formatter
 
+            - uses: actions/download-artifact@v4
+              name: Download vet coverage artifact
+              with:
+                  name: vet-coverage
+                  path: packages/vet
+
+            - uses: actions/download-artifact@v4
+              name: Download driver coverage artifact
+              with:
+                  name: driver-coverage
+                  path: packages/driver
+
             - uses: codecov/codecov-action@v5
-              name: Upload coverage to Codecov
+              name: Upload formatter coverage to Codecov
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
                   files: packages/formatter/coverage.out
+                  flags: formatter
+                  override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+                  fail_ci_if_error: false
+
+            - uses: codecov/codecov-action@v5
+              name: Upload vet coverage to Codecov
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: packages/vet/coverage.out
+                  flags: vet
+                  override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+                  fail_ci_if_error: false
+
+            - uses: codecov/codecov-action@v5
+              name: Upload driver coverage to Codecov
+              with:
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  files: packages/driver/coverage.out
+                  flags: driver
                   override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
                   fail_ci_if_error: false

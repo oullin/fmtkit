@@ -1,43 +1,10 @@
-import { parseSync } from 'oxc-parser';
 import { getEnd, getStart, visit } from '#devx/ast';
 import { applyEdits } from '#devx/edits';
+import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf } from '#devx/pass-utils';
+import type { CallParens } from '#devx/pass-utils';
 import type { Edit, Node } from '#devx/types';
 
-type ParseResult = {
-	program: Node;
-	comments?: Node[];
-};
-
-type CallParens = {
-	open: number;
-	close: number;
-};
-
 const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression']);
-
-function isDeclarationFile(virtualName: string): boolean {
-	return virtualName.endsWith('.d.ts');
-}
-
-function sourceOf(source: string, node: Node): string {
-	return source.slice(getStart(node), getEnd(node));
-}
-
-function lineIndent(source: string, pos: number): string {
-	const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
-	const match = source.slice(lineStart, pos).match(/^[ \t]*/);
-
-	return match?.[0] ?? '';
-}
-
-function hasCommentInside(comments: Node[], from: number, to: number): boolean {
-	return comments.some((comment) => {
-		const start = getStart(comment);
-		const end = getEnd(comment);
-
-		return start >= from && end <= to;
-	});
-}
 
 function unwrapExpression(node: Node | undefined): Node | undefined {
 	let current = node;
@@ -57,28 +24,8 @@ function unwrapExpression(node: Node | undefined): Node | undefined {
 	return current;
 }
 
-function callParens(source: string, call: Node): CallParens | null {
-	const callee = unwrapExpression(call.callee as Node | undefined);
-	const calleeEnd = callee ? getEnd(callee) : -1;
-	const callEnd = getEnd(call);
-
-	if (calleeEnd < 0 || callEnd < 0) {
-		return null;
-	}
-
-	const open = source.indexOf('(', calleeEnd);
-
-	if (open < 0 || open >= callEnd) {
-		return null;
-	}
-
-	const close = callEnd - 1;
-
-	if (source[close] !== ')') {
-		return null;
-	}
-
-	return { open, close };
+function calleeParens(source: string, call: Node): CallParens | null {
+	return callParens(source, call, unwrapExpression(call.callee as Node | undefined));
 }
 
 function callArguments(call: Node): Node[] {
@@ -168,10 +115,10 @@ function canUseTrailingComma(arg: Node | undefined): boolean {
 }
 
 function formatCallParens(source: string, call: Node, comments: Node[], indent: string): string | null {
-	const parens = callParens(source, call);
+	const parens = calleeParens(source, call);
 	const args = callArguments(call);
 
-	if (!parens || args.length === 0 || hasCommentInside(comments, parens.open, parens.close)) {
+	if (!parens || args.length === 0 || hasCommentBetween(comments, parens.open, parens.close)) {
 		return null;
 	}
 
@@ -192,7 +139,7 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 }
 
 function formatCall(source: string, call: Node, comments: Node[], indent: string): string {
-	const parens = callParens(source, call);
+	const parens = calleeParens(source, call);
 	const formattedParens = formatCallParens(source, call, comments, indent);
 
 	if (!parens || formattedParens === null) {
@@ -214,37 +161,18 @@ function formatNode(source: string, node: Node, comments: Node[], indent: string
 	return formatCall(source, node, comments, indent);
 }
 
-function rangesOverlap(a: Edit, b: Edit): boolean {
-	return a.start < b.end && b.start < a.end;
-}
-
-function nonOverlappingEdits(edits: Edit[]): Edit[] {
-	const accepted: Edit[] = [];
-
-	const sorted = [...edits].sort((a, b) => {
-		return a.start - b.start || b.end - b.start - (a.end - a.start);
-	});
-
-	for (const edit of sorted) {
-		if (accepted.some((existing) => rangesOverlap(existing, edit))) {
-			continue;
-		}
-
-		accepted.push(edit);
-	}
-
-	return accepted.sort((a, b) => {
-		return a.start - b.start;
-	});
-}
-
 export function computeExpandedCallEdits(content: string, virtualName: string): Edit[] {
 	if (isDeclarationFile(virtualName)) {
 		return [];
 	}
 
-	const parsed = parseSync(virtualName, content) as unknown as ParseResult;
-	const comments = parsed.comments ?? [];
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
+	const comments = parsed.comments;
 	const parents = new WeakMap<Node, Node>();
 	const edits: Edit[] = [];
 
@@ -263,9 +191,9 @@ export function computeExpandedCallEdits(content: string, virtualName: string): 
 			return;
 		}
 
-		const parens = callParens(content, node);
+		const parens = calleeParens(content, node);
 
-		if (!parens || hasCommentInside(comments, parens.open, parens.close)) {
+		if (!parens || hasCommentBetween(comments, parens.open, parens.close)) {
 			return;
 		}
 

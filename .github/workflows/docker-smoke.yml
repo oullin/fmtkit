@@ -1,0 +1,53 @@
+name: Docker Smoke
+
+# Build-only verification that the Docker images still assemble. Runs on
+# pull requests that touch the build context inputs; images are never
+# pushed. The gha cache scopes are shared with publish-release.yml so
+# green smoke builds pre-warm the release builds.
+on:
+    pull_request:
+        branches:
+            - main
+        paths:
+            - docker/**
+            - cmd/**
+            - .dockerignore
+            - scripts/env.sh
+            - packages/devx/package.json
+            - .github/workflows/docker-smoke.yml
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - image: go
+                      dockerfile: ./docker/Dockerfile.go
+                    - image: node-ts
+                      dockerfile: ./docker/Dockerfile.node-ts
+                    - image: full
+                      dockerfile: ./docker/Dockerfile.full
+
+        steps:
+            - uses: actions/checkout@v6
+              name: Checkout repository
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4
+
+            - name: Build ${{ matrix.image }} image
+              uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  file: ${{ matrix.dockerfile }}
+                  push: false
+                  platforms: linux/amd64
+                  build-args: |
+                      VERSION=smoke
+                  cache-from: type=gha,scope=${{ matrix.image }}
+                  cache-to: type=gha,mode=max,scope=${{ matrix.image }}

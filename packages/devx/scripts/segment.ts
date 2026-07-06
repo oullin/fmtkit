@@ -26,7 +26,7 @@ export function processSegment(content: string, virtualName: string): string {
 	const classReordered = classReorderEdits.length > 0 ? applyEdits(bodyWrapped, classReorderEdits) : bodyWrapped;
 	const declarationReorderEdits = computeDeclarationReorderEdits(classReordered, virtualName);
 	const reordered = declarationReorderEdits.length > 0 ? applyEdits(classReordered, declarationReorderEdits) : classReordered;
-	const positions = computeInsertPositions(reordered, virtualName, 0);
+	const positions = computeInsertPositions(reordered, virtualName);
 
 	return insertBlankLines(reordered, positions);
 }

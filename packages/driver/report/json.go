@@ -80,8 +80,5 @@ func toFormatterJSONReport(report projectedFormatterReport) formatterJSONReport 
 }
 
 func toVetJSONReport(report projectedVetReport) vetJSONReport {
-	return vetJSONReport{
-		Status: report.Status,
-		Errors: report.Errors,
-	}
+	return vetJSONReport(report)
 }

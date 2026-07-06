@@ -31,7 +31,7 @@ export default defineConfig({
 			'image:full': './infra/scripts/tasks/docker-image.sh full',
 			'image:go': './infra/scripts/tasks/docker-image.sh go',
 			'image:node-ts': './infra/scripts/tasks/docker-image.sh node-ts',
-			'install-cli': './infra/scripts/tasks/with-storage-env.sh go -C packages/driver install ./cmd/fmtkit-go',
+			'install-cli': './infra/scripts/tasks/with-storage-env.sh go install ./packages/driver/cmd/fmtkit-go',
 			release: './infra/scripts/release/release.sh',
 			'test:coverage': './infra/scripts/tasks/test-coverage.sh',
 			'test:entrypoints': './infra/scripts/tasks/test-entrypoints.sh',

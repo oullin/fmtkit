@@ -247,7 +247,7 @@ vp run build             # build the local fmtkit-go binary into storage/bin
 vp run check             # run package checks across the workspace
 vp run test              # run all package tests
 vp run test-race         # tests with the race detector (forces CGO_ENABLED=1)
-vp run vet               # run go vet across the Go workspace packages
+vp run vet               # run go vet across the Go module packages
 vp run format:local -- . # run the local formatter pipeline
 vp run format:docker -- . # run the Dockerized formatter pipeline
 vp run install-cli       # install fmtkit-go from the local source tree

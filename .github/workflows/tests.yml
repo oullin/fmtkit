@@ -35,16 +35,10 @@ jobs:
             - uses: actions/setup-go@v6
               name: Install Go
               with:
-                  go-version-file: go.work
+                  go-version-file: go.mod
                   cache-dependency-path: |
-                      go.work
-                      go.work.sum
-                      packages/driver/go.mod
-                      packages/driver/go.sum
-                      packages/formatter/go.mod
-                      packages/formatter/go.sum
-                      packages/vet/go.mod
-                      packages/vet/go.sum
+                      go.mod
+                      go.sum
 
             - uses: golangci/golangci-lint-action@v8
               name: Lint ${{ matrix.module }}
@@ -77,15 +71,10 @@ jobs:
               if: matrix.workspace != 'devx'
               name: Install Go
               with:
-                  go-version-file: go.work
+                  go-version-file: go.mod
                   cache-dependency-path: |
-                      go.work
-                      go.work.sum
-                      packages/driver/go.mod
-                      packages/driver/go.sum
-                      packages/formatter/go.mod
-                      packages/formatter/go.sum
-                      packages/vet/go.mod
+                      go.mod
+                      go.sum
 
             - name: Install workspace dependencies
               run: vp install --frozen-lockfile
@@ -117,15 +106,10 @@ jobs:
             - uses: actions/setup-go@v6
               name: Install Go
               with:
-                  go-version-file: go.work
+                  go-version-file: go.mod
                   cache-dependency-path: |
-                      go.work
-                      go.work.sum
-                      packages/driver/go.mod
-                      packages/driver/go.sum
-                      packages/formatter/go.mod
-                      packages/formatter/go.sum
-                      packages/vet/go.mod
+                      go.mod
+                      go.sum
 
             - name: Install workspace dependencies
               run: vp install --frozen-lockfile

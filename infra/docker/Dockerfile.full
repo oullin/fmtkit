@@ -5,15 +5,9 @@ ARG TARGETARCH
 
 WORKDIR /src
 
-COPY go.work /src/go.work
-COPY packages/formatter/go.mod packages/formatter/go.sum /src/packages/formatter/
-COPY packages/driver/go.mod packages/driver/go.sum /src/packages/driver/
-COPY packages/vet/go.mod /src/packages/vet/
-
+COPY go.mod go.sum /src/
 RUN --mount=type=cache,target=/go/pkg/mod \
-	go -C /src/packages/formatter mod download
-RUN --mount=type=cache,target=/go/pkg/mod \
-	go -C /src/packages/driver mod download
+	go mod download
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/tmp/go/pkg/mod \
@@ -22,7 +16,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 	go install -trimpath -ldflags="-s -w" golang.org/x/tools/cmd/goimports@v0.43.0 && \
 	find /tmp/go/bin -name goimports -exec cp {} /out/goimports \;
 
-COPY go.work.sum /src/go.work.sum
 COPY infra/scripts /src/infra/scripts
 COPY packages/formatter /src/packages/formatter
 COPY packages/vet /src/packages/vet
@@ -35,11 +28,11 @@ ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/go/pkg/mod \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmtkit-go ./cmd/fmtkit-go
+	go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmtkit-go ./packages/driver/cmd/fmtkit-go
 RUN --mount=type=cache,target=/root/.cache/go-build \
 	--mount=type=cache,target=/go/pkg/mod \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-	go -C /src/packages/driver build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./cmd/fmtkit-sources
+	go build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./packages/driver/cmd/fmtkit-sources
 
 FROM golang:1.26.4-alpine AS gosdk
 

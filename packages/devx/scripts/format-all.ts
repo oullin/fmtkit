@@ -26,6 +26,8 @@ type PassOutcome = {
 	missing: boolean;
 };
 
+const OXFMT_CHUNK_SIZE = 100;
+
 export function parseArgs(argv: string[]): CliOptions {
 	const options: CliOptions = {
 		check: false,
@@ -132,23 +134,38 @@ export function runOxfmt(options: CliOptions): Promise<void> {
 
 	const args = options.oxfmtConfig ? ['--config', options.oxfmtConfig] : [];
 
-	args.push(options.check ? '--check' : '--write', '--no-error-on-unmatched-pattern', ...options.formatFiles);
+	args.push(options.check ? '--check' : '--write', '--no-error-on-unmatched-pattern');
 
 	const bin = options.oxfmtBin;
+	const files = options.formatFiles;
 
-	return new Promise((resolvePromise, rejectPromise) => {
-		const child = spawn(bin, args, { stdio: 'inherit' });
+	const runChunk = (chunk: string[]): Promise<void> => {
+		return new Promise((resolvePromise, rejectPromise) => {
+			const child = spawn(bin, [...args, ...chunk], { stdio: 'inherit' });
 
-		child.on('error', rejectPromise);
+			child.on('error', rejectPromise);
 
-		child.on('exit', (code, signal) => {
-			if (code === 0) {
-				resolvePromise();
-			} else {
-				rejectPromise(new Error(`[format-all] oxfmt exited with ${signal ?? code}`));
-			}
+			child.on('exit', (code, signal) => {
+				if (code === 0) {
+					resolvePromise();
+				} else {
+					rejectPromise(new Error(`[format-all] oxfmt exited with ${signal ?? code}`));
+				}
+			});
 		});
-	});
+	};
+
+	let promise = Promise.resolve();
+
+	for (let i = 0; i < files.length; i += OXFMT_CHUNK_SIZE) {
+		const chunk = files.slice(i, i + OXFMT_CHUNK_SIZE);
+
+		promise = promise.then(() => {
+			return runChunk(chunk);
+		});
+	}
+
+	return promise;
 }
 
 async function runValidate(files: string[]): Promise<void> {
@@ -165,9 +182,6 @@ async function runValidate(files: string[]): Promise<void> {
 
 async function main(): Promise<void> {
 	const options = parseArgs(process.argv.slice(2));
-
-	// Deduplicate so a repeated input path can never be processed by two
-	// pool workers concurrently.
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 
 	const syntaxTargets = [
@@ -178,10 +192,16 @@ async function main(): Promise<void> {
 		),
 	];
 
+	const pipelineOptions = { ...options, formatFiles: formatTargets };
+
 	await runPass('blank-lines', formatTargets, options.check, processBlankLinesFile);
-	await runOxfmt(options);
+
+	await runOxfmt(pipelineOptions);
+
 	await runPass('fluent-chains', formatTargets, options.check, processFluentChainsFile);
-	await runOxfmt(options);
+
+	await runOxfmt(pipelineOptions);
+
 	await runValidate(syntaxTargets);
 }
 

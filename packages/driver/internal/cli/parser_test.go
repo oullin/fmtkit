@@ -108,6 +108,7 @@ func TestEnvJobs(t *testing.T) {
 // t.Setenv cleanup that restores the original value afterwards.
 func unsetJobsEnv(t *testing.T) {
 	t.Helper()
+
 	t.Setenv("GO_FMT_JOBS", "")
 
 	if err := os.Unsetenv("GO_FMT_JOBS"); err != nil {

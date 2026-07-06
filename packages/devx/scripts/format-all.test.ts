@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -99,6 +99,34 @@ test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
 	await runOxfmt({ check: false, oxfmtBin: 'true', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] });
 
 	await assert.rejects(runOxfmt({ check: false, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] }), /oxfmt exited/);
+});
+
+test('runOxfmt chunks large file lists', async () => {
+	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-oxfmt-chunks-'));
+
+	try {
+		const bin = join(dir, 'oxfmt');
+		const log = join(dir, 'args.log');
+
+		const files = Array.from({ length: 205 }, (_, index) => {
+			return `file-${index}.ts`;
+		});
+
+		await writeFile(
+			bin,
+			`#!/usr/bin/env bash
+printf '%s\\n' "$#" >> "${log}"
+`,
+		);
+
+		await chmod(bin, 0o755);
+
+		await runOxfmt({ check: false, oxfmtBin: bin, oxfmtConfig: null, formatFiles: files, syntaxFiles: [] });
+
+		assert.deepEqual((await readFile(log, 'utf8')).trim().split('\n'), ['102', '102', '7']);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
 });
 
 test('format-all pipeline formats files and exits 0 end-to-end', async () => {

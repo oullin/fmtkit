@@ -182,6 +182,7 @@ export async function writeFileAtomic(file: string, content: string): Promise<vo
 
 	try {
 		await writeFile(tmp, content);
+
 		await rename(tmp, file);
 	} catch (err) {
 		try {

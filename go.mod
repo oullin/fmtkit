@@ -1,17 +1,12 @@
-module github.com/oullin/fmtkit/packages/driver
+module github.com/oullin/fmtkit
 
 go 1.26.4
 
 require (
 	github.com/fatih/color v1.19.0
-	github.com/oullin/fmtkit/packages/formatter v0.0.0
-	github.com/oullin/fmtkit/packages/vet v0.0.0
 	github.com/spf13/viper v1.20.1
+	golang.org/x/tools v0.43.0
 )
-
-replace github.com/oullin/fmtkit/packages/formatter v0.0.0 => ../formatter
-
-replace github.com/oullin/fmtkit/packages/vet v0.0.0 => ../vet
 
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
@@ -31,6 +26,5 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/tools v0.43.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

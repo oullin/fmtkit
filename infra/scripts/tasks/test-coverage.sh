@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." && pwd)"
+repo_root="$(cd "${script_dir}/../../.." && pwd)"
 
 "${script_dir}/with-storage-env.sh" go -C "${repo_root}/packages/formatter" test ./... -coverprofile=coverage.out -covermode=atomic
 

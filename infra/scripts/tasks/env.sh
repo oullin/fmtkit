@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 export APP="${APP:-fmtkit-go}"
-export GO_WORKDIR="${GO_WORKDIR:-packages/driver}"
-export CMD="${CMD:-./cmd/fmtkit-go}"
+export GO_WORKDIR="${GO_WORKDIR:-.}"
+export CMD="${CMD:-./packages/driver/cmd/fmtkit-go}"
 export CGO_ENABLED="${CGO_ENABLED:-0}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"

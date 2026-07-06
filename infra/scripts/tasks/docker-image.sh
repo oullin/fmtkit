@@ -11,7 +11,7 @@ mode="${1:-}"
 
 case "$mode" in
 	go)
-		docker build --build-arg "VERSION=$VERSION" -f "$REPO_ROOT/infra/docker/Dockerfile.go" -t "$GO_IMAGE" "$REPO_ROOT"
+		docker build --build-arg "VERSION=$VERSION" -f "$REPO_ROOT/infra/docker/Dockerfile.golang" -t "$GO_IMAGE" "$REPO_ROOT"
 		;;
 	node-ts)
 		docker build --label "local.fmtkit.formatter-fingerprint=$FORMATTER_FINGERPRINT" -f "$REPO_ROOT/infra/docker/Dockerfile.node-ts" -t "$NODE_TS_IMAGE" "$REPO_ROOT"

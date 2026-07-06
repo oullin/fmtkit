@@ -1,9 +1,9 @@
-module github.com/oullin/go-fmt/packages/formatter
+module github.com/oullin/fmtkit/packages/formatter
 
 go 1.26.0
 
 require (
-	github.com/oullin/go-fmt/packages/driver v0.0.0-20260629075628-4304e1a9b92c
+	github.com/oullin/fmtkit/packages/driver v0.0.0
 	golang.org/x/tools v0.43.0
 )
 

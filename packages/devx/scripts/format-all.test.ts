@@ -102,7 +102,7 @@ test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
 });
 
 test('runOxfmt chunks large file lists', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-oxfmt-chunks-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-oxfmt-chunks-'));
 
 	try {
 		const bin = join(dir, 'oxfmt');
@@ -130,7 +130,7 @@ printf '%s\\n' "$#" >> "${log}"
 });
 
 test('format-all pipeline formats files and exits 0 end-to-end', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-format-all-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-'));
 
 	try {
 		const file = join(dir, 'app.ts');
@@ -154,7 +154,7 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 });
 
 test('format-all pipeline deduplicates repeated input paths', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-format-all-dup-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-dup-'));
 
 	try {
 		const file = join(dir, 'app.ts');
@@ -172,7 +172,7 @@ test('format-all pipeline deduplicates repeated input paths', async () => {
 });
 
 test('format-all pipeline exits 1 when validation finds syntax errors', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-format-all-bad-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-bad-'));
 
 	try {
 		const file = join(dir, 'broken.ts');

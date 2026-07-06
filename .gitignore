@@ -11,7 +11,7 @@
 *.test
 *.out
 node_modules/
-tooling/node_modules/
+infra/tooling/node_modules/
 
 # IDE
 .idea/

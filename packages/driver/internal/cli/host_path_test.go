@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/internal/cli"
+	"github.com/oullin/fmtkit/packages/driver/internal/cli"
 )
 
 func TestResolveRunPathsRootMapsToWorkRoot(t *testing.T) {

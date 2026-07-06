@@ -1,6 +1,6 @@
 # Spacing rule reference
 
-This is the canonical reference for the built-in `spacing` rule that `go-fmt` runs before `gofmt` and `goimports`. The rule is AST-based: it enforces blank-line boundaries and declaration ordering so the standard formatters have a consistent shape to work with.
+This is the canonical reference for the built-in `spacing` rule that `fmtkit` runs before `gofmt` and `goimports`. The rule is AST-based: it enforces blank-line boundaries and declaration ordering so the standard formatters have a consistent shape to work with.
 
 The README summarises the rule; this page lists every variant with before/after examples.
 

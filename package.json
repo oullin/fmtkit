@@ -1,8 +1,8 @@
 {
-	"name": "go-fmt-monorepo",
+	"name": "workspaces",
 	"private": true,
 	"scripts": {
-		"build": "./scripts/build.sh",
+		"build": "./infra/scripts/tasks/build.sh",
 		"lint": "vp run --filter devx --fail-if-no-match lint:check",
 		"test": "vp run --filter formatter --filter vet --filter driver --filter devx --fail-if-no-match test",
 		"typecheck": "vp run --filter devx --fail-if-no-match typecheck"

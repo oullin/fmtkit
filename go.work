@@ -5,3 +5,9 @@ use (
 	./packages/formatter
 	./packages/vet
 )
+
+replace github.com/oullin/fmtkit/packages/driver v0.0.0 => ./packages/driver
+
+replace github.com/oullin/fmtkit/packages/formatter v0.0.0 => ./packages/formatter
+
+replace github.com/oullin/fmtkit/packages/vet v0.0.0 => ./packages/vet

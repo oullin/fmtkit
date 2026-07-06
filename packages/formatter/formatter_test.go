@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
-	"github.com/oullin/go-fmt/packages/formatter"
-	"github.com/oullin/go-fmt/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/formatter"
+	"github.com/oullin/fmtkit/packages/formatter/config"
 )
 
 func TestCheckReportsStyleChanges(t *testing.T) {

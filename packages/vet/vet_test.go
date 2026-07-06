@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
 )
 
 func TestParseGoEnvValuesPreservesOrderAndEmptyLines(t *testing.T) {

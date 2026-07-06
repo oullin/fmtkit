@@ -62,7 +62,7 @@ jobs:
             - uses: actions/checkout@v6
 
             - name: Shell - Run entrypoint tests
-              run: ./scripts/test-entrypoints.sh
+              run: ./infra/scripts/tasks/test-entrypoints.sh
 
             - uses: voidzero-dev/setup-vp@v1
               with:
@@ -113,7 +113,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG_PREFIX: v
                   DEFAULT_BUMP: patch
-              run: ./scripts/create-release-tag.sh
+              run: ./infra/scripts/release/create-release-tag.sh
 
     # Publishing is invoked directly so this workflow does not rely on tag-push
     # fan-out from a workflow-created tag.

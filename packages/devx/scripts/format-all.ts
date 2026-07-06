@@ -8,7 +8,7 @@ import { validateFile } from '#devx/validate-syntax';
 
 // format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
 // → oxfmt → validate-syntax) inside a single Node process, replacing the
-// three tsx spawns cmd/fmt-ts-files.sh used to make per invocation. Files
+// three tsx spawns infra/bin/fmtkit-ts-files used to make per invocation. Files
 // within a pass are processed concurrently; results are reported in input
 // order so the output stays deterministic.
 

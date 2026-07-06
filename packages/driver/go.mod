@@ -1,6 +1,6 @@
 module github.com/oullin/fmtkit/packages/driver
 
-go 1.26.0
+go 1.26.4
 
 require (
 	github.com/fatih/color v1.19.0
@@ -8,6 +8,10 @@ require (
 	github.com/oullin/fmtkit/packages/vet v0.0.0
 	github.com/spf13/viper v1.20.1
 )
+
+replace github.com/oullin/fmtkit/packages/formatter v0.0.0 => ../formatter
+
+replace github.com/oullin/fmtkit/packages/vet v0.0.0 => ../vet
 
 require (
 	github.com/fsnotify/fsnotify v1.8.0 // indirect

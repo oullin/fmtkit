@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -41,7 +41,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 	go -C /src/packages/driver build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./cmd/fmtkit-sources
 
-FROM golang:1.26-alpine AS gosdk
+FROM golang:1.26.4-alpine AS gosdk
 
 # The runtime needs `go` for goimports (resolves imports via `go env`/std-lib scan)
 # and `go vet` (compiles packages for analysis). Strip the parts neither uses at

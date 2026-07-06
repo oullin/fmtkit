@@ -152,7 +152,7 @@ func TestCollectGoFilesSkipsHiddenVendorAndGenerated(t *testing.T) {
 	testutil.WriteGoFile(t, filepath.Join(root, "vendor", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, ".hidden", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, "generated.gen.go"), "package sample\n")
-	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.go"), "FROM golang:1.26-bookworm\n")
+	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.go"), "FROM golang:1.26.4-bookworm\n")
 
 	files, err := engine.CollectGoFiles([]string{root}, config.Default())
 

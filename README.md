@@ -1,7 +1,7 @@
 # fmtkit
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/oullin/fmtkit/packages/driver.svg)](https://pkg.go.dev/github.com/oullin/fmtkit/packages/driver)
-[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
+[![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
 [![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
 [![Codecov](https://codecov.io/gh/oullin/fmtkit/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/fmtkit)
@@ -232,7 +232,7 @@ pruned automatically by the `Cleanup Old Container Images` workflow.
 
 ## Development
 
-You will need Go 1.26+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
+You will need Go 1.26.4+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
 
 ```bash
 curl -fsSL https://vite.plus -o install-vp.sh

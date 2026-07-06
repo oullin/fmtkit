@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 	go -C /src/packages/driver build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/fmtkit-go ./cmd/fmtkit-go
 
-FROM golang:1.26-alpine
+FROM golang:1.26.4-alpine
 
 RUN apk add --no-cache bash git
 

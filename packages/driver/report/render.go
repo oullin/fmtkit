@@ -5,8 +5,8 @@ import (
 	"io"
 	"path/filepath"
 
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/vet"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 // Combined contains the formatter and vet reports rendered by the CLI.

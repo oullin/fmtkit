@@ -9,10 +9,10 @@ on:
         branches:
             - main
         paths:
-            - docker/**
-            - cmd/**
+            - infra/docker/**
+            - infra/bin/**
             - .dockerignore
-            - scripts/env.sh
+            - infra/scripts/tasks/env.sh
             - packages/devx/package.json
             - .github/workflows/docker-smoke.yml
 
@@ -27,11 +27,11 @@ jobs:
             matrix:
                 include:
                     - image: go
-                      dockerfile: ./docker/Dockerfile.go
+                      dockerfile: ./infra/docker/Dockerfile.go
                     - image: node-ts
-                      dockerfile: ./docker/Dockerfile.node-ts
+                      dockerfile: ./infra/docker/Dockerfile.node-ts
                     - image: full
-                      dockerfile: ./docker/Dockerfile.full
+                      dockerfile: ./infra/docker/Dockerfile.full
 
         steps:
             - uses: actions/checkout@v6

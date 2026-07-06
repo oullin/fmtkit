@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/vet"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 // renderTextPlain renders without ANSI escapes so substring asserts are

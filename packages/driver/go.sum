@@ -19,10 +19,6 @@ github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHP
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
-github.com/oullin/go-fmt/packages/formatter v0.0.0-20260629075628-4304e1a9b92c h1:QNcOT0XIT1neo9lfTSWjvBQtM3v12eE92buaAjeu+q8=
-github.com/oullin/go-fmt/packages/formatter v0.0.0-20260629075628-4304e1a9b92c/go.mod h1:dufSGhlEGLhtVOFyZ0CCh25ZekoLt0aWMQ9A8tICX74=
-github.com/oullin/go-fmt/packages/vet v0.0.0-20260629075628-4304e1a9b92c h1:mc/vKPH1nz3z7fF24wo1qKsMfITC+wrVm5selRRv8jc=
-github.com/oullin/go-fmt/packages/vet v0.0.0-20260629075628-4304e1a9b92c/go.mod h1:db0nwRI5AwpOwNB75Bhu36ctza6VHKVp/l8oDoiIe90=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
 github.com/pelletier/go-toml/v2 v2.2.3/go.mod h1:MfCQTFTvCcUyyvvwm1+G6H/jORL20Xlb6rzQu9GuUkc=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

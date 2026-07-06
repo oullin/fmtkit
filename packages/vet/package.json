@@ -2,9 +2,9 @@
 	"name": "vet",
 	"private": true,
 	"scripts": {
-		"check": "../../scripts/go-package-task.sh check",
-		"gofmt": "../../scripts/go-package-task.sh gofmt",
-		"test": "../../scripts/go-package-task.sh test",
-		"vet": "../../scripts/go-package-task.sh vet"
+		"check": "../../infra/scripts/tasks/go-package-task.sh check",
+		"gofmt": "../../infra/scripts/tasks/go-package-task.sh gofmt",
+		"test": "../../infra/scripts/tasks/go-package-task.sh test",
+		"vet": "../../infra/scripts/tasks/go-package-task.sh vet"
 	}
 }

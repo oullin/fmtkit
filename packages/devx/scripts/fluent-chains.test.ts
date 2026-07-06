@@ -17,7 +17,7 @@ function run(command: string, args: string[], cwd: string): void {
 }
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-fluent-chains-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-fluent-chains-'));
 
 	try {
 		for (const [file, content] of Object.entries(files)) {

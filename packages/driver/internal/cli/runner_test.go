@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	driverreport "github.com/oullin/go-fmt/packages/driver/report"
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/vet"
+	driverreport "github.com/oullin/fmtkit/packages/driver/report"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 func TestExitCode(t *testing.T) {

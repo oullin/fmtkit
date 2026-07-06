@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/oullin/go-fmt/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/formatter/config"
 )
 
 // CollectGoFiles expands input paths into a sorted list of Go source files.

@@ -1,2 +1,2 @@
-// Package engine exposes the embeddable formatting engine used by go-fmt.
+// Package engine exposes the embeddable formatting engine used by fmtkit.
 package engine

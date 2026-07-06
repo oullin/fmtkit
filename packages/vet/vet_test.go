@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
 )
 
 func TestParseGoEnvValuesPreservesOrderAndEmptyLines(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 	workspaceFile := filepath.Join(workspaceRoot, "go.work")
 	moduleFile := filepath.Join(moduleRoot, "go.mod")
 
-	testutil.WriteFile(t, workspaceFile, "go 1.26.0\n")
+	testutil.WriteFile(t, workspaceFile, "go 1.26.4\n")
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
 	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
@@ -145,7 +145,7 @@ func run() {
 	println("ok")
 }
 `)
-	testutil.WriteGoWork(t, workspaceRoot, `go 1.26.0
+	testutil.WriteGoWork(t, workspaceRoot, `go 1.26.4
 
 use (
 	./module-a

@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
-	"github.com/oullin/go-fmt/packages/formatter/config"
-	"github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/formatter/rules"
-	"github.com/oullin/go-fmt/packages/formatter/rules/spacing"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/formatter/rules"
+	"github.com/oullin/fmtkit/packages/formatter/rules/spacing"
 	"golang.org/x/tools/imports"
 )
 
@@ -152,7 +152,7 @@ func TestCollectGoFilesSkipsHiddenVendorAndGenerated(t *testing.T) {
 	testutil.WriteGoFile(t, filepath.Join(root, "vendor", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, ".hidden", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, "generated.gen.go"), "package sample\n")
-	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.go"), "FROM golang:1.26-bookworm\n")
+	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.go"), "FROM golang:1.26.4-bookworm\n")
 
 	files, err := engine.CollectGoFiles([]string{root}, config.Default())
 

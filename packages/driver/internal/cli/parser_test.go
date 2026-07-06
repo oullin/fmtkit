@@ -92,7 +92,7 @@ func TestEnvJobs(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.set {
-				t.Setenv("GO_FMT_JOBS", tc.value)
+				t.Setenv("FMTKIT_JOBS", tc.value)
 			} else {
 				unsetJobsEnv(t)
 			}
@@ -104,14 +104,14 @@ func TestEnvJobs(t *testing.T) {
 	}
 }
 
-// unsetJobsEnv removes GO_FMT_JOBS for the test while registering the
+// unsetJobsEnv removes FMTKIT_JOBS for the test while registering the
 // t.Setenv cleanup that restores the original value afterwards.
 func unsetJobsEnv(t *testing.T) {
 	t.Helper()
 
-	t.Setenv("GO_FMT_JOBS", "")
+	t.Setenv("FMTKIT_JOBS", "")
 
-	if err := os.Unsetenv("GO_FMT_JOBS"); err != nil {
-		t.Fatalf("unset GO_FMT_JOBS: %v", err)
+	if err := os.Unsetenv("FMTKIT_JOBS"); err != nil {
+		t.Fatalf("unset FMTKIT_JOBS: %v", err)
 	}
 }

@@ -23,7 +23,7 @@ builds
 
 # Node (not needed for Go Docker build)
 node_modules
-tooling/node_modules
+infra/tooling/node_modules
 
 # Docs and tests (never needed inside images)
 docs/

@@ -106,7 +106,7 @@ jobs:
               name: Checkout repository
 
             - name: Shell - Run entrypoint tests
-              run: ./scripts/test-entrypoints.sh
+              run: ./infra/scripts/tasks/test-entrypoints.sh
 
             - uses: voidzero-dev/setup-vp@v1
               name: Install Vite+
@@ -131,13 +131,13 @@ jobs:
               run: vp install --frozen-lockfile
 
             - name: Go - Run formatter tests with race detector and coverage
-              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - name: Go - Run vet tests with race detector and coverage
-              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - name: Go - Run driver tests with race detector and coverage
-              run: CGO_ENABLED=1 ./scripts/with-storage-env.sh go -C packages/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - uses: actions/upload-artifact@v4
               name: Upload formatter coverage artifact

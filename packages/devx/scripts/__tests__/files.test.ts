@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { dirExists, listSourceFiles, processFile } from '#devx/files';
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-files-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-files-'));
 
 	try {
 		await fn(dir);

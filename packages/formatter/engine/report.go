@@ -1,6 +1,6 @@
 package engine
 
-import "github.com/oullin/go-fmt/packages/formatter/rules"
+import "github.com/oullin/fmtkit/packages/formatter/rules"
 
 // FileResult describes the outcome for a single file.
 type FileResult struct {

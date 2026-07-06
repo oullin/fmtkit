@@ -112,7 +112,7 @@ test('isJavaScriptOrTypeScript accepts JS/TS langs and module types, rejects oth
 });
 
 test('writeFileAtomic replaces the file content and leaves no temp files', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-atomic-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-atomic-'));
 
 	try {
 		const file = join(dir, 'target.ts');

@@ -252,7 +252,28 @@ vp run format:local -- . # run the local formatter pipeline
 vp run format:docker -- . # run the Dockerized formatter pipeline
 vp run install-cli       # install fmt-go from the local source tree
 vp run release           # build cross-platform binaries into storage/dist
+vp run runtime:contained # package the host runtime archive for the contained fmt-all
+vp run release:contained # build fmt-all with the embedded runtime archive
 ```
+
+### Contained binary
+
+The contained `fmt-all` binary is built from `packages/driver/cmd/fmt-all`. It
+embeds a platform runtime archive for the TS/Vue layer, extracts it into
+`~/.cache/go-fmt/runtime`, and runs Go formatting in-process with automatic
+`go vet` disabled so the installed binary does not require Docker, Node, Go,
+`oxfmt`, or `oxlint` on the target machine.
+
+Build the runtime archive on the matching platform first:
+
+```bash
+vp run runtime:contained
+vp run release:contained
+```
+
+For cross-platform releases, provide one
+`packages/driver/internal/full/assets/runtime-<goos>-<goarch>.tar.gz` per target
+before running `RELEASE_PLATFORMS="darwin/arm64 linux/amd64" vp run release:contained`.
 
 ### Docker compatibility Makefile
 

@@ -51,6 +51,8 @@ export default defineConfig({
 			'image:node-ts': './scripts/docker-image.sh node-ts',
 			'install-cli': './scripts/with-storage-env.sh go -C packages/driver install ./cmd/fmt-go',
 			release: './scripts/release.sh',
+			'release:contained': './scripts/release-contained.sh',
+			'runtime:contained': './scripts/package-contained-runtime.sh',
 			'test:coverage': './scripts/test-coverage.sh',
 			'test:entrypoints': './scripts/test-entrypoints.sh',
 			'test-race':

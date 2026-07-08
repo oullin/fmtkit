@@ -57,6 +57,10 @@ func (r Runner) Run(mode Mode, args []string) int {
 		return 1
 	}
 
+	if opts.vetOverride != nil {
+		cfg.Vet.Enabled = *opts.vetOverride
+	}
+
 	runPaths, err := opts.hostPath.Resolve(workRoot, opts.positional)
 
 	if err != nil {

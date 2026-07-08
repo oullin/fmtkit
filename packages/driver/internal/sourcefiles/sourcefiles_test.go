@@ -116,6 +116,54 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	}
 }
 
+func TestCollectFallsBackToFilesystemOutsideGit(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	writeFile(t, filepath.Join(dir, "node_modules", "pkg", "ignored.ts"), "const ignored = true;\n")
+	writeFile(t, filepath.Join(dir, ".hidden", "ignored.ts"), "const ignored = true;\n")
+
+	files, warnings, err := Collect(Options{Cwd: dir, Scopes: []string{"src", "node_modules", ".hidden"}})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{filepath.Join(dir, "src", "app.ts")}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func TestCollectSkipsRuntimeDirectory(t *testing.T) {
+	dir := t.TempDir()
+	runtimeDir := filepath.Join(dir, "runtime")
+	writeFile(t, filepath.Join(dir, "sample.ts"), "const value = 1;\n")
+	writeFile(t, filepath.Join(runtimeDir, "support", "ignored.ts"), "const ignored = true;\n")
+	t.Setenv("GO_FMT_RUNTIME_DIR", runtimeDir)
+
+	files, warnings, err := Collect(Options{Cwd: dir})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{filepath.Join(dir, "sample.ts")}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
 func initRepo(t *testing.T) string {
 	t.Helper()
 

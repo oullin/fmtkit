@@ -25,10 +25,20 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 	outputFormat := fs.String("format", "text", "Output format: text, json, agent")
 	hostPath := fs.String("host-path", "", "Absolute host path under HOST_PROJECT_PATH to check or format")
 	jobs := fs.Int("jobs", envJobs(), "Max files processed in parallel (0 = NumCPU; also reads GO_FMT_JOBS)")
+	vet := fs.Bool("vet", true, "Run automatic go vet checks")
 
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
+
+	var vetOverride *bool
+
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == "vet" {
+			value := *vet
+			vetOverride = &value
+		}
+	})
 
 	return options{
 		mode:         mode,
@@ -37,6 +47,7 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 		outputFormat: *outputFormat,
 		hostPath:     HostPath(*hostPath),
 		positional:   fs.Args(),
+		vetOverride:  vetOverride,
 		jobs:         *jobs,
 	}, nil
 }

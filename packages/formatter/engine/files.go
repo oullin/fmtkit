@@ -100,6 +100,10 @@ func filterFiles(files, selected []string) []string {
 }
 
 func shouldSkipDir(path, root, name string, cfg config.Config) bool {
+	if isRuntimePath(path) {
+		return true
+	}
+
 	if path != root && strings.HasPrefix(name, ".") {
 		return true
 	}
@@ -111,6 +115,34 @@ func shouldSkipDir(path, root, name string, cfg config.Config) bool {
 	}
 
 	return false
+}
+
+func isRuntimePath(path string) bool {
+	runtimeDir := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
+
+	if runtimeDir == "" {
+		return false
+	}
+
+	absRuntime, err := filepath.Abs(runtimeDir)
+
+	if err != nil {
+		return false
+	}
+
+	absPath, err := filepath.Abs(path)
+
+	if err != nil {
+		return false
+	}
+
+	rel, err := filepath.Rel(absRuntime, absPath)
+
+	if err != nil {
+		return false
+	}
+
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func isExcludedFile(path string, cfg config.Config) bool {

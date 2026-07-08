@@ -79,6 +79,26 @@ func TestShouldSkipDirHonorsRootHiddenDirectory(t *testing.T) {
 	}
 }
 
+func TestCollectGoFilesSkipsRuntimeDirectory(t *testing.T) {
+	root := t.TempDir()
+	runtimeDir := filepath.Join(root, "runtime")
+	testutil.WriteGoFile(t, filepath.Join(root, "sample.go"), "package sample\n")
+	testutil.WriteGoFile(t, filepath.Join(runtimeDir, "go", "src", "ignored.go"), "package ignored\n")
+	t.Setenv("GO_FMT_RUNTIME_DIR", runtimeDir)
+
+	files, err := CollectGoFiles([]string{root}, config.Default())
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	want := []string{filepath.Join(root, "sample.go")}
+
+	if len(files) != len(want) || files[0] != want[0] {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
 func TestCollectGoFilesReturnsWalkErrors(t *testing.T) {
 	root := t.TempDir()
 	blocked := filepath.Join(root, "blocked")

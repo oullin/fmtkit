@@ -7,6 +7,7 @@ type options struct {
 	outputFormat string
 	hostPath     HostPath
 	positional   []string
+	vetOverride  *bool
 	// jobs overrides config.Concurrency when not -1. -1 means "unset"
 	// (no override); 0 means "use NumCPU"; positive values pin the worker count.
 	jobs int

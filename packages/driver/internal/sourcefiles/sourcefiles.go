@@ -59,7 +59,15 @@ func Collect(opts Options) ([]string, []string, error) {
 		entries, err := gitFiles(cwd, absolute)
 
 		if err != nil {
-			return nil, warnings, err
+			if !canUseFilesystemFallback(err) {
+				return nil, warnings, err
+			}
+
+			entries, err = filesystemFiles(absolute)
+
+			if err != nil {
+				return nil, warnings, err
+			}
 		}
 
 		for _, entry := range entries {
@@ -74,6 +82,10 @@ func Collect(opts Options) ([]string, []string, error) {
 			}
 
 			path = filepath.Clean(path)
+
+			if isRuntimePath(path) {
+				continue
+			}
 
 			if _, ok := seen[path]; ok {
 				continue
@@ -121,6 +133,84 @@ func gitFiles(cwd, scope string) ([]string, error) {
 	}
 
 	return entries, nil
+}
+
+func filesystemFiles(scope string) ([]string, error) {
+	info, err := os.Stat(scope)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !info.IsDir() {
+		return []string{scope}, nil
+	}
+
+	entries := []string{}
+
+	err = filepath.WalkDir(scope, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if entry.IsDir() {
+			if shouldSkipFilesystemDir(path, entry) {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		entries = append(entries, path)
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return entries, nil
+}
+
+func shouldSkipFilesystemDir(path string, entry os.DirEntry) bool {
+	base := entry.Name()
+
+	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || isRuntimePath(path)
+}
+
+func canUseFilesystemFallback(err error) bool {
+	message := err.Error()
+
+	return strings.Contains(message, "not a git repository") || strings.Contains(message, "executable file not found")
+}
+
+func isRuntimePath(path string) bool {
+	runtimeDir := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
+
+	if runtimeDir == "" {
+		return false
+	}
+
+	absRuntime, err := filepath.Abs(runtimeDir)
+
+	if err != nil {
+		return false
+	}
+
+	absPath, err := filepath.Abs(path)
+
+	if err != nil {
+		return false
+	}
+
+	rel, err := filepath.Rel(absRuntime, absPath)
+
+	if err != nil {
+		return false
+	}
+
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func isTargetFile(path string, includeDeclarations bool) bool {

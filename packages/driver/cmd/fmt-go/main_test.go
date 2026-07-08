@@ -550,6 +550,34 @@ func run() {
 	}
 }
 
+func TestRunCheckWithVetFlagDisabledOverridesConfig(t *testing.T) {
+	dir := writeTempModule(t, "example.com/sample")
+	configPath := filepath.Join(dir, "config.yml")
+	testutil.WriteFile(t, configPath, "vet:\n  enabled: true\n")
+	testutil.WriteGoFile(t, filepath.Join(dir, "sample.go"), `package sample
+
+import "fmt"
+
+func run() {
+	fmt.Printf("%d", "not-a-number")
+}
+`)
+
+	exitCode, stdout, stderr := runCLI(t, dir, "check", "--config", configPath, "--vet=false", dir)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	if strings.Contains(stdout, "automatic go vet ./... failed") {
+		t.Fatalf("expected go vet to be disabled, got:\n%s", stdout)
+	}
+
+	if stderr != "" {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}
+
 func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) {
 	t.Helper()
 

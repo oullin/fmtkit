@@ -64,17 +64,17 @@ validate_runtime_manifest() {
 
 	archive_sha="$(portable_sha256 "$archive" | awk '{print $1}')"
 	validate_runtime_manifest_platform "$manifest" "$goos" "$goarch"
-	node -e '
+	node - "$manifest" "$archive_sha" <<'JS'
 		const fs = require("node:fs");
 		const crypto = require("node:crypto");
-		const [manifestPath, archiveSHA] = process.argv.slice(1);
+		const [manifestPath, archiveSHA] = process.argv.slice(2);
 		const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 		const required = ["bin/node", "bin/fmt-ts", "bin/fmt-lint", "bin/tsx", "bin/oxfmt", "bin/oxlint", "go/bin/go", "support/scripts/format-all.ts"];
 		if (!/^[a-f0-9]{64}$/.test(manifest.archive_sha256) || !/^[a-f0-9]{64}$/.test(manifest.tree_sha256)) throw new Error("invalid runtime manifest checksums");
 		if (manifest.archive_sha256 !== archiveSHA) throw new Error("runtime archive hash does not match manifest");
 		if (!Array.isArray(manifest.required) || manifest.required.some((path) => typeof path !== "string" || !path || path.startsWith("/") || path.includes("\\\\") || path.split("/").some((part) => !part || part === "." || part === ".."))) throw new Error("invalid runtime manifest member path");
 		for (const path of required) if (!manifest.required.includes(path)) throw new Error(`runtime manifest is missing required member ${path}`);
-	' "$manifest" "$archive_sha"
+JS
 }
 
 validate_runtime_manifest_platform() {
@@ -82,14 +82,14 @@ validate_runtime_manifest_platform() {
 	local goos="$2"
 	local goarch="$3"
 
-	node -e '
+	node - "$manifest" "$goos" "$goarch" <<'JS'
 		const fs = require("node:fs");
-		const [manifestPath, goos, goarch] = process.argv.slice(1);
+		const [manifestPath, goos, goarch] = process.argv.slice(2);
 		const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 		const supported = new Set(["darwin/arm64", "linux/amd64", "linux/arm64"]);
 		if (typeof manifest.goos !== "string" || typeof manifest.goarch !== "string" || !manifest.goos.trim() || !manifest.goarch.trim()) throw new Error("runtime manifest platform fields must be nonblank strings");
 		if (manifest.goos !== manifest.goos.trim() || manifest.goarch !== manifest.goarch.trim()) throw new Error("runtime manifest platform fields must be canonical");
 		if (!supported.has(`${manifest.goos}/${manifest.goarch}`)) throw new Error(`unsupported runtime manifest platform ${manifest.goos}/${manifest.goarch}`);
 		if (manifest.goos !== goos || manifest.goarch !== goarch) throw new Error(`runtime manifest platform ${manifest.goos}/${manifest.goarch} does not match requested platform ${goos}/${goarch}`);
-	' "$manifest" "$goos" "$goarch"
+JS
 }

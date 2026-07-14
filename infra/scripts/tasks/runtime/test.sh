@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1091
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 task_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=../env.sh
 source "$task_dir/env.sh"
+# shellcheck source=common.sh
 source "$task_dir/runtime/common.sh"
+# shellcheck source=platform.sh
 source "$task_dir/runtime/platform.sh"
+# shellcheck source=archive.sh
 source "$task_dir/runtime/archive.sh"
 
 assert_equals() { [[ "$1" == "$2" ]] || { printf 'expected %q, got %q\n' "$2" "$1" >&2; exit 1; }; }
@@ -27,6 +31,12 @@ assert_fails validate_runtime_platform darwin amd64
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+shellcheck_disable_directive='shellcheck disable'
+shellcheck_disable_matches="$(find "$task_dir/runtime" -type f -name '*.sh' -exec grep -HnF -- "$shellcheck_disable_directive=" {} \;)"
+if [[ -n "$shellcheck_disable_matches" ]]; then
+	printf 'shellcheck disable directives are prohibited in runtime scripts:\n%s\n' "$shellcheck_disable_matches" >&2
+	exit 1
+fi
 node_stub="$tmp/node"
 cat >"$node_stub" <<'SH'
 #!/usr/bin/env bash
@@ -34,8 +44,7 @@ printf '%s\n' "${TEST_LIBC:-gnu}"
 SH
 chmod +x "$node_stub"
 TEST_LIBC=gnu require_gnu_linux "$node_stub"
-# shellcheck disable=SC2016
-assert_fails env TEST_LIBC=musl bash -c 'source "$1"; source "$2"; require_gnu_linux "$3"' bash "$task_dir/runtime/common.sh" "$task_dir/runtime/platform.sh" "$node_stub"
+TEST_LIBC=musl assert_fails require_gnu_linux "$node_stub"
 printf test >"$tmp/input"
 assert_equals "$(portable_sha256 "$tmp/input")" "$(shasum -a 256 "$tmp/input" | awk '{print $1}')  input"
 

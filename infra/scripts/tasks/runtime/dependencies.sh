@@ -4,11 +4,11 @@ resolve_package() {
 	local package="$1"
 	local parent="$2"
 
-	"$NODE_BIN" -e '
+	"$NODE_BIN" - "$package" "$parent" "$REPO_ROOT/packages/devx" <<'JS'
 		const { createRequire } = require("node:module");
 		const fs = require("node:fs");
 		const path = require("node:path");
-		const [packageName, parentName, workspace] = process.argv.slice(1);
+		const [packageName, parentName, workspace] = process.argv.slice(2);
 		const store = path.join(workspace, "..", "..", "node_modules", ".pnpm");
 		let parent;
 		try { parent = require.resolve(`${parentName}/package.json`, { paths: [workspace] }); }
@@ -30,7 +30,7 @@ resolve_package() {
 			if (!entry) throw new Error(`pnpm store entry not found for ${packageName}@${version}`);
 			console.log(path.join(store, entry, "node_modules", packageName));
 		}
-	' "$package" "$parent" "$REPO_ROOT/packages/devx"
+JS
 }
 
 copy_locked_package() {

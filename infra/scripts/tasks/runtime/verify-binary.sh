@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1091
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 task_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=../env.sh
 source "$task_dir/env.sh"
+# shellcheck source=common.sh
 source "$task_dir/runtime/common.sh"
+# shellcheck source=platform.sh
 source "$task_dir/runtime/platform.sh"
 
 goos=''

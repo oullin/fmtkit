@@ -36,7 +36,7 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 		}
 
 		if !info.IsDir() {
-			if isGoSource(absRoot) && !isExcludedFile(absRoot, cfg) {
+			if isGoSource(absRoot) && !runtimepath.Contains(runtimeDir, absRoot) && !isExcludedFile(absRoot, cfg) {
 				if _, ok := seen[absRoot]; !ok {
 					files = append(files, absRoot)
 					seen[absRoot] = struct{}{}

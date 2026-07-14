@@ -2,6 +2,7 @@
 set -euo pipefail
 
 source "$(dirname "$0")/env.sh"
+source "$(dirname "$0")/package-contained-runtime-lib.sh"
 
 goos="${RUNTIME_GOOS:-$(go -C "$GO_WORKDIR" env GOOS)}"
 goarch="${RUNTIME_GOARCH:-$(go -C "$GO_WORKDIR" env GOARCH)}"
@@ -28,14 +29,12 @@ native_goos="$(go -C "$GO_WORKDIR" env GOOS)"
 native_goarch="$(go -C "$GO_WORKDIR" env GOARCH)"
 native_node_platform="$("$node_bin" -p 'process.platform')"
 native_node_arch="$("$node_bin" -p 'process.arch')"
+native_go_node_arch="$(go_arch_to_node_arch "$native_goarch")" || {
+	printf 'unsupported Go architecture: %s\n' "$native_goarch" >&2
+	exit 1
+}
 
-case "$native_node_arch" in
-	x64) native_node_arch="amd64" ;;
-	arm64) ;;
-	*) printf 'unsupported Node architecture: %s\n' "$native_node_arch" >&2; exit 1 ;;
-esac
-
-if [[ "$goos" != "$native_goos" || "$goarch" != "$native_goarch" || "$goos" != "$native_node_platform" || "$goarch" != "$native_node_arch" ]]; then
+if [[ "$goos" != "$native_goos" || "$goarch" != "$native_goarch" || "$goos" != "$native_node_platform" || "$native_go_node_arch" != "$native_node_arch" ]]; then
 	printf 'contained runtime packaging must run natively; requested %s/%s, Go is %s/%s, Node is %s/%s\n' "$goos" "$goarch" "$native_goos" "$native_goarch" "$native_node_platform" "$native_node_arch" >&2
 	exit 1
 fi
@@ -78,9 +77,14 @@ cp -RL "$stage/devx-closure/node_modules" "$stage/support/node_modules"
 rm -rf "$stage/devx-closure"
 
 node_package_arch="$native_node_arch"
-if [[ "$node_package_arch" == "amd64" ]]; then
-	node_package_arch="x64"
+native_binding_libc=""
+if [[ "$native_node_platform" == "linux" ]]; then
+	native_binding_libc="$(native_linux_libc "$node_bin")"
 fi
+native_binding_suffix="$(native_binding_suffix "$native_node_platform" "$node_package_arch" "$native_binding_libc")" || {
+	printf 'unsupported native binding target: %s/%s (%s)\n' "$native_node_platform" "$node_package_arch" "$native_binding_libc" >&2
+	exit 1
+}
 
 resolve_package() {
 	local package="$1"
@@ -140,10 +144,10 @@ copy_package() {
 # frozen workspace graph instead of selecting an arbitrary store wildcard.
 copy_package esbuild "$stage/support/node_modules/esbuild" tsx
 copy_package "@esbuild/$native_node_platform-$node_package_arch" "$stage/support/node_modules/@esbuild/$native_node_platform-$node_package_arch" esbuild
-copy_package "@oxc-parser/binding-$native_node_platform-$native_node_arch" "$stage/support/node_modules/@oxc-parser/binding-$native_node_platform-$native_node_arch" oxc-parser
+copy_package "@oxc-parser/binding-$native_binding_suffix" "$stage/support/node_modules/@oxc-parser/binding-$native_binding_suffix" oxc-parser
 copy_package tinypool "$stage/support/node_modules/tinypool" oxfmt
-copy_package "@oxfmt/binding-$native_node_platform-$native_node_arch" "$stage/support/node_modules/@oxfmt/binding-$native_node_platform-$native_node_arch" oxfmt
-copy_package "@oxlint/binding-$native_node_platform-$native_node_arch" "$stage/support/node_modules/@oxlint/binding-$native_node_platform-$native_node_arch" oxlint
+copy_package "@oxfmt/binding-$native_binding_suffix" "$stage/support/node_modules/@oxfmt/binding-$native_binding_suffix" oxfmt
+copy_package "@oxlint/binding-$native_binding_suffix" "$stage/support/node_modules/@oxlint/binding-$native_binding_suffix" oxlint
 
 cat >"$stage/bin/tsx" <<'SH'
 #!/usr/bin/env sh

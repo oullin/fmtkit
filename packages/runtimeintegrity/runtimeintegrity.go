@@ -2,13 +2,16 @@ package runtimeintegrity
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 type Manifest struct {
@@ -18,6 +21,10 @@ type Manifest struct {
 }
 
 func Build(root, archive string, required []string) (Manifest, error) {
+	if err := ValidateRequired(required); err != nil {
+		return Manifest{}, err
+	}
+
 	tree, err := TreeSHA256(root, nil)
 
 	if err != nil {
@@ -44,6 +51,10 @@ func Parse(content []byte) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("runtime manifest is incomplete")
 	}
 
+	if err := ValidateRequired(manifest.Required); err != nil {
+		return Manifest{}, err
+	}
+
 	return manifest, nil
 }
 
@@ -68,6 +79,10 @@ func ValidateArchive(content []byte, manifest Manifest) error {
 }
 
 func ValidateTree(root string, manifest Manifest, excluded map[string]struct{}) error {
+	if err := ValidateRequired(manifest.Required); err != nil {
+		return err
+	}
+
 	tree, err := TreeSHA256(root, excluded)
 
 	if err != nil {
@@ -152,7 +167,7 @@ func TreeSHA256(root string, excluded map[string]struct{}) (string, error) {
 		}
 
 		if info.IsDir() {
-			_, _ = io.WriteString(hash, "d:"+rel+"\n")
+			writeTreeRecord(hash, "d", rel)
 
 			return nil
 		}
@@ -173,7 +188,7 @@ func TreeSHA256(root string, excluded map[string]struct{}) (string, error) {
 			executable = "1"
 		}
 
-		_, _ = io.WriteString(hash, strings.Join([]string{"f", rel, executable, fileHash}, ":")+"\n")
+		writeTreeRecord(hash, "f", rel, executable, fileHash)
 
 		return nil
 	})
@@ -183,4 +198,32 @@ func TreeSHA256(root string, excluded map[string]struct{}) (string, error) {
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// ValidateRequired accepts only canonical, slash-delimited relative file paths.
+// The manifest is part of the runtime trust boundary, so validate it wherever it
+// enters or is consumed rather than relying on a previous validation step.
+func ValidateRequired(required []string) error {
+	for _, value := range required {
+		if value == "" || value == "." || path.IsAbs(value) || filepath.IsAbs(value) ||
+			strings.ContainsAny(value, `\\:`) || strings.IndexFunc(value, unicode.IsControl) >= 0 ||
+			path.Clean(value) != value || value == ".." || strings.HasPrefix(value, "../") {
+			return fmt.Errorf("invalid required runtime path %q", value)
+		}
+	}
+
+	return nil
+}
+
+func writeTreeRecord(hash io.Writer, fields ...string) {
+	var length [8]byte
+
+	binary.BigEndian.PutUint64(length[:], uint64(len(fields)))
+	_, _ = hash.Write(length[:])
+
+	for _, field := range fields {
+		binary.BigEndian.PutUint64(length[:], uint64(len(field)))
+		_, _ = hash.Write(length[:])
+		_, _ = io.WriteString(hash, field)
+	}
 }

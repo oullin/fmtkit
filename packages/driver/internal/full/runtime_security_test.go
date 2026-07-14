@@ -127,6 +127,39 @@ func TestEnsureRuntimeCacheSerializesConcurrentExtraction(t *testing.T) {
 	}
 }
 
+func TestEnsureSourceShimSerializesConcurrentPublication(t *testing.T) {
+	root := filepath.Join(realTempDir(t), "runtime")
+
+	if err := ensureEmptyRuntimeRoot(root); err != nil {
+		t.Fatalf("create runtime root: %v", err)
+	}
+
+	var group sync.WaitGroup
+	errs := make(chan error, 8)
+
+	for range 8 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+
+			errs <- ensureSourceShim(root, "/tmp/fmt-all")
+		}()
+	}
+
+	group.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent shim publication: %v", err)
+		}
+	}
+
+	if info, err := os.Stat(filepath.Join(root, "bin", "fmt-sources")); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("expected private executable shim, info=%v err=%v", info, err)
+	}
+}
+
 func TestEnsureRuntimeCacheReleasesStaleAdvisoryLock(t *testing.T) {
 	root := filepath.Join(realTempDir(t), "runtime")
 	payload := testRuntimePayload(t)

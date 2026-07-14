@@ -157,7 +157,7 @@ func filesystemFiles(scope, runtimeDir string) ([]string, error) {
 		}
 
 		if entry.IsDir() {
-			if shouldSkipFilesystemDir(path, entry, runtimeDir) {
+			if shouldSkipFilesystemDir(path, entry, runtimeDir) && (path != scope || !strings.HasPrefix(entry.Name(), ".")) {
 				return filepath.SkipDir
 			}
 

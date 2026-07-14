@@ -101,6 +101,24 @@ func TestCollectGoFilesSkipsRuntimeDirectory(t *testing.T) {
 	}
 }
 
+func TestCollectGoFilesSkipsExplicitRuntimeFile(t *testing.T) {
+	root := t.TempDir()
+	runtimeDir := filepath.Join(root, "runtime")
+	file := filepath.Join(runtimeDir, "go", "src", "ignored.go")
+	testutil.WriteGoFile(t, file, "package ignored\n")
+	t.Setenv("GO_FMT_RUNTIME_DIR", runtimeDir)
+
+	files, err := CollectGoFiles([]string{file}, config.Default())
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(files) != 0 {
+		t.Fatalf("expected runtime file exclusion, got %#v", files)
+	}
+}
+
 func TestCollectGoFilesReturnsWalkErrors(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses file permissions, so the blocked directory stays readable")

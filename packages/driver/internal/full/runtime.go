@@ -59,7 +59,7 @@ func ensureToolRuntime() (toolRuntime, error) {
 
 	binDir := filepath.Join(root, "bin")
 
-	if err := writeSourceShim(filepath.Join(binDir, "fmt-sources"), self); err != nil {
+	if err := ensureSourceShim(root, self); err != nil {
 		return toolRuntime{}, err
 	}
 
@@ -716,6 +716,21 @@ func writeSourceShim(path, self string) error {
 	}
 
 	return nil
+}
+
+// ensureSourceShim serializes replacement of the mutable shim with runtime
+// extraction. Without the lock, concurrent launches can both remove the file
+// then race to create it with O_EXCL.
+func ensureSourceShim(root, self string) error {
+	unlock, err := lockRuntime(root)
+
+	if err != nil {
+		return err
+	}
+
+	defer unlock()
+
+	return writeSourceShim(filepath.Join(root, "bin", "fmt-sources"), self)
 }
 
 func shellQuote(value string) string {

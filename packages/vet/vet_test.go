@@ -166,6 +166,10 @@ use (
 	if !strings.Contains(report.Errors[0].Message, "automatic go vet ./... failed") {
 		t.Fatalf("unexpected error message: %#v", report.Errors[0])
 	}
+
+	if !strings.Contains(report.Errors[0].Message, "fmt.Printf format %d has arg") {
+		t.Fatalf("expected fmt.Printf vet diagnostic, got %#v", report.Errors[0])
+	}
 }
 
 func TestRunReportsGoEnvLookupError(t *testing.T) {

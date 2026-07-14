@@ -69,14 +69,24 @@ jobs:
                   test -f packages/driver/internal/full/assets/runtime-darwin-arm64.tar.gz.manifest.json
               shell: bash
 
+            - name: Stage contained release assets
+              run: |
+                  staging=storage/release-artifact
+                  rm -rf "$staging"
+                  mkdir -p "$staging"
+                  cp storage/dist/fmt-all-darwin-arm64 "$staging/fmt-all-darwin-arm64"
+                  cp storage/dist/fmt-all-darwin-arm64.sha256 "$staging/fmt-all-darwin-arm64.sha256"
+                  cp packages/driver/internal/full/assets/runtime-darwin-arm64.tar.gz.manifest.json "$staging/runtime-darwin-arm64.tar.gz.manifest.json"
+                  test -f "$staging/fmt-all-darwin-arm64"
+                  test -f "$staging/fmt-all-darwin-arm64.sha256"
+                  test -f "$staging/runtime-darwin-arm64.tar.gz.manifest.json"
+              shell: bash
+
             - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               name: Upload contained release artifact
               with:
                   name: fmt-all-darwin-arm64
-                  path: |
-                      storage/dist/fmt-all-darwin-arm64
-                      storage/dist/fmt-all-darwin-arm64.sha256
-                      packages/driver/internal/full/assets/runtime-darwin-arm64.tar.gz.manifest.json
+                  path: storage/release-artifact/*
                   if-no-files-found: error
 
     publish:

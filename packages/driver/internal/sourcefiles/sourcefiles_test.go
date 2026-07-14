@@ -133,7 +133,32 @@ func TestCollectFallsBackToFilesystemOutsideGit(t *testing.T) {
 		t.Fatalf("unexpected warnings: %v", warnings)
 	}
 
-	want := []string{filepath.Join(dir, "src", "app.ts")}
+	want := []string{
+		filepath.Join(dir, ".hidden", "ignored.ts"),
+		filepath.Join(dir, "src", "app.ts"),
+	}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func TestCollectFilesystemFallbackProcessesExplicitHiddenRoot(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".visible", "app.ts"), "const value = 1;\n")
+	writeFile(t, filepath.Join(dir, ".visible", ".nested", "ignored.ts"), "const ignored = true;\n")
+
+	files, warnings, err := Collect(Options{Cwd: dir, Scopes: []string{".visible"}})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{filepath.Join(dir, ".visible", "app.ts")}
 
 	if !reflect.DeepEqual(files, want) {
 		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)

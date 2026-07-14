@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import test from 'node:test';
 
-import { RELEASE_ASSETS, generateFormula, generateFormulaFromArguments, parseArguments, readChecksums, renderFormula, validateTag } from '../src/formula.mjs';
+import { RELEASE_ASSETS, generateFormula, generateFormulaFromArguments, parseArguments, readChecksums, renderFormula, validateTag } from '../src/formula.ts';
+import type { Checksums } from '../src/formula.ts';
 
 const execFileAsync = promisify(execFile);
-const GENERATOR_SCRIPT = fileURLToPath(new URL('../scripts/generate-formula.mjs', import.meta.url));
-const DIGESTS = Object.freeze({
+const GENERATOR_SCRIPT = fileURLToPath(new URL('../scripts/generate-formula.ts', import.meta.url));
+
+const DIGESTS: Checksums = Object.freeze({
 	'fmtkit-darwin-arm64': '1'.repeat(64),
 	'fmtkit-linux-amd64': '2'.repeat(64),
 	'fmtkit-linux-arm64': '3'.repeat(64),
@@ -19,17 +21,23 @@ const DIGESTS = Object.freeze({
 
 test('generates a deterministic formula with every supported platform', async () => {
 	const directory = await makeChecksumDirectory();
+
 	const firstOutput = path.join(directory, 'Formula', 'fmtkit.rb');
 	const secondOutput = path.join(directory, 'other', 'fmtkit.rb');
 	const options = { tag: 'v1.2.3', checksumsDir: directory };
 
 	await generateFormulaFromArguments(['--tag', options.tag, '--checksums-dir', directory, '--output', firstOutput]);
+
 	await generateFormulaFromArguments(['--output', secondOutput, '--checksums-dir', directory, '--tag', options.tag]);
 
 	const first = await readFile(firstOutput, 'utf8');
+
 	const second = await readFile(secondOutput, 'utf8');
+
 	assert.equal(first, second);
+
 	assert.equal(first, await generateFormula({ ...options, output: firstOutput }));
+
 	assert.match(first, /^class Fmtkit < Formula$/m);
 	assert.match(first, /^  version "1\.2\.3"$/m);
 
@@ -82,7 +90,7 @@ test('parses exactly one value for every CLI argument', () => {
 });
 
 test('strictly parses checksum filenames and contents', async (t) => {
-	const malformedCases = [
+	const malformedCases: ReadonlyArray<readonly [name: string, contents: string]> = [
 		['uppercase digest', 'A'.repeat(64) + '  fmtkit-linux-amd64\n'],
 		['short digest', 'a'.repeat(63) + '  fmtkit-linux-amd64\n'],
 		['single separator space', 'a'.repeat(64) + ' fmtkit-linux-amd64\n'],
@@ -96,7 +104,9 @@ test('strictly parses checksum filenames and contents', async (t) => {
 	for (const [name, contents] of malformedCases) {
 		await t.test(name, async () => {
 			const directory = await makeChecksumDirectory();
+
 			await writeFile(path.join(directory, 'fmtkit-linux-amd64.sha256'), contents);
+
 			await assert.rejects(readChecksums(directory), /malformed checksum file/);
 		});
 	}
@@ -105,111 +115,154 @@ test('strictly parses checksum filenames and contents', async (t) => {
 test('rejects missing, unexpected, duplicate, and unsafe checksum inputs', async (t) => {
 	await t.test('missing platform', async () => {
 		const directory = await makeChecksumDirectory();
+
 		await rm(path.join(directory, 'fmtkit-linux-arm64.sha256'));
+
 		await assert.rejects(readChecksums(directory), /missing checksum file fmtkit-linux-arm64\.sha256/);
 	});
 
 	await t.test('unexpected checksum filename', async () => {
 		const directory = await makeChecksumDirectory();
+
 		await writeFile(path.join(directory, 'fmtkit-windows-amd64.sha256'), `${'4'.repeat(64)}  fmtkit-windows-amd64\n`);
+
 		await assert.rejects(readChecksums(directory), /unexpected checksum file: fmtkit-windows-amd64\.sha256/);
 	});
 
 	await t.test('hard-linked duplicate inputs', async () => {
 		const directory = await makeChecksumDirectory();
+
 		const duplicate = path.join(directory, 'fmtkit-linux-arm64.sha256');
+
 		await rm(duplicate);
+
 		await link(path.join(directory, 'fmtkit-linux-amd64.sha256'), duplicate);
+
 		await assert.rejects(readChecksums(directory), /duplicate checksum input/);
 	});
 
 	await t.test('symbolic link input', { skip: process.platform === 'win32' }, async () => {
 		const directory = await makeChecksumDirectory();
+
 		const checksumPath = path.join(directory, 'fmtkit-linux-arm64.sha256');
+
 		await rm(checksumPath);
+
 		await symlink(path.join(directory, 'fmtkit-linux-amd64.sha256'), checksumPath);
+
 		await assert.rejects(readChecksums(directory), /not a regular file/);
 	});
 
 	await t.test('symbolic link directory', { skip: process.platform === 'win32' }, async () => {
 		const root = await mkdtemp(path.join(os.tmpdir(), 'fmtkit-homebrew-link-'));
+
 		const directory = await makeChecksumDirectory();
+
 		const linkPath = path.join(root, 'checksums');
+
 		await symlink(directory, linkPath);
+
 		await assert.rejects(readChecksums(linkPath), /not a real directory/);
 	});
 });
 
 test('writes atomically and never changes an existing output after validation failure', async () => {
 	const directory = await makeChecksumDirectory();
+
 	const outputDirectory = path.join(directory, 'Formula');
 	const output = path.join(outputDirectory, 'fmtkit.rb');
+
 	await mkdir(outputDirectory);
+
 	await writeFile(output, 'previous formula\n');
+
 	await writeFile(path.join(directory, 'fmtkit-linux-arm64.sha256'), 'invalid\n');
 
 	await assert.rejects(generateFormulaFromArguments(['--tag', 'v1.2.3', '--checksums-dir', directory, '--output', output]), /malformed checksum file/);
+
 	assert.equal(await readFile(output, 'utf8'), 'previous formula\n');
+
 	assert.deepEqual((await readdir(outputDirectory)).sort(), ['fmtkit.rb']);
 });
 
 test('refuses to overwrite an input checksum', async () => {
 	const directory = await makeChecksumDirectory();
+
 	const output = path.join(directory, 'fmtkit-linux-arm64.sha256');
+
 	await assert.rejects(generateFormula({ tag: 'v1.2.3', checksumsDir: directory, output }), /must not overwrite/);
 });
 
 test('refuses to overwrite an input checksum through a symlinked output parent', { skip: process.platform === 'win32' }, async () => {
 	const root = await mkdtemp(path.join(os.tmpdir(), 'fmtkit-homebrew-output-link-'));
+
 	const checksumsDirectory = await makeChecksumDirectory();
+
 	const checksumPath = path.join(checksumsDirectory, 'fmtkit-linux-arm64.sha256');
+
 	const originalChecksum = await readFile(checksumPath, 'utf8');
+
 	const outputAlias = path.join(root, 'checksums-alias');
+
 	await symlink(checksumsDirectory, outputAlias);
 
 	await assert.rejects(
 		generateFormulaFromArguments(['--tag', 'v1.2.3', '--checksums-dir', checksumsDirectory, '--output', path.join(outputAlias, 'fmtkit-linux-arm64.sha256')]),
 		/must not overwrite/,
 	);
+
 	assert.equal(await readFile(checksumPath, 'utf8'), originalChecksum);
 });
 
 test('generated formula passes Ruby syntax verification when Ruby is available', async (t) => {
-	if (spawnSync('ruby', ['--version'], { encoding: 'utf8' }).error?.code === 'ENOENT') {
+	const rubyCheck = spawnSync('ruby', ['--version'], { encoding: 'utf8' });
+
+	if (isNodeError(rubyCheck.error) && rubyCheck.error.code === 'ENOENT') {
 		t.skip('Ruby is unavailable');
+
 		return;
 	}
 
 	const directory = await makeChecksumDirectory();
+
 	const output = path.join(directory, 'Formula', 'fmtkit.rb');
+
 	await generateFormulaFromArguments(['--tag', 'v1.2.3', '--checksums-dir', directory, '--output', output]);
+
 	const { stdout, stderr } = await execFileAsync('ruby', ['-c', output]);
+
 	assert.match(stdout, /Syntax OK/);
 	assert.equal(stderr, '');
 });
 
 test('CLI exits non-zero without writing for invalid input', async () => {
 	const directory = await makeChecksumDirectory();
+
 	const output = path.join(directory, 'Formula', 'fmtkit.rb');
 
 	await assert.rejects(execFileAsync(process.execPath, [GENERATOR_SCRIPT, '--tag', 'v1.2.3\nend', '--checksums-dir', directory, '--output', output]), (error) => {
+		assert.ok(isExecFileError(error));
 		assert.equal(error.code, 1);
 		assert.match(error.stderr, /invalid release tag/);
+
 		return true;
 	});
 });
 
 test('CLI accepts the package-manager separator and writes Formula/fmtkit.rb', async () => {
 	const directory = await makeChecksumDirectory();
+
 	const output = path.join(directory, 'Formula', 'fmtkit.rb');
+
 	const { stdout, stderr } = await execFileAsync(process.execPath, [GENERATOR_SCRIPT, '--', '--tag', 'v4.5.6', '--checksums-dir', directory, '--output', output]);
 
 	assert.equal(stdout, '');
 	assert.equal(stderr, '');
+
 	assert.match(await readFile(output, 'utf8'), /releases\/download\/v4\.5\.6\/fmtkit-darwin-arm64/);
 });
 
-async function makeChecksumDirectory() {
+async function makeChecksumDirectory(): Promise<string> {
 	const directory = await mkdtemp(path.join(os.tmpdir(), 'fmtkit-homebrew-'));
 
 	for (const asset of RELEASE_ASSETS) {
@@ -221,4 +274,12 @@ async function makeChecksumDirectory() {
 	await writeFile(path.join(directory, 'release-notes.txt'), 'unrelated release artifact\n');
 
 	return directory;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+	return error instanceof Error && 'code' in error;
+}
+
+function isExecFileError(error: unknown): error is Error & { code: number; stderr: string } {
+	return error instanceof Error && 'code' in error && typeof error.code === 'number' && 'stderr' in error && typeof error.stderr === 'string';
 }

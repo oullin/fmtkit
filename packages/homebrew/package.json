@@ -3,8 +3,13 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"check": "node --check ./scripts/generate-formula.mjs && node --check ./src/formula.mjs && node --check ./test/formula.test.mjs && node --test ./test/*.test.mjs",
-		"generate": "node ./scripts/generate-formula.mjs",
-		"test": "node --test ./test/*.test.mjs"
+		"check": "pnpm typecheck && pnpm test",
+		"generate": "node ./scripts/generate-formula.ts",
+		"test": "node --test ./test/*.test.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/node": "25.9.1",
+		"typescript": "6.0.3"
 	}
 }

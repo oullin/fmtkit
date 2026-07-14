@@ -1,32 +1,51 @@
 import { constants as fileConstants, lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 
-export const RELEASE_ASSETS = Object.freeze(['fmtkit-darwin-arm64', 'fmtkit-linux-amd64', 'fmtkit-linux-arm64']);
+export const RELEASE_ASSETS = Object.freeze(['fmtkit-darwin-arm64', 'fmtkit-linux-amd64', 'fmtkit-linux-arm64'] as const);
+
+export type ReleaseAsset = (typeof RELEASE_ASSETS)[number];
+
+export interface FormulaOptions {
+	tag: string;
+	checksumsDir: string;
+	output: string;
+}
+
+export type Checksums = Readonly<Record<ReleaseAsset, string>>;
+
+interface FormulaGeneration {
+	formula: string;
+	output: string;
+	protectedInputs: readonly string[];
+}
 
 const TAG_PATTERN = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/;
 const CHECKSUM_SUFFIX = '.sha256';
+
 let temporaryFileSequence = 0;
 
-export async function generateFormulaFromArguments(arguments_) {
+export async function generateFormulaFromArguments(arguments_: unknown): Promise<void> {
 	const options = parseArguments(arguments_);
+
 	const generation = await prepareFormulaGeneration(options);
 
 	await writeFileAtomically(generation.output, generation.formula, generation.protectedInputs);
 }
 
-export function parseArguments(arguments_) {
+export function parseArguments(arguments_: unknown): FormulaOptions {
 	if (!Array.isArray(arguments_)) {
 		throw new TypeError('arguments must be an array');
 	}
 
-	const values = new Map();
+	const values = new Map<string, string>();
 	const allowed = new Set(['--tag', '--checksums-dir', '--output']);
 
 	for (let index = 0; index < arguments_.length; index += 2) {
 		const flag = arguments_[index];
 		const value = arguments_[index + 1];
 
-		if (!allowed.has(flag)) {
+		if (typeof flag !== 'string' || !allowed.has(flag)) {
 			throw new Error(`unknown argument: ${String(flag)}`);
 		}
 
@@ -49,18 +68,18 @@ export function parseArguments(arguments_) {
 
 	return {
 		tag: validateTag(values.get('--tag')),
-		checksumsDir: path.resolve(values.get('--checksums-dir')),
-		output: path.resolve(values.get('--output')),
+		checksumsDir: path.resolve(values.get('--checksums-dir')!),
+		output: path.resolve(values.get('--output')!),
 	};
 }
 
-export async function generateFormula({ tag, checksumsDir, output }) {
+export async function generateFormula({ tag, checksumsDir, output }: FormulaOptions): Promise<string> {
 	const generation = await prepareFormulaGeneration({ tag, checksumsDir, output });
 
 	return generation.formula;
 }
 
-async function prepareFormulaGeneration({ tag, checksumsDir, output }) {
+async function prepareFormulaGeneration({ tag, checksumsDir, output }: FormulaOptions): Promise<FormulaGeneration> {
 	validateTag(tag);
 
 	if (typeof checksumsDir !== 'string' || checksumsDir.length === 0) {
@@ -72,9 +91,13 @@ async function prepareFormulaGeneration({ tag, checksumsDir, output }) {
 	}
 
 	const resolvedChecksumsDir = path.resolve(checksumsDir);
+
 	const checksums = await readChecksums(resolvedChecksumsDir);
+
 	const canonicalChecksumsDir = await realpath(resolvedChecksumsDir);
+
 	const canonicalOutput = await resolveCanonicalOutput(output);
+
 	const inputPaths = RELEASE_ASSETS.map((asset) => path.join(canonicalChecksumsDir, `${asset}${CHECKSUM_SUFFIX}`));
 
 	if (inputPaths.includes(canonicalOutput)) {
@@ -88,7 +111,7 @@ async function prepareFormulaGeneration({ tag, checksumsDir, output }) {
 	};
 }
 
-export function validateTag(tag) {
+export function validateTag(tag: unknown): string {
 	if (typeof tag !== 'string' || !TAG_PATTERN.test(tag)) {
 		throw new Error(`invalid release tag: ${String(tag)} (expected vMAJOR.MINOR.PATCH)`);
 	}
@@ -96,8 +119,9 @@ export function validateTag(tag) {
 	return tag;
 }
 
-export async function readChecksums(checksumsDir) {
+export async function readChecksums(checksumsDir: string): Promise<Checksums> {
 	const directory = path.resolve(checksumsDir);
+
 	const directoryMetadata = await safeLstat(directory, 'checksums directory');
 
 	if (directoryMetadata.isSymbolicLink() || !directoryMetadata.isDirectory()) {
@@ -105,7 +129,9 @@ export async function readChecksums(checksumsDir) {
 	}
 
 	const entries = await readdir(directory, { withFileTypes: true });
+
 	const expectedChecksumFiles = new Set(RELEASE_ASSETS.map((asset) => `${asset}${CHECKSUM_SUFFIX}`));
+
 	const unexpectedChecksumFiles = entries
 		.map((entry) => entry.name)
 		.filter((name) => name.endsWith(CHECKSUM_SUFFIX) && !expectedChecksumFiles.has(name))
@@ -115,12 +141,13 @@ export async function readChecksums(checksumsDir) {
 		throw new Error(`unexpected checksum file: ${unexpectedChecksumFiles.join(', ')}`);
 	}
 
-	const checksums = {};
-	const identities = new Set();
+	const checksums: Partial<Record<ReleaseAsset, string>> = {};
+	const identities = new Set<string>();
 
 	for (const asset of RELEASE_ASSETS) {
 		const filename = `${asset}${CHECKSUM_SUFFIX}`;
 		const checksumPath = path.join(directory, filename);
+
 		const metadata = await safeLstat(checksumPath, `checksum file ${filename}`);
 
 		if (metadata.isSymbolicLink() || !metadata.isFile()) {
@@ -136,6 +163,7 @@ export async function readChecksums(checksumsDir) {
 		identities.add(identity);
 
 		const contents = await readChecksumWithoutFollowingLinks(checksumPath, filename);
+
 		const match = contents.match(new RegExp(`^([a-f0-9]{64})  ${asset}\\n$`));
 
 		if (match === null) {
@@ -145,10 +173,10 @@ export async function readChecksums(checksumsDir) {
 		checksums[asset] = match[1];
 	}
 
-	return Object.freeze(checksums);
+	return Object.freeze(checksums) as Checksums;
 }
 
-export function renderFormula(tag, checksums) {
+export function renderFormula(tag: string, checksums: Checksums): string {
 	validateTag(tag);
 
 	for (const asset of RELEASE_ASSETS) {
@@ -233,11 +261,11 @@ end
 `;
 }
 
-async function safeLstat(filePath, label) {
+async function safeLstat(filePath: string, label: string) {
 	try {
 		return await lstat(filePath);
 	} catch (error) {
-		if (error?.code === 'ENOENT') {
+		if (isNodeError(error) && error.code === 'ENOENT') {
 			throw new Error(`missing ${label}: ${filePath}`);
 		}
 
@@ -245,14 +273,15 @@ async function safeLstat(filePath, label) {
 	}
 }
 
-async function readChecksumWithoutFollowingLinks(checksumPath, filename) {
-	let handle;
+async function readChecksumWithoutFollowingLinks(checksumPath: string, filename: string): Promise<string> {
+	let handle: FileHandle | undefined;
 
 	try {
 		handle = await open(checksumPath, fileConstants.O_RDONLY | (fileConstants.O_NOFOLLOW ?? 0));
+
 		return await handle.readFile({ encoding: 'utf8' });
 	} catch (error) {
-		if (error?.code === 'ELOOP') {
+		if (isNodeError(error) && error.code === 'ELOOP') {
 			throw new Error(`checksum input must not be a symbolic link: ${filename}`);
 		}
 
@@ -262,17 +291,19 @@ async function readChecksumWithoutFollowingLinks(checksumPath, filename) {
 	}
 }
 
-async function resolveCanonicalOutput(output) {
+async function resolveCanonicalOutput(output: string): Promise<string> {
 	const target = path.resolve(output);
 	const targetDirectory = path.dirname(target);
+
 	await mkdir(targetDirectory, { recursive: true });
 
 	return path.join(await realpath(targetDirectory), path.basename(target));
 }
 
-async function writeFileAtomically(output, contents, protectedInputs) {
+async function writeFileAtomically(output: string, contents: string, protectedInputs: readonly string[]): Promise<void> {
 	const target = path.resolve(output);
 	const targetDirectory = path.dirname(target);
+
 	await mkdir(targetDirectory, { recursive: true });
 
 	try {
@@ -282,12 +313,13 @@ async function writeFileAtomically(output, contents, protectedInputs) {
 			throw new Error(`output is not a regular file: ${target}`);
 		}
 	} catch (error) {
-		if (error?.code !== 'ENOENT') {
+		if (!isNodeError(error) || error.code !== 'ENOENT') {
 			throw error;
 		}
 	}
 
 	const canonicalDirectory = await realpath(targetDirectory);
+
 	const canonicalTarget = path.join(canonicalDirectory, path.basename(target));
 
 	if (protectedInputs.includes(canonicalTarget)) {
@@ -295,19 +327,32 @@ async function writeFileAtomically(output, contents, protectedInputs) {
 	}
 
 	const temporaryPath = path.join(canonicalDirectory, `.${path.basename(canonicalTarget)}.${process.pid}.${(temporaryFileSequence += 1)}.tmp`);
-	let handle;
+
+	let handle: FileHandle | undefined;
 
 	try {
 		handle = await open(temporaryPath, 'wx', 0o600);
+
 		await handle.writeFile(contents, { encoding: 'utf8' });
+
 		await handle.chmod(0o644);
+
 		await handle.sync();
+
 		await handle.close();
+
 		handle = undefined;
+
 		await rename(temporaryPath, canonicalTarget);
 	} catch (error) {
 		await handle?.close();
+
 		await rm(temporaryPath, { force: true });
+
 		throw error;
 	}
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+	return error instanceof Error && 'code' in error;
 }

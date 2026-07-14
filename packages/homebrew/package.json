@@ -1,0 +1,10 @@
+{
+	"name": "homebrew",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check": "node --check ./scripts/generate-formula.mjs && node --check ./src/formula.mjs && node --check ./test/formula.test.mjs && node --test ./test/*.test.mjs",
+		"generate": "node ./scripts/generate-formula.mjs",
+		"test": "node --test ./test/*.test.mjs"
+	}
+}

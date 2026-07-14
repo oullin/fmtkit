@@ -4,7 +4,7 @@
 	"scripts": {
 		"build": "./infra/scripts/tasks/build.sh",
 		"lint": "vp run --filter devx --fail-if-no-match lint:check",
-		"test": "vp run --filter formatter --filter vet --filter driver --filter devx --fail-if-no-match test",
+		"test": "vp run --filter formatter --filter vet --filter driver --filter devx --filter homebrew --fail-if-no-match test",
 		"typecheck": "vp run --filter devx --fail-if-no-match typecheck"
 	},
 	"devDependencies": {

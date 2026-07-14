@@ -1,5 +1,5 @@
 name: Build contained runtime
-description: Package, verify, and upload one native contained fmt-all release artifact.
+description: Package, verify, and upload one native contained fmtkit release artifact.
 
 inputs:
     goos:
@@ -44,7 +44,7 @@ runs:
               GOOS: ${{ inputs.goos }}
               GOARCH: ${{ inputs.goarch }}
           run: |
-              binary="storage/dist/fmt-all-${GOOS}-${GOARCH}"
+              binary="storage/dist/fmtkit-${GOOS}-${GOARCH}"
               manifest="packages/runtimex/assets/runtime-${GOOS}-${GOARCH}.tar.gz.manifest.json"
               staging="storage/release-artifact"
 

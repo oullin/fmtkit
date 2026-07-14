@@ -7,21 +7,29 @@
 [![Codecov](https://codecov.io/gh/oullin/fmtkit/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/fmtkit)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Foullin%2Ffmtkit-2496ED?logo=docker&logoColor=white)](https://github.com/oullin/fmtkit/pkgs/container/fmtkit)
 
-`fmtkit` is a rule-driven formatter for Go. It enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass. You can run it as a local CLI or as a shared Docker image; either way the output is the same.
+`fmtkit` is a contained Go, TypeScript, and Vue formatter. Its Go layer enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass. The installed CLI bundles its runtime, so it does not require Docker, Node.js, Go, `oxfmt`, or `oxlint` on the target machine.
 
 ## At a glance
 
 - AST-based spacing rules, then `gofmt` and `goimports`, in one deterministic pipeline.
-- Runs `go vet ./...` automatically when invoked inside a Go module or workspace.
+- The Go-only `fmtkit-go` CLI runs `go vet ./...` automatically inside a Go module or workspace; the contained `fmtkit` CLI disables vet so it needs no host toolchain.
 - Three output modes: `text` for humans, `json` for scripts, `agent` for CI and AI tools.
-- One CLI binary (`fmtkit-go`) or one Docker image with a thin host wrapper.
+- One contained CLI binary (`fmtkit`), plus Go-only and Docker interfaces for contributors and existing integrations.
 - Engine in [`packages/formatter/engine`](packages/formatter/engine) is importable from Go.
 
 ## Install
 
-Two ways to run it. Pick the one that fits your workflow — both produce identical output.
+**With Homebrew** (recommended):
 
-**With Go** (good for local hacking and contributors):
+```bash
+brew tap oullin/fmtkit https://github.com/oullin/fmtkit-homebrew
+brew install oullin/fmtkit/fmtkit
+fmtkit
+```
+
+The Homebrew formula supports macOS on Apple Silicon, Linux x86_64 with GNU libc, and Linux ARM64 with GNU libc. macOS x64 and Linux musl are not supported.
+
+**With Go** (Go-only CLI for local hacking and contributors):
 
 ```bash
 go install github.com/oullin/fmtkit/packages/driver/cmd/fmtkit-go@latest
@@ -29,7 +37,7 @@ fmtkit-go check .
 fmtkit-go format .
 ```
 
-**With Docker** (good for CI and pinning one version across many projects):
+**With Docker** (full formatter for existing CI and image-pinned workflows):
 
 ```bash
 curl -fsSL -o /tmp/fmtkit-host.sh https://raw.githubusercontent.com/oullin/fmtkit/main/infra/scripts/tasks/fmtkit-host.sh
@@ -42,6 +50,22 @@ The Docker wrapper mounts the current directory at `/work` and reuses a shared `
 If `fmtkit-go` is not on your `PATH` after `go install`, add the Go bin directory: `export PATH="$(go env GOPATH)/bin:$PATH"`.
 
 ## Usage
+
+Running `fmtkit` without arguments uses full Go + TS/Vue mode. In a Git checkout it formats only staged, unstaged, renamed, copied, and untracked supported files. A clean checkout is a silent successful no-op. Outside Git, the same command scans the current directory in full.
+
+```bash
+fmtkit                         # changed supported files; full Go + TS/Vue mode
+fmtkit --go                    # changed Go files only
+fmtkit --ts                    # changed TypeScript/Vue files only
+fmtkit ./core ./web            # complete explicit paths, even in a clean checkout
+fmtkit --go ./core/main.go     # complete explicit Go path
+fmtkit --ts ./web/app.ts       # complete explicit TypeScript path
+fmtkit format-all              # force the full pipeline across the current directory
+```
+
+Explicit files and directories are always formatted in full rather than filtered through Git status. Use `--` before a path beginning with `-`. The `go`, `ts`, `check`, `version`, and `help` subcommands remain available for compatibility and focused workflows.
+
+### Go-only CLI
 
 | Command             | What it does                        |
 | ------------------- | ----------------------------------- |
@@ -252,15 +276,15 @@ vp run format:local -- . # run the local formatter pipeline
 vp run format:docker -- . # run the Dockerized formatter pipeline
 vp run install-cli       # install fmtkit-go from the local source tree
 vp run release           # build cross-platform binaries into storage/dist
-vp run runtime:contained # package the host runtime archive for the contained fmt-all
-vp run release:contained # build fmt-all with the embedded runtime archive
+vp run runtime:contained # package the host runtime archive for the contained fmtkit binary
+vp run release:contained # build fmtkit with the embedded runtime archive
 ```
 
 ### Contained binary
 
-The contained `fmt-all` binary is released for macOS on Apple Silicon
+The contained `fmtkit` binary is released for macOS on Apple Silicon
 (`darwin/arm64`), Linux x86_64 with GNU libc (`linux/amd64`), and Linux ARM64
-with GNU libc (`linux/arm64`). It is built from `packages/driver/cmd/fmt-all`. It
+with GNU libc (`linux/arm64`). It is built from `packages/driver/cmd/fmtkit`. It
 embeds a platform runtime archive for the TS/Vue layer, extracts it into
 `~/.cache/go-fmt/runtime`, and runs Go formatting in-process with automatic
 `go vet` disabled so the installed binary does not require Docker, Node, Go,
@@ -275,6 +299,8 @@ vp run release:contained
 
 Contained runtime archives must be packaged on their matching native platform.
 Linux musl targets and macOS x64 are not supported.
+
+Release publishing assumes the public `oullin/fmtkit-homebrew` repository already exists with a writable `main` branch and this repository has a `HOMEBREW_TAP_TOKEN` Actions secret that can push to it. The workflow validates the generated formula on every supported platform before updating the tap; it does not create the repository or token.
 
 ### Docker compatibility Makefile
 

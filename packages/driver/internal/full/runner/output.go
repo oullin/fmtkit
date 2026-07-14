@@ -14,8 +14,9 @@ func writef(writer io.Writer, format string, args ...any) {
 }
 
 func (r Runner) printUsage() {
-	writef(r.stderr, "usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]\n")
-	writef(r.stderr, "  format [paths...]                        run TS/Vue support + lint, then Go formatting\n")
+	writef(r.stderr, "usage: fmtkit [--go|--ts] [--] [paths...]\n")
+	writef(r.stderr, "       fmtkit <format|format-all|go|ts|check|version|help> [args...]\n")
+	writef(r.stderr, "  format [--go|--ts] [--] [paths...]       format changed files, or complete explicit scopes\n")
 	writef(r.stderr, "  format-all                               run the full formatter pipeline against .\n")
 	writef(r.stderr, "  go [check|format|sources|version|help] [args...] run the Go formatter CLI\n")
 	writef(r.stderr, "  ts [paths...]                            run TS/Vue formatting support and oxfmt\n")

@@ -37,12 +37,12 @@ archive="$(runtime_archive_path "$goos" "$goarch")"
 manifest="$archive.manifest.json"
 validate_archive_inputs "$archive" "$manifest" "$goos" "$goarch"
 
-output="$dist_dir_path/fmt-all-${goos}-${goarch}"
-[[ "$(basename "$output")" == "fmt-all-${goos}-${goarch}" ]] || {
+output="$dist_dir_path/fmtkit-${goos}-${goarch}"
+[[ "$(basename "$output")" == "fmtkit-${goos}-${goarch}" ]] || {
 	printf 'contained binary name does not match requested platform: %s\n' "$output" >&2
 	exit 1
 }
-printf 'Building contained fmt-all (%s/%s)...\n' "$goos" "$goarch"
+printf 'Building contained fmtkit (%s/%s)...\n' "$goos" "$goarch"
 CGO_ENABLED="$CGO_ENABLED" GOOS="$goos" GOARCH="$goarch" \
-	go -C "$GO_WORKDIR" build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$output" ./packages/driver/cmd/fmt-all
+	go -C "$GO_WORKDIR" build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$output" ./packages/driver/cmd/fmtkit
 chmod +x "$output"

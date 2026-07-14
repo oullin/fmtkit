@@ -147,7 +147,7 @@ func TestEnsureSourceShimSerializesConcurrentPublication(t *testing.T) {
 		go func() {
 			defer group.Done()
 
-			errs <- ensureSourceShim(root, "/tmp/fmt-all")
+			errs <- ensureSourceShim(root, "/tmp/fmtkit")
 		}()
 	}
 

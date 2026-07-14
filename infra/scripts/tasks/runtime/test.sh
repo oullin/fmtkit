@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091
 set -euo pipefail
 
 task_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -33,6 +34,7 @@ printf '%s\n' "${TEST_LIBC:-gnu}"
 SH
 chmod +x "$node_stub"
 TEST_LIBC=gnu require_gnu_linux "$node_stub"
+# shellcheck disable=SC2016
 assert_fails env TEST_LIBC=musl bash -c 'source "$1"; source "$2"; require_gnu_linux "$3"' bash "$task_dir/runtime/common.sh" "$task_dir/runtime/platform.sh" "$node_stub"
 printf test >"$tmp/input"
 assert_equals "$(portable_sha256 "$tmp/input")" "$(shasum -a 256 "$tmp/input" | awk '{print $1}')  input"
@@ -65,6 +67,14 @@ assert_fails "$verify" --goos ' ' --goarch arm64 --binary /missing --checksum "$
 assert_fails "$verify" --goos darwin --goarch --binary /missing --checksum "$tmp/checksum"
 assert_fails "$verify" --goos darwin --goos darwin --goarch arm64 --binary /missing --checksum "$tmp/checksum"
 assert_fails "$verify" --goos darwin --goarch arm64 --binary /missing --checksum "$tmp/checksum" extra
+
+release="$task_dir/runtime/release.sh"
+grep -Fq "fmtkit-\${goos}-\${goarch}" "$release"
+grep -Fq './packages/driver/cmd/fmtkit' "$release"
+if grep -Fq 'fmt-all-' "$release"; then
+	printf 'contained release still exposes the old binary name\n' >&2
+	exit 1
+fi
 
 manifest_verify="$task_dir/runtime/verify-manifest-platform.sh"
 manifest="$tmp/runtime-linux-amd64.tar.gz.manifest.json"

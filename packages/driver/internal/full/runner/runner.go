@@ -22,9 +22,9 @@ func (r Runner) Run(args []string) int {
 
 	switch request.command {
 	case "format":
-		return r.runFormat(request.args)
+		return r.runFormat(request.args, request.family)
 	case "format-all":
-		return r.runFormat([]string{"."})
+		return r.runFormat(request.args, request.family)
 	case "go":
 		return r.runGo(request.args)
 	case "ts":
@@ -32,7 +32,7 @@ func (r Runner) Run(args []string) int {
 	case "check":
 		return r.runGo(append([]string{"check"}, request.args...))
 	case "version", "--version", "-version":
-		writef(r.stdout, "go-fmt %s\n", r.version)
+		writef(r.stdout, "fmtkit %s\n", r.version)
 
 		return 0
 	case "help", "--help", "-h":

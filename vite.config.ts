@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite-plus';
 
-const workspacePackages = ['--filter formatter', '--filter vet', '--filter driver', '--filter devx', '--fail-if-no-match'].join(' ');
+const workspacePackages = ['--filter formatter', '--filter vet', '--filter driver', '--filter devx', '--filter homebrew', '--fail-if-no-match'].join(' ');
 
 const goPackages = ['--filter formatter', '--filter vet', '--filter driver', '--fail-if-no-match'].join(' ');
 

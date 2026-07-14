@@ -36,6 +36,8 @@ type toolRuntime struct {
 	self   string
 }
 
+type sourceShimPublisher func(temporary, path string) error
+
 func ensureToolRuntime() (toolRuntime, error) {
 	self, err := os.Executable()
 
@@ -684,10 +686,14 @@ func isAppleDoublePath(name string) bool {
 }
 
 func writeSourceShim(path, self string) error {
-	return writeSourceShimWithHook(path, self, nil)
+	return writeSourceShimWithPublisher(path, self, publishSourceShimAtomically)
 }
 
-func writeSourceShimWithHook(path, self string, beforeRename func()) error {
+func publishSourceShimAtomically(temporary, path string) error {
+	return os.Rename(temporary, path)
+}
+
+func writeSourceShimWithPublisher(path, self string, publish sourceShimPublisher) error {
 	if err := ensureSecureDirectory(filepath.Dir(path)); err != nil {
 		return err
 	}
@@ -735,11 +741,7 @@ func writeSourceShimWithHook(path, self string, beforeRename func()) error {
 		return fmt.Errorf("close temporary fmt-sources shim: %w", err)
 	}
 
-	if beforeRename != nil {
-		beforeRename()
-	}
-
-	if err := os.Rename(temporary, path); err != nil {
+	if err := publish(temporary, path); err != nil {
 		return fmt.Errorf("publish fmt-sources shim: %w", err)
 	}
 

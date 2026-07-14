@@ -185,7 +185,9 @@ func untarGzip(root string, content []byte) error {
 		return fmt.Errorf("open bundled runtime: %w", err)
 	}
 
-	defer gzipReader.Close()
+	defer func() {
+		_ = gzipReader.Close()
+	}()
 
 	tarReader := tar.NewReader(gzipReader)
 

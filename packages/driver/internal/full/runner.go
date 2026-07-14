@@ -51,7 +51,7 @@ func (r Runner) Run(args []string) int {
 	case "check":
 		return r.runGo(append([]string{"check"}, rest...))
 	case "version", "--version", "-version":
-		fmt.Fprintf(r.stdout, "go-fmt %s\n", r.version)
+		writef(r.stdout, "go-fmt %s\n", r.version)
 
 		return 0
 	case "help", "--help", "-h":
@@ -59,7 +59,7 @@ func (r Runner) Run(args []string) int {
 
 		return 0
 	default:
-		fmt.Fprintf(r.stderr, "unknown subcommand - {%q}\n\n", mode)
+		writef(r.stderr, "unknown subcommand - {%q}\n\n", mode)
 		r.printUsage()
 
 		return 2
@@ -74,7 +74,7 @@ func (r Runner) runFormat(paths []string) int {
 	tools, err := ensureToolRuntime()
 
 	if err != nil {
-		fmt.Fprintf(r.stderr, "%v\n", err)
+		writef(r.stderr, "%v\n", err)
 
 		return 1
 	}
@@ -114,7 +114,7 @@ func (r Runner) runTS(args []string, streamToStderr bool) int {
 	tools, err := ensureToolRuntime()
 
 	if err != nil {
-		fmt.Fprintf(r.stderr, "%v\n", err)
+		writef(r.stderr, "%v\n", err)
 
 		return 1
 	}
@@ -153,7 +153,7 @@ func (r Runner) runGo(args []string) int {
 	case "sources":
 		return cli.RunSources(args[1:], r.stdout, r.stderr)
 	case "version", "--version", "-version":
-		fmt.Fprintf(r.stdout, "go-fmt %s\n", r.version)
+		writef(r.stdout, "go-fmt %s\n", r.version)
 
 		return 0
 	case "help", "--help", "-h":
@@ -161,7 +161,7 @@ func (r Runner) runGo(args []string) int {
 
 		return 0
 	default:
-		fmt.Fprintf(r.stderr, "unknown go subcommand - {%q}\n\n", args[0])
+		writef(r.stderr, "unknown go subcommand - {%q}\n\n", args[0])
 		r.printGoUsage()
 
 		return 2
@@ -172,7 +172,7 @@ func (r Runner) applyRuntimeForGo() (func(), bool) {
 	tools, err := ensureToolRuntime()
 
 	if err != nil {
-		fmt.Fprintf(r.stderr, "%v\n", err)
+		writef(r.stderr, "%v\n", err)
 
 		return func() {}, false
 	}
@@ -203,7 +203,7 @@ func (r Runner) runTool(label string, bin string, args []string, env []string, s
 			return exitErr.ExitCode()
 		}
 
-		fmt.Fprintf(r.stderr, "%s: %v\n", label, err)
+		writef(r.stderr, "%s: %v\n", label, err)
 
 		return 1
 	}
@@ -212,30 +212,30 @@ func (r Runner) runTool(label string, bin string, args []string, env []string, s
 }
 
 func (r Runner) section(label string) {
-	fmt.Fprintf(r.stderr, "\n==> %s\n", label)
+	writef(r.stderr, "\n==> %s\n", label)
 }
 
 func (r Runner) detail(label string, value string) {
-	fmt.Fprintf(r.stderr, "    %-12s %s\n", label, value)
+	writef(r.stderr, "    %-12s %s\n", label, value)
 }
 
 func (r Runner) failure(label string) {
-	fmt.Fprintf(r.stderr, "\n!! %s\n", label)
+	writef(r.stderr, "\n!! %s\n", label)
+}
+
+func writef(writer io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(writer, format, args...)
 }
 
 func (r Runner) printUsage() {
-	fmt.Fprintln(r.stderr, "usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]")
-	fmt.Fprintln(r.stderr, "  format [paths...]                        run TS/Vue support + lint, then Go formatting")
-	fmt.Fprintln(r.stderr, "  format-all                               run the full formatter pipeline against .")
-	fmt.Fprintln(r.stderr, "  go [check|format|sources|version|help] [args...] run the Go formatter CLI")
-	fmt.Fprintln(r.stderr, "  ts [paths...]                            run TS/Vue formatting support and oxfmt")
-	fmt.Fprintln(r.stderr, "  check|version|help [args...]             run the matching Go formatter CLI command")
+	writef(r.stderr, "usage: fmt-all <format|format-all|go|ts|check|version|help> [args...]\n")
+	writef(r.stderr, "  format [paths...]                        run TS/Vue support + lint, then Go formatting\n")
+	writef(r.stderr, "  format-all                               run the full formatter pipeline against .\n")
+	writef(r.stderr, "  go [check|format|sources|version|help] [args...] run the Go formatter CLI\n")
+	writef(r.stderr, "  ts [paths...]                            run TS/Vue formatting support and oxfmt\n")
+	writef(r.stderr, "  check|version|help [args...]             run the matching Go formatter CLI command\n")
 }
 
 func (r Runner) printGoUsage() {
-	fmt.Fprintln(r.stderr, "go-fmt check [--host-path /absolute/host/path] [paths...]")
-	fmt.Fprintln(r.stderr)
-	fmt.Fprintln(r.stderr, "go-fmt format [--host-path /absolute/host/path] [paths...]")
-	fmt.Fprintln(r.stderr)
-	fmt.Fprintln(r.stderr, "go-fmt sources [--include-declarations] [paths...]")
+	writef(r.stderr, "go-fmt check [--host-path /absolute/host/path] [paths...]\n\ngo-fmt format [--host-path /absolute/host/path] [paths...]\n\ngo-fmt sources [--include-declarations] [paths...]\n")
 }

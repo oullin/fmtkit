@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/oullin/fmtkit/packages/runtimeintegrity"
 )
@@ -77,6 +78,28 @@ func TestEnsureRuntimeCacheRejectsSymlinkedRoot(t *testing.T) {
 	}
 }
 
+func TestEnsureRuntimeCacheRejectsSymlinkedBackupAndLock(t *testing.T) {
+	for _, suffix := range []string{".old", ".lock"} {
+		t.Run(suffix, func(t *testing.T) {
+			base := realTempDir(t)
+			root := filepath.Join(base, "runtime")
+			target := filepath.Join(base, "target")
+
+			if err := os.Mkdir(target, 0o700); err != nil {
+				t.Fatalf("create target: %v", err)
+			}
+
+			if err := os.Symlink(target, root+suffix); err != nil {
+				t.Fatalf("create unsafe state: %v", err)
+			}
+
+			if err := ensureRuntimeCache(root, testRuntimePayload(t), true); err == nil {
+				t.Fatal("expected unsafe runtime state to be rejected")
+			}
+		})
+	}
+}
+
 func TestEnsureRuntimeCacheSerializesConcurrentExtraction(t *testing.T) {
 	root := filepath.Join(realTempDir(t), "runtime")
 	payload := testRuntimePayload(t)
@@ -102,6 +125,98 @@ func TestEnsureRuntimeCacheSerializesConcurrentExtraction(t *testing.T) {
 			t.Fatalf("concurrent extraction: %v", err)
 		}
 	}
+}
+
+func TestEnsureRuntimeCacheReleasesStaleAdvisoryLock(t *testing.T) {
+	root := filepath.Join(realTempDir(t), "runtime")
+	payload := testRuntimePayload(t)
+
+	if err := os.WriteFile(root+".lock", nil, 0o600); err != nil {
+		t.Fatalf("create stale lock file: %v", err)
+	}
+
+	if err := ensureRuntimeCache(root, payload, true); err != nil {
+		t.Fatalf("recover with stale lock file: %v", err)
+	}
+}
+
+func TestEnsureRuntimeCacheWaitsForSlowConcurrentExtraction(t *testing.T) {
+	root := filepath.Join(realTempDir(t), "runtime")
+	payload := testRuntimePayload(t)
+	unlock, err := lockRuntime(root)
+
+	if err != nil {
+		t.Fatalf("acquire runtime lock: %v", err)
+	}
+
+	errs := make(chan error, 1)
+	go func() {
+		errs <- ensureRuntimeCache(root, payload, true)
+	}()
+
+	select {
+	case err := <-errs:
+		t.Fatalf("runtime extraction did not wait for lock: %v", err)
+	case <-time.After(5100 * time.Millisecond):
+	}
+
+	unlock()
+
+	if err := <-errs; err != nil {
+		t.Fatalf("runtime extraction after slow lock: %v", err)
+	}
+}
+
+func TestEnsureRuntimeCacheRecoversInterruptedPublish(t *testing.T) {
+	t.Run("retains current and removes old", func(t *testing.T) {
+		root := filepath.Join(realTempDir(t), "runtime")
+		payload := testRuntimePayload(t)
+
+		if err := ensureRuntimeCache(root, payload, true); err != nil {
+			t.Fatalf("extract runtime: %v", err)
+		}
+
+		if err := os.Rename(root, root+".old"); err != nil {
+			t.Fatalf("move runtime to old: %v", err)
+		}
+
+		if err := ensureRuntimeCache(root, payload, true); err != nil {
+			t.Fatalf("replace runtime: %v", err)
+		}
+
+		if err := os.Mkdir(root+".old", 0o700); err != nil {
+			t.Fatalf("create stale backup: %v", err)
+		}
+
+		if err := ensureRuntimeCache(root, payload, true); err != nil {
+			t.Fatalf("recover stale backup: %v", err)
+		}
+
+		if _, err := os.Lstat(root + ".old"); !os.IsNotExist(err) {
+			t.Fatalf("expected stale backup removal, got %v", err)
+		}
+	})
+
+	t.Run("restores valid old when current is absent", func(t *testing.T) {
+		root := filepath.Join(realTempDir(t), "runtime")
+		payload := testRuntimePayload(t)
+
+		if err := ensureRuntimeCache(root, payload, true); err != nil {
+			t.Fatalf("extract runtime: %v", err)
+		}
+
+		if err := os.Rename(root, root+".old"); err != nil {
+			t.Fatalf("simulate interrupted publish: %v", err)
+		}
+
+		if err := ensureRuntimeCache(root, payload, true); err != nil {
+			t.Fatalf("restore runtime backup: %v", err)
+		}
+
+		if content := readFile(t, filepath.Join(root, "bin", "node")); content != "node" {
+			t.Fatalf("expected restored runtime, got %q", content)
+		}
+	})
 }
 
 func testRuntimePayload(t *testing.T) runtimePayload {

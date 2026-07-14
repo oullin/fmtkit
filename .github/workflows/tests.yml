@@ -197,7 +197,7 @@ jobs:
                   override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
                   fail_ci_if_error: false
 
-    contained_runtime:
+    contained_runtime_darwin_arm64:
         runs-on: macos-14
 
         steps:

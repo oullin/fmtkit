@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/oullin/fmtkit/packages/runtimeintegrity"
 )
@@ -211,12 +210,22 @@ func ensureRuntimeCache(root string, payload runtimePayload, hasPayload bool) er
 
 	defer unlock()
 
-	if !hasPayload {
-		return ensureEmptyRuntimeRoot(root)
+	ready, err := reconcileRuntime(root, payload, hasPayload)
+
+	if err != nil {
+		return err
 	}
 
-	if validRuntimeCache(root, payload) {
+	if ready {
+		if !hasPayload {
+			return ensureEmptyRuntimeRoot(root)
+		}
+
 		return nil
+	}
+
+	if !hasPayload {
+		return ensureEmptyRuntimeRoot(root)
 	}
 
 	stage, err := os.MkdirTemp(filepath.Dir(root), "."+filepath.Base(root)+".tmp-")
@@ -256,6 +265,80 @@ func validRuntimeCache(root string, payload runtimePayload) bool {
 	return true
 }
 
+// reconcileRuntime completes an interrupted atomic publish before deciding
+// whether extraction is necessary. A valid current cache always wins; a valid
+// backup is restored only when the current cache is absent or invalid.
+func reconcileRuntime(root string, payload runtimePayload, hasPayload bool) (bool, error) {
+	currentExists, currentValid, err := runtimeState(root, payload, hasPayload)
+
+	if err != nil {
+		return false, fmt.Errorf("inspect runtime cache: %w", err)
+	}
+
+	backup := root + ".old"
+	backupExists, backupValid, err := runtimeState(backup, payload, hasPayload)
+
+	if err != nil {
+		return false, fmt.Errorf("inspect runtime backup: %w", err)
+	}
+
+	if currentValid {
+		if backupExists {
+			if err := removePrivateRuntime(backup); err != nil {
+				return false, fmt.Errorf("remove stale runtime backup: %w", err)
+			}
+		}
+
+		return true, nil
+	}
+
+	if backupValid {
+		if currentExists {
+			if err := removePrivateRuntime(root); err != nil {
+				return false, fmt.Errorf("remove invalid runtime cache: %w", err)
+			}
+		}
+
+		if err := os.Rename(backup, root); err != nil {
+			return false, fmt.Errorf("restore runtime backup: %w", err)
+		}
+
+		return true, nil
+	}
+
+	if backupExists {
+		if err := removePrivateRuntime(backup); err != nil {
+			return false, fmt.Errorf("remove invalid runtime backup: %w", err)
+		}
+	}
+
+	if currentExists {
+		if err := removePrivateRuntime(root); err != nil {
+			return false, fmt.Errorf("remove invalid runtime cache: %w", err)
+		}
+	}
+
+	return false, nil
+}
+
+func runtimeState(path string, payload runtimePayload, hasPayload bool) (bool, bool, error) {
+	if _, err := os.Lstat(path); os.IsNotExist(err) {
+		return false, false, nil
+	} else if err != nil {
+		return false, false, err
+	}
+
+	if err := validatePrivateRuntimePath(path); err != nil {
+		return true, false, err
+	}
+
+	if !hasPayload {
+		return true, true, nil
+	}
+
+	return true, validRuntimeCache(path, payload), nil
+}
+
 func ensureEmptyRuntimeRoot(root string) error {
 	info, err := os.Lstat(root)
 
@@ -283,6 +366,14 @@ func ensureEmptyRuntimeRoot(root string) error {
 }
 
 func validatePrivateRuntime(root string, manifest runtimeintegrity.Manifest) error {
+	if err := validatePrivateRuntimePath(root); err != nil {
+		return err
+	}
+
+	return runtimeintegrity.ValidateTree(root, manifest, runtimeShimExclusions)
+}
+
+func validatePrivateRuntimePath(root string) error {
 	info, err := os.Lstat(root)
 
 	if err != nil {
@@ -297,9 +388,17 @@ func validatePrivateRuntime(root string, manifest runtimeintegrity.Manifest) err
 		return fmt.Errorf("runtime root permissions are not owner-only")
 	}
 
+	if !ownedByCurrentUser(info) {
+		return fmt.Errorf("runtime root is not owned by the current user")
+	}
+
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("runtime cache contains symlink %s", path)
 		}
 
 		info, err := entry.Info()
@@ -316,6 +415,10 @@ func validatePrivateRuntime(root string, manifest runtimeintegrity.Manifest) err
 			return fmt.Errorf("runtime cache is not owner-only: %s", path)
 		}
 
+		if !ownedByCurrentUser(info) {
+			return fmt.Errorf("runtime cache is not owned by the current user: %s", path)
+		}
+
 		return nil
 	})
 
@@ -323,7 +426,7 @@ func validatePrivateRuntime(root string, manifest runtimeintegrity.Manifest) err
 		return err
 	}
 
-	return runtimeintegrity.ValidateTree(root, manifest, runtimeShimExclusions)
+	return nil
 }
 
 func extractRuntimeArchive(root string, content []byte) error {
@@ -495,13 +598,17 @@ func ensureTrustedBase(path string) error {
 		return fmt.Errorf("GO_FMT_RUNTIME_DIR base permissions are not owner-only")
 	}
 
-	stat, ok := info.Sys().(*syscall.Stat_t)
-
-	if !ok || int(stat.Uid) != os.Getuid() {
+	if !ownedByCurrentUser(info) {
 		return fmt.Errorf("GO_FMT_RUNTIME_DIR base is not owned by the current user")
 	}
 
 	return nil
+}
+
+func ownedByCurrentUser(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+
+	return ok && int(stat.Uid) == os.Getuid()
 }
 
 func ensureSecureDirectory(path string) error {
@@ -535,9 +642,9 @@ func publishRuntime(stage, root string) error {
 		return err
 	}
 
-	if info, err := os.Lstat(root); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return fmt.Errorf("runtime root is not a directory")
+	if _, err := os.Lstat(root); err == nil {
+		if err := validatePrivateRuntimePath(root); err != nil {
+			return fmt.Errorf("validate current runtime before publish: %w", err)
 		}
 
 		if err := os.Rename(root, backup); err != nil {
@@ -549,39 +656,19 @@ func publishRuntime(stage, root string) error {
 		return fmt.Errorf("publish runtime cache: %w", err)
 	}
 
-	if err := os.RemoveAll(backup); err != nil && !os.IsNotExist(err) {
+	if err := removePrivateRuntime(backup); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove stale runtime cache: %w", err)
 	}
 
 	return nil
 }
 
-func lockRuntime(root string) (func(), error) {
-	lock := root + ".lock"
-
-	for range 500 {
-		err := os.Mkdir(lock, 0o700)
-
-		if err == nil {
-			return func() {
-				_ = os.Remove(lock)
-			}, nil
-		}
-
-		if !os.IsExist(err) {
-			return nil, fmt.Errorf("create runtime lock: %w", err)
-		}
-
-		info, statErr := os.Lstat(lock)
-
-		if statErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return nil, fmt.Errorf("runtime lock is unsafe")
-		}
-
-		time.Sleep(10 * time.Millisecond)
+func removePrivateRuntime(path string) error {
+	if err := validatePrivateRuntimePath(path); err != nil {
+		return err
 	}
 
-	return nil, fmt.Errorf("timed out waiting for runtime cache lock")
+	return os.RemoveAll(path)
 }
 
 func isAppleDoublePath(name string) bool {

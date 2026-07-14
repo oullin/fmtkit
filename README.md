@@ -258,7 +258,8 @@ vp run release:contained # build fmt-all with the embedded runtime archive
 
 ### Contained binary
 
-The contained `fmt-all` binary is built from `packages/driver/cmd/fmt-all`. It
+The contained `fmt-all` binary is currently released and tested only for
+macOS on Apple Silicon (`darwin/arm64`). It is built from `packages/driver/cmd/fmt-all`. It
 embeds a platform runtime archive for the TS/Vue layer, extracts it into
 `~/.cache/go-fmt/runtime`, and runs Go formatting in-process with automatic
 `go vet` disabled so the installed binary does not require Docker, Node, Go,
@@ -271,9 +272,8 @@ vp run runtime:contained
 vp run release:contained
 ```
 
-For cross-platform releases, provide one
-`packages/driver/internal/full/assets/runtime-<goos>-<goarch>.tar.gz` per target
-before running `RELEASE_PLATFORMS="darwin/arm64 linux/amd64" vp run release:contained`.
+Additional platforms require a matching runtime archive and explicit CI coverage;
+no Linux or macOS x64 contained binary is currently published.
 
 ### Docker compatibility Makefile
 

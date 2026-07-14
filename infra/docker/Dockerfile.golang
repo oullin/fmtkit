@@ -20,6 +20,7 @@ COPY infra/scripts /src/infra/scripts
 COPY packages/formatter /src/packages/formatter
 COPY packages/vet /src/packages/vet
 COPY packages/driver /src/packages/driver
+COPY packages/runtimepath /src/packages/runtimepath
 
 RUN bash -lc 'source /src/infra/scripts/tasks/env.sh && assert_no_legacy_artifacts'
 

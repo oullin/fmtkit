@@ -38,6 +38,7 @@ func Collect(opts Options) ([]string, []string, error) {
 	files := []string{}
 	warnings := []string{}
 	seen := map[string]struct{}{}
+	runtimeDir := resolveRuntimeDir()
 
 	for _, scope := range scopes {
 		absolute := scope
@@ -63,7 +64,7 @@ func Collect(opts Options) ([]string, []string, error) {
 				return nil, warnings, err
 			}
 
-			entries, err = filesystemFiles(absolute)
+			entries, err = filesystemFiles(absolute, runtimeDir)
 
 			if err != nil {
 				return nil, warnings, err
@@ -83,7 +84,7 @@ func Collect(opts Options) ([]string, []string, error) {
 
 			path = filepath.Clean(path)
 
-			if isRuntimePath(path) {
+			if isRuntimePath(path, runtimeDir) {
 				continue
 			}
 
@@ -135,7 +136,7 @@ func gitFiles(cwd, scope string) ([]string, error) {
 	return entries, nil
 }
 
-func filesystemFiles(scope string) ([]string, error) {
+func filesystemFiles(scope, runtimeDir string) ([]string, error) {
 	info, err := os.Stat(scope)
 
 	if err != nil {
@@ -154,7 +155,7 @@ func filesystemFiles(scope string) ([]string, error) {
 		}
 
 		if entry.IsDir() {
-			if shouldSkipFilesystemDir(path, entry) {
+			if shouldSkipFilesystemDir(path, entry, runtimeDir) {
 				return filepath.SkipDir
 			}
 
@@ -173,10 +174,10 @@ func filesystemFiles(scope string) ([]string, error) {
 	return entries, nil
 }
 
-func shouldSkipFilesystemDir(path string, entry os.DirEntry) bool {
+func shouldSkipFilesystemDir(path string, entry os.DirEntry, runtimeDir string) bool {
 	base := entry.Name()
 
-	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || isRuntimePath(path)
+	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || isRuntimePath(path, runtimeDir)
 }
 
 func canUseFilesystemFallback(err error) bool {
@@ -185,16 +186,24 @@ func canUseFilesystemFallback(err error) bool {
 	return strings.Contains(message, "not a git repository") || strings.Contains(message, "executable file not found")
 }
 
-func isRuntimePath(path string) bool {
+func resolveRuntimeDir() string {
 	runtimeDir := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
 
 	if runtimeDir == "" {
-		return false
+		return ""
 	}
 
 	absRuntime, err := filepath.Abs(runtimeDir)
 
 	if err != nil {
+		return ""
+	}
+
+	return absRuntime
+}
+
+func isRuntimePath(path, runtimeDir string) bool {
+	if runtimeDir == "" {
 		return false
 	}
 
@@ -204,7 +213,7 @@ func isRuntimePath(path string) bool {
 		return false
 	}
 
-	rel, err := filepath.Rel(absRuntime, absPath)
+	rel, err := filepath.Rel(runtimeDir, absPath)
 
 	if err != nil {
 		return false

@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { parseSync } from 'oxc-parser';
+import { extractVueScripts, isJavaScriptOrTypeScript, isNotFoundError, scriptAttribute } from '#devx/pass-utils';
 
 const cwd = process.cwd();
-const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
-const VUE_SCRIPT_LANG_REGEX = /\blang\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i;
 
 type ParseError = {
 	message?: unknown;
@@ -33,10 +33,9 @@ function formatError(file: string, error: ParseError): string {
 }
 
 function scriptExtension(openingTag: string): 'ts' | 'tsx' {
-	const match = openingTag.match(VUE_SCRIPT_LANG_REGEX);
-	const lang = match?.[1] ?? match?.[2] ?? match?.[3] ?? '';
+	const lang = scriptAttribute(openingTag, 'lang') ?? '';
 
-	return lang.toLowerCase() === 'tsx' || lang.toLowerCase() === 'jsx' ? 'tsx' : 'ts';
+	return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
 }
 
 function scriptPrefix(content: string, scriptStart: number): string {
@@ -46,16 +45,13 @@ function scriptPrefix(content: string, scriptStart: number): string {
 function validateVue(file: string, content: string): string[] {
 	const failures: string[] = [];
 
-	VUE_SCRIPT_REGEX.lastIndex = 0;
+	for (const block of extractVueScripts(content)) {
+		if (!isJavaScriptOrTypeScript(block.openTag)) {
+			continue;
+		}
 
-	let match: RegExpExecArray | null;
-
-	while ((match = VUE_SCRIPT_REGEX.exec(content)) !== null) {
-		const openingTag = match[1];
-		const script = match[2];
-		const scriptStart = match.index + openingTag.length;
-		const virtualContent = scriptPrefix(content, scriptStart) + script;
-		const errors = parseErrors(`${file}.script.${scriptExtension(openingTag)}`, virtualContent);
+		const virtualContent = scriptPrefix(content, block.start) + block.content;
+		const errors = parseErrors(`${file}.script.${scriptExtension(block.openTag)}`, virtualContent);
 
 		for (const error of errors) {
 			failures.push(formatError(file, error));
@@ -65,9 +61,9 @@ function validateVue(file: string, content: string): string[] {
 	return failures;
 }
 
-async function validateFile(file: string): Promise<string[]> {
+export async function validateFile(file: string): Promise<string[]> {
 	const content = await readFile(file, 'utf8').catch((err: unknown) => {
-		if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+		if (isNotFoundError(err)) {
 			console.warn(`[validate-syntax] path not found, skipping: ${file}`);
 
 			return null;
@@ -109,7 +105,9 @@ async function main(): Promise<void> {
 	console.log(`[validate-syntax] checked ${files.length} file(s) in ${cwd}`);
 }
 
-main().catch((err: unknown) => {
-	console.error(err);
-	process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	main().catch((err: unknown) => {
+		console.error(err);
+		process.exit(1);
+	});
+}

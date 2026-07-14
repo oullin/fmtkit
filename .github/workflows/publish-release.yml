@@ -21,7 +21,7 @@ permissions:
     packages: write
 
 env:
-    IMAGE_NAME: ghcr.io/oullin/go-fmt
+    IMAGE_NAME: ghcr.io/oullin/fmtkit
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     RELEASE_TAG: ${{ inputs.tag }}
 
@@ -39,7 +39,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Verify release tag and checkout tagged commit
-              run: ./scripts/verify-release-tag.sh
+              run: ./infra/scripts/release/verify-release-tag.sh
               shell: bash
 
             - name: Set up QEMU
@@ -60,7 +60,7 @@ jobs:
               uses: docker/build-push-action@v7
               with:
                   context: .
-                  file: ./docker/Dockerfile.go
+                  file: ./infra/docker/Dockerfile.golang
                   push: true
                   platforms: linux/amd64,linux/arm64
                   tags: |
@@ -68,25 +68,29 @@ jobs:
                       ${{ env.IMAGE_NAME }}:latest-go
                   build-args: |
                       VERSION=${{ env.RELEASE_TAG }}
+                  cache-from: type=gha,scope=go
+                  cache-to: type=gha,mode=max,scope=go
 
             - name: Build and push Node/TS image
               id: build-node-ts
               uses: docker/build-push-action@v7
               with:
                   context: .
-                  file: ./docker/Dockerfile.node-ts
+                  file: ./infra/docker/Dockerfile.node-ts
                   push: true
                   platforms: linux/amd64,linux/arm64
                   tags: |
                       ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
                       ${{ env.IMAGE_NAME }}:latest-node-ts
+                  cache-from: type=gha,scope=node-ts
+                  cache-to: type=gha,mode=max,scope=node-ts
 
             - name: Build and push full image
               id: build-full
               uses: docker/build-push-action@v7
               with:
                   context: .
-                  file: ./docker/Dockerfile.full
+                  file: ./infra/docker/Dockerfile.full
                   push: true
                   platforms: linux/amd64,linux/arm64
                   tags: |
@@ -94,11 +98,13 @@ jobs:
                       ${{ env.IMAGE_NAME }}:latest-full
                   build-args: |
                       VERSION=${{ env.RELEASE_TAG }}
+                  cache-from: type=gha,scope=full
+                  cache-to: type=gha,mode=max,scope=full
 
             - name: Verify published release image
               env:
                   NEW_TAG: ${{ env.RELEASE_TAG }}
-              run: ./scripts/verify-release-image.sh
+              run: ./infra/scripts/release/verify-release-image.sh
               shell: bash
 
             - name: Promote verified full image to compatibility tags

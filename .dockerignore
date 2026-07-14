@@ -15,7 +15,7 @@ Thumbs.db
 
 # Go caches
 # Storage-managed caches and build artifacts
-storage/bin/
+storage/bin*/
 storage/dist/
 storage/dist-test/
 storage/.cache/
@@ -23,10 +23,15 @@ builds
 
 # Node (not needed for Go Docker build)
 node_modules
-tooling/node_modules
-packages/semantic/node_modules
-packages/correctness/node_modules
-packages/orchestrator/node_modules
+infra/tooling/node_modules
+
+# Docs and tests (never needed inside images)
+docs/
+*.md
+**/testdata
+**/*_test.go
+**/__tests__
+**/*.test.ts
 
 # Runtime / generated
 config.yml

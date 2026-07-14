@@ -10,7 +10,7 @@ const script = fileURLToPath(import.meta.resolve('#devx/validate-syntax'));
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-validate-syntax-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-validate-syntax-'));
 
 	try {
 		assert.equal(spawnSync('git', ['init', '-q'], { cwd: dir }).status, 0);

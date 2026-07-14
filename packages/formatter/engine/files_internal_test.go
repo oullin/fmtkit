@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
-	"github.com/oullin/go-fmt/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/formatter/config"
 )
 
 func TestFilterFiles(t *testing.T) {
@@ -69,12 +69,13 @@ func TestIsGoSourceHandlesReadErrorsAsSource(t *testing.T) {
 func TestShouldSkipDirHonorsRootHiddenDirectory(t *testing.T) {
 	cfg := config.Default()
 	root := filepath.Join(t.TempDir(), ".root")
+	runtimeDir := resolveRuntimeDir()
 
-	if shouldSkipDir(root, root, ".root", cfg) {
+	if shouldSkipDir(root, root, ".root", cfg, runtimeDir) {
 		t.Fatal("expected root directory to be walkable even when hidden")
 	}
 
-	if !shouldSkipDir(filepath.Join(root, ".hidden"), root, ".hidden", cfg) {
+	if !shouldSkipDir(filepath.Join(root, ".hidden"), root, ".hidden", cfg, runtimeDir) {
 		t.Fatal("expected nested hidden directory to be skipped")
 	}
 }
@@ -100,6 +101,10 @@ func TestCollectGoFilesSkipsRuntimeDirectory(t *testing.T) {
 }
 
 func TestCollectGoFilesReturnsWalkErrors(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions, so the blocked directory stays readable")
+	}
+
 	root := t.TempDir()
 	blocked := filepath.Join(root, "blocked")
 	testutil.WriteGoFile(t, filepath.Join(blocked, "sample.go"), "package sample\n")

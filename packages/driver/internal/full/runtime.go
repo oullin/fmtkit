@@ -84,7 +84,10 @@ func (r toolRuntime) lintTSBin() string {
 
 func (r toolRuntime) env() []string {
 	env := os.Environ()
-	env = append(env, "GO_FMT_SOURCES_BIN="+filepath.Join(r.binDir, "fmt-sources"))
+	env = append(env,
+		"FMTKIT_SOURCES_BIN="+filepath.Join(r.binDir, "fmt-sources"),
+		"GO_FMT_SOURCES_BIN="+filepath.Join(r.binDir, "fmt-sources"),
+	)
 
 	return env
 }
@@ -310,6 +313,10 @@ func writeSourceShim(path string, self string) error {
 
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		return fmt.Errorf("write fmt-sources shim: %w", err)
+	}
+
+	if err := os.Chmod(path, 0o755); err != nil {
+		return fmt.Errorf("make fmt-sources shim executable: %w", err)
 	}
 
 	return nil

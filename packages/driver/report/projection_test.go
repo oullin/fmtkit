@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/formatter/rules"
-	"github.com/oullin/go-fmt/packages/vet"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/formatter/rules"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 func TestProjectReportNormalizesFormatterAndVetResults(t *testing.T) {

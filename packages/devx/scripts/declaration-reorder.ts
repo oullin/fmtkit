@@ -1,5 +1,5 @@
-import { parseSync } from 'oxc-parser';
 import { collectStatementLists, getEnd, getStart, visit } from '#devx/ast';
+import { isConstDeclaration, lineIndent, lineStart, parseCleanly } from '#devx/pass-utils';
 import type { Edit, Node } from '#devx/types';
 
 function isMultiline(source: string, node: Node): boolean {
@@ -7,21 +7,6 @@ function isMultiline(source: string, node: Node): boolean {
 	const end = getEnd(node);
 
 	return start >= 0 && end >= 0 && source.slice(start, end).includes('\n');
-}
-
-function isConstDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'const';
-}
-
-function lineStart(source: string, pos: number): number {
-	return source.lastIndexOf('\n', pos - 1) + 1;
-}
-
-function lineIndent(source: string, pos: number): string {
-	const start = lineStart(source, pos);
-	const match = source.slice(start, pos).match(/^[ \t]*/);
-
-	return match?.[0] ?? '';
 }
 
 function nodeSource(source: string, node: Node): string {
@@ -260,7 +245,12 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 }
 
 export function computeDeclarationReorderEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseSync(virtualName, content) as unknown as { program: Node };
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
 	const lists = collectStatementLists(parsed.program);
 	const edits: Edit[] = [];
 

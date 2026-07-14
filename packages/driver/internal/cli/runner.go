@@ -6,12 +6,12 @@ import (
 	"os"
 	"strings"
 
-	driverconfig "github.com/oullin/go-fmt/packages/driver/config"
-	driverreport "github.com/oullin/go-fmt/packages/driver/report"
-	"github.com/oullin/go-fmt/packages/formatter"
-	formatterconfig "github.com/oullin/go-fmt/packages/formatter/config"
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/vet"
+	driverconfig "github.com/oullin/fmtkit/packages/driver/config"
+	driverreport "github.com/oullin/fmtkit/packages/driver/report"
+	"github.com/oullin/fmtkit/packages/formatter"
+	formatterconfig "github.com/oullin/fmtkit/packages/formatter/config"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 type Runner struct {

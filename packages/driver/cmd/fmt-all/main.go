@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/oullin/go-fmt/packages/driver/internal/full"
+	"github.com/oullin/fmtkit/packages/driver/internal/full"
 )
 
 var version = "dev"

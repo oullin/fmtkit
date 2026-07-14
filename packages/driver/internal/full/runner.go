@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/oullin/go-fmt/packages/driver/internal/cli"
+	"github.com/oullin/fmtkit/packages/driver/internal/cli"
 )
 
 type Runner struct {

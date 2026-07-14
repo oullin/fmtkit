@@ -16,7 +16,7 @@ function run(command: string, args: string[], cwd: string): void {
 }
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-blank-lines-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-blank-lines-'));
 
 	try {
 		run('git', ['init', '-q'], dir);

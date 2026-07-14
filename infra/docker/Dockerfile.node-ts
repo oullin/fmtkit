@@ -1,0 +1,38 @@
+FROM --platform=$BUILDPLATFORM golang:1.26.4-bookworm AS source-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+COPY go.mod go.sum /src/
+RUN --mount=type=cache,target=/go/pkg/mod \
+	go mod download
+
+COPY packages/driver /src/packages/driver
+RUN --mount=type=cache,target=/root/.cache/go-build \
+	--mount=type=cache,target=/go/pkg/mod \
+	CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+	go build -trimpath -ldflags="-s -w" -o /out/fmtkit-sources ./packages/driver/cmd/fmtkit-sources
+
+FROM node:25.8.2-alpine
+
+RUN apk add --no-cache bash git
+
+WORKDIR /opt/fmtkit/support
+
+COPY packages/devx/package.json /opt/fmtkit/support/package.json
+RUN --mount=type=cache,target=/root/.npm \
+	node -e 'const p = require("./package.json"); const deps = ["oxc-parser", "oxfmt", "tsx"]; console.log(deps.map((name) => `${name}@${p.devDependencies[name]}`).join(" "));' \
+	| xargs npm install --no-save
+
+COPY packages/devx/scripts/*.ts /opt/fmtkit/support/
+COPY packages/devx/scripts/package.json /opt/fmtkit/support/package.json
+COPY .oxfmtrc.json /opt/fmtkit/support/.oxfmtrc.json
+COPY --from=source-builder /out/fmtkit-sources /usr/local/bin/fmtkit-sources
+COPY infra/bin/fmtkit-ts /usr/local/bin/fmtkit-ts
+COPY infra/bin/fmtkit-ts-files /usr/local/bin/fmtkit-ts-files
+RUN chmod +x /usr/local/bin/fmtkit-ts /usr/local/bin/fmtkit-ts-files
+
+WORKDIR /work
+
+ENTRYPOINT ["/usr/local/bin/fmtkit-ts"]

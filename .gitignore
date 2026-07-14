@@ -1,5 +1,5 @@
 /fmt
-/storage/bin/
+/storage/bin*/
 /storage/dist/
 /storage/dist-test/
 /storage/.cache/
@@ -11,8 +11,7 @@
 *.test
 *.out
 node_modules/
-tooling/node_modules/
-semantic/node_modules/
+infra/tooling/node_modules/
 
 # IDE
 .idea/

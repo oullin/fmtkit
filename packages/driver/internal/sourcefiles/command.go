@@ -26,7 +26,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		cwd, err = os.Getwd()
 
 		if err != nil {
-			fmt.Fprintf(stderr, "resolve cwd: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "resolve cwd: %v\n", err)
 
 			return 1
 		}
@@ -39,17 +39,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	})
 
 	for _, warning := range warnings {
-		fmt.Fprintf(stderr, "[sources] %s\n", warning)
+		_, _ = fmt.Fprintf(stderr, "[sources] %s\n", warning)
 	}
 
 	if err != nil {
-		fmt.Fprintf(stderr, "[sources] %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "[sources] %v\n", err)
 
 		return 1
 	}
 
 	for _, file := range files {
-		fmt.Fprintf(stdout, "%s%c", file, 0)
+		_, _ = fmt.Fprintf(stdout, "%s%c", file, 0)
 	}
 
 	return 0

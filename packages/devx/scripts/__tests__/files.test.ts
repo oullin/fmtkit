@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { dirExists, listSourceFiles, processFile } from '#devx/files';
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'go-fmt-devx-files-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-files-'));
 
 	try {
 		await fn(dir);
@@ -49,6 +49,24 @@ test('processFile reports check changes without writing TypeScript files', async
 		assert.equal(await processFile(file, true), true);
 
 		assert.equal(await readFile(file, 'utf8'), original);
+	});
+});
+
+test('processFile leaves non-JS/TS Vue script blocks untouched', async () => {
+	await withTempDir(async (dir) => {
+		const file = join(dir, 'component.vue');
+		const yamlBlock = ['<script lang="yaml">', 'items:', '  - if (value) console.log(value)', '</script>'].join('\n');
+		const tsBlock = ['<script setup lang="ts">', 'const value = 1;', 'if (value) console.log(value);', '</script>'].join('\n');
+
+		await writeFile(file, `${yamlBlock}\n${tsBlock}\n`);
+
+		assert.equal(await processFile(file, false), true);
+
+		const updated = await readFile(file, 'utf8');
+
+		assert.ok(updated.startsWith(yamlBlock), 'yaml script block must not be reformatted');
+
+		assert.match(updated, /if \(value\) \{\n\tconsole\.log\(value\);\n\}/);
 	});
 });
 

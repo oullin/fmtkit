@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/go-fmt/packages/driver/testutil"
+	"github.com/oullin/fmtkit/packages/driver/testutil"
 )
 
 func TestRunnerFormatRunsFullPipeline(t *testing.T) {
@@ -111,6 +111,32 @@ func TestRunnerGoPassthroughUsesInProcessGoCLI(t *testing.T) {
 
 	if stderr.String() != "" {
 		t.Fatalf("unexpected stderr: %q", stderr.String())
+	}
+}
+
+func TestWriteSourceShimMakesExistingFileExecutable(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fmt-sources")
+
+	if err := os.WriteFile(path, []byte("stale\n"), 0o600); err != nil {
+		t.Fatalf("write existing shim: %v", err)
+	}
+
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatalf("restrict existing shim: %v", err)
+	}
+
+	if err := writeSourceShim(path, "/tmp/fmt-all"); err != nil {
+		t.Fatalf("write source shim: %v", err)
+	}
+
+	info, err := os.Stat(path)
+
+	if err != nil {
+		t.Fatalf("stat source shim: %v", err)
+	}
+
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("expected executable shim mode 0755, got %04o", info.Mode().Perm())
 	}
 }
 

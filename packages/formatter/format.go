@@ -1,11 +1,11 @@
 package formatter
 
 import (
-	"github.com/oullin/go-fmt/packages/formatter/config"
-	"github.com/oullin/go-fmt/packages/formatter/engine"
-	"github.com/oullin/go-fmt/packages/formatter/internal/step"
-	"github.com/oullin/go-fmt/packages/formatter/rules"
-	"github.com/oullin/go-fmt/packages/formatter/rules/spacing"
+	"github.com/oullin/fmtkit/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/formatter/engine"
+	"github.com/oullin/fmtkit/packages/formatter/internal/step"
+	"github.com/oullin/fmtkit/packages/formatter/rules"
+	"github.com/oullin/fmtkit/packages/formatter/rules/spacing"
 )
 
 func buildRules(cfg config.Config) []rules.Rule {

@@ -20,11 +20,11 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 	fs := flag.NewFlagSet(mode.String(), flag.ContinueOnError)
 	fs.SetOutput(p.stderr)
 
-	configPath := fs.String("config", "", "Path to go-fmt YAML config")
+	configPath := fs.String("config", "", "Path to fmtkit YAML config")
 	reportRoot := fs.String("cwd", "", "Path used for config discovery and report-relative file paths")
 	outputFormat := fs.String("format", "text", "Output format: text, json, agent")
 	hostPath := fs.String("host-path", "", "Absolute host path under HOST_PROJECT_PATH to check or format")
-	jobs := fs.Int("jobs", envJobs(), "Max files processed in parallel (0 = NumCPU; also reads GO_FMT_JOBS)")
+	jobs := fs.Int("jobs", envJobs(), "Max files processed in parallel (0 = NumCPU; also reads FMTKIT_JOBS)")
 	vet := fs.Bool("vet", true, "Run automatic go vet checks")
 
 	if err := fs.Parse(args); err != nil {
@@ -52,12 +52,12 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 	}, nil
 }
 
-// envJobs reads GO_FMT_JOBS as the default for the --jobs flag.
+// envJobs reads FMTKIT_JOBS as the default for the --jobs flag.
 // Returns -1 when the env var is unset so the runner can distinguish
 // "unset" from an explicit 0 (which means "use NumCPU").
 // Invalid values fall back to -1 as well.
 func envJobs() int {
-	val, ok := os.LookupEnv("GO_FMT_JOBS")
+	val, ok := os.LookupEnv("FMTKIT_JOBS")
 
 	if !ok {
 		return -1

@@ -92,8 +92,5 @@ func toFormatterAgentReport(report projectedFormatterReport) formatterAgentRepor
 }
 
 func toVetAgentReport(report projectedVetReport) vetAgentReport {
-	return vetAgentReport{
-		Status: report.Status,
-		Errors: report.Errors,
-	}
+	return vetAgentReport(report)
 }

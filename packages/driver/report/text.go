@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	formatterengine "github.com/oullin/go-fmt/packages/formatter/engine"
+	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
 )
 
 // RenderText writes the human-readable text report representation.
@@ -96,7 +96,9 @@ func renderFormatterText(w io.Writer, cwd, mode string, report formatterengine.R
 			}
 		}
 
-		fmt.Fprintln(w)
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
 	}
 
 	for _, result := range report.Errors {

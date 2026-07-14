@@ -1,6 +1,6 @@
 name: Cleanup Old Container Images
 
-# Prunes stale go-fmt container versions from GHCR so old release tags do not
+# Prunes stale fmtkit container versions from GHCR so old release tags do not
 # accumulate forever. Protects every `latest*` tag and the 2 most recent
 # versions; only deletes versions older than the cut-off beyond those.
 #
@@ -30,12 +30,12 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - name: Prune old go-fmt image versions
+            - name: Prune old fmtkit image versions
               uses: snok/container-retention-policy@v3.1.0
               with:
                   account: oullin # change to "user" if oullin is a personal account
                   token: ${{ secrets.GHCR_CLEANUP_TOKEN }}
-                  image-names: go-fmt
+                  image-names: fmtkit
                   image-tags: '!latest*' # never delete latest, latest-go, latest-node-ts, latest-full
                   tag-selection: both
                   cut-off: 12w

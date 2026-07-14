@@ -1,20 +1,20 @@
-# go-fmt
+# fmtkit
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/oullin/go-fmt/packages/driver.svg)](https://pkg.go.dev/github.com/oullin/go-fmt/packages/driver)
-[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
-[![Tests](https://github.com/oullin/go-fmt/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/go-fmt/actions/workflows/tests.yml)
-[![Release](https://github.com/oullin/go-fmt/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/go-fmt/actions/workflows/release.yml)
-[![Codecov](https://codecov.io/gh/oullin/go-fmt/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/go-fmt)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Foullin%2Fgo--fmt-2496ED?logo=docker&logoColor=white)](https://github.com/oullin/go-fmt/pkgs/container/go-fmt)
+[![Go Reference](https://pkg.go.dev/badge/github.com/oullin/fmtkit/packages/driver.svg)](https://pkg.go.dev/github.com/oullin/fmtkit/packages/driver)
+[![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
+[![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
+[![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
+[![Codecov](https://codecov.io/gh/oullin/fmtkit/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/fmtkit)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Foullin%2Ffmtkit-2496ED?logo=docker&logoColor=white)](https://github.com/oullin/fmtkit/pkgs/container/fmtkit)
 
-`go-fmt` is a rule-driven formatter for Go. It enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass. You can run it as a local CLI or as a shared Docker image; either way the output is the same.
+`fmtkit` is a rule-driven formatter for Go. It enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass. You can run it as a local CLI or as a shared Docker image; either way the output is the same.
 
 ## At a glance
 
 - AST-based spacing rules, then `gofmt` and `goimports`, in one deterministic pipeline.
 - Runs `go vet ./...` automatically when invoked inside a Go module or workspace.
 - Three output modes: `text` for humans, `json` for scripts, `agent` for CI and AI tools.
-- One CLI binary (`fmt-go`) or one Docker image with a thin host wrapper.
+- One CLI binary (`fmtkit-go`) or one Docker image with a thin host wrapper.
 - Engine in [`packages/formatter/engine`](packages/formatter/engine) is importable from Go.
 
 ## Install
@@ -24,22 +24,22 @@ Two ways to run it. Pick the one that fits your workflow — both produce identi
 **With Go** (good for local hacking and contributors):
 
 ```bash
-go install github.com/oullin/go-fmt/packages/driver/cmd/fmt-go@latest
-fmt-go check .
-fmt-go format .
+go install github.com/oullin/fmtkit/packages/driver/cmd/fmtkit-go@latest
+fmtkit-go check .
+fmtkit-go format .
 ```
 
 **With Docker** (good for CI and pinning one version across many projects):
 
 ```bash
-curl -fsSL -o /tmp/go-fmt-host.sh https://raw.githubusercontent.com/oullin/go-fmt/main/scripts/go-fmt-host.sh
-sudo install -m 0755 /tmp/go-fmt-host.sh /usr/local/bin/go-fmt
-go-fmt format .
+curl -fsSL -o /tmp/fmtkit-host.sh https://raw.githubusercontent.com/oullin/fmtkit/main/infra/scripts/tasks/fmtkit-host.sh
+sudo install -m 0755 /tmp/fmtkit-host.sh /usr/local/bin/fmtkit
+fmtkit format .
 ```
 
-The Docker wrapper mounts the current directory at `/work` and reuses a shared `go-fmt-cache` volume across projects, so you do not need a per-project Dockerfile or version pin. Pin a specific release for a single run with `GO_FMT_IMAGE=ghcr.io/oullin/go-fmt:v0.0.18 go-fmt …`, or swap in a flavour tag (`latest-go`, `latest-node-ts`, `latest-full`) when you only need one formatter layer.
+The Docker wrapper mounts the current directory at `/work` and reuses a shared `fmtkit-cache` volume across projects, so you do not need a per-project Dockerfile or version pin. Pin a specific release for a single run with `FMTKIT_IMAGE=ghcr.io/oullin/fmtkit:v0.0.18 fmtkit …`, or swap in a flavour tag (`latest-go`, `latest-node-ts`, `latest-full`) when you only need one formatter layer.
 
-If `fmt-go` is not on your `PATH` after `go install`, add the Go bin directory: `export PATH="$(go env GOPATH)/bin:$PATH"`.
+If `fmtkit-go` is not on your `PATH` after `go install`, add the Go bin directory: `export PATH="$(go env GOPATH)/bin:$PATH"`.
 
 ## Usage
 
@@ -55,22 +55,22 @@ Both default to `.` when no paths are given. Both run `go vet ./...` automatical
 | `--config`    | auto    | Path to a `config.yml`. Auto-detected if omitted.                        |
 | `--cwd`       | `.`     | Base path for config discovery and relative output paths.                |
 | `--format`    | `text`  | Output mode: `text`, `json`, or `agent`.                                 |
-| `--jobs`      | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `GO_FMT_JOBS`. |
+| `--jobs`      | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `FMTKIT_JOBS`. |
 | `--host-path` | off     | Absolute host path under `HOST_PROJECT_PATH` (Docker host-mount flow).   |
 
 A handful of common invocations:
 
 ```bash
-fmt-go check .
-fmt-go format ./core ./demo/api
-fmt-go check --format json .
-fmt-go check --format agent .
-fmt-go check ./packages/formatter/rules/spacing/spacing.go
+fmtkit-go check .
+fmtkit-go format ./core ./demo/api
+fmtkit-go check --format json .
+fmtkit-go check --format agent .
+fmtkit-go check ./packages/formatter/rules/spacing/spacing.go
 ```
 
 ## Configuration
 
-`go-fmt` looks for `config.yml` in the working directory; if none is found, the defaults below apply. Point at a specific file with `--config`.
+`fmtkit` looks for `config.yml` in the working directory; if none is found, the defaults below apply. Point at a specific file with `--config`.
 
 ```yaml
 rules:
@@ -113,7 +113,7 @@ concurrency: 0
 
 The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources, then applies project-specific syntax passes for blank lines and fluent builder chains. The images ship a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
 
-A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `GO_FMT_OXFMTRC` environment variable, matching the other `GO_FMT_*` knobs.
+A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `FMTKIT_OXFMTRC` environment variable, matching the other `FMTKIT_*` knobs.
 
 ## What it formats
 
@@ -182,14 +182,14 @@ When given directories, the engine walks recursively for `.go` files and always 
 
 ## Docker images
 
-Published to `ghcr.io/oullin/go-fmt` for `linux/amd64` and `linux/arm64`.
+Published to `ghcr.io/oullin/fmtkit` for `linux/amd64` and `linux/arm64`.
 
-| Tag                               | Contents                            | Entrypoint |
-| --------------------------------- | ----------------------------------- | ---------- |
-| `latest`, `<tag>`                 | Full Go + TS/Vue formatter (alias). | `fmt-all`  |
-| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter.         | `fmt-all`  |
-| `latest-go`, `<tag>-go`           | Go formatter CLI only.              | `fmt-go`   |
-| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only.              | `fmt-ts`   |
+| Tag                               | Contents                            | Entrypoint  |
+| --------------------------------- | ----------------------------------- | ----------- |
+| `latest`, `<tag>`                 | Full Go + TS/Vue formatter (alias). | `fmtkit`    |
+| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter.         | `fmtkit`    |
+| `latest-go`, `<tag>-go`           | Go formatter CLI only.              | `fmtkit-go` |
+| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only.              | `fmtkit-ts` |
 
 The Go-containing images bundle a trimmed Go SDK (Go's own test suite, API data,
 std-library test fixtures, and unused tool binaries are stripped) because both
@@ -198,8 +198,8 @@ is ever absent, `go vet` is skipped gracefully rather than failing.
 
 ### Docker maintenance
 
-Reclaim space taken by go-fmt's own Docker artifacts (local `*:local` images,
-fingerprinted build images, and the `go-fmt-cache` volume) without touching
+Reclaim space taken by fmtkit's own Docker artifacts (local `*:local` images,
+fingerprinted build images, and the `fmtkit-cache` volume) without touching
 unrelated Docker state:
 
 ```bash
@@ -217,8 +217,8 @@ pruned per project. Cap it so it can't grow unbounded by adding this to
 { "builder": { "gc": { "enabled": true, "defaultKeepStorage": "20GB" } } }
 ```
 
-go-fmt's own run scripts already use `docker run --rm`, so normal usage leaves no
-stopped containers behind. Old `ghcr.io/oullin/go-fmt` tags on the registry are
+fmtkit's own run scripts already use `docker run --rm`, so normal usage leaves no
+stopped containers behind. Old `ghcr.io/oullin/fmtkit` tags on the registry are
 pruned automatically by the `Cleanup Old Container Images` workflow.
 
 ## Exit codes
@@ -232,7 +232,7 @@ pruned automatically by the `Cleanup Old Container Images` workflow.
 
 ## Development
 
-You will need Go 1.26+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
+You will need Go 1.26.4+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
 
 ```bash
 curl -fsSL https://vite.plus -o install-vp.sh
@@ -243,14 +243,14 @@ vp install
 Use Vite+ tasks for day-to-day development:
 
 ```bash
-vp run build             # build the local fmt-go binary into storage/bin
+vp run build             # build the local fmtkit-go binary into storage/bin
 vp run check             # run package checks across the workspace
 vp run test              # run all package tests
 vp run test-race         # tests with the race detector (forces CGO_ENABLED=1)
-vp run vet               # run go vet across the Go workspace packages
+vp run vet               # run go vet across the Go module packages
 vp run format:local -- . # run the local formatter pipeline
 vp run format:docker -- . # run the Dockerized formatter pipeline
-vp run install-cli       # install fmt-go from the local source tree
+vp run install-cli       # install fmtkit-go from the local source tree
 vp run release           # build cross-platform binaries into storage/dist
 vp run runtime:contained # package the host runtime archive for the contained fmt-all
 vp run release:contained # build fmt-all with the embedded runtime archive
@@ -283,7 +283,7 @@ Docker compatibility shim for the existing Docker-first workflow:
 ```bash
 make format       # Dockerized formatter against ARGS (default ".")
 make format-all   # Dockerized formatter against the whole repository
-make check        # Dockerized go-fmt check against ARGS (default ".")
+make check        # Dockerized fmtkit check against ARGS (default ".")
 make image-go     # build the local Go-only formatter image
 make image-node-ts
 make image-full
@@ -291,7 +291,7 @@ make docker-clean
 ```
 
 External consumers do not need this Makefile. They can keep using
-`scripts/go-fmt-host.sh` or the published `ghcr.io/oullin/go-fmt` tags
+`infra/scripts/tasks/fmtkit-host.sh` or the published `ghcr.io/oullin/fmtkit` tags
 (`latest`, `latest-go`, `latest-node-ts`, and `latest-full`).
 
 Package layout:

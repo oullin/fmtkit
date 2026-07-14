@@ -1,7 +1,6 @@
-import { parseSync } from 'oxc-parser';
 import { collectStatementLists, getEnd, getStart } from '#devx/ast';
+import { parseCleanly } from '#devx/pass-utils';
 import { needsBlankLine } from '#devx/rules';
-import type { Node } from '#devx/types';
 
 function countNewlines(source: string, from: number, to: number): number {
 	let count = 0;
@@ -15,8 +14,13 @@ function countNewlines(source: string, from: number, to: number): number {
 	return count;
 }
 
-export function computeInsertPositions(content: string, virtualName: string, baseOffset: number): number[] {
-	const parsed = parseSync(virtualName, content) as unknown as { program: Node };
+export function computeInsertPositions(content: string, virtualName: string): number[] {
+	const parsed = parseCleanly(virtualName, content);
+
+	if (!parsed) {
+		return [];
+	}
+
 	const lists = collectStatementLists(parsed.program);
 	const positions: number[] = [];
 
@@ -46,7 +50,7 @@ export function computeInsertPositions(content: string, virtualName: string, bas
 				continue;
 			}
 
-			positions.push(lineStart + 1 + baseOffset);
+			positions.push(lineStart + 1);
 		}
 	}
 

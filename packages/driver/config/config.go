@@ -1,8 +1,8 @@
 package config
 
 import (
-	formatterconfig "github.com/oullin/go-fmt/packages/formatter/config"
-	"github.com/oullin/go-fmt/packages/vet"
+	formatterconfig "github.com/oullin/fmtkit/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/vet"
 )
 
 // Toggle enables or disables a config section.

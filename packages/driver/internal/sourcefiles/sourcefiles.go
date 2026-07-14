@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/oullin/fmtkit/packages/runtimepath"
 )
 
 type Options struct {
@@ -38,7 +40,7 @@ func Collect(opts Options) ([]string, []string, error) {
 	files := []string{}
 	warnings := []string{}
 	seen := map[string]struct{}{}
-	runtimeDir := resolveRuntimeDir()
+	runtimeDir := runtimepath.Resolve()
 
 	for _, scope := range scopes {
 		absolute := scope
@@ -84,7 +86,7 @@ func Collect(opts Options) ([]string, []string, error) {
 
 			path = filepath.Clean(path)
 
-			if isRuntimePath(path, runtimeDir) {
+			if runtimepath.Contains(runtimeDir, path) {
 				continue
 			}
 
@@ -177,49 +179,13 @@ func filesystemFiles(scope, runtimeDir string) ([]string, error) {
 func shouldSkipFilesystemDir(path string, entry os.DirEntry, runtimeDir string) bool {
 	base := entry.Name()
 
-	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || isRuntimePath(path, runtimeDir)
+	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || runtimepath.Contains(runtimeDir, path)
 }
 
 func canUseFilesystemFallback(err error) bool {
 	message := err.Error()
 
 	return strings.Contains(message, "not a git repository") || strings.Contains(message, "executable file not found")
-}
-
-func resolveRuntimeDir() string {
-	runtimeDir := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
-
-	if runtimeDir == "" {
-		return ""
-	}
-
-	absRuntime, err := filepath.Abs(runtimeDir)
-
-	if err != nil {
-		return ""
-	}
-
-	return absRuntime
-}
-
-func isRuntimePath(path, runtimeDir string) bool {
-	if runtimeDir == "" {
-		return false
-	}
-
-	absPath, err := filepath.Abs(path)
-
-	if err != nil {
-		return false
-	}
-
-	rel, err := filepath.Rel(runtimeDir, absPath)
-
-	if err != nil {
-		return false
-	}
-
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func isTargetFile(path string, includeDeclarations bool) bool {

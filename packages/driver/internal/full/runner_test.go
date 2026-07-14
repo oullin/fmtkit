@@ -12,7 +12,7 @@ import (
 
 func TestRunnerFormatRunsFullPipeline(t *testing.T) {
 	workdir := t.TempDir()
-	runtimeDir := t.TempDir()
+	runtimeDir := realTempDir(t)
 	logPath := filepath.Join(t.TempDir(), "invocations.log")
 	formatBin := writeStubTool(t, "fmt-ts", logPath, 0, "[blank-lines] processed 1 file(s) in /work, 0 changed\n")
 	lintBin := writeStubTool(t, "fmt-lint", logPath, 0, "Found 0 warnings and 0 errors.\n")
@@ -52,7 +52,7 @@ func run() {
 		t.Fatalf("expected Go report on stdout, got:\n%s", stdout.String())
 	}
 
-	shim := readFile(t, filepath.Join(runtimeDir, "bin", "fmt-sources"))
+	shim := readFile(t, filepath.Join(runtimeCacheRoot(t), "bin", "fmt-sources"))
 
 	if !strings.Contains(shim, " go sources ") {
 		t.Fatalf("expected fmt-sources shim to call go sources, got:\n%s", shim)
@@ -67,7 +67,7 @@ func TestRunnerFormatStopsOnFailingTool(t *testing.T) {
 
 	t.Setenv("FORMAT_TS_BIN", formatBin)
 	t.Setenv("FORMAT_LINT_BIN", lintBin)
-	t.Setenv("GO_FMT_RUNTIME_DIR", t.TempDir())
+	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
 	chdir(t, workdir)
 
 	var stdout strings.Builder
@@ -114,8 +114,35 @@ func TestRunnerGoPassthroughUsesInProcessGoCLI(t *testing.T) {
 	}
 }
 
+func TestRunnerGoFormatRunsVetWhenEnabled(t *testing.T) {
+	workdir := realTempDir(t)
+
+	if err := os.WriteFile(filepath.Join(workdir, "go.mod"), []byte("module example.com/vetcheck\n\ngo 1.26.4\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
+	testutil.WriteGoFile(t, filepath.Join(workdir, "main.go"), `package vetcheck
+
+import "fmt"
+
+func broken() {
+	fmt.Printf("%d", "not an integer")
+}
+`)
+	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
+	chdir(t, workdir)
+
+	var stdout strings.Builder
+
+	var stderr strings.Builder
+
+	if exitCode := NewRunner(&stdout, &stderr, "test").Run([]string{"go", "format", "."}); exitCode == 0 {
+		t.Fatalf("expected vet-enabled go format to fail\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+	}
+}
+
 func TestWriteSourceShimMakesExistingFileExecutable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fmt-sources")
+	path := filepath.Join(realTempDir(t), "fmt-sources")
 
 	if err := os.WriteFile(path, []byte("stale\n"), 0o600); err != nil {
 		t.Fatalf("write existing shim: %v", err)
@@ -135,8 +162,8 @@ func TestWriteSourceShimMakesExistingFileExecutable(t *testing.T) {
 		t.Fatalf("stat source shim: %v", err)
 	}
 
-	if info.Mode().Perm() != 0o755 {
-		t.Fatalf("expected executable shim mode 0755, got %04o", info.Mode().Perm())
+	if info.Mode().Perm() != 0o700 {
+		t.Fatalf("expected executable shim mode 0700, got %04o", info.Mode().Perm())
 	}
 }
 
@@ -184,4 +211,32 @@ func chdir(t *testing.T, path string) {
 	t.Cleanup(func() {
 		_ = os.Chdir(oldwd)
 	})
+}
+
+func realTempDir(t *testing.T) string {
+	t.Helper()
+
+	path, err := filepath.EvalSymlinks(t.TempDir())
+
+	if err != nil {
+		t.Fatalf("resolve temp dir: %v", err)
+	}
+
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatalf("secure temp dir: %v", err)
+	}
+
+	return path
+}
+
+func runtimeCacheRoot(t *testing.T) string {
+	t.Helper()
+
+	root, err := runtimeRoot(runtimePayload{}, false)
+
+	if err != nil {
+		t.Fatalf("resolve runtime cache root: %v", err)
+	}
+
+	return root
 }

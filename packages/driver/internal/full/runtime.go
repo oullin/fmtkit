@@ -4,21 +4,30 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"crypto/sha256"
 	"embed"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
+	"time"
+
+	"github.com/oullin/fmtkit/packages/runtimeintegrity"
 )
 
-const runtimeVersion = "v1"
+const runtimeVersion = "v2"
+
+var runtimeShimExclusions = map[string]struct{}{"bin/fmt-sources": {}}
 
 //go:embed assets/*
 var runtimeAssets embed.FS
+
+type runtimePayload struct {
+	archive  []byte
+	manifest runtimeintegrity.Manifest
+}
 
 type toolRuntime struct {
 	binDir string
@@ -33,37 +42,61 @@ func ensureToolRuntime() (toolRuntime, error) {
 		return toolRuntime{}, fmt.Errorf("resolve executable: %w", err)
 	}
 
-	root := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
+	payload, ok, err := bundledRuntimePayload()
 
-	if root == "" {
-		cacheRoot, err := os.UserCacheDir()
+	if err != nil {
+		return toolRuntime{}, err
+	}
 
-		if err != nil {
-			return toolRuntime{}, fmt.Errorf("resolve user cache dir: %w", err)
-		}
+	root, err := runtimeRoot(payload, ok)
 
-		root = filepath.Join(cacheRoot, "go-fmt", "runtime", runtimeVersion, runtime.GOOS+"-"+runtime.GOARCH)
+	if err != nil {
+		return toolRuntime{}, err
+	}
+
+	if err := ensureRuntimeCache(root, payload, ok); err != nil {
+		return toolRuntime{}, err
 	}
 
 	binDir := filepath.Join(root, "bin")
-
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return toolRuntime{}, fmt.Errorf("create runtime bin dir: %w", err)
-	}
-
-	if err := extractBundledRuntime(root); err != nil {
-		return toolRuntime{}, err
-	}
 
 	if err := writeSourceShim(filepath.Join(binDir, "fmt-sources"), self); err != nil {
 		return toolRuntime{}, err
 	}
 
-	return toolRuntime{
-		binDir: binDir,
-		root:   root,
-		self:   self,
-	}, nil
+	return toolRuntime{binDir: binDir, root: root, self: self}, nil
+}
+
+func runtimeRoot(payload runtimePayload, hasPayload bool) (string, error) {
+	base := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
+
+	if base != "" {
+		if !filepath.IsAbs(base) {
+			return "", fmt.Errorf("GO_FMT_RUNTIME_DIR must be an absolute path")
+		}
+	} else {
+		cacheRoot, err := os.UserCacheDir()
+
+		if err != nil {
+			return "", fmt.Errorf("resolve user cache dir: %w", err)
+		}
+
+		base = filepath.Join(cacheRoot, "go-fmt", "contained")
+	}
+
+	base = filepath.Clean(base)
+
+	if err := ensureTrustedBase(base); err != nil {
+		return "", err
+	}
+
+	identity := "unbundled"
+
+	if hasPayload {
+		identity = payload.manifest.ArchiveSHA256
+	}
+
+	return filepath.Join(base, "runtime", runtimeVersion, runtime.GOOS+"-"+runtime.GOARCH, identity), nil
 }
 
 func (r toolRuntime) formatTSBin() string {
@@ -133,52 +166,177 @@ func (r toolRuntime) applyGoEnv() func() {
 	}
 }
 
-func extractBundledRuntime(root string) error {
-	content, ok, err := bundledRuntimeArchive()
+func bundledRuntimePayload() (runtimePayload, bool, error) {
+	archiveName := "assets/runtime-" + runtime.GOOS + "-" + runtime.GOARCH + ".tar.gz"
+	archive, err := runtimeAssets.ReadFile(archiveName)
+
+	if os.IsNotExist(err) {
+		return runtimePayload{}, false, nil
+	}
+
+	if err != nil {
+		return runtimePayload{}, false, fmt.Errorf("read bundled runtime %s: %w", archiveName, err)
+	}
+
+	manifestName := archiveName + ".manifest.json"
+	manifestContent, err := runtimeAssets.ReadFile(manifestName)
+
+	if err != nil {
+		return runtimePayload{}, false, fmt.Errorf("read runtime manifest %s: %w", manifestName, err)
+	}
+
+	manifest, err := runtimeintegrity.Parse(manifestContent)
+
+	if err != nil {
+		return runtimePayload{}, false, err
+	}
+
+	if err := runtimeintegrity.ValidateArchive(archive, manifest); err != nil {
+		return runtimePayload{}, false, err
+	}
+
+	return runtimePayload{archive: archive, manifest: manifest}, true, nil
+}
+
+func ensureRuntimeCache(root string, payload runtimePayload, hasPayload bool) error {
+	if err := ensureSecureParent(filepath.Dir(root)); err != nil {
+		return err
+	}
+
+	unlock, err := lockRuntime(root)
 
 	if err != nil {
 		return err
 	}
 
-	if !ok {
+	defer unlock()
+
+	if !hasPayload {
+		return ensureEmptyRuntimeRoot(root)
+	}
+
+	if validRuntimeCache(root, payload) {
 		return nil
 	}
 
-	sum := sha256.Sum256(content)
-	fingerprint := hex.EncodeToString(sum[:])
-	marker := filepath.Join(root, ".runtime.sha256")
+	stage, err := os.MkdirTemp(filepath.Dir(root), "."+filepath.Base(root)+".tmp-")
 
-	if current, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(current)) == fingerprint {
-		return nil
+	if err != nil {
+		return fmt.Errorf("create runtime staging directory: %w", err)
 	}
 
-	if err := untarGzip(root, content); err != nil {
+	defer func() {
+		_ = os.RemoveAll(stage)
+	}()
+
+	if err := os.Chmod(stage, 0o700); err != nil {
+		return fmt.Errorf("secure runtime staging directory: %w", err)
+	}
+
+	if err := extractRuntimeArchive(stage, payload.archive); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(marker, []byte(fingerprint+"\n"), 0o644); err != nil {
-		return fmt.Errorf("write runtime marker: %w", err)
+	if err := validatePrivateRuntime(stage, payload.manifest); err != nil {
+		return fmt.Errorf("validate extracted runtime: %w", err)
+	}
+
+	if err := publishRuntime(stage, root); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func bundledRuntimeArchive() ([]byte, bool, error) {
-	name := "assets/runtime-" + runtime.GOOS + "-" + runtime.GOARCH + ".tar.gz"
-	content, err := runtimeAssets.ReadFile(name)
-
-	if err == nil {
-		return content, true, nil
+func validRuntimeCache(root string, payload runtimePayload) bool {
+	if err := validatePrivateRuntime(root, payload.manifest); err != nil {
+		return false
 	}
 
-	if os.IsNotExist(err) {
-		return nil, false, nil
-	}
-
-	return nil, false, fmt.Errorf("read bundled runtime %s: %w", name, err)
+	return true
 }
 
-func untarGzip(root string, content []byte) error {
+func ensureEmptyRuntimeRoot(root string) error {
+	info, err := os.Lstat(root)
+
+	if err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("runtime root is not a directory")
+		}
+
+		if info.Mode().Perm()&0o077 != 0 {
+			return fmt.Errorf("runtime root permissions are not owner-only")
+		}
+
+		return ensureSecureDirectory(filepath.Join(root, "bin"))
+	}
+
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect runtime root: %w", err)
+	}
+
+	if err := os.Mkdir(root, 0o700); err != nil {
+		return fmt.Errorf("create runtime root: %w", err)
+	}
+
+	return ensureSecureDirectory(filepath.Join(root, "bin"))
+}
+
+func validatePrivateRuntime(root string, manifest runtimeintegrity.Manifest) error {
+	info, err := os.Lstat(root)
+
+	if err != nil {
+		return err
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("runtime root is not a directory")
+	}
+
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("runtime root permissions are not owner-only")
+	}
+
+	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		info, err := entry.Info()
+
+		if err != nil {
+			return err
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("runtime cache contains symlink %s", path)
+		}
+
+		if info.Mode().Perm()&0o077 != 0 {
+			return fmt.Errorf("runtime cache is not owner-only: %s", path)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return runtimeintegrity.ValidateTree(root, manifest, runtimeShimExclusions)
+}
+
+func extractRuntimeArchive(root string, content []byte) error {
+	rootFS, err := os.OpenRoot(root)
+
+	if err != nil {
+		return fmt.Errorf("open runtime staging root: %w", err)
+	}
+
+	defer func() {
+		_ = rootFS.Close()
+	}()
+
 	gzipReader, err := gzip.NewReader(bytes.NewReader(content))
 
 	if err != nil {
@@ -202,15 +360,11 @@ func untarGzip(root string, content []byte) error {
 			return fmt.Errorf("read bundled runtime: %w", err)
 		}
 
-		if filepath.Clean(header.Name) == "." {
-			continue
-		}
-
 		if isAppleDoublePath(header.Name) {
 			continue
 		}
 
-		target, err := runtimeTarget(root, header.Name)
+		rel, err := runtimeRelativePath(header.Name)
 
 		if err != nil {
 			return err
@@ -218,54 +372,16 @@ func untarGzip(root string, content []byte) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, header.FileInfo().Mode()); err != nil {
-				return fmt.Errorf("create runtime dir %s: %w", target, err)
+			if err := rootFS.MkdirAll(rel, 0o700); err != nil {
+				return fmt.Errorf("create runtime directory %s: %w", rel, err)
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return fmt.Errorf("create runtime parent %s: %w", filepath.Dir(target), err)
+			if err := rootFS.MkdirAll(filepath.ToSlash(filepath.Dir(rel)), 0o700); err != nil {
+				return fmt.Errorf("create runtime parent %s: %w", rel, err)
 			}
 
-			file, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, header.FileInfo().Mode())
-
-			if err != nil {
-				return fmt.Errorf("create runtime file %s: %w", target, err)
-			}
-
-			if _, err := io.Copy(file, tarReader); err != nil {
-				_ = file.Close()
-
-				return fmt.Errorf("write runtime file %s: %w", target, err)
-			}
-
-			if err := file.Close(); err != nil {
-				return fmt.Errorf("close runtime file %s: %w", target, err)
-			}
-		case tar.TypeSymlink:
-			if _, err := runtimeTarget(root, filepath.Join(filepath.Dir(header.Name), header.Linkname)); err != nil {
-				return fmt.Errorf("invalid runtime symlink %s -> %s: %w", header.Name, header.Linkname, err)
-			}
-
-			if err := os.RemoveAll(target); err != nil {
-				return fmt.Errorf("replace runtime symlink %s: %w", target, err)
-			}
-
-			if err := os.Symlink(header.Linkname, target); err != nil {
-				return fmt.Errorf("create runtime symlink %s: %w", target, err)
-			}
-		case tar.TypeLink:
-			source, err := runtimeTarget(root, header.Linkname)
-
-			if err != nil {
-				return fmt.Errorf("invalid runtime hard link %s -> %s: %w", header.Name, header.Linkname, err)
-			}
-
-			if err := os.RemoveAll(target); err != nil {
-				return fmt.Errorf("replace runtime hard link %s: %w", target, err)
-			}
-
-			if err := os.Link(source, target); err != nil {
-				return fmt.Errorf("create runtime hard link %s: %w", target, err)
+			if err := writeRuntimeRootFile(rootFS, rel, tarReader, header.FileInfo().Mode()); err != nil {
+				return err
 			}
 		default:
 			return fmt.Errorf("unsupported runtime archive entry %s", header.Name)
@@ -273,25 +389,199 @@ func untarGzip(root string, content []byte) error {
 	}
 }
 
-func runtimeTarget(root string, name string) (string, error) {
+func runtimeRelativePath(name string) (string, error) {
 	clean := filepath.Clean(name)
 
 	if clean == "." || filepath.IsAbs(clean) || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || clean == ".." {
 		return "", fmt.Errorf("invalid runtime archive path %q", name)
 	}
 
-	target := filepath.Join(root, clean)
-	rel, err := filepath.Rel(root, target)
+	return filepath.ToSlash(clean), nil
+}
+
+func writeRuntimeRootFile(root *os.Root, path string, source io.Reader, mode os.FileMode) error {
+	if info, err := root.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("runtime path is a symlink: %s", path)
+		}
+
+		return fmt.Errorf("runtime archive contains duplicate path %s", path)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	permissions := os.FileMode(0o600)
+
+	if mode.Perm()&0o111 != 0 {
+		permissions = 0o700
+	}
+
+	file, err := root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, permissions)
 
 	if err != nil {
-		return "", fmt.Errorf("validate runtime archive path %q: %w", name, err)
+		return fmt.Errorf("create runtime file %s: %w", path, err)
 	}
 
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("runtime archive path escapes runtime dir: %q", name)
+	if _, err := io.Copy(file, source); err != nil {
+		_ = file.Close()
+
+		return fmt.Errorf("write runtime file %s: %w", path, err)
 	}
 
-	return target, nil
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close runtime file %s: %w", path, err)
+	}
+
+	return nil
+}
+
+func ensureSecureParent(path string) error {
+	volume := filepath.VolumeName(path)
+	remaining := strings.TrimPrefix(path, volume)
+	current := volume + string(filepath.Separator)
+
+	for _, part := range strings.Split(remaining, string(filepath.Separator)) {
+		if part == "" {
+			continue
+		}
+
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+
+		if os.IsNotExist(err) {
+			if err := os.Mkdir(current, 0o700); err != nil {
+				return fmt.Errorf("create runtime parent %s: %w", current, err)
+			}
+
+			continue
+		}
+
+		if err != nil {
+			return fmt.Errorf("inspect runtime parent %s: %w", current, err)
+		}
+
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("runtime parent is not a directory: %s", current)
+		}
+	}
+
+	return nil
+}
+
+func ensureTrustedBase(path string) error {
+	if err := ensureSecureParent(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	info, err := os.Lstat(path)
+
+	if os.IsNotExist(err) {
+		if err := os.Mkdir(path, 0o700); err != nil {
+			return fmt.Errorf("create GO_FMT_RUNTIME_DIR base: %w", err)
+		}
+
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("inspect GO_FMT_RUNTIME_DIR base: %w", err)
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("GO_FMT_RUNTIME_DIR base is not a directory")
+	}
+
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("GO_FMT_RUNTIME_DIR base permissions are not owner-only")
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+
+	if !ok || int(stat.Uid) != os.Getuid() {
+		return fmt.Errorf("GO_FMT_RUNTIME_DIR base is not owned by the current user")
+	}
+
+	return nil
+}
+
+func ensureSecureDirectory(path string) error {
+	if err := ensureSecureParent(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	info, err := os.Lstat(path)
+
+	if os.IsNotExist(err) {
+		return os.Mkdir(path, 0o700)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("runtime path is not a directory: %s", path)
+	}
+
+	return os.Chmod(path, 0o700)
+}
+
+func publishRuntime(stage, root string) error {
+	backup := root + ".old"
+
+	if _, err := os.Lstat(backup); err == nil {
+		return fmt.Errorf("runtime backup path already exists")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if info, err := os.Lstat(root); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("runtime root is not a directory")
+		}
+
+		if err := os.Rename(root, backup); err != nil {
+			return fmt.Errorf("move invalid runtime aside: %w", err)
+		}
+	}
+
+	if err := os.Rename(stage, root); err != nil {
+		return fmt.Errorf("publish runtime cache: %w", err)
+	}
+
+	if err := os.RemoveAll(backup); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove stale runtime cache: %w", err)
+	}
+
+	return nil
+}
+
+func lockRuntime(root string) (func(), error) {
+	lock := root + ".lock"
+
+	for range 500 {
+		err := os.Mkdir(lock, 0o700)
+
+		if err == nil {
+			return func() {
+				_ = os.Remove(lock)
+			}, nil
+		}
+
+		if !os.IsExist(err) {
+			return nil, fmt.Errorf("create runtime lock: %w", err)
+		}
+
+		info, statErr := os.Lstat(lock)
+
+		if statErr != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return nil, fmt.Errorf("runtime lock is unsafe")
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return nil, fmt.Errorf("timed out waiting for runtime cache lock")
 }
 
 func isAppleDoublePath(name string) bool {
@@ -304,21 +594,38 @@ func isAppleDoublePath(name string) bool {
 	return false
 }
 
-func writeSourceShim(path string, self string) error {
-	content := "#!/usr/bin/env sh\nexec " + shellQuote(self) + " go sources \"$@\"\n"
-
-	current, err := os.ReadFile(path)
-
-	if err == nil && string(current) == content {
-		return os.Chmod(path, 0o755)
+func writeSourceShim(path, self string) error {
+	if err := ensureSecureDirectory(filepath.Dir(path)); err != nil {
+		return err
 	}
 
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("fmt-sources shim is a symlink")
+		}
+
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove fmt-sources shim: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect fmt-sources shim: %w", err)
+	}
+
+	content := "#!/usr/bin/env sh\nexec " + shellQuote(self) + " go sources \"$@\"\n"
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
+
+	if err != nil {
+		return fmt.Errorf("create fmt-sources shim: %w", err)
+	}
+
+	if _, err := file.WriteString(content); err != nil {
+		_ = file.Close()
+
 		return fmt.Errorf("write fmt-sources shim: %w", err)
 	}
 
-	if err := os.Chmod(path, 0o755); err != nil {
-		return fmt.Errorf("make fmt-sources shim executable: %w", err)
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close fmt-sources shim: %w", err)
 	}
 
 	return nil

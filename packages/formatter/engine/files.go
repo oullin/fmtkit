@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/oullin/fmtkit/packages/formatter/config"
+	"github.com/oullin/fmtkit/packages/runtimepath"
 )
 
 // CollectGoFiles expands input paths into a sorted list of Go source files.
@@ -19,7 +20,7 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 	var files []string
 
 	seen := map[string]struct{}{}
-	runtimeDir := resolveRuntimeDir()
+	runtimeDir := runtimepath.Resolve()
 
 	for _, root := range paths {
 		absRoot, err := filepath.Abs(root)
@@ -101,7 +102,7 @@ func filterFiles(files, selected []string) []string {
 }
 
 func shouldSkipDir(path, root, name string, cfg config.Config, runtimeDir string) bool {
-	if isRuntimePath(path, runtimeDir) {
+	if runtimepath.Contains(runtimeDir, path) {
 		return true
 	}
 
@@ -116,42 +117,6 @@ func shouldSkipDir(path, root, name string, cfg config.Config, runtimeDir string
 	}
 
 	return false
-}
-
-func resolveRuntimeDir() string {
-	runtimeDir := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
-
-	if runtimeDir == "" {
-		return ""
-	}
-
-	absRuntime, err := filepath.Abs(runtimeDir)
-
-	if err != nil {
-		return ""
-	}
-
-	return absRuntime
-}
-
-func isRuntimePath(path, runtimeDir string) bool {
-	if runtimeDir == "" {
-		return false
-	}
-
-	absPath, err := filepath.Abs(path)
-
-	if err != nil {
-		return false
-	}
-
-	rel, err := filepath.Rel(runtimeDir, absPath)
-
-	if err != nil {
-		return false
-	}
-
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 func isExcludedFile(path string, cfg config.Config) bool {

@@ -684,6 +684,10 @@ func isAppleDoublePath(name string) bool {
 }
 
 func writeSourceShim(path, self string) error {
+	return writeSourceShimWithHook(path, self, nil)
+}
+
+func writeSourceShimWithHook(path, self string, beforeRename func()) error {
 	if err := ensureSecureDirectory(filepath.Dir(path)); err != nil {
 		return err
 	}
@@ -731,11 +735,39 @@ func writeSourceShim(path, self string) error {
 		return fmt.Errorf("close temporary fmt-sources shim: %w", err)
 	}
 
+	if beforeRename != nil {
+		beforeRename()
+	}
+
 	if err := os.Rename(temporary, path); err != nil {
 		return fmt.Errorf("publish fmt-sources shim: %w", err)
 	}
 
 	published = true
+
+	if err := syncSourceShimDirectory(filepath.Dir(path)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func syncSourceShimDirectory(path string) error {
+	directory, err := os.Open(path)
+
+	if err != nil {
+		return fmt.Errorf("open fmt-sources shim directory for sync: %w", err)
+	}
+
+	if err := directory.Sync(); err != nil {
+		_ = directory.Close()
+
+		return fmt.Errorf("sync fmt-sources shim directory: %w", err)
+	}
+
+	if err := directory.Close(); err != nil {
+		return fmt.Errorf("close fmt-sources shim directory: %w", err)
+	}
 
 	return nil
 }

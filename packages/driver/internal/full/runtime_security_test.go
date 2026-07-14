@@ -4,14 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -180,92 +177,63 @@ func TestWriteSourceShimPublishesAtomicallyForReaders(t *testing.T) {
 		t.Fatalf("write initial shim: %v", err)
 	}
 
-	want := map[string]struct{}{
-		"#!/usr/bin/env sh\nexec '" + first + "' go sources \"$@\"\n":  {},
-		"#!/usr/bin/env sh\nexec '" + second + "' go sources \"$@\"\n": {},
-	}
-	errs := make(chan error, 8)
-	done := make(chan struct{})
+	reachedRename := make(chan struct{})
+	releaseRename := make(chan struct{})
+	writerDone := make(chan error, 1)
 
-	var readers sync.WaitGroup
+	go func() {
+		writerDone <- writeSourceShimWithHook(shim, second, func() {
+			close(reachedRename)
+			<-releaseRename
+		})
+	}()
 
-	for range 4 {
-		readers.Add(1)
-		go func() {
-			defer readers.Done()
+	<-reachedRename
 
-			for {
-				select {
-				case <-done:
-					return
-				default:
-				}
-
-				file, err := os.Open(shim)
-
-				if err != nil {
-					errs <- fmt.Errorf("open shim: %w", err)
-
-					return
-				}
-
-				content, readErr := io.ReadAll(file)
-				closeErr := file.Close()
-
-				if readErr != nil || closeErr != nil {
-					errs <- fmt.Errorf("read shim: read=%v close=%v", readErr, closeErr)
-
-					return
-				}
-
-				if _, ok := want[string(content)]; !ok {
-					errs <- fmt.Errorf("observed partial shim content %q", content)
-
-					return
-				}
-
-				if err := executeShim(shim); err != nil {
-					errs <- fmt.Errorf("execute shim: %w", err)
-
-					return
-				}
-			}
-		}()
+	for range 16 {
+		assertShim(t, shim, first, "first\n")
 	}
 
-	for index := range 128 {
-		self := first
+	close(releaseRename)
 
-		if index%2 == 1 {
-			self = second
-		}
-
-		if err := writeSourceShim(shim, self); err != nil {
-			close(done)
-			readers.Wait()
-			t.Fatalf("replace shim: %v", err)
-		}
+	if err := <-writerDone; err != nil {
+		t.Fatalf("replace shim: %v", err)
 	}
 
-	close(done)
-	readers.Wait()
-	close(errs)
-
-	for err := range errs {
-		t.Fatal(err)
-	}
+	assertShim(t, shim, second, "second\n")
 }
 
-func executeShim(path string) error {
-	for range 8 {
-		err := exec.Command(path).Run()
+func assertShim(t *testing.T, path, target, wantOutput string) {
+	t.Helper()
 
-		if err == nil || !errors.Is(err, syscall.ETXTBSY) {
-			return err
-		}
+	file, err := os.Open(path)
+
+	if err != nil {
+		t.Fatalf("open shim: %v", err)
 	}
 
-	return fmt.Errorf("execute shim: %w", syscall.ETXTBSY)
+	content, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+
+	if readErr != nil || closeErr != nil {
+		t.Fatalf("read shim: read=%v close=%v", readErr, closeErr)
+	}
+
+	wantContent := "#!/usr/bin/env sh\nexec '" + target + "' go sources \"$@\"\n"
+
+	if string(content) != wantContent {
+		t.Fatalf("unexpected shim content %q", content)
+	}
+
+	output, err := exec.Command(path).Output()
+
+	if err != nil {
+		t.Fatalf("execute shim: %v", err)
+	}
+
+	if string(output) != wantOutput {
+		t.Fatalf("unexpected shim output %q", output)
+	}
 }
 
 func writeShimTarget(t *testing.T, name string) string {
@@ -273,7 +241,7 @@ func writeShimTarget(t *testing.T, name string) string {
 
 	path := filepath.Join(realTempDir(t), name)
 
-	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf '%s\\n' '"+name+"'\n"), 0o700); err != nil {
 		t.Fatalf("write shim target: %v", err)
 	}
 

@@ -19,7 +19,6 @@ on:
 permissions: {}
 
 env:
-    IMAGE_NAME: ghcr.io/oullin/fmtkit
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     RELEASE_TAG: ${{ inputs.tag }}
 
@@ -28,10 +27,25 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    contained_runtime_darwin_arm64:
-        runs-on: macos-14
+    contained_runtime:
+        name: Contained release (${{ matrix.goos }}/${{ matrix.goarch }})
+        runs-on: ${{ matrix.runner }}
         permissions:
             contents: read
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - runner: macos-14
+                      goos: darwin
+                      goarch: arm64
+                    - runner: ubuntu-22.04
+                      goos: linux
+                      goarch: amd64
+                    - runner: ubuntu-22.04-arm
+                      goos: linux
+                      goarch: arm64
 
         steps:
             - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -42,163 +56,62 @@ jobs:
               run: ./infra/scripts/release/verify-release-tag.sh
               shell: bash
 
-            - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-              name: Install Vite+
+            - uses: ./.github/actions/contained-runtime
+              name: Build contained release
               with:
-                  node-version: 25.8.2
-                  cache: true
+                  goos: ${{ matrix.goos }}
+                  goarch: ${{ matrix.goarch }}
+                  artifact-name: fmt-all-${{ matrix.goos }}-${{ matrix.goarch }}
 
-            - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-              name: Install Go
-              with:
-                  go-version-file: go.mod
-                  cache-dependency-path: |
-                      go.mod
-                      go.sum
+    publish_images:
+        uses: ./.github/workflows/publish-images.yml
+        permissions:
+            contents: read
+            packages: write
+        secrets: inherit
+        with:
+            tag: ${{ inputs.tag }}
 
-            - name: Package and build contained runtime
-              run: |
-                  vp run runtime:contained
-                  vp run release:contained
-                  shasum -a 256 storage/dist/fmt-all-darwin-arm64 > storage/dist/fmt-all-darwin-arm64.sha256
-
-            - name: Verify contained release assets
-              run: |
-                  test -f storage/dist/fmt-all-darwin-arm64
-                  test -f storage/dist/fmt-all-darwin-arm64.sha256
-                  test -f packages/driver/internal/full/assets/runtime-darwin-arm64.tar.gz.manifest.json
-              shell: bash
-
-            - name: Stage contained release assets
-              run: |
-                  staging=storage/release-artifact
-                  rm -rf "$staging"
-                  mkdir -p "$staging"
-                  cp storage/dist/fmt-all-darwin-arm64 "$staging/fmt-all-darwin-arm64"
-                  cp storage/dist/fmt-all-darwin-arm64.sha256 "$staging/fmt-all-darwin-arm64.sha256"
-                  cp packages/driver/internal/full/assets/runtime-darwin-arm64.tar.gz.manifest.json "$staging/runtime-darwin-arm64.tar.gz.manifest.json"
-                  test -f "$staging/fmt-all-darwin-arm64"
-                  test -f "$staging/fmt-all-darwin-arm64.sha256"
-                  test -f "$staging/runtime-darwin-arm64.tar.gz.manifest.json"
-              shell: bash
-
-            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-              name: Upload contained release artifact
-              with:
-                  name: fmt-all-darwin-arm64
-                  path: storage/release-artifact/*
-                  if-no-files-found: error
-
-    publish:
-        needs: contained_runtime_darwin_arm64
+    publish_release:
+        needs:
+            - contained_runtime
+            - publish_images
         runs-on: ubuntu-latest
         permissions:
             contents: write
-            packages: write
 
         steps:
-            - uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
-
-            - name: Verify release tag and checkout tagged commit
-              run: ./infra/scripts/release/verify-release-tag.sh
-              shell: bash
-
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v4
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
-
-            - name: Log in to GHCR
-              uses: docker/login-action@v4
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Build and push Go image
-              id: build-go
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.golang
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go
-                      ${{ env.IMAGE_NAME }}:latest-go
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=go
-                  cache-to: type=gha,mode=max,scope=go
-
-            - name: Build and push Node/TS image
-              id: build-node-ts
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.node-ts
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
-                      ${{ env.IMAGE_NAME }}:latest-node-ts
-                  cache-from: type=gha,scope=node-ts
-                  cache-to: type=gha,mode=max,scope=node-ts
-
-            - name: Build and push full image
-              id: build-full
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.full
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full
-                      ${{ env.IMAGE_NAME }}:latest-full
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=full
-                  cache-to: type=gha,mode=max,scope=full
-
-            - name: Verify published release image
-              env:
-                  NEW_TAG: ${{ env.RELEASE_TAG }}
-              run: ./infra/scripts/release/verify-release-image.sh
-              shell: bash
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              name: Checkout repository
 
             - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-              name: Download contained release artifact
+              name: Download contained release artifacts
               with:
-                  name: fmt-all-darwin-arm64
+                  pattern: fmt-all-*
                   path: storage/release
+                  merge-multiple: true
 
-            - name: Verify contained release checksum
-              run: |
-                  cd storage/release
-                  test -f fmt-all-darwin-arm64
-                  test -f fmt-all-darwin-arm64.sha256
-                  test -f runtime-darwin-arm64.tar.gz.manifest.json
-                  shasum -a 256 -c fmt-all-darwin-arm64.sha256
-              shell: bash
-
-            - name: Promote verified full image to compatibility tags
-              env:
-                  DIGEST: ${{ steps.build-full.outputs.digest }}
+            - name: Verify contained release assets
               run: |
                   set -euo pipefail
+                  cd storage/release
 
-                  docker buildx imagetools create \
-                      --tag "${IMAGE_NAME}:${RELEASE_TAG}" \
-                      --tag "${IMAGE_NAME}:latest" \
-                      "${IMAGE_NAME}@${DIGEST}"
+                  for platform in darwin-arm64 linux-amd64 linux-arm64; do
+                      test -f "fmt-all-${platform}"
+                      test -f "fmt-all-${platform}.sha256"
+                      test -f "runtime-${platform}.tar.gz.manifest.json"
+                      shasum -a 256 -c "fmt-all-${platform}.sha256"
+                      goos="${platform%-*}"
+                      goarch="${platform#*-}"
+                      "${GITHUB_WORKSPACE}/infra/scripts/tasks/runtime/verify-manifest-platform.sh" \
+                          --goos "$goos" \
+                          --goarch "$goarch" \
+                          --manifest "runtime-${platform}.tar.gz.manifest.json"
+                  done
               shell: bash
 
             - name: Create or update release
-              uses: softprops/action-gh-release@v2
+              uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
               with:
                   tag_name: ${{ env.RELEASE_TAG }}
                   prerelease: false
@@ -206,19 +119,25 @@ jobs:
                   body: |
                       Docker images published:
 
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}` aliases the verified full image
+                      - `ghcr.io/oullin/fmtkit:${{ env.RELEASE_TAG }}-go`
+                      - `ghcr.io/oullin/fmtkit:${{ env.RELEASE_TAG }}-node-ts`
+                      - `ghcr.io/oullin/fmtkit:${{ env.RELEASE_TAG }}-full`
+                      - `ghcr.io/oullin/fmtkit:${{ env.RELEASE_TAG }}` aliases the verified full image
 
                       Latest tags updated:
 
-                      - `${{ env.IMAGE_NAME }}:latest-go`
-                      - `${{ env.IMAGE_NAME }}:latest-node-ts`
-                      - `${{ env.IMAGE_NAME }}:latest-full`
-                      - `${{ env.IMAGE_NAME }}:latest` aliases the verified full image
+                      - `ghcr.io/oullin/fmtkit:latest-go`
+                      - `ghcr.io/oullin/fmtkit:latest-node-ts`
+                      - `ghcr.io/oullin/fmtkit:latest-full`
+                      - `ghcr.io/oullin/fmtkit:latest` aliases the verified full image
                   files: |
                       storage/release/fmt-all-darwin-arm64
                       storage/release/fmt-all-darwin-arm64.sha256
                       storage/release/runtime-darwin-arm64.tar.gz.manifest.json
+                      storage/release/fmt-all-linux-amd64
+                      storage/release/fmt-all-linux-amd64.sha256
+                      storage/release/runtime-linux-amd64.tar.gz.manifest.json
+                      storage/release/fmt-all-linux-arm64
+                      storage/release/fmt-all-linux-arm64.sha256
+                      storage/release/runtime-linux-arm64.tar.gz.manifest.json
                   fail_on_unmatched_files: true

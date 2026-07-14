@@ -33,8 +33,8 @@ export default defineConfig({
 			'image:node-ts': './infra/scripts/tasks/docker-image.sh node-ts',
 			'install-cli': './infra/scripts/tasks/with-storage-env.sh go install ./packages/driver/cmd/fmtkit-go',
 			release: './infra/scripts/release/release.sh',
-			'release:contained': './infra/scripts/tasks/release-contained.sh',
-			'runtime:contained': './infra/scripts/tasks/package-contained-runtime.sh',
+			'release:contained': './infra/scripts/tasks/runtime/release.sh',
+			'runtime:contained': './infra/scripts/tasks/runtime/package.sh',
 			'test:coverage': './infra/scripts/tasks/test-coverage.sh',
 			'test:entrypoints': './infra/scripts/tasks/test-entrypoints.sh',
 			'test-race':

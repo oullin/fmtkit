@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/oullin/fmtkit/packages/formatter/config"
-	"github.com/oullin/fmtkit/packages/runtimepath"
+	"github.com/oullin/fmtkit/packages/runtimex/pathx"
 )
 
 // CollectGoFiles expands input paths into a sorted list of Go source files.
@@ -20,7 +20,7 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 	var files []string
 
 	seen := map[string]struct{}{}
-	runtimeDir := runtimepath.Resolve()
+	runtimeDir := pathx.Resolve()
 
 	for _, root := range paths {
 		absRoot, err := filepath.Abs(root)
@@ -36,7 +36,7 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 		}
 
 		if !info.IsDir() {
-			if isGoSource(absRoot) && !runtimepath.Contains(runtimeDir, absRoot) && !isExcludedFile(absRoot, cfg) {
+			if isGoSource(absRoot) && !pathx.Contains(runtimeDir, absRoot) && !isExcludedFile(absRoot, cfg) {
 				if _, ok := seen[absRoot]; !ok {
 					files = append(files, absRoot)
 					seen[absRoot] = struct{}{}
@@ -102,7 +102,7 @@ func filterFiles(files, selected []string) []string {
 }
 
 func shouldSkipDir(path, root, name string, cfg config.Config, runtimeDir string) bool {
-	if runtimepath.Contains(runtimeDir, path) {
+	if pathx.Contains(runtimeDir, path) {
 		return true
 	}
 

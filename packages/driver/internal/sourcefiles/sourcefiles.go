@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/oullin/fmtkit/packages/runtimepath"
+	"github.com/oullin/fmtkit/packages/runtimex/pathx"
 )
 
 type Options struct {
@@ -40,7 +40,7 @@ func Collect(opts Options) ([]string, []string, error) {
 	files := []string{}
 	warnings := []string{}
 	seen := map[string]struct{}{}
-	runtimeDir := runtimepath.Resolve()
+	runtimeDir := pathx.Resolve()
 
 	for _, scope := range scopes {
 		absolute := scope
@@ -86,7 +86,7 @@ func Collect(opts Options) ([]string, []string, error) {
 
 			path = filepath.Clean(path)
 
-			if runtimepath.Contains(runtimeDir, path) {
+			if pathx.Contains(runtimeDir, path) {
 				continue
 			}
 
@@ -179,7 +179,7 @@ func filesystemFiles(scope, runtimeDir string) ([]string, error) {
 func shouldSkipFilesystemDir(path string, entry os.DirEntry, runtimeDir string) bool {
 	base := entry.Name()
 
-	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || runtimepath.Contains(runtimeDir, path)
+	return strings.HasPrefix(base, ".") || base == "node_modules" || base == "vendor" || pathx.Contains(runtimeDir, path)
 }
 
 func canUseFilesystemFallback(err error) bool {

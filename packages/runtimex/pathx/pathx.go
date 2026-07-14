@@ -1,4 +1,4 @@
-package runtimepath
+package pathx
 
 import (
 	"os"
@@ -9,9 +9,9 @@ import (
 // Resolve returns an absolute cleaned runtime root, or an empty string when
 // GO_FMT_RUNTIME_DIR is unset or cannot be resolved.
 func Resolve() string {
-	value := strings.TrimSpace(os.Getenv("GO_FMT_RUNTIME_DIR"))
+	value := os.Getenv("GO_FMT_RUNTIME_DIR")
 
-	if value == "" {
+	if strings.TrimSpace(value) == "" {
 		return ""
 	}
 

@@ -28,14 +28,14 @@ jobs:
                     - devx
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-            - uses: voidzero-dev/setup-vp@v1
+            - uses: voidzero-dev/setup-vp@8a7496fd44e8a1b0a88a7459e36213b2fefc1d15 # v1
               with:
                   node-version: 25.8.2
                   cache: true
 
-            - uses: actions/setup-go@v6
+            - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
               if: matrix.workspace != 'devx'
               with:
                   go-version-file: go.mod
@@ -54,17 +54,17 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
             - name: Shell - Run entrypoint tests
               run: ./infra/scripts/tasks/test-entrypoints.sh
 
-            - uses: voidzero-dev/setup-vp@v1
+            - uses: voidzero-dev/setup-vp@8a7496fd44e8a1b0a88a7459e36213b2fefc1d15 # v1
               with:
                   node-version: 25.8.2
                   cache: true
 
-            - uses: actions/setup-go@v6
+            - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
               with:
                   go-version-file: go.mod
                   cache-dependency-path: |
@@ -88,7 +88,7 @@ jobs:
             tag: ${{ steps.version.outputs.new_tag }}
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
               with:
                   fetch-depth: 0
 

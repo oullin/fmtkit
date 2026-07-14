@@ -1,6 +1,6 @@
 //go:build darwin || dragonfly || freebsd || linux || netbsd || openbsd
 
-package full
+package runtimex
 
 import (
 	"fmt"

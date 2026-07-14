@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(dirname "$0")/../tasks/env.sh"
 
 dist_dir="${DIST_DIR}"
-release_platforms="${RELEASE_PLATFORMS:-darwin/amd64 darwin/arm64 linux/amd64 linux/arm64}"
+release_platforms="${RELEASE_PLATFORMS:-darwin/arm64 linux/amd64 linux/arm64}"
 dist_dir_path="$(canonical_path "$dist_dir")"
 
 os_label() {

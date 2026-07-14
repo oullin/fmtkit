@@ -1,0 +1,109 @@
+name: Publish Images
+
+on:
+    workflow_call:
+        inputs:
+            tag:
+                description: Release tag to publish, for example v0.0.12
+                required: true
+                type: string
+
+permissions: {}
+
+env:
+    IMAGE_NAME: ghcr.io/oullin/fmtkit
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    RELEASE_TAG: ${{ inputs.tag }}
+
+jobs:
+    publish_images:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+
+        steps:
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              with:
+                  fetch-depth: 0
+
+            - name: Verify release tag and checkout tagged commit
+              run: ./infra/scripts/release/verify-release-tag.sh
+              shell: bash
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+            - name: Log in to GHCR
+              uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Build and push Go image
+              id: build-go
+              uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+              with:
+                  context: .
+                  file: ./infra/docker/Dockerfile.golang
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go
+                      ${{ env.IMAGE_NAME }}:latest-go
+                  build-args: |
+                      VERSION=${{ env.RELEASE_TAG }}
+                  cache-from: type=gha,scope=go
+                  cache-to: type=gha,mode=max,scope=go
+
+            - name: Build and push Node/TS image
+              id: build-node-ts
+              uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+              with:
+                  context: .
+                  file: ./infra/docker/Dockerfile.node-ts
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
+                      ${{ env.IMAGE_NAME }}:latest-node-ts
+                  cache-from: type=gha,scope=node-ts
+                  cache-to: type=gha,mode=max,scope=node-ts
+
+            - name: Build and push full image
+              id: build-full
+              uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+              with:
+                  context: .
+                  file: ./infra/docker/Dockerfile.full
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: |
+                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full
+                      ${{ env.IMAGE_NAME }}:latest-full
+                  build-args: |
+                      VERSION=${{ env.RELEASE_TAG }}
+                  cache-from: type=gha,scope=full
+                  cache-to: type=gha,mode=max,scope=full
+
+            - name: Verify published release images
+              env:
+                  NEW_TAG: ${{ env.RELEASE_TAG }}
+              run: ./infra/scripts/release/verify-release-image.sh
+              shell: bash
+
+            - name: Promote verified full image to compatibility tags
+              env:
+                  DIGEST: ${{ steps.build-full.outputs.digest }}
+              run: |
+                  set -euo pipefail
+
+                  docker buildx imagetools create \
+                      --tag "${IMAGE_NAME}:${RELEASE_TAG}" \
+                      --tag "${IMAGE_NAME}:latest" \
+                      "${IMAGE_NAME}@${DIGEST}"
+              shell: bash

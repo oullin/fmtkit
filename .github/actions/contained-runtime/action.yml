@@ -1,0 +1,84 @@
+name: Build contained runtime
+description: Package, verify, and upload one native contained fmt-all release artifact.
+
+inputs:
+    goos:
+        description: Native Go operating system for the runtime.
+        required: true
+    goarch:
+        description: Native Go architecture for the runtime.
+        required: true
+    artifact-name:
+        description: Name of the GitHub Actions artifact to upload.
+        required: true
+
+runs:
+    using: composite
+    steps:
+        - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+          name: Install Vite+
+          with:
+              node-version: 25.8.2
+              cache: true
+
+        - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+          name: Install Go
+          with:
+              go-version-file: go.mod
+              cache-dependency-path: |
+                  go.mod
+                  go.sum
+
+        - name: Package and build contained runtime
+          env:
+              RUNTIME_GOOS: ${{ inputs.goos }}
+              RUNTIME_GOARCH: ${{ inputs.goarch }}
+              RELEASE_PLATFORMS: ${{ inputs.goos }}/${{ inputs.goarch }}
+          run: |
+              vp run runtime:contained
+              vp run release:contained
+          shell: bash
+
+        - name: Stage and verify contained release assets
+          env:
+              GOOS: ${{ inputs.goos }}
+              GOARCH: ${{ inputs.goarch }}
+          run: |
+              binary="storage/dist/fmt-all-${GOOS}-${GOARCH}"
+              manifest="packages/runtimex/assets/runtime-${GOOS}-${GOARCH}.tar.gz.manifest.json"
+              staging="storage/release-artifact"
+
+              test -f "$binary"
+              test -f "$manifest"
+              "${GITHUB_WORKSPACE}/infra/scripts/tasks/runtime/verify-manifest-platform.sh" \
+                  --goos "$GOOS" \
+                  --goarch "$GOARCH" \
+                  --manifest "$manifest"
+              rm -rf "$staging"
+              mkdir -p "$staging"
+              cp "$binary" "$staging/$(basename "$binary")"
+              cp "$manifest" "$staging/$(basename "$manifest")"
+              (
+                  cd "$staging"
+                  chmod 700 "$(basename "$binary")"
+                  "${GITHUB_WORKSPACE}/infra/scripts/tasks/runtime/verify-binary.sh" \
+                      --goos "$GOOS" \
+                      --goarch "$GOARCH" \
+                      --binary "./$(basename "$binary")" \
+                      --checksum "./$(basename "$binary").sha256"
+              )
+              test -f "$staging/$(basename "$binary")"
+              test -f "$staging/$(basename "$binary").sha256"
+              test -f "$staging/$(basename "$manifest")"
+              "${GITHUB_WORKSPACE}/infra/scripts/tasks/runtime/verify-manifest-platform.sh" \
+                  --goos "$GOOS" \
+                  --goarch "$GOARCH" \
+                  --manifest "$staging/$(basename "$manifest")"
+          shell: bash
+
+        - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+          name: Upload contained release artifact
+          with:
+              name: ${{ inputs.artifact-name }}
+              path: storage/release-artifact/*
+              if-no-files-found: error

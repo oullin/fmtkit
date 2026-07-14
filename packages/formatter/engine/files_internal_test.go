@@ -7,7 +7,7 @@ import (
 
 	"github.com/oullin/fmtkit/packages/driver/testutil"
 	"github.com/oullin/fmtkit/packages/formatter/config"
-	"github.com/oullin/fmtkit/packages/runtimepath"
+	"github.com/oullin/fmtkit/packages/runtimex/pathx"
 )
 
 func TestFilterFiles(t *testing.T) {
@@ -70,7 +70,7 @@ func TestIsGoSourceHandlesReadErrorsAsSource(t *testing.T) {
 func TestShouldSkipDirHonorsRootHiddenDirectory(t *testing.T) {
 	cfg := config.Default()
 	root := filepath.Join(t.TempDir(), ".root")
-	runtimeDir := runtimepath.Resolve()
+	runtimeDir := pathx.Resolve()
 
 	if shouldSkipDir(root, root, ".root", cfg, runtimeDir) {
 		t.Fatal("expected root directory to be walkable even when hidden")

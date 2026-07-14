@@ -1,4 +1,4 @@
-package full
+package runtimex
 
 import (
 	"archive/tar"
@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oullin/fmtkit/packages/runtimeintegrity"
+	"github.com/oullin/fmtkit/packages/runtimex/integrityx"
 )
 
 func TestExtractRuntimeArchiveRejectsUnsafeEntries(t *testing.T) {
@@ -277,12 +277,14 @@ func readAndExecuteShim(path, target, wantOutput string) error {
 
 	var output []byte
 
-	for range 8 {
+	for attempt := range 8 {
 		output, err = exec.Command(path).Output()
 
 		if err == nil || !errors.Is(err, syscall.ETXTBSY) {
 			break
 		}
+
+		time.Sleep(time.Duration(attempt+1) * time.Millisecond)
 	}
 
 	if err != nil {
@@ -414,7 +416,7 @@ func testRuntimePayload(t *testing.T) runtimePayload {
 		t.Fatalf("write archive: %v", err)
 	}
 
-	manifest, err := runtimeintegrity.Build(stage, archive, []string{"bin/node"})
+	manifest, err := integrityx.Build(stage, archive, "linux", "amd64", []string{"bin/node"})
 
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)

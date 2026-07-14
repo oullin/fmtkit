@@ -3,40 +3,60 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
-	"github.com/oullin/fmtkit/packages/runtimeintegrity"
+	"github.com/oullin/fmtkit/packages/runtimex/integrityx"
 )
 
 func main() {
-	root := flag.String("root", "", "runtime directory to hash")
-	archive := flag.String("archive", "", "runtime archive to hash")
-	output := flag.String("output", "", "manifest output path")
-	required := flag.String("required", "", "comma-separated required runtime files")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Stderr))
+}
 
-	if *root == "" || *archive == "" || *output == "" || *required == "" {
-		fmt.Fprintln(os.Stderr, "usage: runtime-manifest --root DIR --archive FILE --output FILE --required path[,path...]")
-		os.Exit(2)
+func run(args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("runtime-manifest", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	root := flags.String("root", "", "runtime directory to hash")
+	archive := flags.String("archive", "", "runtime archive to hash")
+	output := flags.String("output", "", "manifest output path")
+	required := flags.String("required", "", "comma-separated required runtime files")
+	goos := flags.String("goos", "", "runtime Go operating system")
+	goarch := flags.String("goarch", "", "runtime Go architecture")
+
+	if err := flags.Parse(args); err != nil {
+		fmt.Fprintln(stderr, err)
+
+		return 2
 	}
 
-	manifest, err := runtimeintegrity.Build(*root, *archive, strings.Split(*required, ","))
+	if *root == "" || *archive == "" || *output == "" || *required == "" || strings.TrimSpace(*goos) == "" || strings.TrimSpace(*goarch) == "" {
+		fmt.Fprintln(stderr, "usage: runtime-manifest --root DIR --archive FILE --output FILE --goos GOOS --goarch GOARCH --required path[,path...]")
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "build runtime manifest: %v\n", err)
-		os.Exit(1)
+		return 2
 	}
 
-	content, err := runtimeintegrity.Marshal(manifest)
+	manifest, err := integrityx.Build(*root, *archive, *goos, *goarch, strings.Split(*required, ","))
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "marshal runtime manifest: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "build runtime manifest: %v\n", err)
+
+		return 1
+	}
+
+	content, err := integrityx.Marshal(manifest)
+
+	if err != nil {
+		fmt.Fprintf(stderr, "marshal runtime manifest: %v\n", err)
+
+		return 1
 	}
 
 	if err := os.WriteFile(*output, content, 0o600); err != nil {
-		fmt.Fprintf(os.Stderr, "write runtime manifest: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "write runtime manifest: %v\n", err)
+
+		return 1
 	}
+
+	return 0
 }

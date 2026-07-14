@@ -1,4 +1,4 @@
-package full
+package runner
 
 import (
 	"os"
@@ -16,31 +16,20 @@ func TestRunnerFormatRunsFullPipeline(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "invocations.log")
 	formatBin := writeStubTool(t, "fmt-ts", logPath, 0, "[blank-lines] processed 1 file(s) in /work, 0 changed\n")
 	lintBin := writeStubTool(t, "fmt-lint", logPath, 0, "Found 0 warnings and 0 errors.\n")
-
-	testutil.WriteGoFile(t, filepath.Join(workdir, "sample.go"), `package sample
-
-func run() {
-	println("ok")
-}
-`)
+	testutil.WriteGoFile(t, filepath.Join(workdir, "sample.go"), "package sample\n\nfunc run() {\n\tprintln(\"ok\")\n}\n")
 	t.Setenv("FORMAT_TS_BIN", formatBin)
 	t.Setenv("FORMAT_LINT_BIN", lintBin)
 	t.Setenv("GO_FMT_RUNTIME_DIR", runtimeDir)
 	chdir(t, workdir)
 
-	var stdout strings.Builder
-
-	var stderr strings.Builder
-
-	exitCode := NewRunner(&stdout, &stderr, "test").Run([]string{"format", "."})
+	var stdout, stderr strings.Builder
+	exitCode := New(&stdout, &stderr, "test").Run([]string{"format", "."})
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d\nstdout:\n%s\nstderr:\n%s", exitCode, stdout.String(), stderr.String())
 	}
 
-	invocations := readFile(t, logPath)
-
-	if invocations != "fmt-ts .\nfmt-lint .\n" {
+	if invocations := readFile(t, logPath); invocations != "fmt-ts .\nfmt-lint .\n" {
 		t.Fatalf("unexpected invocations:\n%s", invocations)
 	}
 
@@ -51,38 +40,24 @@ func run() {
 	if !strings.Contains(stdout.String(), "Formatter") || !strings.Contains(stdout.String(), "Vet") {
 		t.Fatalf("expected Go report on stdout, got:\n%s", stdout.String())
 	}
-
-	shim := readFile(t, filepath.Join(runtimeCacheRoot(t), "bin", "fmt-sources"))
-
-	if !strings.Contains(shim, " go sources ") {
-		t.Fatalf("expected fmt-sources shim to call go sources, got:\n%s", shim)
-	}
 }
 
 func TestRunnerFormatStopsOnFailingTool(t *testing.T) {
-	workdir := t.TempDir()
 	logPath := filepath.Join(t.TempDir(), "invocations.log")
 	formatBin := writeStubTool(t, "fmt-ts", logPath, 7, "format failed\n")
 	lintBin := writeStubTool(t, "fmt-lint", logPath, 0, "should not run\n")
-
 	t.Setenv("FORMAT_TS_BIN", formatBin)
 	t.Setenv("FORMAT_LINT_BIN", lintBin)
 	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
-	chdir(t, workdir)
+	chdir(t, t.TempDir())
 
-	var stdout strings.Builder
+	var stdout, stderr strings.Builder
 
-	var stderr strings.Builder
-
-	exitCode := NewRunner(&stdout, &stderr, "test").Run([]string{"format", "."})
-
-	if exitCode != 7 {
+	if exitCode := New(&stdout, &stderr, "test").Run([]string{"format", "."}); exitCode != 7 {
 		t.Fatalf("expected exit code 7, got %d", exitCode)
 	}
 
-	invocations := readFile(t, logPath)
-
-	if invocations != "fmt-ts .\n" {
+	if invocations := readFile(t, logPath); invocations != "fmt-ts .\n" {
 		t.Fatalf("unexpected invocations:\n%s", invocations)
 	}
 
@@ -92,25 +67,14 @@ func TestRunnerFormatStopsOnFailingTool(t *testing.T) {
 }
 
 func TestRunnerGoPassthroughUsesInProcessGoCLI(t *testing.T) {
-	workdir := t.TempDir()
-	chdir(t, workdir)
+	var stdout, stderr strings.Builder
 
-	var stdout strings.Builder
-
-	var stderr strings.Builder
-
-	exitCode := NewRunner(&stdout, &stderr, "test").Run([]string{"go", "version"})
-
-	if exitCode != 0 {
+	if exitCode := New(&stdout, &stderr, "test").Run([]string{"go", "version"}); exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	if stdout.String() != "go-fmt test\n" {
-		t.Fatalf("unexpected stdout: %q", stdout.String())
-	}
-
-	if stderr.String() != "" {
-		t.Fatalf("unexpected stderr: %q", stderr.String())
+	if stdout.String() != "go-fmt test\n" || stderr.String() != "" {
+		t.Fatalf("unexpected streams: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 
@@ -121,60 +85,70 @@ func TestRunnerGoFormatRunsVetWhenEnabled(t *testing.T) {
 		t.Fatalf("write go.mod: %v", err)
 	}
 
-	testutil.WriteGoFile(t, filepath.Join(workdir, "main.go"), `package vetcheck
-
-import "fmt"
-
-func broken() {
-	fmt.Printf("%d", "not an integer")
-}
-`)
+	testutil.WriteGoFile(t, filepath.Join(workdir, "main.go"), "package vetcheck\n\nimport \"fmt\"\n\nfunc broken() {\n\tfmt.Printf(\"%d\", \"not an integer\")\n}\n")
 	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
 	chdir(t, workdir)
 
-	var stdout strings.Builder
+	var stdout, stderr strings.Builder
 
-	var stderr strings.Builder
-
-	if exitCode := NewRunner(&stdout, &stderr, "test").Run([]string{"go", "format", "."}); exitCode == 0 {
+	if exitCode := New(&stdout, &stderr, "test").Run([]string{"go", "format", "."}); exitCode == 0 {
 		t.Fatalf("expected vet-enabled go format to fail\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
 	}
 }
 
-func TestWriteSourceShimMakesExistingFileExecutable(t *testing.T) {
-	path := filepath.Join(realTempDir(t), "fmt-sources")
+func TestRunnerFormatAllUsesCurrentDirectory(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "invocations.log")
+	formatBin := writeStubTool(t, "fmt-ts", logPath, 7, "")
+	t.Setenv("FORMAT_TS_BIN", formatBin)
+	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
+	chdir(t, t.TempDir())
 
-	if err := os.WriteFile(path, []byte("stale\n"), 0o600); err != nil {
-		t.Fatalf("write existing shim: %v", err)
+	var stdout, stderr strings.Builder
+
+	if exitCode := New(&stdout, &stderr, "test").Run([]string{"format-all"}); exitCode != 7 {
+		t.Fatalf("expected exit code 7, got %d", exitCode)
 	}
 
-	if err := os.Chmod(path, 0o600); err != nil {
-		t.Fatalf("restrict existing shim: %v", err)
-	}
-
-	if err := writeSourceShim(path, "/tmp/fmt-all"); err != nil {
-		t.Fatalf("write source shim: %v", err)
-	}
-
-	info, err := os.Stat(path)
-
-	if err != nil {
-		t.Fatalf("stat source shim: %v", err)
-	}
-
-	if info.Mode().Perm() != 0o700 {
-		t.Fatalf("expected executable shim mode 0700, got %04o", info.Mode().Perm())
+	if invocations := readFile(t, logPath); invocations != "fmt-ts .\n" {
+		t.Fatalf("format-all did not forward the current-directory target: %q", invocations)
 	}
 }
 
-func writeStubTool(t *testing.T, name string, logPath string, exitCode int, output string) string {
+func TestRunnerRejectsWhitespaceOnlyCommandAndPath(t *testing.T) {
+	for _, args := range [][]string{{"   "}, {"format", "\t "}, {"ts", "\n"}} {
+		t.Run(strings.Join(args, "/"), func(t *testing.T) {
+			var stdout, stderr strings.Builder
+
+			if exitCode := New(&stdout, &stderr, "test").Run(args); exitCode != 2 {
+				t.Fatalf("expected exit code 2, got %d", exitCode)
+			}
+		})
+	}
+}
+
+func TestRunnerTrimsCommandButForwardsSpaceContainingPath(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "invocations.log")
+	formatBin := writeStubTool(t, "fmt-ts", logPath, 0, "")
+	t.Setenv("FORMAT_TS_BIN", formatBin)
+	t.Setenv("GO_FMT_RUNTIME_DIR", realTempDir(t))
+	chdir(t, t.TempDir())
+
+	var stdout, stderr strings.Builder
+
+	if exitCode := New(&stdout, &stderr, "test").Run([]string{" ts ", "a path/with spaces"}); exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d: %s", exitCode, stderr.String())
+	}
+
+	if invocations := readFile(t, logPath); invocations != "fmt-ts a path/with spaces\n" {
+		t.Fatalf("path was not forwarded unchanged: %q", invocations)
+	}
+}
+
+func writeStubTool(t *testing.T, name, logPath string, exitCode int, output string) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), name)
-	content := "#!/usr/bin/env sh\n" +
-		"printf '%s %s\\n' '" + name + "' \"$*\" >> '" + logPath + "'\n" +
-		"printf '%s' '" + strings.ReplaceAll(output, "'", "'\\''") + "'\n" +
-		"exit " + strconv.Itoa(exitCode) + "\n"
+	content := "#!/usr/bin/env sh\n" + "printf '%s %s\\n' '" + name + "' \"$*\" >> '" + logPath + "'\n" + "printf '%s' '" + strings.ReplaceAll(output, "'", "'\\''") + "'\n" + "exit " + strconv.Itoa(exitCode) + "\n"
 
 	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
 		t.Fatalf("write stub: %v", err)
@@ -208,9 +182,7 @@ func chdir(t *testing.T, path string) {
 		t.Fatalf("chdir: %v", err)
 	}
 
-	t.Cleanup(func() {
-		_ = os.Chdir(oldwd)
-	})
+	t.Cleanup(func() { _ = os.Chdir(oldwd) })
 }
 
 func realTempDir(t *testing.T) string {
@@ -227,16 +199,4 @@ func realTempDir(t *testing.T) string {
 	}
 
 	return path
-}
-
-func runtimeCacheRoot(t *testing.T) string {
-	t.Helper()
-
-	root, err := runtimeRoot(runtimePayload{}, false)
-
-	if err != nil {
-		t.Fatalf("resolve runtime cache root: %v", err)
-	}
-
-	return root
 }

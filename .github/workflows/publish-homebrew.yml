@@ -1,0 +1,227 @@
+name: Publish Homebrew
+
+on:
+    workflow_call:
+        inputs:
+            tag:
+                description: Release tag to publish, for example v0.0.12
+                required: true
+                type: string
+        secrets:
+            HOMEBREW_TAP_TOKEN:
+                required: true
+
+permissions: {}
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    RELEASE_TAG: ${{ inputs.tag }}
+
+jobs:
+    validate_homebrew:
+        name: Homebrew (${{ matrix.goos }}/${{ matrix.goarch }})
+        runs-on: ${{ matrix.runner }}
+        permissions:
+            contents: read
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - runner: macos-14
+                      goos: darwin
+                      goarch: arm64
+                    - runner: ubuntu-22.04
+                      goos: linux
+                      goarch: amd64
+                    - runner: ubuntu-22.04-arm
+                      goos: linux
+                      goarch: arm64
+
+        steps:
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              name: Checkout release source
+              with:
+                  ref: ${{ env.RELEASE_TAG }}
+
+            - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+              name: Install Vite+
+              with:
+                  node-version: 25.8.2
+                  cache: true
+
+            - uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479
+              name: Install Homebrew
+
+            - name: Download published fmtkit assets and generate formula
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  release_dir="storage/homebrew/release"
+                  formula="storage/homebrew/Formula/fmtkit.rb"
+                  mkdir -p "$release_dir" "$(dirname "$formula")"
+                  gh release download "$RELEASE_TAG" \
+                      --repo "$GITHUB_REPOSITORY" \
+                      --dir "$release_dir" \
+                      --pattern 'fmtkit-*' \
+                      --clobber
+
+                  for platform in darwin-arm64 linux-amd64 linux-arm64; do
+                      test -f "$release_dir/fmtkit-${platform}"
+                      test -f "$release_dir/fmtkit-${platform}.sha256"
+                      (cd "$release_dir" && shasum -a 256 -c "fmtkit-${platform}.sha256")
+                  done
+
+                  vp run --filter homebrew --fail-if-no-match generate -- \
+                      --tag "$RELEASE_TAG" \
+                      --checksums-dir "$release_dir" \
+                      --output "$formula"
+              shell: bash
+
+            - name: Audit, install, and test from an isolated local tap
+              env:
+                  GOOS: ${{ matrix.goos }}
+                  GOARCH: ${{ matrix.goarch }}
+              run: |
+                  set -euo pipefail
+                  tap="fmtkit-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/${GOOS}-${GOARCH}"
+                  formula="storage/homebrew/Formula/fmtkit.rb"
+                  cleanup() {
+                      brew uninstall --force "$tap/fmtkit" >/dev/null 2>&1 || true
+                      brew untap --force "$tap" >/dev/null 2>&1 || true
+                  }
+                  trap cleanup EXIT
+
+                  brew tap-new "$tap"
+                  tap_dir="$(brew --repository "$tap")"
+                  cp "$formula" "$tap_dir/Formula/fmtkit.rb"
+                  ruby -c "$tap_dir/Formula/fmtkit.rb"
+                  brew style "$tap/fmtkit"
+                  brew readall --aliases --os=all --arch=all "$tap"
+                  brew audit --formula --strict --os=all --arch=all "$tap/fmtkit"
+                  brew install --build-from-source "$tap/fmtkit"
+                  brew test "$tap/fmtkit"
+              shell: bash
+
+    publish_homebrew:
+        name: Publish Homebrew formula
+        needs: validate_homebrew
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+
+        steps:
+            - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              name: Checkout release source
+              with:
+                  ref: ${{ env.RELEASE_TAG }}
+
+            - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+              name: Install Vite+
+              with:
+                  node-version: 25.8.2
+                  cache: true
+
+            - name: Download published fmtkit assets and generate formula
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -euo pipefail
+                  release_dir="storage/homebrew/release"
+                  formula="storage/homebrew/Formula/fmtkit.rb"
+                  mkdir -p "$release_dir" "$(dirname "$formula")"
+                  gh release download "$RELEASE_TAG" \
+                      --repo "$GITHUB_REPOSITORY" \
+                      --dir "$release_dir" \
+                      --pattern 'fmtkit-*' \
+                      --clobber
+
+                  for platform in darwin-arm64 linux-amd64 linux-arm64; do
+                      test -f "$release_dir/fmtkit-${platform}"
+                      test -f "$release_dir/fmtkit-${platform}.sha256"
+                      (cd "$release_dir" && shasum -a 256 -c "fmtkit-${platform}.sha256")
+                  done
+
+                  vp run --filter homebrew --fail-if-no-match generate -- \
+                      --tag "$RELEASE_TAG" \
+                      --checksums-dir "$release_dir" \
+                      --output "$formula"
+              shell: bash
+
+            - name: Update oullin/fmtkit-homebrew
+              env:
+                  GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  source_formula="storage/homebrew/Formula/fmtkit.rb"
+                  tap_dir="storage/homebrew/tap"
+                  gh auth setup-git
+                  gh repo clone oullin/fmtkit-homebrew "$tap_dir" -- --depth=1
+                  mkdir -p "$tap_dir/Formula"
+
+                  candidate_version="${RELEASE_TAG#v}"
+                  current_version=''
+                  if [[ -f "$tap_dir/Formula/fmtkit.rb" ]]; then
+                      current_version="$(sed -n 's/^  version "\([0-9][0-9.]*\)"$/\1/p' "$tap_dir/Formula/fmtkit.rb")"
+                      [[ -n "$current_version" ]] || {
+                          printf 'existing tap formula has no valid version\n' >&2
+                          exit 1
+                      }
+                  fi
+                  if [[ -n "$current_version" && "$current_version" != "$candidate_version" ]]; then
+                      newest="$(printf '%s\n%s\n' "$current_version" "$candidate_version" | sort -V | tail -n 1)"
+                      [[ "$newest" == "$candidate_version" ]] || {
+                          printf 'refusing to downgrade public formula from %s to %s\n' "$current_version" "$candidate_version" >&2
+                          exit 1
+                      }
+                  fi
+
+                  cp "$source_formula" "$tap_dir/Formula/fmtkit.rb"
+                  git -C "$tap_dir" config user.name "github-actions[bot]"
+                  git -C "$tap_dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git -C "$tap_dir" add Formula/fmtkit.rb
+                  if git -C "$tap_dir" diff --cached --quiet; then
+                      printf 'Homebrew formula is already current for %s\n' "$RELEASE_TAG"
+                      exit 0
+                  fi
+                  git -C "$tap_dir" commit -m "fmtkit ${RELEASE_TAG}"
+                  git -C "$tap_dir" push origin HEAD:main
+              shell: bash
+
+    verify_public_homebrew:
+        name: Public Homebrew (${{ matrix.goos }}/${{ matrix.goarch }})
+        needs: publish_homebrew
+        runs-on: ${{ matrix.runner }}
+        permissions:
+            contents: read
+
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - runner: macos-14
+                      goos: darwin
+                      goarch: arm64
+                    - runner: ubuntu-22.04
+                      goos: linux
+                      goarch: amd64
+                    - runner: ubuntu-22.04-arm
+                      goos: linux
+                      goarch: arm64
+
+        steps:
+            - uses: Homebrew/actions/setup-homebrew@18fcb8e3e06b4247c676c506750dc95ea7226479
+              name: Install Homebrew
+
+            - name: Reinstall and test the public formula
+              run: |
+                  set -euo pipefail
+                  formula='oullin/fmtkit/fmtkit'
+                  brew untap --force oullin/fmtkit >/dev/null 2>&1 || true
+                  brew tap oullin/fmtkit https://github.com/oullin/fmtkit-homebrew
+                  brew install "$formula"
+                  brew reinstall "$formula"
+                  brew test "$formula"
+                  test "$(fmtkit version)" = "fmtkit ${RELEASE_TAG}"
+              shell: bash

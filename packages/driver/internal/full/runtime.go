@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	cryptorand "crypto/rand"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -691,31 +693,76 @@ func writeSourceShim(path, self string) error {
 			return fmt.Errorf("fmt-sources shim is a symlink")
 		}
 
-		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("remove fmt-sources shim: %w", err)
+		if !ownedByCurrentUser(info) {
+			return fmt.Errorf("fmt-sources shim is not owned by the current user")
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("inspect fmt-sources shim: %w", err)
 	}
 
 	content := "#!/usr/bin/env sh\nexec " + shellQuote(self) + " go sources \"$@\"\n"
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
+	temporary, file, err := createSourceShimTemp(filepath.Dir(path), filepath.Base(path))
 
 	if err != nil {
-		return fmt.Errorf("create fmt-sources shim: %w", err)
+		return err
 	}
+
+	published := false
+
+	defer func() {
+		if !published {
+			_ = os.Remove(temporary)
+		}
+	}()
 
 	if _, err := file.WriteString(content); err != nil {
 		_ = file.Close()
 
-		return fmt.Errorf("write fmt-sources shim: %w", err)
+		return fmt.Errorf("write temporary fmt-sources shim: %w", err)
+	}
+
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+
+		return fmt.Errorf("sync temporary fmt-sources shim: %w", err)
 	}
 
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("close fmt-sources shim: %w", err)
+		return fmt.Errorf("close temporary fmt-sources shim: %w", err)
 	}
 
+	if err := os.Rename(temporary, path); err != nil {
+		return fmt.Errorf("publish fmt-sources shim: %w", err)
+	}
+
+	published = true
+
 	return nil
+}
+
+func createSourceShimTemp(dir, base string) (string, *os.File, error) {
+	for range 16 {
+		var token [16]byte
+
+		if _, err := cryptorand.Read(token[:]); err != nil {
+			return "", nil, fmt.Errorf("generate temporary fmt-sources shim name: %w", err)
+		}
+
+		path := filepath.Join(dir, "."+base+".tmp-"+hex.EncodeToString(token[:]))
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o700)
+
+		if os.IsExist(err) {
+			continue
+		}
+
+		if err != nil {
+			return "", nil, fmt.Errorf("create temporary fmt-sources shim: %w", err)
+		}
+
+		return path, file, nil
+	}
+
+	return "", nil, fmt.Errorf("create temporary fmt-sources shim: exhausted unique names")
 }
 
 // ensureSourceShim serializes replacement of the mutable shim with runtime

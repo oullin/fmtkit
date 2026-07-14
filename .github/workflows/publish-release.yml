@@ -42,7 +42,7 @@ jobs:
               run: ./infra/scripts/release/verify-release-tag.sh
               shell: bash
 
-            - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.0.1
+            - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
               name: Install Vite+
               with:
                   node-version: 25.8.2

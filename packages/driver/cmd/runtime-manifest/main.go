@@ -25,13 +25,13 @@ func run(args []string, stderr io.Writer) int {
 	goarch := flags.String("goarch", "", "runtime Go architecture")
 
 	if err := flags.Parse(args); err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 
 		return 2
 	}
 
 	if *root == "" || *archive == "" || *output == "" || *required == "" || strings.TrimSpace(*goos) == "" || strings.TrimSpace(*goarch) == "" {
-		fmt.Fprintln(stderr, "usage: runtime-manifest --root DIR --archive FILE --output FILE --goos GOOS --goarch GOARCH --required path[,path...]")
+		_, _ = fmt.Fprintln(stderr, "usage: runtime-manifest --root DIR --archive FILE --output FILE --goos GOOS --goarch GOARCH --required path[,path...]")
 
 		return 2
 	}
@@ -39,7 +39,7 @@ func run(args []string, stderr io.Writer) int {
 	manifest, err := integrityx.Build(*root, *archive, *goos, *goarch, strings.Split(*required, ","))
 
 	if err != nil {
-		fmt.Fprintf(stderr, "build runtime manifest: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "build runtime manifest: %v\n", err)
 
 		return 1
 	}
@@ -47,13 +47,13 @@ func run(args []string, stderr io.Writer) int {
 	content, err := integrityx.Marshal(manifest)
 
 	if err != nil {
-		fmt.Fprintf(stderr, "marshal runtime manifest: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "marshal runtime manifest: %v\n", err)
 
 		return 1
 	}
 
 	if err := os.WriteFile(*output, content, 0o600); err != nil {
-		fmt.Fprintf(stderr, "write runtime manifest: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "write runtime manifest: %v\n", err)
 
 		return 1
 	}

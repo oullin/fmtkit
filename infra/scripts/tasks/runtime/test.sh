@@ -37,6 +37,28 @@ assert_fails env TEST_LIBC=musl bash -c 'source "$1"; source "$2"; require_gnu_l
 printf test >"$tmp/input"
 assert_equals "$(portable_sha256 "$tmp/input")" "$(shasum -a 256 "$tmp/input" | awk '{print $1}')  input"
 
+# GNU tar reports SIGPIPE under pipefail when grep -q stops at bin/node. Materialize
+# the listing before checking it so native Linux runtime archives remain valid.
+runtime_root="$tmp/runtime"
+mkdir -p "$runtime_root/bin" "$runtime_root/go/bin" "$runtime_root/support/scripts" "$runtime_root/support/filler"
+for member in node fmt-ts fmt-lint tsx oxfmt oxlint; do
+	printf '#!/usr/bin/env sh\n' >"$runtime_root/bin/$member"
+done
+printf '#!/usr/bin/env sh\n' >"$runtime_root/go/bin/go"
+printf 'export {}\n' >"$runtime_root/support/scripts/format-all.ts"
+for number in $(seq 1 8192); do
+	printf '%s\n' "$number" >"$runtime_root/support/filler/$number"
+done
+runtime_archive="$tmp/runtime-linux-amd64.tar.gz"
+tar -C "$runtime_root" -czf "$runtime_archive" bin go support
+validate_archive_members "$runtime_archive"
+cp -R "$runtime_root" "$tmp/runtime-with-unexpected"
+mkdir -p "$tmp/runtime-with-unexpected/unexpected"
+printf 'unexpected\n' >"$tmp/runtime-with-unexpected/unexpected/member"
+unexpected_archive="$tmp/runtime-with-unexpected.tar.gz"
+tar -C "$tmp/runtime-with-unexpected" -czf "$unexpected_archive" bin go support unexpected
+assert_fails validate_archive_members "$unexpected_archive"
+
 verify="$task_dir/runtime/verify-binary.sh"
 assert_fails "$verify"
 assert_fails "$verify" --goos ' ' --goarch arm64 --binary /missing --checksum "$tmp/checksum"

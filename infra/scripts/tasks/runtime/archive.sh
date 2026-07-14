@@ -7,19 +7,26 @@ runtime_archive_path() {
 validate_archive_members() {
 	local archive="$1"
 	local member
+	local members_file
 
-	gzip -t "$archive"
+	members_file="$(mktemp)"
+
+	gzip -t "$archive" || { rm -f "$members_file"; return 1; }
+	tar -tzf "$archive" >"$members_file" || { rm -f "$members_file"; return 1; }
 	for member in bin/node bin/fmt-ts bin/fmt-lint bin/tsx bin/oxfmt bin/oxlint go/bin/go support/scripts/format-all.ts; do
-		if ! tar -tzf "$archive" | grep -Fxq "$member"; then
+		if ! grep -Fxq -- "$member" "$members_file"; then
 			printf 'runtime archive %s is missing required member %s\n' "$archive" "$member" >&2
+			rm -f "$members_file"
 			return 1
 		fi
 	done
 
-	if ! tar -tzf "$archive" | awk -F/ 'NF == 0 || $1 == "" || ($1 != "bin" && $1 != "go" && $1 != "lib" && $1 != "support") { exit 1 }'; then
+	if ! awk -F/ 'NF == 0 || $1 == "" || ($1 != "bin" && $1 != "go" && $1 != "lib" && $1 != "support") { exit 1 }' "$members_file"; then
 		printf 'runtime archive contains an unexpected top-level path: %s\n' "$archive" >&2
+		rm -f "$members_file"
 		return 1
 	fi
+	rm -f "$members_file"
 }
 
 validate_archive_inputs() {

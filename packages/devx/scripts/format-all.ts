@@ -180,7 +180,7 @@ async function runValidate(files: string[]): Promise<void> {
 	console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
 	const options = parseArgs(process.argv.slice(2));
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 

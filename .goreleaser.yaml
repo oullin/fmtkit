@@ -1,0 +1,73 @@
+version: 2
+
+project_name: fmtkit
+
+# Releases stage every platform; PR validation sets FMTKIT_STAGE_TARGETS=host
+# to stage only the runner's platform before a --single-target build.
+env:
+    - FMTKIT_STAGE_TARGETS={{ if index .Env "FMTKIT_STAGE_TARGETS" }}{{ .Env.FMTKIT_STAGE_TARGETS }}{{ else }}all{{ end }}
+
+before:
+    hooks:
+        - ./infra/scripts/release/stage-ts-assets.sh {{ .Env.FMTKIT_STAGE_TARGETS }}
+
+builds:
+    - id: fmtkit
+      main: ./packages/driver/cmd/fmtkit
+      binary: fmtkit
+      env:
+          - CGO_ENABLED=0
+      goos:
+          - darwin
+          - linux
+      goarch:
+          - amd64
+          - arm64
+      flags:
+          - -trimpath
+      tags:
+          - fmtkit_sidecar
+      ldflags:
+          - -s -w -X main.version={{ .Tag }}
+
+archives:
+    - formats:
+          - tar.gz
+      name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+      files:
+          - README.md
+          - LICENSE
+
+checksum:
+    name_template: checksums.txt
+
+changelog:
+    disable: true
+
+release:
+    # publish-release.yml creates the GitHub Release (with the Docker image
+    # notes) before this runs; goreleaser only attaches the binary assets.
+    mode: keep-existing
+
+homebrew_casks:
+    - name: fmtkit
+      repository:
+          owner: oullin
+          name: homebrew-fmtkit
+          branch: main
+          token: '{{ .Env.HOMEBREW_TAP_TOKEN }}'
+      directory: Casks
+      homepage: https://github.com/oullin/fmtkit
+      description: TS/Vue and Go formatting pipeline in a single self-contained binary
+      caveats: |
+          The TS/Vue toolchain (oxfmt, oxlint, oxc-parser) is embedded in the
+          binary and extracted to your user cache directory on first run; no
+          Node.js installation is required.
+      # The release binaries are not notarized; strip the quarantine flag so
+      # Gatekeeper does not block them.
+      hooks:
+          post:
+              install: |
+                  if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+                    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/fmtkit"]
+                  end

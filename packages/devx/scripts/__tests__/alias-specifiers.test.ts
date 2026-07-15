@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { parseSync } from 'oxc-parser';
@@ -15,6 +15,11 @@ type Node = {
 };
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
+
+// sidecar.ts is a bundler-only entry point that must reach the oxfmt/oxlint
+// CLI internals in node_modules; oxlint's exports map blocks the bare
+// specifier the alias map would need, so its relative imports are exempt.
+const exemptFiles = new Set(['sidecar.ts']);
 
 const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#devx/ast')));
 
@@ -123,6 +128,10 @@ test('script module specifiers use aliases instead of relative paths', async () 
 	const violations: string[] = [];
 
 	for (const file of files) {
+		if (exemptFiles.has(basename(file))) {
+			continue;
+		}
+
 		const source = await readFile(file, 'utf8');
 
 		const specifiers = collectModuleSpecifiers(file, source);

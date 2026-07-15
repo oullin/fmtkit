@@ -14,12 +14,29 @@
 - AST-based spacing rules, then `gofmt` and `goimports`, in one deterministic pipeline.
 - Runs `go vet ./...` automatically when invoked inside a Go module or workspace.
 - Three output modes: `text` for humans, `json` for scripts, `agent` for CI and AI tools.
-- One CLI binary (`fmtkit-go`) or one Docker image with a thin host wrapper.
+- One self-contained `fmtkit` binary (Homebrew or GitHub Releases), a Go-only CLI (`fmtkit-go`), or one Docker image with a thin host wrapper.
 - Engine in [`packages/formatter/engine`](packages/formatter/engine) is importable from Go.
 
 ## Install
 
-Two ways to run it. Pick the one that fits your workflow — both produce identical output.
+Three ways to run it. Pick the one that fits your workflow — all produce identical output.
+
+**With Homebrew** (recommended: one self-contained binary with the full TS/Vue + Go pipeline — no Node.js, no Docker):
+
+```bash
+brew tap oullin/fmtkit
+brew install --cask fmtkit
+fmtkit format .
+```
+
+The binary embeds the TS toolchain (oxfmt, oxlint, oxc-parser and the support scripts, compiled with Bun) and extracts it to your user cache directory on first run. Homebrew casks are macOS-only; on Linux, download the same binary from GitHub Releases instead:
+
+```bash
+curl -fsSL https://github.com/oullin/fmtkit/releases/download/v0.5.0/fmtkit_0.5.0_linux_amd64.tar.gz | tar -xz fmtkit
+sudo install -m 0755 fmtkit /usr/local/bin/fmtkit
+```
+
+Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap in the [latest release](https://github.com/oullin/fmtkit/releases/latest) tag and your platform.
 
 **With Go** (good for local hacking and contributors):
 

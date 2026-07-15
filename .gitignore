@@ -1,4 +1,6 @@
 /fmt
+/dist/
+*.bun-build
 /storage/bin*/
 /storage/dist/
 /storage/dist-test/

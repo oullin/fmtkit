@@ -10,6 +10,15 @@ import (
 	"github.com/oullin/fmtkit/packages/driver/testutil"
 )
 
+// TestMain pins a color-free environment: CI task runners export FORCE_COLOR,
+// which would inject ANSI codes into the captured output these tests assert.
+func TestMain(m *testing.M) {
+	_ = os.Unsetenv("FORCE_COLOR")
+	_ = os.Setenv("NO_COLOR", "1")
+
+	os.Exit(m.Run())
+}
+
 func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) {
 	t.Helper()
 

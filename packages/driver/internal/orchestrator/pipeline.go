@@ -16,9 +16,25 @@ type Tools struct {
 	Go   func(args []string, output io.Writer) int
 }
 
+// Steps selects which parts of the pipeline run; the zero value (no
+// selection flags) runs everything.
+type Steps struct {
+	TS bool
+	Go bool
+}
+
+func (s Steps) normalized() Steps {
+	if !s.TS && !s.Go {
+		return Steps{TS: true, Go: true}
+	}
+
+	return s
+}
+
 // Pipeline renders sectioned progress on Stderr while running the steps.
 type Pipeline struct {
 	Tools Tools
+	Steps Steps
 
 	// Quiet restores the entrypoint's summary-only output; tool logs then
 	// only appear when a step fails.
@@ -39,32 +55,43 @@ func (p Pipeline) RunFormat(paths []string) int {
 	log.section("Formatting target(s)")
 	log.detail("paths", strings.Join(paths, " "))
 
-	steps := []struct {
+	selected := p.Steps.normalized()
+
+	type step struct {
 		label     string
 		summarize func(string, *logger)
 		run       func(output io.Writer) int
-	}{
-		{
-			label:     "Running TS/Vue formatting",
-			summarize: summarizeTSFormat,
-			run: func(output io.Writer) int {
-				return exitCode(p.Tools.TS(paths, output), output)
+	}
+
+	var steps []step
+
+	if selected.TS {
+		steps = append(steps,
+			step{
+				label:     "Running TS/Vue formatting",
+				summarize: summarizeTSFormat,
+				run: func(output io.Writer) int {
+					return exitCode(p.Tools.TS(paths, output), output)
+				},
 			},
-		},
-		{
-			label:     "Running TS/Vue lint",
-			summarize: summarizeTSLint,
-			run: func(output io.Writer) int {
-				return exitCode(p.Tools.Lint(paths, output), output)
+			step{
+				label:     "Running TS/Vue lint",
+				summarize: summarizeTSLint,
+				run: func(output io.Writer) int {
+					return exitCode(p.Tools.Lint(paths, output), output)
+				},
 			},
-		},
-		{
+		)
+	}
+
+	if selected.Go {
+		steps = append(steps, step{
 			label:     "Running Go formatting",
 			summarize: summarizeGoFormat,
 			run: func(output io.Writer) int {
 				return p.Tools.Go(append([]string{"format"}, paths...), output)
 			},
-		},
+		})
 	}
 
 	for _, step := range steps {

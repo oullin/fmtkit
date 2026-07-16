@@ -16,7 +16,6 @@ import (
 	"sort"
 
 	fmtkit "github.com/oullin/fmtkit"
-	"github.com/oullin/fmtkit/packages/driver/internal/tsruntime/embedded"
 )
 
 // SupportDirEnv points at a pre-extracted toolchain directory and skips
@@ -73,7 +72,7 @@ func Resolve(version string) (Support, error) {
 		return support, nil
 	}
 
-	assets, ok := embedded.Assets()
+	assets, ok := fmtkit.SidecarAssets()
 
 	if !ok {
 		return Support{}, errors.New(

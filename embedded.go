@@ -1,6 +1,8 @@
 // Package fmtkit exposes repository-level assets embedded into the fmtkit
 // binaries. It lives at the module root because go:embed cannot reference
-// files above the embedding package.
+// files above the embedding package; that also covers the TS toolchain
+// staged under infra/bin/ by infra/scripts/release/stage-ts-assets.sh, which
+// only builds tagged fmtkit_sidecar embed (see embedded_sidecar_*.go).
 package fmtkit
 
 import _ "embed"

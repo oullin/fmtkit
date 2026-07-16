@@ -194,6 +194,31 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 	}
 }
 
+func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
+	repo := gitScratchRepo(t, map[string]string{
+		"app.ts":         "export const a = 1;\n",
+		".oxlintrc.json": "{}",
+	})
+
+	support := supportWithStub(t)
+
+	if err := os.WriteFile(filepath.Join(support.Dir, ".oxlintrc.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write bundled config: %v", err)
+	}
+
+	t.Setenv(SourcesCwdEnv, repo)
+
+	var stdout, stderr bytes.Buffer
+
+	if err := support.RunLint(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
+	}
+
+	if strings.Contains(stdout.String(), "--config") {
+		t.Fatalf("bundled config passed despite project config:\n%s", stdout.String())
+	}
+}
+
 func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 	repo := gitScratchRepo(t, map[string]string{"main.go": "package main\n"})
 

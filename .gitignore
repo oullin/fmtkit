@@ -1,6 +1,10 @@
 /fmt
 /dist/
 *.bun-build
+
+# TS toolchain assets staged per platform by stage-ts-assets.sh; the tracked
+# entrypoint scripts in infra/bin itself stay versioned.
+/infra/bin/*/
 /storage/bin*/
 /storage/dist/
 /storage/dist-test/

@@ -184,6 +184,86 @@ func TestFormatRunsFullPipeline(t *testing.T) {
 	}
 }
 
+func TestFormatTSFlagSkipsGoStep(t *testing.T) {
+	support, logFile := stubSupportDir(t)
+
+	t.Setenv("FMTKIT_SUPPORT_DIR", support)
+
+	workdir := gitWorkdir(t)
+
+	exitCode, _, stderr := runCLI(t, workdir, "format", "--ts", ".")
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d\n%s", exitCode, stderr)
+	}
+
+	if strings.Contains(stderr, "==> Running Go formatting") {
+		t.Fatalf("--ts still ran the Go step:\n%s", stderr)
+	}
+
+	log, err := os.ReadFile(logFile)
+
+	if err != nil {
+		t.Fatalf("read invocation log: %v", err)
+	}
+
+	if invocations := strings.Split(strings.TrimSpace(string(log)), "\n"); len(invocations) != 2 {
+		t.Fatalf("expected pipeline + oxlint invocations, got %q", invocations)
+	}
+}
+
+func TestFormatGoFlagSkipsTSSteps(t *testing.T) {
+	workdir := gitWorkdir(t)
+
+	// No FMTKIT_SUPPORT_DIR: the TS toolchain is unavailable, so --go must
+	// succeed without touching it.
+	exitCode, _, stderr := runCLI(t, workdir, "format", "--go", ".")
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d\n%s", exitCode, stderr)
+	}
+
+	if strings.Contains(stderr, "==> Running TS/Vue formatting") {
+		t.Fatalf("--go still ran the TS step:\n%s", stderr)
+	}
+
+	if !strings.Contains(stderr, "==> Running Go formatting") {
+		t.Fatalf("--go did not run the Go step:\n%s", stderr)
+	}
+}
+
+func TestFormatBothFlagsRunEverything(t *testing.T) {
+	support, _ := stubSupportDir(t)
+
+	t.Setenv("FMTKIT_SUPPORT_DIR", support)
+
+	workdir := gitWorkdir(t)
+
+	exitCode, _, stderr := runCLI(t, workdir, "format", "--ts", "--go", ".")
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d\n%s", exitCode, stderr)
+	}
+
+	for _, needle := range []string{"==> Running TS/Vue formatting", "==> Running TS/Vue lint", "==> Running Go formatting"} {
+		if !strings.Contains(stderr, needle) {
+			t.Fatalf("stderr missing %q:\n%s", needle, stderr)
+		}
+	}
+}
+
+func TestFormatRejectsUnknownFlag(t *testing.T) {
+	exitCode, _, stderr := runCLI(t, t.TempDir(), "format", "--nope")
+
+	if exitCode != 2 {
+		t.Fatalf("expected exit code 2, got %d", exitCode)
+	}
+
+	if !strings.Contains(stderr, "unknown flag") {
+		t.Fatalf("unexpected stderr:\n%s", stderr)
+	}
+}
+
 func TestFormatAllRejectsExtraArgs(t *testing.T) {
 	exitCode, _, stderr := runCLI(t, t.TempDir(), "format-all", "extra")
 

@@ -25,7 +25,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/driver/internal/tsruntime/embedded/dist}"
+dist="${FMTKIT_TS_ASSET_DIR:-${root}/infra/bin}"
 
 all_targets=(darwin_arm64 darwin_amd64 linux_arm64 linux_amd64)
 

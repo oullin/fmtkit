@@ -18,10 +18,8 @@ on:
 
 permissions:
     contents: write
-    packages: write
 
 env:
-    IMAGE_NAME: ghcr.io/oullin/fmtkit
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     RELEASE_TAG: ${{ inputs.tag }}
 
@@ -30,120 +28,9 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    publish:
-        runs-on: ubuntu-latest
-
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
-
-            - name: Verify release tag and checkout tagged commit
-              run: ./infra/scripts/release/verify-release-tag.sh
-              shell: bash
-
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v4
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
-
-            - name: Log in to GHCR
-              uses: docker/login-action@v4
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Build and push Go image
-              id: build-go
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.golang
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go
-                      ${{ env.IMAGE_NAME }}:latest-go
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=go
-                  cache-to: type=gha,mode=max,scope=go
-
-            - name: Build and push Node/TS image
-              id: build-node-ts
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.node-ts
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
-                      ${{ env.IMAGE_NAME }}:latest-node-ts
-                  cache-from: type=gha,scope=node-ts
-                  cache-to: type=gha,mode=max,scope=node-ts
-
-            - name: Build and push full image
-              id: build-full
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.full
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full
-                      ${{ env.IMAGE_NAME }}:latest-full
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=full
-                  cache-to: type=gha,mode=max,scope=full
-
-            - name: Verify published release image
-              env:
-                  NEW_TAG: ${{ env.RELEASE_TAG }}
-              run: ./infra/scripts/release/verify-release-image.sh
-              shell: bash
-
-            - name: Promote verified full image to compatibility tags
-              env:
-                  DIGEST: ${{ steps.build-full.outputs.digest }}
-              run: |
-                  set -euo pipefail
-
-                  docker buildx imagetools create \
-                      --tag "${IMAGE_NAME}:${RELEASE_TAG}" \
-                      --tag "${IMAGE_NAME}:latest" \
-                      "${IMAGE_NAME}@${DIGEST}"
-              shell: bash
-
-            - name: Create or update release
-              uses: softprops/action-gh-release@v2
-              with:
-                  tag_name: ${{ env.RELEASE_TAG }}
-                  prerelease: false
-                  generate_release_notes: true
-                  body: |
-                      Docker images published:
-
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}` aliases the verified full image
-
-                      Latest tags updated:
-
-                      - `${{ env.IMAGE_NAME }}:latest-go`
-                      - `${{ env.IMAGE_NAME }}:latest-node-ts`
-                      - `${{ env.IMAGE_NAME }}:latest-full`
-                      - `${{ env.IMAGE_NAME }}:latest` aliases the verified full image
-
-    # Attaches the self-contained fmtkit binaries to the release created by
-    # the publish job and pushes the Homebrew cask to oullin/homebrew-fmtkit.
+    # Creates the release, attaches the self-contained fmtkit binaries to it, and
+    # pushes the Homebrew cask to oullin/homebrew-fmtkit.
     binaries:
-        needs: publish
         runs-on: ubuntu-latest
 
         steps:
@@ -172,6 +59,16 @@ jobs:
                   cache-dependency-path: |
                       go.mod
                       go.sum
+
+            # Creates the release up front so goreleaser (release.mode
+            # keep-existing) attaches its assets to it, and so the notes come
+            # from GitHub's generator rather than goreleaser's changelog.
+            - name: Create or update release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ env.RELEASE_TAG }}
+                  prerelease: false
+                  generate_release_notes: true
 
             - name: Build and publish release binaries
               uses: goreleaser/goreleaser-action@v6

@@ -1,18 +1,21 @@
 //go:build fmtkit_sidecar && darwin && arm64
 
-package fmtkit
+package embedded
 
 import (
 	"embed"
 	"io/fs"
 )
 
-//go:embed infra/bin/darwin_arm64
+// all: keeps the bundled .oxfmtrc.json and .oxlintrc.json, which a directory
+// pattern would drop for starting with a dot.
+//
+//go:embed all:bin/darwin_arm64
 var sidecarAssets embed.FS
 
 // SidecarAssets returns the TS toolchain staged for this platform.
 func SidecarAssets() (fs.FS, bool) {
-	sub, err := fs.Sub(sidecarAssets, "infra/bin/darwin_arm64")
+	sub, err := fs.Sub(sidecarAssets, "bin/darwin_arm64")
 
 	if err != nil {
 		panic(err)

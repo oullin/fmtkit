@@ -1,6 +1,6 @@
 //go:build !fmtkit_sidecar
 
-package fmtkit
+package embedded
 
 import "io/fs"
 

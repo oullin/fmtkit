@@ -23,14 +23,6 @@ type Steps struct {
 	Go bool
 }
 
-func (s Steps) normalized() Steps {
-	if !s.TS && !s.Go {
-		return Steps{TS: true, Go: true}
-	}
-
-	return s
-}
-
 // Pipeline renders sectioned progress on Stderr while running the steps.
 type Pipeline struct {
 	Tools Tools
@@ -43,8 +35,16 @@ type Pipeline struct {
 	Stderr io.Writer
 }
 
+func (s Steps) normalized() Steps {
+	if !s.TS && !s.Go {
+		return Steps{TS: true, Go: true}
+	}
+
+	return s
+}
+
 // RunFormat runs TS/Vue formatting, TS/Vue lint, and Go formatting against
-// the given paths, the Go port of run_format_pipeline in infra/bin/fmtkit.
+// the given paths.
 func (p Pipeline) RunFormat(paths []string) int {
 	if len(paths) == 0 {
 		paths = []string{"."}

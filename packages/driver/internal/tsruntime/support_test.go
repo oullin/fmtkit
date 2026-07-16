@@ -7,12 +7,16 @@ import (
 	"testing/fstest"
 )
 
+// fakeAssets mirrors a directory staged by stage-ts-assets.sh: the bindings
+// and the sidecar, plus the configs that ride along with them.
 func fakeAssets() fstest.MapFS {
 	return fstest.MapFS{
 		sidecarName:       &fstest.MapFile{Data: []byte("#!/bin/sh\n"), Mode: 0o755},
 		"oxc-parser.node": &fstest.MapFile{Data: []byte("parser")},
 		"oxfmt.node":      &fstest.MapFile{Data: []byte("fmt")},
 		"oxlint.node":     &fstest.MapFile{Data: []byte("lint")},
+		".oxfmtrc.json":   &fstest.MapFile{Data: []byte("{}")},
+		".oxlintrc.json":  &fstest.MapFile{Data: []byte("{}")},
 	}
 }
 

@@ -8,9 +8,14 @@ set -euo pipefail
 #   - oxc-parser.node    napi binding, loaded via NAPI_RS_NATIVE_LIBRARY_PATH
 #   - oxfmt.node         napi binding for the oxfmt CLI
 #   - oxlint.node        napi binding for the oxlint CLI
+#   - .oxfmtrc.json      repo-root config, the default for projects without one
+#   - .oxlintrc.json     repo-root config, the default for projects without one
 #
-# Tool versions come from packages/devx/package.json devDependencies, the same
-# source of truth the Docker images use. Requires bash, node, npm, and bun.
+# Output lands in packages/driver/internal/embedded/bin/<target>/, next to the
+# package that embeds it: go:embed cannot reach outside its own directory.
+#
+# Tool versions come from packages/devx/package.json devDependencies. Requires
+# bash, node, npm, and bun.
 #
 # usage: stage-ts-assets.sh <all|host|goos_goarch...>
 
@@ -25,7 +30,9 @@ if [[ $# -eq 0 ]]; then
 fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-dist="${FMTKIT_TS_ASSET_DIR:-${root}/infra/bin}"
+dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/driver/internal/embedded/bin}"
+
+source "${root}/infra/scripts/host-target.sh"
 
 all_targets=(darwin_arm64 darwin_amd64 linux_arm64 linux_amd64)
 
@@ -47,30 +54,6 @@ binding_suffix() {
 		linux_amd64) printf 'linux-x64-gnu' ;;
 		*) return 1 ;;
 	esac
-}
-
-host_target() {
-	local os arch
-
-	case "$(uname -s)" in
-		Darwin) os='darwin' ;;
-		Linux) os='linux' ;;
-		*)
-			printf 'unsupported host OS: %s\n' "$(uname -s)" >&2
-			return 1
-			;;
-	esac
-
-	case "$(uname -m)" in
-		arm64 | aarch64) arch='arm64' ;;
-		x86_64) arch='amd64' ;;
-		*)
-			printf 'unsupported host arch: %s\n' "$(uname -m)" >&2
-			return 1
-			;;
-	esac
-
-	printf '%s_%s' "${os}" "${arch}"
 }
 
 declare -a targets=()
@@ -194,6 +177,12 @@ for target in "${targets[@]}"; do
 	fetch_binding "@oxc-parser/binding-${suffix}@${oxc_parser_pin}" "parser.${suffix}.node" "${out}/oxc-parser.node"
 	fetch_binding "@oxfmt/binding-${suffix}@${oxfmt_pin}" "oxfmt.${suffix}.node" "${out}/oxfmt.node"
 	fetch_binding "@oxlint/binding-${suffix}@${oxlint_pin}" "oxlint.${suffix}.node" "${out}/oxlint.node"
+
+	# The repo root configs are the single source of truth: they double as the
+	# configs this repo formats itself with, and tsruntime extracts these
+	# copies as the fallback for projects that carry none.
+	install -m 0644 "${root}/.oxfmtrc.json" "${out}/.oxfmtrc.json"
+	install -m 0644 "${root}/.oxlintrc.json" "${out}/.oxlintrc.json"
 
 	printf '==> staged %s\n' "${out}" >&2
 done

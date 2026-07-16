@@ -94,9 +94,6 @@ jobs:
             - uses: actions/checkout@v6
               name: Checkout repository
 
-            - name: Shell - Run entrypoint tests
-              run: ./infra/scripts/tasks/test-entrypoints.sh
-
             - uses: voidzero-dev/setup-vp@v1
               name: Install Vite+
               with:

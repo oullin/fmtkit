@@ -7,10 +7,9 @@ import { isNotFoundError, isTargetFile } from '#devx/pass-utils';
 import { validateFile } from '#devx/validate-syntax';
 
 // format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
-// → oxfmt → validate-syntax) inside a single Node process, replacing the
-// three tsx spawns infra/bin/fmtkit-ts-files used to make per invocation. Files
-// within a pass are processed concurrently; results are reported in input
-// order so the output stays deterministic.
+// → oxfmt → validate-syntax) inside a single process. Files within a pass are
+// processed concurrently; results are reported in input order so the output
+// stays deterministic.
 
 type CliOptions = {
 	check: boolean;

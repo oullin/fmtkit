@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	fmtkit "github.com/oullin/fmtkit"
+	"github.com/oullin/fmtkit/packages/driver/internal/embedded"
 )
 
 // SupportDirEnv points at a pre-extracted toolchain directory and skips
@@ -72,14 +72,13 @@ func Resolve(version string) (Support, error) {
 		return support, nil
 	}
 
-	assets, ok := fmtkit.SidecarAssets()
+	assets, ok := embedded.SidecarAssets()
 
 	if !ok {
 		return Support{}, errors.New(
 			"this fmtkit build carries no TS toolchain (built without the fmtkit_sidecar tag); " +
 				"point " + SupportDirEnv + " at a staged toolchain directory " +
-				"(see infra/scripts/release/stage-ts-assets.sh), or use a release binary " +
-				"or the ghcr.io/oullin/fmtkit image",
+				"(see infra/scripts/release/stage-ts-assets.sh), or use a release binary",
 		)
 	}
 
@@ -167,17 +166,6 @@ func extract(dst string, assets fs.FS) error {
 
 		if err := writeFileFrom(assets, entry.Name(), filepath.Join(dst, entry.Name()), mode); err != nil {
 			return err
-		}
-	}
-
-	configs := map[string][]byte{
-		".oxfmtrc.json":  fmtkit.OxfmtConfig,
-		".oxlintrc.json": fmtkit.OxlintConfig,
-	}
-
-	for name, contents := range configs {
-		if err := os.WriteFile(filepath.Join(dst, name), contents, 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", name, err)
 		}
 	}
 

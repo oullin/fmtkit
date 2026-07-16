@@ -33,14 +33,17 @@ cd "$fixture"
 
 git init --quiet .
 
-printf 'const  a = { x:1 }\nexport default a\n' > app.ts
+# The fixture carries no .oxfmtrc.* of its own, so oxfmt must pick up the
+# bundled config. The double-quoted string is the probe: singleQuote there
+# rewrites it, while a dropped config leaves oxfmt on its double-quote default.
+printf 'const  a = { x:1, s:"hi" }\nexport default a\n' > app.ts
 printf 'package p\n\nfunc f() {\n\tdefer println("d")\n\treturn\n}\n' > app.go
 printf 'module fixture\n\ngo 1.26.4\n' > go.mod
 
 XDG_CACHE_HOME="${tmp_root}/cache" "$bin" version
 XDG_CACHE_HOME="${tmp_root}/cache" "$bin" format .
 
-expected_ts=$'const a = { x: 1 };\n\nexport default a;\n'
+expected_ts=$'const a = { x: 1, s: \'hi\' };\n\nexport default a;\n'
 expected_go=$'package p\n\nfunc f() {\n\tdefer println("d")\n\n\treturn\n}\n'
 
 if ! diff <(printf '%s' "$expected_ts") app.ts; then

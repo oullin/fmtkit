@@ -50,7 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintf(w, "fmtkit check [--host-path /absolute/host/path] [paths...]\n\n")
-	_, _ = fmt.Fprintf(w, "fmtkit format [--host-path /absolute/host/path] [paths...]\n\n")
+	_, _ = fmt.Fprintf(w, "fmtkit check [paths...]\n\n")
+	_, _ = fmt.Fprintf(w, "fmtkit format [paths...]\n\n")
 	_, _ = fmt.Fprintf(w, "fmtkit sources [--include-declarations] [paths...]\n\n")
 }

@@ -1,8 +1,7 @@
 // Package orchestrator drives the full fmtkit formatting pipeline (TS/Vue
-// formatting, TS/Vue lint, Go formatting) with the sectioned, colorized
-// progress output the infra/bin/fmtkit entrypoint established. Unlike the
-// bash entrypoint, tool output streams live (indented under each section)
-// and is followed by the condensed summary lines.
+// formatting, TS/Vue lint, Go formatting) with sectioned, colorized progress
+// output: each step's tool output streams live, indented under its section
+// header, and is followed by the condensed summary lines.
 package orchestrator
 
 import (

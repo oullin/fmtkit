@@ -23,18 +23,13 @@ export default defineConfig({
 		},
 		tasks: {
 			check: `vp run ${workspacePackages} check`,
-			'check:docker': './infra/scripts/tasks/format-docker.sh check',
-			'docker:clean': './infra/scripts/tasks/docker-image.sh clean',
-			'format:docker': './infra/scripts/tasks/format-docker.sh format',
-			'format:local': './infra/scripts/tasks/format.sh',
+			// fmtkit formats itself with the binary it ships.
+			format: './infra/scripts/tasks/format.sh',
 			gofmt: './infra/scripts/tasks/fmt-source.sh',
-			'image:full': './infra/scripts/tasks/docker-image.sh full',
-			'image:go': './infra/scripts/tasks/docker-image.sh go',
-			'image:node-ts': './infra/scripts/tasks/docker-image.sh node-ts',
 			'install-cli': './infra/scripts/tasks/with-storage-env.sh go install ./packages/driver/cmd/fmtkit-go',
 			release: './infra/scripts/release/release.sh',
+			'test:binary': './infra/scripts/tasks/test-binary-smoke.sh',
 			'test:coverage': './infra/scripts/tasks/test-coverage.sh',
-			'test:entrypoints': './infra/scripts/tasks/test-entrypoints.sh',
 			'test-race':
 				'CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/formatter test ./... -race -v && CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/vet test ./... -race -v && CGO_ENABLED=1 ./infra/scripts/tasks/with-storage-env.sh go -C packages/driver test ./... -race -v',
 			vet: `vp run ${goPackages} vet`,

@@ -2,6 +2,10 @@ version: 2
 
 project_name: fmtkit
 
+# Build output belongs under storage/ like every other artifact this repo
+# produces; infra/scripts/tasks/env.sh rejects a repo-root dist/.
+dist: storage/dist
+
 # Releases stage every platform; PR validation sets FMTKIT_STAGE_TARGETS=host
 # to stage only the runner's platform before a --single-target build.
 env:
@@ -45,7 +49,7 @@ changelog:
     disable: true
 
 release:
-    # publish-release.yml creates the GitHub Release (with the Docker image
+    # publish-release.yml creates the GitHub Release (with GitHub's generated
     # notes) before this runs; goreleaser only attaches the binary assets.
     mode: keep-existing
 

@@ -57,13 +57,7 @@ func (r Runner) Run(mode Mode, args []string) int {
 		return 1
 	}
 
-	runPaths, err := opts.hostPath.Resolve(workRoot, opts.positional)
-
-	if err != nil {
-		r.writeError("%v\n", err)
-
-		return 1
-	}
+	runPaths := opts.positional
 
 	formatterCfg := cfg.FormatterConfig()
 

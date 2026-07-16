@@ -10,9 +10,6 @@ import (
 	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
 )
 
-// Env override names shared with the container entrypoints; see
-// infra/bin/fmtkit-ts-files and infra/bin/fmtkit-ts-lint.
-
 // RunOptions describes one TS toolchain invocation.
 type RunOptions struct {
 	// Scopes are the paths to process, defaulting to ".".
@@ -32,8 +29,7 @@ const (
 )
 
 // RunPipeline runs the full TS/Vue formatting pipeline (blank-lines -> oxfmt
-// -> fluent-chains -> oxfmt -> validate-syntax), the Go port of
-// infra/bin/fmtkit-ts-files.
+// -> fluent-chains -> oxfmt -> validate-syntax).
 func (s Support) RunPipeline(opts RunOptions) error {
 	cwd, err := sourcesCwd()
 
@@ -79,8 +75,7 @@ func (s Support) RunPipeline(opts RunOptions) error {
 	return s.spawn(pipelineBin(s.Sidecar()), args, opts)
 }
 
-// RunLint lints the collected TS/Vue files with oxlint, the Go port of
-// infra/bin/fmtkit-ts-lint.
+// RunLint lints the collected TS/Vue files with oxlint.
 func (s Support) RunLint(opts RunOptions) error {
 	cwd, err := sourcesCwd()
 
@@ -167,8 +162,8 @@ func (s Support) oxfmtConfigFor(cwd string) string {
 	return s.OxfmtConfig()
 }
 
-// oxlintConfigFor mirrors infra/bin/fmtkit-ts-lint: both the extensionless
-// .oxlintrc and .oxlintrc.* count as project configuration.
+// oxlintConfigFor treats both the extensionless .oxlintrc and .oxlintrc.* as
+// project configuration.
 func (s Support) oxlintConfigFor(cwd string) string {
 	if config := os.Getenv(OxlintConfigEnv); config != "" {
 		return existingFile(config)

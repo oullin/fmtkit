@@ -6,9 +6,8 @@ import (
 	"strings"
 )
 
-// The summarizers are ports of the summarize_* helpers in infra/bin/fmtkit:
-// they distill a step's captured output into the aligned detail lines shown
-// under its section header.
+// The summarizers distill a step's captured output into the aligned detail
+// lines shown under its section header.
 
 var (
 	lintResultPattern     = regexp.MustCompile(`Found [0-9]+ warning|[0-9]+ error`)

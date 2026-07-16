@@ -119,6 +119,13 @@ cp "${root}/packages/devx/scripts/package.json" "${workdir}/scripts/package.json
 		"oxc-parser@${oxc_parser_pin}" >/dev/null
 )
 
+# oxfmt formats embedded code (Vue <template>/<style>, markdown, HTML) through a
+# Tinypool child_process pool whose worker entry scripts do not survive
+# `bun build --compile` (they resolve to non-existent /$bunfs/root/ paths), which
+# hangs the binary on any such file. Rewrite oxfmt to do that work in-process
+# before it is bundled. See the script header for the full rationale.
+node "${root}/infra/scripts/release/patch-oxfmt-inprocess.mjs" "${workdir}/node_modules/oxfmt/dist"
+
 # The napi bindings stay external: every target loads them from files staged
 # next to the sidecar through NAPI_RS_NATIVE_LIBRARY_PATH, which keeps the JS
 # bundle platform-independent. oxfmt's optional prettier plugins are external

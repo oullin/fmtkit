@@ -60,6 +60,19 @@ If `fmtkit-go` is not on your `PATH` after `go install`, add the Go bin director
 
 ## Usage
 
+The distributed `fmtkit` binary runs the whole pipeline (TS/Vue formatting, TS/Vue lint, Go formatting) with `format` / `format-all`, and narrows it with step flags:
+
+```bash
+fmtkit format .          # everything (default)
+fmtkit format --ts .     # TS/Vue formatting + lint only
+fmtkit format --go .     # Go formatting only
+fmtkit format-all --quiet
+```
+
+`ts`, `lint`, `go <subcommand>`, `check`, `version`, and `help` are also available; `fmtkit help` lists them.
+
+The `fmtkit-go` CLI (the Go-only formatter used by the Docker images and `go install`) accepts:
+
 | Command             | What it does                        |
 | ------------------- | ----------------------------------- |
 | `check [paths...]`  | Reports violations without writing. |

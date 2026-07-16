@@ -1,0 +1,12 @@
+{
+	"type": "module",
+	"imports": {
+		"#oxfmt-inprocess": "./oxfmt-inprocess/index.ts",
+		"#oxfmt-inprocess/api-bindings": "./oxfmt-inprocess/api-bindings.ts",
+		"#oxfmt-inprocess/cli-patcher": "./oxfmt-inprocess/cli-patcher.ts",
+		"#oxfmt-inprocess/errors": "./oxfmt-inprocess/errors.ts",
+		"#oxfmt-inprocess/result": "./oxfmt-inprocess/result.ts",
+		"#oxfmt-inprocess/shim-source": "./oxfmt-inprocess/shim-source.ts",
+		"#oxfmt-inprocess/text-files": "./oxfmt-inprocess/text-files.ts"
+	}
+}

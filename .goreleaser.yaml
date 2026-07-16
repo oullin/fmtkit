@@ -53,6 +53,13 @@ release:
     # notes) before this runs; goreleaser only attaches the binary assets.
     mode: keep-existing
 
+    # Make re-running Publish Release for a tag idempotent. mode: keep-existing
+    # preserves the release but still re-uploads every asset, so a retry after a
+    # partial publish died with `422 already_exists` before reaching the cask.
+    # Replacing same-named assets lets the retry path in publish-release.yml
+    # actually work.
+    replace_existing_artifacts: true
+
 homebrew_casks:
     - name: fmtkit
       repository:

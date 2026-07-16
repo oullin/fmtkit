@@ -69,7 +69,7 @@ func (a App) runPipeline(paths []string, opts formatOptions, selection sourcefil
 			},
 			Go: func(args []string, output io.Writer) int {
 				return cli.
-					NewRunner(output, output).
+					NewScopedRunner(output, output, selection).
 					Run(cli.FormatMode, args[1:])
 			},
 		},

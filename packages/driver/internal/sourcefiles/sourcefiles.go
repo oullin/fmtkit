@@ -44,9 +44,25 @@ type Options struct {
 	Selection Selection
 }
 
+// Collect lists the TS/Vue files under the given scopes.
 func Collect(opts Options) ([]string, []string, error) {
-	cwd := opts.Cwd
+	return collect(opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+		return isTargetFile(path, opts.IncludeDeclarations)
+	})
+}
 
+// ChangedPaths lists every file the working tree has modified or added under
+// the given scopes, whatever its extension. Callers do their own filtering —
+// the Go formatter, for one, has its own notion of which files it owns.
+func ChangedPaths(cwd string, scopes []string) ([]string, error) {
+	files, _, err := collect(cwd, scopes, SelectionChanged, func(string) bool {
+		return true
+	})
+
+	return files, err
+}
+
+func collect(cwd string, scopes []string, selection Selection, keep func(string) bool) ([]string, []string, error) {
 	if strings.TrimSpace(cwd) == "" {
 		var err error
 
@@ -56,8 +72,6 @@ func Collect(opts Options) ([]string, []string, error) {
 			return nil, nil, err
 		}
 	}
-
-	scopes := opts.Scopes
 
 	if len(scopes) == 0 {
 		scopes = []string{"."}
@@ -84,14 +98,14 @@ func Collect(opts Options) ([]string, []string, error) {
 			return nil, warnings, err
 		}
 
-		entries, err := gitFiles(cwd, absolute, opts.Selection)
+		entries, err := gitFiles(cwd, absolute, selection)
 
 		if err != nil {
 			return nil, warnings, err
 		}
 
 		for _, entry := range entries {
-			if !isTargetFile(entry, opts.IncludeDeclarations) {
+			if !keep(entry) {
 				continue
 			}
 

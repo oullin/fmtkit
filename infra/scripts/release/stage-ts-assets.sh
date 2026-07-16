@@ -123,8 +123,9 @@ cp "${root}/packages/devx/scripts/package.json" "${workdir}/scripts/package.json
 # Tinypool child_process pool whose worker entry scripts do not survive
 # `bun build --compile` (they resolve to non-existent /$bunfs/root/ paths), which
 # hangs the binary on any such file. Rewrite oxfmt to do that work in-process
-# before it is bundled. See the script header for the full rationale.
-node "${root}/infra/scripts/release/patch-oxfmt-inprocess.mjs" "${workdir}/node_modules/oxfmt/dist"
+# before it is bundled. See infra/scripts/release/oxfmt-inprocess for the full
+# rationale. Run by node directly (type stripping) so staging needs no tsx.
+node "${root}/infra/scripts/release/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
 
 # The napi bindings stay external: every target loads them from files staged
 # next to the sidecar through NAPI_RS_NATIVE_LIBRARY_PATH, which keeps the JS

@@ -56,7 +56,7 @@ func stubSupportDir(t *testing.T) (string, string) {
 
 	script := "#!/usr/bin/env bash\n" +
 		"set -euo pipefail\n" +
-		"printf '%s\\n' \"$*\" >> " + logFile + "\n" +
+		"printf '%s\\n' \"$*\" >> \"" + logFile + "\"\n" +
 		"case \"${1:-}\" in\n" +
 		"pipeline)\n" +
 		"\tprintf '[blank-lines] processed 3 file(s) in /work, 0 changed\\n'\n" +

@@ -26,10 +26,10 @@ func lines(log string) []string {
 	return strings.Split(log, "\n")
 }
 
-func lastWithPrefix(log, prefix string) string {
+func lastWithPrefix(logLines []string, prefix string) string {
 	var match string
 
-	for _, line := range lines(log) {
+	for _, line := range logLines {
 		if strings.HasPrefix(line, prefix) {
 			match = line
 		}
@@ -39,15 +39,16 @@ func lastWithPrefix(log, prefix string) string {
 }
 
 func summarizeTSFormat(log string, l *logger) {
+	logLines := lines(log)
 	missing := 0
 
-	for _, line := range lines(log) {
+	for _, line := range logLines {
 		if strings.HasPrefix(line, sourcesMissingPrefix) {
 			missing++
 		}
 	}
 
-	if line := lastWithPrefix(log, blankLinesPrefix); line != "" {
+	if line := lastWithPrefix(logLines, blankLinesPrefix); line != "" {
 		l.detail("blank-lines", strings.TrimPrefix(line, "[blank-lines] "))
 	}
 
@@ -55,21 +56,23 @@ func summarizeTSFormat(log string, l *logger) {
 		l.detail("skipped", fmt.Sprintf("%d missing tracked file(s)", missing))
 	}
 
-	if line := lastWithPrefix(log, oxfmtFinishedPrefix); line != "" {
+	if line := lastWithPrefix(logLines, oxfmtFinishedPrefix); line != "" {
 		l.detail("oxfmt", line)
 	}
 
-	if line := lastWithPrefix(log, fluentChainsPrefix); line != "" {
+	if line := lastWithPrefix(logLines, fluentChainsPrefix); line != "" {
 		l.detail("fluent", strings.TrimPrefix(line, "[fluent-chains] "))
 	}
 
-	if line := lastWithPrefix(log, validateSyntaxPrefix); line != "" {
+	if line := lastWithPrefix(logLines, validateSyntaxPrefix); line != "" {
 		l.detail("validated", strings.TrimPrefix(line, "[validate-syntax] "))
 	}
 }
 
 func summarizeTSLint(log string, l *logger) {
-	if lastWithPrefix(log, lintNothingToLintLine) != "" {
+	logLines := lines(log)
+
+	if lastWithPrefix(logLines, lintNothingToLintLine) != "" {
 		l.detail("oxlint", strings.TrimPrefix(lintNothingToLintLine, "[lint] "))
 
 		return
@@ -77,7 +80,7 @@ func summarizeTSLint(log string, l *logger) {
 
 	var match string
 
-	for _, line := range lines(log) {
+	for _, line := range logLines {
 		if lintResultPattern.MatchString(line) {
 			match = line
 		}

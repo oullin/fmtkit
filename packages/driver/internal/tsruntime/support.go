@@ -222,15 +222,33 @@ func assetsDigest(assets fs.FS) (string, error) {
 	sort.Strings(names)
 
 	for _, name := range names {
-		contents, err := fs.ReadFile(assets, name)
-
-		if err != nil {
-			return "", fmt.Errorf("read embedded %s: %w", name, err)
-		}
-
 		hash.Write([]byte(name))
-		hash.Write(contents)
+
+		if err := hashFile(hash, assets, name); err != nil {
+			return "", err
+		}
 	}
 
 	return hex.EncodeToString(hash.Sum(nil))[:12], nil
+}
+
+// hashFile streams one asset through hash. The sidecar alone is tens of
+// megabytes, so reading assets whole would spike memory for a digest that is
+// only used to name a cache directory.
+func hashFile(hash io.Writer, assets fs.FS, name string) error {
+	file, err := assets.Open(name)
+
+	if err != nil {
+		return fmt.Errorf("open embedded %s: %w", name, err)
+	}
+
+	defer func() {
+		_ = file.Close()
+	}()
+
+	if _, err := io.Copy(hash, file); err != nil {
+		return fmt.Errorf("read embedded %s: %w", name, err)
+	}
+
+	return nil
 }

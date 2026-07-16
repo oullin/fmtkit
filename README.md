@@ -5,21 +5,37 @@
 [![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
 [![Codecov](https://codecov.io/gh/oullin/fmtkit/graph/badge.svg?branch=main)](https://app.codecov.io/github/oullin/fmtkit)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Foullin%2Ffmtkit-2496ED?logo=docker&logoColor=white)](https://github.com/oullin/fmtkit/pkgs/container/fmtkit)
 
-`fmtkit` is a rule-driven formatter for Go. It enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass. You can run it as a local CLI or as a shared Docker image; either way the output is the same.
+`fmtkit` is a rule-driven formatter for Go. It enforces layout and structure that `gofmt` leaves alone — blank lines around control flow, type hoisting, declaration grouping — then hands off to `gofmt` and `goimports` for the final pass.
 
 ## At a glance
 
 - AST-based spacing rules, then `gofmt` and `goimports`, in one deterministic pipeline.
 - Runs `go vet ./...` automatically when invoked inside a Go module or workspace.
 - Three output modes: `text` for humans, `json` for scripts, `agent` for CI and AI tools.
-- One CLI binary (`fmtkit-go`) or one Docker image with a thin host wrapper.
+- One self-contained `fmtkit` binary (Homebrew or GitHub Releases), or a Go-only CLI (`fmtkit-go`).
 - Engine in [`packages/formatter/engine`](packages/formatter/engine) is importable from Go.
 
 ## Install
 
 Two ways to run it. Pick the one that fits your workflow — both produce identical output.
+
+**With Homebrew** (recommended: one self-contained binary with the full TS/Vue + Go pipeline — no Node.js required):
+
+```bash
+brew tap oullin/fmtkit
+brew install --cask fmtkit
+fmtkit format .
+```
+
+The binary embeds the TS toolchain (oxfmt, oxlint, oxc-parser and the support scripts, compiled with Bun) and extracts it to your user cache directory on first run. Homebrew casks are macOS-only; on Linux, download the same binary from GitHub Releases instead:
+
+```bash
+curl -fsSL https://github.com/oullin/fmtkit/releases/download/v0.5.0/fmtkit_0.5.0_linux_amd64.tar.gz | tar -xz fmtkit
+sudo install -m 0755 fmtkit /usr/local/bin/fmtkit
+```
+
+Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap in the [latest release](https://github.com/oullin/fmtkit/releases/latest) tag and your platform.
 
 **With Go** (good for local hacking and contributors):
 
@@ -29,19 +45,24 @@ fmtkit-go check .
 fmtkit-go format .
 ```
 
-**With Docker** (good for CI and pinning one version across many projects):
-
-```bash
-curl -fsSL -o /tmp/fmtkit-host.sh https://raw.githubusercontent.com/oullin/fmtkit/main/infra/scripts/tasks/fmtkit-host.sh
-sudo install -m 0755 /tmp/fmtkit-host.sh /usr/local/bin/fmtkit
-fmtkit format .
-```
-
-The Docker wrapper mounts the current directory at `/work` and reuses a shared `fmtkit-cache` volume across projects, so you do not need a per-project Dockerfile or version pin. Pin a specific release for a single run with `FMTKIT_IMAGE=ghcr.io/oullin/fmtkit:v0.0.18 fmtkit …`, or swap in a flavour tag (`latest-go`, `latest-node-ts`, `latest-full`) when you only need one formatter layer.
-
 If `fmtkit-go` is not on your `PATH` after `go install`, add the Go bin directory: `export PATH="$(go env GOPATH)/bin:$PATH"`.
 
+For CI, download the release binary for the runner's platform and pin the tag — it needs no daemon, no image pull, and no Node.js.
+
 ## Usage
+
+The distributed `fmtkit` binary runs the whole pipeline (TS/Vue formatting, TS/Vue lint, Go formatting) with `format` / `format-all`, and narrows it with step flags:
+
+```bash
+fmtkit format .          # everything (default)
+fmtkit format --ts .     # TS/Vue formatting + lint only
+fmtkit format --go .     # Go formatting only
+fmtkit format-all --quiet
+```
+
+`ts`, `lint`, `go <subcommand>`, `check`, `version`, and `help` are also available; `fmtkit help` lists them.
+
+The `fmtkit-go` CLI (the Go-only formatter published via `go install`) accepts:
 
 | Command             | What it does                        |
 | ------------------- | ----------------------------------- |
@@ -50,13 +71,12 @@ If `fmtkit-go` is not on your `PATH` after `go install`, add the Go bin director
 
 Both default to `.` when no paths are given. Both run `go vet ./...` automatically when the working directory is inside a Go module or workspace.
 
-| Flag          | Default | Description                                                              |
-| ------------- | ------- | ------------------------------------------------------------------------ |
-| `--config`    | auto    | Path to a `config.yml`. Auto-detected if omitted.                        |
-| `--cwd`       | `.`     | Base path for config discovery and relative output paths.                |
-| `--format`    | `text`  | Output mode: `text`, `json`, or `agent`.                                 |
-| `--jobs`      | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `FMTKIT_JOBS`. |
-| `--host-path` | off     | Absolute host path under `HOST_PROJECT_PATH` (Docker host-mount flow).   |
+| Flag       | Default | Description                                                              |
+| ---------- | ------- | ------------------------------------------------------------------------ |
+| `--config` | auto    | Path to a `config.yml`. Auto-detected if omitted.                        |
+| `--cwd`    | `.`     | Base path for config discovery and relative output paths.                |
+| `--format` | `text`  | Output mode: `text`, `json`, or `agent`.                                 |
+| `--jobs`   | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `FMTKIT_JOBS`. |
 
 A handful of common invocations:
 
@@ -111,7 +131,7 @@ concurrency: 0
 
 ### TS/Vue formatting (`.oxfmtrc.json`)
 
-The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources, then applies project-specific syntax passes for blank lines and fluent builder chains. The images ship a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
+The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources, then applies project-specific syntax passes for blank lines and fluent builder chains. The binary ships a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
 
 A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `FMTKIT_OXFMTRC` environment variable, matching the other `FMTKIT_*` knobs.
 
@@ -180,47 +200,6 @@ When given directories, the engine walks recursively for `.go` files and always 
 }
 ```
 
-## Docker images
-
-Published to `ghcr.io/oullin/fmtkit` for `linux/amd64` and `linux/arm64`.
-
-| Tag                               | Contents                            | Entrypoint  |
-| --------------------------------- | ----------------------------------- | ----------- |
-| `latest`, `<tag>`                 | Full Go + TS/Vue formatter (alias). | `fmtkit`    |
-| `latest-full`, `<tag>-full`       | Full Go + TS/Vue formatter.         | `fmtkit`    |
-| `latest-go`, `<tag>-go`           | Go formatter CLI only.              | `fmtkit-go` |
-| `latest-node-ts`, `<tag>-node-ts` | TS/Vue formatter only.              | `fmtkit-ts` |
-
-The Go-containing images bundle a trimmed Go SDK (Go's own test suite, API data,
-std-library test fixtures, and unused tool binaries are stripped) because both
-`goimports` and `go vet` invoke the `go` toolchain at runtime. If the toolchain
-is ever absent, `go vet` is skipped gracefully rather than failing.
-
-### Docker maintenance
-
-Reclaim space taken by fmtkit's own Docker artifacts (local `*:local` images,
-fingerprinted build images, and the `fmtkit-cache` volume) without touching
-unrelated Docker state:
-
-```bash
-vp run docker:clean
-```
-
-`make docker-clean` is available as a Docker compatibility alias for the same
-cleanup flow.
-
-The global Docker **build cache** is shared across all projects and cannot be
-pruned per project. Cap it so it can't grow unbounded by adding this to
-`~/.docker/daemon.json` and restarting Docker:
-
-```json
-{ "builder": { "gc": { "enabled": true, "defaultKeepStorage": "20GB" } } }
-```
-
-fmtkit's own run scripts already use `docker run --rm`, so normal usage leaves no
-stopped containers behind. Old `ghcr.io/oullin/fmtkit` tags on the registry are
-pruned automatically by the `Cleanup Old Container Images` workflow.
-
 ## Exit codes
 
 | Command  | Code | Meaning                              |
@@ -232,7 +211,7 @@ pruned automatically by the `Cleanup Old Container Images` workflow.
 
 ## Development
 
-You will need Go 1.26.4+, Vite+, and a Docker runtime if you plan to touch the published images. Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
+You will need Go 1.26.4+, Vite+, and [Bun](https://bun.com) (used to compile the TS sidecar the binary embeds). Vite+ manages the project Node.js runtime and pnpm version declared by the workspace.
 
 ```bash
 curl -fsSL https://vite.plus -o install-vp.sh
@@ -243,35 +222,39 @@ vp install
 Use Vite+ tasks for day-to-day development:
 
 ```bash
-vp run build             # build the local fmtkit-go binary into storage/bin
-vp run check             # run package checks across the workspace
-vp run test              # run all package tests
-vp run test-race         # tests with the race detector (forces CGO_ENABLED=1)
-vp run vet               # run go vet across the Go module packages
-vp run format:local -- . # run the local formatter pipeline
-vp run format:docker -- . # run the Dockerized formatter pipeline
-vp run install-cli       # install fmtkit-go from the local source tree
-vp run release           # build cross-platform binaries into storage/dist
+vp run build         # build the local fmtkit-go binary into storage/bin
+vp run check         # run package checks across the workspace
+vp run test          # run all package tests
+vp run test-race     # tests with the race detector (forces CGO_ENABLED=1)
+vp run test:binary   # build the self-contained binary and smoke test it
+vp run vet           # run go vet across the Go module packages
+vp run format -- .   # format this repo with fmtkit's own binary
+vp run install-cli   # install fmtkit-go from the local source tree
+vp run release       # build cross-platform binaries into storage/dist
 ```
 
-### Docker compatibility Makefile
+### Formatting fmtkit with fmtkit
 
-Vite+ is the default developer interface. The root `Makefile` remains as a
-Docker compatibility shim for the existing Docker-first workflow:
+fmtkit formats itself with the binary it ships, so the development loop and the
+release exercise the same Go orchestrator and the same Bun-compiled TS sidecar.
+The root `Makefile` is the shortest way in:
 
 ```bash
-make format       # Dockerized formatter against ARGS (default ".")
-make format-all   # Dockerized formatter against the whole repository
-make check        # Dockerized fmtkit check against ARGS (default ".")
-make image-go     # build the local Go-only formatter image
-make image-node-ts
-make image-full
-make docker-clean
+make format                # format the repo (ARGS defaults to ".")
+make format ARGS=--ts      # only the TS/Vue half
+make format-all            # the whole repository
+make check                 # Go formatter in check mode
 ```
 
-External consumers do not need this Makefile. They can keep using
-`infra/scripts/tasks/fmtkit-host.sh` or the published `ghcr.io/oullin/fmtkit` tags
-(`latest`, `latest-go`, `latest-node-ts`, and `latest-full`).
+The first run stages the host TS toolchain assets into
+`packages/driver/internal/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
+few seconds); later runs reuse them and re-stage only when the support scripts,
+the tool pins, or the `.oxfmtrc.json` / `.oxlintrc.json` configs change. The
+inner loop is then a plain `go run`.
+
+That loop points `FMTKIT_SUPPORT_DIR` at the staged assets rather than embedding
+them, which keeps it fast. The embedded-asset path a release actually uses is
+covered by `vp run test:binary`.
 
 Package layout:
 

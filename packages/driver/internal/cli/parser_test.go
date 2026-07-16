@@ -34,7 +34,6 @@ func TestParseAllFlags(t *testing.T) {
 		"--config", "custom.yml",
 		"--cwd", "/repo",
 		"--format", "json",
-		"--host-path", "/host/project",
 		"--jobs", "4",
 		"main.go", "pkg",
 	}
@@ -50,7 +49,6 @@ func TestParseAllFlags(t *testing.T) {
 		configPath:   "custom.yml",
 		reportRoot:   "/repo",
 		outputFormat: "json",
-		hostPath:     HostPath("/host/project"),
 		positional:   []string{"main.go", "pkg"},
 		jobs:         4,
 	}

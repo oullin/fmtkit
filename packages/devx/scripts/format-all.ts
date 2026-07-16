@@ -7,10 +7,9 @@ import { isNotFoundError, isTargetFile } from '#devx/pass-utils';
 import { validateFile } from '#devx/validate-syntax';
 
 // format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
-// → oxfmt → validate-syntax) inside a single Node process, replacing the
-// three tsx spawns infra/bin/fmtkit-ts-files used to make per invocation. Files
-// within a pass are processed concurrently; results are reported in input
-// order so the output stays deterministic.
+// → oxfmt → validate-syntax) inside a single process. Files within a pass are
+// processed concurrently; results are reported in input order so the output
+// stays deterministic.
 
 type CliOptions = {
 	check: boolean;
@@ -180,7 +179,7 @@ async function runValidate(files: string[]): Promise<void> {
 	console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
 	const options = parseArgs(process.argv.slice(2));
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 

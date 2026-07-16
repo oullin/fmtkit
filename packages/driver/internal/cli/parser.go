@@ -23,7 +23,6 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 	configPath := fs.String("config", "", "Path to fmtkit YAML config")
 	reportRoot := fs.String("cwd", "", "Path used for config discovery and report-relative file paths")
 	outputFormat := fs.String("format", "text", "Output format: text, json, agent")
-	hostPath := fs.String("host-path", "", "Absolute host path under HOST_PROJECT_PATH to check or format")
 	jobs := fs.Int("jobs", envJobs(), "Max files processed in parallel (0 = NumCPU; also reads FMTKIT_JOBS)")
 
 	if err := fs.Parse(args); err != nil {
@@ -35,7 +34,6 @@ func (p parser) Parse(mode Mode, args []string) (options, error) {
 		configPath:   *configPath,
 		reportRoot:   *reportRoot,
 		outputFormat: *outputFormat,
-		hostPath:     HostPath(*hostPath),
 		positional:   fs.Args(),
 		jobs:         *jobs,
 	}, nil

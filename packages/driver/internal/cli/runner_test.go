@@ -169,24 +169,6 @@ func TestRunnerRunRejectsUnsupportedFormat(t *testing.T) {
 	}
 }
 
-func TestRunnerRunRejectsRelativeHostPath(t *testing.T) {
-	dir := t.TempDir()
-
-	t.Chdir(dir)
-
-	var out, errOut bytes.Buffer
-
-	code := NewRunner(&out, &errOut).Run(CheckMode, []string{"--host-path", "relative/path"})
-
-	if code != 1 {
-		t.Fatalf("exit = %d", code)
-	}
-
-	if !strings.Contains(errOut.String(), "--host-path must be an absolute path") {
-		t.Fatalf("unexpected stderr: %s", errOut.String())
-	}
-}
-
 func TestRunnerRunRejectsUnknownFlag(t *testing.T) {
 	dir := t.TempDir()
 

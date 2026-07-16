@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/cli"
 	"github.com/oullin/fmtkit/packages/driver/testutil"
 )
 
@@ -146,105 +145,6 @@ func run() {
 	}
 }
 
-func TestRunCheckWithHostPath(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.go")
-	testutil.WriteGoFile(t, path, `package sample
-
-func run() {
-	if true {
-		println("ok")
-	}
-	println("next")
-}
-`)
-	t.Setenv(cli.HostRootEnv, dir)
-
-	exitCode, stdout, stderr := runCLI(t, dir, "check", "--host-path", path)
-
-	if exitCode != 1 {
-		t.Fatalf("expected exit code 1, got %d", exitCode)
-	}
-
-	if !strings.Contains(stdout, "Result: fail") {
-		t.Fatalf("unexpected stdout:\n%s", stdout)
-	}
-
-	if stderr != "" {
-		t.Fatalf("unexpected stderr:\n%s", stderr)
-	}
-}
-
-func TestRunFormatWithHostPath(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.go")
-	testutil.WriteGoFile(t, path, `package sample
-
-func run() {
-	defer println("done")
-	return
-}
-`)
-	t.Setenv(cli.HostRootEnv, dir)
-
-	exitCode, stdout, stderr := runCLI(t, dir, "format", "--host-path", path)
-
-	if exitCode != 0 {
-		t.Fatalf("expected exit code 0, got %d", exitCode)
-	}
-
-	if !strings.Contains(stdout, "Result: fixed") {
-		t.Fatalf("unexpected stdout:\n%s", stdout)
-	}
-
-	if stderr != "" {
-		t.Fatalf("unexpected stderr:\n%s", stderr)
-	}
-
-	content, err := os.ReadFile(path)
-
-	if err != nil {
-		t.Fatalf("read file: %v", err)
-	}
-
-	if !strings.Contains(string(content), "defer println(\"done\")\n\n\treturn") {
-		t.Fatalf("expected formatted file, got:\n%s", content)
-	}
-}
-
-func TestRunWithHostPathRequiresEnv(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.go")
-	testutil.WriteGoFile(t, path, "package sample\n")
-
-	exitCode, _, stderr := runCLI(t, dir, "check", "--host-path", path)
-
-	if exitCode != 1 {
-		t.Fatalf("expected exit code 1, got %d", exitCode)
-	}
-
-	if !strings.Contains(stderr, cli.HostRootEnv) {
-		t.Fatalf("unexpected stderr:\n%s", stderr)
-	}
-}
-
-func TestRunWithHostPathRejectsPositionalPaths(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "sample.go")
-	testutil.WriteGoFile(t, path, "package sample\n")
-	t.Setenv(cli.HostRootEnv, dir)
-
-	exitCode, _, stderr := runCLI(t, dir, "check", "--host-path", path, dir)
-
-	if exitCode != 1 {
-		t.Fatalf("expected exit code 1, got %d", exitCode)
-	}
-
-	if !strings.Contains(stderr, "cannot be used with positional paths") {
-		t.Fatalf("unexpected stderr:\n%s", stderr)
-	}
-}
-
 func TestRunSourcesEmitsNullDelimitedTypeScriptFiles(t *testing.T) {
 	dir := t.TempDir()
 	canonicalDir, err := filepath.EvalSymlinks(dir)
@@ -319,7 +219,7 @@ func TestPrintUsage(t *testing.T) {
 				t.Errorf("expected empty stdout, got %q", stdout)
 			}
 
-			if !strings.Contains(stderr, "fmtkit check [--host-path /absolute/host/path] [paths...]") {
+			if !strings.Contains(stderr, "fmtkit check [paths...]") {
 				t.Errorf("expected stderr to contain usage, got %q", stderr)
 			}
 
@@ -487,34 +387,6 @@ func run() {
 
 	if strings.Contains(stdout, "automatic go vet ./... failed") {
 		t.Fatalf("expected go vet to be skipped outside a module, got:\n%s", stdout)
-	}
-
-	if stderr != "" {
-		t.Fatalf("unexpected stderr:\n%s", stderr)
-	}
-}
-
-func TestRunWithHostPathRunsGoVetInModule(t *testing.T) {
-	dir := writeTempModule(t, "example.com/sample")
-	path := filepath.Join(dir, "sample.go")
-	testutil.WriteGoFile(t, path, `package sample
-
-import "fmt"
-
-func run() {
-	fmt.Printf("%d", "not-a-number")
-}
-`)
-	t.Setenv(cli.HostRootEnv, dir)
-
-	exitCode, stdout, stderr := runCLI(t, dir, "check", "--host-path", path)
-
-	if exitCode != 1 {
-		t.Fatalf("expected exit code 1, got %d", exitCode)
-	}
-
-	if !strings.Contains(stdout, "automatic go vet ./... failed") {
-		t.Fatalf("expected stdout to include go vet failure, got:\n%s", stdout)
 	}
 
 	if stderr != "" {

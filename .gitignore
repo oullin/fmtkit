@@ -1,4 +1,9 @@
 /fmt
+*.bun-build
+
+# TS toolchain assets staged per platform by stage-ts-assets.sh, next to the
+# package that embeds them.
+/packages/driver/internal/embedded/bin/
 /storage/bin*/
 /storage/dist/
 /storage/dist-test/
@@ -11,7 +16,6 @@
 *.test
 *.out
 node_modules/
-infra/tooling/node_modules/
 
 # IDE
 .idea/

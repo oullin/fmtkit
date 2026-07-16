@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(dirname "$0")/env.sh"
+# Formats this repository with fmtkit's own binary. Paths are resolved against
+# the repository root rather than the invoking directory, so `format.sh .` means
+# the whole repo no matter where it is run from.
 
-repo_root="$REPO_ROOT"
-oxfmt_bin="${OXFMT_BIN:-packages/devx/node_modules/.bin/oxfmt}"
-tsx_bin="${TSX_BIN:-packages/devx/node_modules/.bin/tsx}"
-go_bin="${GO_BIN:-go}"
+source "$(dirname "${BASH_SOURCE[0]}")/env.sh"
 
 declare -a args=("$@")
 declare -a fmtkit_args=()
@@ -23,17 +22,21 @@ to_repo_path() {
 	local arg="$1"
 
 	case "$arg" in
+		-*)
+			# A step or output flag (--ts, --go, --quiet): pass it through as-is.
+			printf '%s\n' "$arg"
+			;;
 		.)
-			printf '%s\n' "$repo_root"
+			printf '%s\n' "$REPO_ROOT"
 			;;
 		./*)
-			printf '%s\n' "$repo_root/${arg#./}"
+			printf '%s\n' "$REPO_ROOT/${arg#./}"
 			;;
 		/*)
 			printf '%s\n' "$arg"
 			;;
 		*)
-			printf '%s\n' "$repo_root/$arg"
+			printf '%s\n' "$REPO_ROOT/$arg"
 			;;
 	esac
 }
@@ -42,23 +45,4 @@ for raw_arg in "${args[@]}"; do
 	fmtkit_args+=("$(to_repo_path "$raw_arg")")
 done
 
-sources_workdir="$GO_WORKDIR"
-
-if [[ "$sources_workdir" != /* ]]; then
-	sources_workdir="$repo_root/$sources_workdir"
-fi
-
-ensure_storage_layout
-"$go_bin" -C "$GO_WORKDIR" run "$CMD" format --cwd "$repo_root" "${fmtkit_args[@]}"
-
-(
-	cd "$repo_root"
-	GO_BIN="$go_bin" \
-		FMTKIT_SUPPORT_DIR="$repo_root/packages/devx" \
-		FMTKIT_SOURCES_GO_WORKDIR="$sources_workdir" \
-		FMTKIT_SOURCES_CWD="$repo_root" \
-		FMTKIT_FORMAT_ALL_SCRIPT="$repo_root/packages/devx/scripts/format-all.ts" \
-		TSX_BIN="$tsx_bin" \
-		OXFMT_BIN="$oxfmt_bin" \
-		"$repo_root/infra/bin/fmtkit-ts-files" "${fmtkit_args[@]}"
-)
+exec "$(dirname "${BASH_SOURCE[0]}")/fmtkit.sh" format "${fmtkit_args[@]}"

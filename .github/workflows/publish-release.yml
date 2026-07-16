@@ -18,10 +18,8 @@ on:
 
 permissions:
     contents: write
-    packages: write
 
 env:
-    IMAGE_NAME: ghcr.io/oullin/fmtkit
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     RELEASE_TAG: ${{ inputs.tag }}
 
@@ -30,7 +28,9 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
-    publish:
+    # Creates the release, attaches the self-contained fmtkit binaries to it, and
+    # pushes the Homebrew cask to oullin/homebrew-fmtkit.
+    binaries:
         runs-on: ubuntu-latest
 
         steps:
@@ -42,100 +42,40 @@ jobs:
               run: ./infra/scripts/release/verify-release-tag.sh
               shell: bash
 
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v4
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v4
-
-            - name: Log in to GHCR
-              uses: docker/login-action@v4
+            - uses: actions/setup-node@v5
               with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+                  node-version-file: .nvmrc
+                  # This job uses npm only; without this, setup-node v5's cache
+                  # auto-detection finds pnpm-lock.yaml and requires pnpm.
+                  package-manager-cache: false
 
-            - name: Build and push Go image
-              id: build-go
-              uses: docker/build-push-action@v7
+            - uses: oven-sh/setup-bun@v2
               with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.golang
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go
-                      ${{ env.IMAGE_NAME }}:latest-go
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=go
-                  cache-to: type=gha,mode=max,scope=go
+                  bun-version: 1.3.14
 
-            - name: Build and push Node/TS image
-              id: build-node-ts
-              uses: docker/build-push-action@v7
+            - uses: actions/setup-go@v6
               with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.node-ts
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts
-                      ${{ env.IMAGE_NAME }}:latest-node-ts
-                  cache-from: type=gha,scope=node-ts
-                  cache-to: type=gha,mode=max,scope=node-ts
+                  go-version-file: go.mod
+                  cache-dependency-path: |
+                      go.mod
+                      go.sum
 
-            - name: Build and push full image
-              id: build-full
-              uses: docker/build-push-action@v7
-              with:
-                  context: .
-                  file: ./infra/docker/Dockerfile.full
-                  push: true
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full
-                      ${{ env.IMAGE_NAME }}:latest-full
-                  build-args: |
-                      VERSION=${{ env.RELEASE_TAG }}
-                  cache-from: type=gha,scope=full
-                  cache-to: type=gha,mode=max,scope=full
-
-            - name: Verify published release image
-              env:
-                  NEW_TAG: ${{ env.RELEASE_TAG }}
-              run: ./infra/scripts/release/verify-release-image.sh
-              shell: bash
-
-            - name: Promote verified full image to compatibility tags
-              env:
-                  DIGEST: ${{ steps.build-full.outputs.digest }}
-              run: |
-                  set -euo pipefail
-
-                  docker buildx imagetools create \
-                      --tag "${IMAGE_NAME}:${RELEASE_TAG}" \
-                      --tag "${IMAGE_NAME}:latest" \
-                      "${IMAGE_NAME}@${DIGEST}"
-              shell: bash
-
+            # Creates the release up front so goreleaser (release.mode
+            # keep-existing) attaches its assets to it, and so the notes come
+            # from GitHub's generator rather than goreleaser's changelog.
             - name: Create or update release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ env.RELEASE_TAG }}
                   prerelease: false
                   generate_release_notes: true
-                  body: |
-                      Docker images published:
 
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-go`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-node-ts`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}-full`
-                      - `${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}` aliases the verified full image
-
-                      Latest tags updated:
-
-                      - `${{ env.IMAGE_NAME }}:latest-go`
-                      - `${{ env.IMAGE_NAME }}:latest-node-ts`
-                      - `${{ env.IMAGE_NAME }}:latest-full`
-                      - `${{ env.IMAGE_NAME }}:latest` aliases the verified full image
+            - name: Build and publish release binaries
+              uses: goreleaser/goreleaser-action@v6
+              with:
+                  version: '~> v2'
+                  args: release --clean
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+                  GORELEASER_CURRENT_TAG: ${{ env.RELEASE_TAG }}

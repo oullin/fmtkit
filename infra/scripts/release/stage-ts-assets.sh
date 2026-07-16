@@ -123,6 +123,12 @@ cp "${root}/packages/devx/scripts/package.json" "${workdir}/scripts/package.json
 # next to the sidecar through NAPI_RS_NATIVE_LIBRARY_PATH, which keeps the JS
 # bundle platform-independent. oxfmt's optional prettier plugins are external
 # too; they are not installed by any fmtkit distribution channel.
+#
+# vite-plus is an optional peer of oxfmt/oxlint that both lazily import to read
+# a Vite+ config file. Upstream ships the specifier external for the same
+# reason. The sidecar bundles .oxfmtrc.json/.oxlintrc.json, so that path is
+# unreachable here; a project that does keep its config in vite.config.ts has
+# its own vite-plus for the import to resolve against.
 bun_externals=(
 	--external '@oxc-parser/binding-*'
 	--external '@oxfmt/binding-*'
@@ -131,6 +137,7 @@ bun_externals=(
 	--external 'prettier-plugin-*'
 	--external '@shopify/prettier-plugin-liquid'
 	--external '@zackad/prettier-plugin-twig'
+	--external 'vite-plus'
 )
 
 fetch_binding() {

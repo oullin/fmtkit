@@ -31,11 +31,12 @@ fmtkit format .
 The binary embeds the TS toolchain (oxfmt, oxlint, oxc-parser and the support scripts, compiled with Bun) and extracts it to your user cache directory on first run. Homebrew casks are macOS-only; on Linux, download the same binary from GitHub Releases instead:
 
 ```bash
-curl -fsSL https://github.com/oullin/fmtkit/releases/download/v0.5.0/fmtkit_0.5.0_linux_amd64.tar.gz | tar -xz fmtkit
+tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/oullin/fmtkit/releases/latest | sed 's#.*/##')
+curl -fsSL "https://github.com/oullin/fmtkit/releases/download/${tag}/fmtkit_${tag#v}_linux_amd64.tar.gz" | tar -xz fmtkit
 sudo install -m 0755 fmtkit /usr/local/bin/fmtkit
 ```
 
-Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap in the [latest release](https://github.com/oullin/fmtkit/releases/latest) tag and your platform.
+Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap `linux_amd64` for your platform. The snippet resolves the [latest release](https://github.com/oullin/fmtkit/releases/latest) rather than naming a version, so it does not go stale. For CI, pin `tag` to a known release instead.
 
 **With Go** (good for local hacking and contributors):
 

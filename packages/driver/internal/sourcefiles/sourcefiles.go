@@ -10,10 +10,38 @@ import (
 	"strings"
 )
 
+// Selection is how much of the working tree a collection covers.
+type Selection int
+
+const (
+	// SelectionAll covers every non-ignored file: tracked plus untracked.
+	// This is what `format-all` runs against.
+	SelectionAll Selection = iota
+
+	// SelectionChanged covers only what the working tree has actually touched:
+	// modified-but-tracked plus untracked. This is what `format` runs against,
+	// so an everyday format stays proportional to the diff rather than the repo.
+	SelectionChanged
+)
+
+// gitArgs returns the `git ls-files` selection flags for s.
+func (s Selection) gitArgs() []string {
+	if s == SelectionChanged {
+		// --modified is relative to the index, so a staged-and-unmodified file is
+		// deliberately not "changed" here.
+		return []string{"--others", "--modified"}
+	}
+
+	return []string{"--cached", "--others"}
+}
+
 type Options struct {
 	Cwd                 string
 	IncludeDeclarations bool
 	Scopes              []string
+
+	// Selection defaults to SelectionAll.
+	Selection Selection
 }
 
 func Collect(opts Options) ([]string, []string, error) {
@@ -56,7 +84,7 @@ func Collect(opts Options) ([]string, []string, error) {
 			return nil, warnings, err
 		}
 
-		entries, err := gitFiles(cwd, absolute)
+		entries, err := gitFiles(cwd, absolute, opts.Selection)
 
 		if err != nil {
 			return nil, warnings, err
@@ -89,8 +117,12 @@ func Collect(opts Options) ([]string, []string, error) {
 	return files, warnings, nil
 }
 
-func gitFiles(cwd, scope string) ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope)
+func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
+	args := []string{"ls-files"}
+	args = append(args, selection.gitArgs()...)
+	args = append(args, "--exclude-standard", "-z", "--", scope)
+
+	cmd := exec.Command("git", args...)
 	cmd.Dir = cwd
 
 	var stderr bytes.Buffer

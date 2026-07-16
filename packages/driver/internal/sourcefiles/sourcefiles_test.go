@@ -156,3 +156,91 @@ func run(t *testing.T, dir string, name string, args ...string) {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
 	}
 }
+
+func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, ".gitignore"), "ignored.ts\n")
+	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 1;\n")
+	gitAdd(t, dir, ".gitignore", "untouched.ts", "modified.ts")
+	gitCommit(t, dir)
+
+	// Only these three diverge from the commit: a tracked file edited in the
+	// working tree, a brand new file, and an ignored one that must stay out.
+	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 2;\n")
+	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
+	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
+
+	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{
+		filepath.Join(dir, "modified.ts"),
+		filepath.Join(dir, "untracked.vue"),
+	}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	gitAdd(t, dir, "untouched.ts")
+	gitCommit(t, dir)
+
+	changed, _, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+
+	if err != nil {
+		t.Fatalf("collect changed: %v", err)
+	}
+
+	if len(changed) != 0 {
+		t.Fatalf("a clean working tree has no changes, got: %#v", changed)
+	}
+
+	all, _, err := Collect(Options{Cwd: dir, Selection: SelectionAll})
+
+	if err != nil {
+		t.Fatalf("collect all: %v", err)
+	}
+
+	want := []string{filepath.Join(dir, "untouched.ts")}
+
+	if !reflect.DeepEqual(all, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, all)
+	}
+}
+
+func TestCollectDefaultsToAll(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	gitAdd(t, dir, "untouched.ts")
+	gitCommit(t, dir)
+
+	files, _, err := Collect(Options{Cwd: dir})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	want := []string{filepath.Join(dir, "untouched.ts")}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("the zero Selection must cover everything\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func gitCommit(t *testing.T, dir string) {
+	t.Helper()
+
+	run(t, dir, "git", "commit", "-q", "-m", "fixture")
+}

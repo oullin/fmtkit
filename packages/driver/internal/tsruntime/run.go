@@ -15,6 +15,10 @@ type RunOptions struct {
 	// Scopes are the paths to process, defaulting to ".".
 	Scopes []string
 
+	// Selection is how much of the working tree to cover within Scopes. It
+	// defaults to sourcefiles.SelectionAll.
+	Selection sourcefiles.Selection
+
 	Stdout io.Writer
 	Stderr io.Writer
 }
@@ -37,7 +41,7 @@ func (s Support) RunPipeline(opts RunOptions) error {
 		return err
 	}
 
-	formatFiles, warnings, err := collect(cwd, opts.Scopes, false)
+	formatFiles, warnings, err := collect(cwd, opts.Scopes, false, opts.Selection)
 
 	if err != nil {
 		return err
@@ -47,7 +51,7 @@ func (s Support) RunPipeline(opts RunOptions) error {
 		_, _ = fmt.Fprintf(opts.Stderr, "[sources] %s\n", warning)
 	}
 
-	syntaxFiles, _, err := collect(cwd, opts.Scopes, true)
+	syntaxFiles, _, err := collect(cwd, opts.Scopes, true, opts.Selection)
 
 	if err != nil {
 		return err
@@ -83,7 +87,7 @@ func (s Support) RunLint(opts RunOptions) error {
 		return err
 	}
 
-	files, warnings, err := collect(cwd, opts.Scopes, false)
+	files, warnings, err := collect(cwd, opts.Scopes, false, opts.Selection)
 
 	if err != nil {
 		return err
@@ -139,11 +143,12 @@ func sourcesCwd() (string, error) {
 	return cwd, nil
 }
 
-func collect(cwd string, scopes []string, includeDeclarations bool) ([]string, []string, error) {
+func collect(cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
 	return sourcefiles.Collect(sourcefiles.Options{
 		Cwd:                 cwd,
 		IncludeDeclarations: includeDeclarations,
 		Scopes:              scopes,
+		Selection:           selection,
 	})
 }
 

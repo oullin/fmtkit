@@ -178,6 +178,11 @@ jobs:
             - name: Smoke test the self-contained binary
               run: ./infra/scripts/tasks/test-binary-smoke.sh
 
+            # Runs here rather than in `check`, which has no Go: the only tool
+            # that can say whether this tree is formatted is fmtkit itself.
+            - name: Check the repository is fmtkit-formatted
+              run: ./infra/scripts/tasks/check-self-formatted.sh
+
     coverage:
         needs: test
         runs-on: ubuntu-latest

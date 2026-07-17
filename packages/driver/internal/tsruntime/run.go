@@ -33,7 +33,8 @@ const (
 )
 
 // RunPipeline runs the full TS/Vue formatting pipeline (blank-lines -> oxfmt
-// -> fluent-chains -> oxfmt -> validate-syntax).
+// -> fluent-chains -> validate-syntax). oxfmt is an internal normalising step,
+// not the last word: the project passes run after it and own the final style.
 func (s Support) RunPipeline(opts RunOptions) error {
 	cwd, err := sourcesCwd()
 

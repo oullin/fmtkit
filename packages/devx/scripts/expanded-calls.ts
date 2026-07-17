@@ -114,7 +114,38 @@ function canUseTrailingComma(arg: Node | undefined): boolean {
 	return arg?.type !== 'SpreadElement';
 }
 
-function formatCallParens(source: string, call: Node, comments: Node[], indent: string): string | null {
+/**
+ * Re-indent lifted source so its continuation lines match where it now sits.
+ *
+ * An argument's text is copied out of the call site verbatim, so its second and
+ * later lines are still indented relative to the statement the call started on
+ * (`from`). Expanding the call moves the argument one or more levels deeper
+ * (`to`), and without rebasing those lines they keep the shallower depth and the
+ * block reads inside-out. Only the first line is left alone — the caller places
+ * it.
+ */
+function rebaseIndent(text: string, from: string, to: string): string {
+	if (from === to || !text.includes('\n')) {
+		return text;
+	}
+
+	return text
+		.split('\n')
+		.map((line, index) => {
+			if (index === 0) {
+				return line;
+			}
+
+			if (line.trim() === '') {
+				return '';
+			}
+
+			return line.startsWith(from) ? `${to}${line.slice(from.length)}` : line;
+		})
+		.join('\n');
+}
+
+function formatCallParens(source: string, call: Node, comments: Node[], indent: string, baseIndent: string): string | null {
 	const parens = calleeParens(source, call);
 	const args = callArguments(call);
 
@@ -129,7 +160,7 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	const argIndent = `${indent}\t`;
 
 	const formattedArgs = args.map((arg) => {
-		return formatNode(source, arg, comments, argIndent);
+		return formatNode(source, arg, comments, argIndent, baseIndent);
 	});
 
 	const separator = `,\n${argIndent}`;
@@ -138,27 +169,30 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;
 }
 
-function formatCall(source: string, call: Node, comments: Node[], indent: string): string {
+function formatCall(source: string, call: Node, comments: Node[], indent: string, baseIndent: string): string {
 	const parens = calleeParens(source, call);
-	const formattedParens = formatCallParens(source, call, comments, indent);
+	const formattedParens = formatCallParens(source, call, comments, indent, baseIndent);
 
 	if (!parens || formattedParens === null) {
-		return sourceOf(source, call);
+		return rebaseIndent(sourceOf(source, call), baseIndent, indent);
 	}
 
 	return `${source.slice(getStart(call), parens.open)}${formattedParens}`;
 }
 
-function formatNode(source: string, node: Node, comments: Node[], indent: string): string {
+// indent is where node will sit once expanded; baseIndent is where its source
+// text came from and is threaded down unchanged, because nothing has moved in
+// the source yet however deep the recursion goes.
+function formatNode(source: string, node: Node, comments: Node[], indent: string, baseIndent: string): string {
 	if (node.type !== 'CallExpression') {
-		return sourceOf(source, node);
+		return rebaseIndent(sourceOf(source, node), baseIndent, indent);
 	}
 
 	if (!shouldExpandCall(node)) {
-		return sourceOf(source, node);
+		return rebaseIndent(sourceOf(source, node), baseIndent, indent);
 	}
 
-	return formatCall(source, node, comments, indent);
+	return formatCall(source, node, comments, indent, baseIndent);
 }
 
 export function computeExpandedCallEdits(content: string, virtualName: string): Edit[] {
@@ -199,7 +233,9 @@ export function computeExpandedCallEdits(content: string, virtualName: string): 
 
 		const indent = lineIndent(content, getStart(node));
 
-		const replacement = formatCallParens(content, node, comments, indent);
+		// The call has not moved, so every argument's source is still based at
+		// this statement's indent — that is what nested levels rebase away from.
+		const replacement = formatCallParens(content, node, comments, indent, indent);
 		const current = content.slice(parens.open, parens.close + 1);
 
 		if (replacement === null || replacement === current) {

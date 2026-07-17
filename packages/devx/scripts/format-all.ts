@@ -6,10 +6,18 @@ import { processFluentChainsFile } from '#devx/fluent-chains';
 import { isNotFoundError, isTargetFile } from '#devx/pass-utils';
 import { validateFile } from '#devx/validate-syntax';
 
-// format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
-// → oxfmt → validate-syntax) inside a single process. Files within a pass are
-// processed concurrently; results are reported in input order so the output
-// stays deterministic.
+// format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains →
+// validate-syntax) inside a single process. Files within a pass are processed
+// concurrently; results are reported in input order so the output stays
+// deterministic.
+//
+// oxfmt runs *before* the project passes, never after. It is an internal step
+// that normalises the file; the project passes then impose the style fmtkit
+// actually ships. Re-running oxfmt at the end would undo them — it collapses
+// anything that fits in printWidth, which is most of what expanded-calls and
+// fluent-chains just expanded. The output is therefore deliberately not what
+// bare oxfmt would produce: fmtkit's format is the pipeline's output, so check
+// it by running the pipeline, not by running oxfmt.
 
 type CliOptions = {
 	check: boolean;
@@ -198,8 +206,6 @@ export async function main(): Promise<void> {
 	await runOxfmt(pipelineOptions);
 
 	await runPass('fluent-chains', formatTargets, options.check, processFluentChainsFile);
-
-	await runOxfmt(pipelineOptions);
 
 	await runValidate(syntaxTargets);
 }

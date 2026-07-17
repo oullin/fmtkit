@@ -325,7 +325,11 @@ function callDisplayName(source: string, call: Node, imports: DrizzleImports): s
 }
 
 function callParens(source: string, call: Node): { open: number; close: number } | null {
-	return sharedCallParens(source, call, unwrapChainExpression(call.callee as Node | undefined));
+	return sharedCallParens(
+		source,
+		call,
+		unwrapChainExpression(call.callee as Node | undefined),
+	);
 }
 
 function shouldFormatObjectExpression(node: Node): boolean {
@@ -422,7 +426,11 @@ function shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boole
 }
 
 function formatArrayExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(comments, getStart(node), getEnd(node))) {
+	if (hasCommentBetween(
+		comments,
+		getStart(node),
+		getEnd(node),
+	)) {
 		return sourceOf(source, node);
 	}
 
@@ -442,7 +450,11 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 }
 
 function formatObjectExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(comments, getStart(node), getEnd(node))) {
+	if (hasCommentBetween(
+		comments,
+		getStart(node),
+		getEnd(node),
+	)) {
 		return sourceOf(source, node);
 	}
 
@@ -477,11 +489,18 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 }
 
 function formatHelperCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(comments, getStart(call), getEnd(call))) {
+	if (hasCommentBetween(
+		comments,
+		getStart(call),
+		getEnd(call),
+	)) {
 		return sourceOf(source, call);
 	}
 
-	const importedName = calleeName(unwrapChainExpression(call.callee as Node | undefined), imports);
+	const importedName = calleeName(
+		unwrapChainExpression(call.callee as Node | undefined),
+		imports,
+	);
 
 	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
 
@@ -496,7 +515,11 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 }
 
 function formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(comments, getStart(call), getEnd(call))) {
+	if (hasCommentBetween(
+		comments,
+		getStart(call),
+		getEnd(call),
+	)) {
 		return sourceOf(source, call);
 	}
 

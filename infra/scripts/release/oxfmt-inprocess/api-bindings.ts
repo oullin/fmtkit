@@ -66,6 +66,12 @@ export class ApiBindings {
 
 		for (const binding of bindingList.split(',')) {
 			const trimmed = binding.trim();
+
+			// A trailing comma in the import splits into an empty last element.
+			if (trimmed === '') {
+				continue;
+			}
+
 			const parsed = BINDING.exec(trimmed);
 			const exported = parsed?.[1];
 

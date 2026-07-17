@@ -13,7 +13,9 @@ function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): 
 	const firstStart = getStart(members[0]);
 	const lastEnd = getEnd(members[members.length - 1]);
 
-	if (containsComment(source.slice(bodyStart + 1, firstStart))) {
+	if (containsComment(
+		source.slice(bodyStart + 1, firstStart),
+	)) {
 		return true;
 	}
 
@@ -25,7 +27,9 @@ function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): 
 		}
 	}
 
-	return containsComment(source.slice(lastEnd, bodyEnd - 1));
+	return containsComment(
+		source.slice(lastEnd, bodyEnd - 1),
+	);
 }
 
 function computeClassReorderEdit(source: string, body: Node): Edit | null {

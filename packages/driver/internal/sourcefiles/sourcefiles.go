@@ -10,15 +10,72 @@ import (
 	"strings"
 )
 
+// Selection is how much of the working tree a collection covers.
+type Selection int
+
 type Options struct {
 	Cwd                 string
 	IncludeDeclarations bool
 	Scopes              []string
+
+	// Selection defaults to SelectionAll.
+	Selection Selection
 }
 
-func Collect(opts Options) ([]string, []string, error) {
-	cwd := opts.Cwd
+const (
+	// SelectionAll covers every non-ignored file: tracked plus untracked.
+	// This is what `format-all` runs against.
+	SelectionAll Selection = iota
 
+	// SelectionChanged covers only what has actually diverged from HEAD:
+	// modified-but-tracked (staged or not) plus untracked. This is what `format`
+	// runs against, so an everyday format stays proportional to the diff rather
+	// than the repo.
+	SelectionChanged
+)
+
+// gitCommands returns the git invocations whose combined output lists the
+// files s covers under scope. Every command prints NUL-separated paths
+// relative to the directory git runs in.
+func (s Selection) gitCommands(scope string) [][]string {
+	if s == SelectionChanged {
+		return [][]string{
+			// Untracked files, plus tracked ones whose working-tree copy differs
+			// from the index.
+			{"ls-files", "--others", "--modified", "--exclude-standard", "-z", "--", scope},
+
+			// Staged changes are invisible to ls-files' worktree-vs-index view —
+			// a pre-commit hook would otherwise see nothing to format — so they
+			// come from an index-vs-HEAD diff. --relative keeps paths cwd-relative
+			// like ls-files; --diff-filter=d drops staged deletions, which leave
+			// no file to format.
+			{"diff", "--cached", "--name-only", "--relative", "--diff-filter=d", "-z", "--", scope},
+		}
+	}
+
+	return [][]string{{"ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope}}
+}
+
+// Collect lists the TS/Vue files under the given scopes.
+func Collect(opts Options) ([]string, []string, error) {
+	return collect(opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+		return isTargetFile(path, opts.IncludeDeclarations)
+	})
+}
+
+// ChangedPaths lists every file that diverges from HEAD — modified, staged, or
+// added — under the given scopes, whatever its extension. Callers do their own
+// filtering — the Go formatter, for one, has its own notion of which files it
+// owns.
+func ChangedPaths(cwd string, scopes []string) ([]string, error) {
+	files, _, err := collect(cwd, scopes, SelectionChanged, func(string) bool {
+		return true
+	})
+
+	return files, err
+}
+
+func collect(cwd string, scopes []string, selection Selection, keep func(string) bool) ([]string, []string, error) {
 	if strings.TrimSpace(cwd) == "" {
 		var err error
 
@@ -28,8 +85,6 @@ func Collect(opts Options) ([]string, []string, error) {
 			return nil, nil, err
 		}
 	}
-
-	scopes := opts.Scopes
 
 	if len(scopes) == 0 {
 		scopes = []string{"."}
@@ -56,14 +111,14 @@ func Collect(opts Options) ([]string, []string, error) {
 			return nil, warnings, err
 		}
 
-		entries, err := gitFiles(cwd, absolute)
+		entries, err := gitFiles(cwd, absolute, selection)
 
 		if err != nil {
 			return nil, warnings, err
 		}
 
 		for _, entry := range entries {
-			if !isTargetFile(entry, opts.IncludeDeclarations) {
+			if !keep(entry) {
 				continue
 			}
 
@@ -89,8 +144,24 @@ func Collect(opts Options) ([]string, []string, error) {
 	return files, warnings, nil
 }
 
-func gitFiles(cwd, scope string) ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope)
+func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
+	entries := []string{}
+
+	for _, args := range selection.gitCommands(scope) {
+		found, err := runGit(cwd, args)
+
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, found...)
+	}
+
+	return entries, nil
+}
+
+func runGit(cwd string, args []string) ([]string, error) {
+	cmd := exec.Command("git", args...)
 	cmd.Dir = cwd
 
 	var stderr bytes.Buffer
@@ -106,7 +177,7 @@ func gitFiles(cwd, scope string) ([]string, error) {
 			reason = err.Error()
 		}
 
-		return nil, fmt.Errorf("git ls-files failed: %s", reason)
+		return nil, fmt.Errorf("git %s failed: %s", args[0], reason)
 	}
 
 	parts := bytes.Split(out, []byte{0})

@@ -55,11 +55,25 @@ For CI, download the release binary for the runner's platform and pin the tag �
 The distributed `fmtkit` binary runs the whole pipeline (TS/Vue formatting, TS/Vue lint, Go formatting) with `format` / `format-all`, and narrows it with step flags:
 
 ```bash
-fmtkit format .          # everything (default)
+fmtkit format .          # every step, over the working tree's changes
 fmtkit format --ts .     # TS/Vue formatting + lint only
 fmtkit format --go .     # Go formatting only
 fmtkit format-all --quiet
 ```
+
+**`format` covers what you changed; `format-all` covers everything.** `format`
+covers the files that diverge from HEAD — modified (staged or not) and
+untracked — so an everyday format stays proportional to your diff rather than
+the repo.
+`format-all` covers every non-ignored file, and is what a CI gate wants: a
+changed-file scope would pass vacuously on a fresh checkout, where nothing is
+modified. Both skip anything `.gitignore`d, and both need a git working tree.
+
+This applies to every step. The TS/Vue steps collect through git directly; the
+Go formatter keeps its own walk (so `config.yml`'s `exclude` / `not_path` /
+`not_name` and generated-file detection always apply) and `format` then narrows
+that to what git reports as changed. `go vet` is unscoped either way — it
+analyses whole packages, not files.
 
 `ts`, `lint`, `go <subcommand>`, `check`, `version`, and `help` are also available; `fmtkit help` lists them.
 

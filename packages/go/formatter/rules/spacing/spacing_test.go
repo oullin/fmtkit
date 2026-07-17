@@ -1504,6 +1504,53 @@ type Options struct {
 	}
 }
 
+func TestApplyReorderKeepsTrailingCommentsAtEndOfFile(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+func run() {}
+
+type Kind int
+
+// A trailing footer note.
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(violations))
+	}
+
+	got := string(formatted)
+
+	// The type is hoisted above the function, but the trailing note stays at the
+	// end of the file rather than traveling with the hoisted type.
+	if !strings.HasSuffix(got, "// A trailing footer note.\n") {
+		t.Fatalf("expected trailing comment to stay at EOF, got:\n%s", got)
+	}
+
+	if strings.Index(got, "func run()") > strings.Index(got, "// A trailing footer note.") {
+		t.Fatalf("expected the function before the trailing note, got:\n%s", got)
+	}
+
+	repeatViolations, reformatted, err := New().Apply(path, formatted)
+
+	if err != nil {
+		t.Fatalf("apply reordered output: %v", err)
+	}
+
+	if len(repeatViolations) != 0 {
+		t.Fatalf("expected reordered output to be clean, got %d violation(s)", len(repeatViolations))
+	}
+
+	if string(reformatted) != string(formatted) {
+		t.Fatalf("expected reorder to be idempotent, got:\n%s", reformatted)
+	}
+}
+
 func TestApplyFormatsBlankLinesAroundGenericSelectorCalls(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
 

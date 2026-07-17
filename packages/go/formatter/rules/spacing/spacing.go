@@ -659,6 +659,16 @@ func reorderTypeDecls(filename string, src []byte) ([]byte, bool, error) {
 		out.Write(bytes.TrimSpace(src[region.start:region.end]))
 	}
 
+	// Trailing comments and blank lines past the last declaration in source
+	// order belong to the file, not to whichever declaration ended up last, so
+	// pin them to the end rather than letting them travel with a hoisted type.
+	lastInSource := file.Decls[len(file.Decls)-1]
+
+	if trailing := bytes.TrimSpace(src[regions[lastInSource].end:]); len(trailing) > 0 {
+		out.WriteString("\n\n")
+		out.Write(trailing)
+	}
+
 	out.WriteByte('\n')
 
 	return out.Bytes(), true, nil
@@ -701,6 +711,15 @@ func declSourceRegions(decls []ast.Decl, fset *token.FileSet, src []byte) map[as
 
 		if i+1 < len(decls) {
 			end = starts[i+1]
+		} else {
+			// The last declaration ends at the line after its body, not at EOF:
+			// trailing comments and blank lines beyond it are the file's, not the
+			// declaration's, so they must not travel when this declaration moves.
+			end = lineStartOffset(lineStarts, fset.Position(decl.End()).Line+1)
+
+			if end > len(src) {
+				end = len(src)
+			}
 		}
 
 		regions[decl] = declRegion{start: starts[i], end: end}

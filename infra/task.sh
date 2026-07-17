@@ -51,12 +51,15 @@ sidecar_is_stale() {
 
 	[[ -x "$sidecar" ]] || return 0
 
+	# -print -quit stops at the first match without a pipe: piping to `head`
+	# would hand find a SIGPIPE (exit 141) the moment head closes the pipe,
+	# and under pipefail + set -e that aborts the whole script.
 	newer="$(find \
 		"${REPO_ROOT}/packages/ts/sidecar/src" \
 		"${REPO_ROOT}/packages/ts/sidecar/package.json" \
 		"${REPO_ROOT}/.oxfmtrc.json" \
 		"${REPO_ROOT}/.oxlintrc.json" \
-		-newer "$sidecar" -print 2>/dev/null | head -n 1)"
+		-newer "$sidecar" -print -quit 2>/dev/null)"
 
 	[[ -n "$newer" ]]
 }

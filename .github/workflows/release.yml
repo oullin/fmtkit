@@ -25,7 +25,7 @@ jobs:
                     - formatter
                     - vet
                     - driver
-                    - devx
+                    - sidecar
 
         steps:
             - uses: actions/checkout@v6
@@ -36,12 +36,12 @@ jobs:
                   cache: true
 
             - uses: actions/setup-go@v6
-              if: matrix.workspace != 'devx'
+              if: matrix.workspace != 'sidecar'
               with:
-                  go-version-file: go.mod
+                  go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-                      go.mod
-                      go.sum
+                      packages/go/go.mod
+                      packages/go/go.sum
 
             - name: Install workspace dependencies
               run: vp install --frozen-lockfile
@@ -63,10 +63,10 @@ jobs:
 
             - uses: actions/setup-go@v6
               with:
-                  go-version-file: go.mod
+                  go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-                      go.mod
-                      go.sum
+                      packages/go/go.mod
+                      packages/go/go.sum
 
             - name: Install workspace dependencies
               run: vp install --frozen-lockfile
@@ -100,7 +100,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG_PREFIX: v
                   DEFAULT_BUMP: patch
-              run: ./infra/scripts/release/create-release-tag.sh
+              run: ./infra/release/create-release-tag.sh
 
     # Publishing is invoked directly so this workflow does not rely on tag-push
     # fan-out from a workflow-created tag.

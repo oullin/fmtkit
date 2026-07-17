@@ -1,0 +1,10 @@
+{
+	"name": "formatter",
+	"private": true,
+	"scripts": {
+		"check": "../infra/task.sh check",
+		"gofmt": "../infra/task.sh gofmt",
+		"test": "../infra/task.sh test",
+		"vet": "../infra/task.sh vet"
+	}
+}

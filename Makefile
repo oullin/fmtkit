@@ -17,13 +17,13 @@ help: ## Show the available targets
 	@printf '\nVariables: ARGS\n'
 
 format: ## Run the formatter pipeline against ARGS
-	@./infra/scripts/tasks/format.sh $(ARGS)
+	@./infra/task.sh format $(ARGS)
 
 format-all: ## Run the formatter pipeline against the whole repository
-	@./infra/scripts/tasks/fmtkit.sh format-all
+	@./infra/task.sh fmtkit format-all
 
 check: ## Run the Go formatter in check mode against ARGS
-	@./infra/scripts/tasks/fmtkit.sh check $(ARGS)
+	@./infra/task.sh fmtkit check $(ARGS)
 
 version: ## Print the version the working tree builds as
-	@./infra/scripts/tasks/fmtkit.sh version
+	@./infra/task.sh fmtkit version

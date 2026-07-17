@@ -3,7 +3,7 @@
 
 # TS toolchain assets staged per platform by stage-ts-assets.sh, next to the
 # package that embeds them.
-/packages/driver/internal/embedded/bin/
+/packages/go/driver/internal/embedded/bin/
 /storage/bin*/
 /storage/dist/
 /storage/dist-test/

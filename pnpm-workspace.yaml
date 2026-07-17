@@ -1,2 +1,3 @@
 packages:
-    - packages/*
+    - packages/go/*
+    - packages/ts/sidecar

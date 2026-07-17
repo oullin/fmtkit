@@ -193,6 +193,48 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 	}
 });
 
+test('format-all pipeline reaches a fixed point in a single run', async () => {
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-format-all-fixpoint-',
+		),
+	);
+
+	try {
+		const file = join(dir, 'app.ts');
+
+		// A single-line statement followed by a call that expanded-calls turns
+		// multiline: the blank line separating them can only be inserted after
+		// the expansion has happened.
+		await writeFile(
+			file,
+			"function queueMessage(id: string, body: object) {\n\treturn { id, body };\n}\n\nexport function run() {\n\tconst registry = new Map<string, string>();\n\tconst invalid = queueMessage('1', { unexpected: true });\n\treturn [registry, invalid];\n}\n",
+		);
+
+		await execFileAsync(
+			tsxBin,
+			[formatAllScript, '--format-files', file, '--syntax-files', file],
+		);
+
+		const afterFirstRun = await readFile(file, 'utf8');
+
+		assert.match(afterFirstRun, /queueMessage\(\n\t\t'1',/, 'expected the call to be expanded');
+
+		await execFileAsync(
+			tsxBin,
+			[formatAllScript, '--format-files', file, '--syntax-files', file],
+		);
+
+		assert.equal(await readFile(file, 'utf8'), afterFirstRun, 'second run must not change an already formatted file');
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
+});
+
 test('format-all pipeline deduplicates repeated input paths', async () => {
 	const dir = await mkdtemp(
 		join(

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/format"
 	"go/parser"
 	"go/token"
 	"slices"
@@ -23,6 +22,11 @@ type declBlock struct {
 	decl         ast.Decl
 	effectivePos token.Pos
 	anchored     bool
+}
+
+type declRegion struct {
+	start int
+	end   int
 }
 
 var stdlibSpacingImports = map[string]string{
@@ -636,15 +640,84 @@ func reorderTypeDecls(filename string, src []byte) ([]byte, bool, error) {
 		return src, false, nil
 	}
 
-	file.Decls = desired
+	// go/printer places comments by their recorded source positions, so
+	// reprinting a file whose declarations moved detaches every comment from
+	// its declaration and hoists body comments to file scope. Splice the
+	// original text instead: each declaration travels as the literal bytes it
+	// was written as, doc comment and body comments included.
+	importsEnd := leadingImportDeclsEnd(file.Decls)
+	regions := declSourceRegions(file.Decls[importsEnd:], fset, src)
 
 	var out bytes.Buffer
 
-	if err := format.Node(&out, fset, file); err != nil {
-		return nil, false, err
+	out.Write(bytes.TrimRight(src[:regions[file.Decls[importsEnd]].start], " \t\n"))
+
+	for _, decl := range desired[importsEnd:] {
+		region := regions[decl]
+
+		out.WriteString("\n\n")
+		out.Write(bytes.TrimSpace(src[region.start:region.end]))
 	}
 
+	out.WriteByte('\n')
+
 	return out.Bytes(), true, nil
+}
+
+// declSourceRegions partitions the source text after the leading imports into
+// one contiguous region per declaration, cut at the first line of each
+// declaration's doc comment. Every byte belongs to exactly one region, so
+// free-floating comments and blank lines travel with the declaration they
+// follow and nothing is lost in a reorder.
+func declSourceRegions(decls []ast.Decl, fset *token.FileSet, src []byte) map[ast.Decl]declRegion {
+	lineStarts := buildLineStarts(src)
+	regions := make(map[ast.Decl]declRegion, len(decls))
+	starts := make([]int, len(decls))
+
+	for i, decl := range decls {
+		pos := decl.Pos()
+
+		if doc := declDocComment(decl); doc != nil && doc.Pos() < pos {
+			pos = doc.Pos()
+		}
+
+		start := lineStartOffset(lineStarts, fset.Position(pos).Line)
+
+		// A doc comment group can never reach back past the previous
+		// declaration; clamp defensively so no byte lands in two regions.
+		if i > 0 {
+			prevEnd := lineStartOffset(lineStarts, fset.Position(decls[i-1].End()).Line+1)
+
+			if start < prevEnd {
+				start = prevEnd
+			}
+		}
+
+		starts[i] = start
+	}
+
+	for i, decl := range decls {
+		end := len(src)
+
+		if i+1 < len(decls) {
+			end = starts[i+1]
+		}
+
+		regions[decl] = declRegion{start: starts[i], end: end}
+	}
+
+	return regions
+}
+
+func declDocComment(decl ast.Decl) *ast.CommentGroup {
+	switch typed := decl.(type) {
+	case *ast.FuncDecl:
+		return typed.Doc
+	case *ast.GenDecl:
+		return typed.Doc
+	}
+
+	return nil
 }
 
 func attachEmbedDirectiveDocs(file *ast.File) {

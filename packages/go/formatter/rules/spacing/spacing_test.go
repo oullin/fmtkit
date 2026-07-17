@@ -1430,6 +1430,80 @@ func run() {
 	}
 }
 
+func TestApplyReorderMovesCommentsWithTheirDeclarations(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+// Kind is a kind.
+type Kind int
+
+const (
+	// KindA is the first kind.
+	KindA Kind = iota
+
+	// KindB is the second kind.
+	KindB
+)
+
+// Args returns the args for k.
+func (k Kind) Args() []string {
+	if k == KindB {
+		// A meaningful inline note.
+		return []string{"b"}
+	}
+
+	return []string{"a"}
+}
+
+// Options carries options.
+type Options struct {
+	Name string
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d", len(violations))
+	}
+
+	attached := []string{
+		"// Kind is a kind.\ntype Kind int",
+		"// Options carries options.\ntype Options struct {",
+		"// KindA is the first kind.\n\tKindA Kind = iota",
+		"// KindB is the second kind.\n\tKindB",
+		"// Args returns the args for k.\nfunc (k Kind) Args() []string {",
+		"if k == KindB {\n\t\t// A meaningful inline note.\n\t\treturn []string{\"b\"}",
+	}
+
+	for _, want := range attached {
+		if !strings.Contains(string(formatted), want) {
+			t.Fatalf("expected reorder to keep %q attached, got:\n%s", want, formatted)
+		}
+	}
+
+	if !strings.Contains(string(formatted), "type Options struct {\n\tName string\n}\n\nconst (") {
+		t.Fatalf("expected hoisted types to precede the const block, got:\n%s", formatted)
+	}
+
+	repeatViolations, reformatted, err := New().Apply(path, formatted)
+
+	if err != nil {
+		t.Fatalf("apply reordered output: %v", err)
+	}
+
+	if len(repeatViolations) != 0 {
+		t.Fatalf("expected reordered output to be clean, got %d violation(s)", len(repeatViolations))
+	}
+
+	if string(reformatted) != string(formatted) {
+		t.Fatalf("expected reorder to be idempotent, got:\n%s", reformatted)
+	}
+}
+
 func TestApplyFormatsBlankLinesAroundGenericSelectorCalls(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
 

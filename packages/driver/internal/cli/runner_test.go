@@ -2,13 +2,13 @@ package cli
 
 import (
 	"bytes"
-	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
 	driverreport "github.com/oullin/fmtkit/packages/driver/report"
 	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
 	"github.com/oullin/fmtkit/packages/vet"

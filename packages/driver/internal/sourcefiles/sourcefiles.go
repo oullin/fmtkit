@@ -13,6 +13,15 @@ import (
 // Selection is how much of the working tree a collection covers.
 type Selection int
 
+type Options struct {
+	Cwd                 string
+	IncludeDeclarations bool
+	Scopes              []string
+
+	// Selection defaults to SelectionAll.
+	Selection Selection
+}
+
 const (
 	// SelectionAll covers every non-ignored file: tracked plus untracked.
 	// This is what `format-all` runs against.
@@ -33,15 +42,6 @@ func (s Selection) gitArgs() []string {
 	}
 
 	return []string{"--cached", "--others"}
-}
-
-type Options struct {
-	Cwd                 string
-	IncludeDeclarations bool
-	Scopes              []string
-
-	// Selection defaults to SelectionAll.
-	Selection Selection
 }
 
 // Collect lists the TS/Vue files under the given scopes.

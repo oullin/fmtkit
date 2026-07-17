@@ -707,7 +707,7 @@ func declSourceRegions(decls []ast.Decl, fset *token.FileSet, src []byte) map[as
 	}
 
 	for i, decl := range decls {
-		end := len(src)
+		var end int
 
 		if i+1 < len(decls) {
 			end = starts[i+1]

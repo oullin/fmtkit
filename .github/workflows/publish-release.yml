@@ -39,7 +39,7 @@ jobs:
                   fetch-depth: 0
 
             - name: Verify release tag and checkout tagged commit
-              run: ./infra/scripts/release/verify-release-tag.sh
+              run: ./infra/release/verify-release-tag.sh
               shell: bash
 
             - uses: actions/setup-node@v5
@@ -55,10 +55,12 @@ jobs:
 
             - uses: actions/setup-go@v6
               with:
-                  go-version-file: go.mod
+                  go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-                      go.mod
-                      go.sum
+packages/go/go.mod
+packages/go/go.sum|cache-dependency-path: |
+                      packages/go/go.mod
+                      packages/go/go.sum
 
             # Creates the release up front so goreleaser (release.mode
             # keep-existing) attaches its assets to it, and so the notes come

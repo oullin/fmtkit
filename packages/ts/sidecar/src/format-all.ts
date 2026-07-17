@@ -7,9 +7,9 @@ import { isNotFoundError, isTargetFile } from '#sidecar/pass-utils';
 import { validateFile } from '#sidecar/validate-syntax';
 
 // format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains →
-// validate-syntax) inside a single process. Files within a pass are processed
-// concurrently; results are reported in input order so the output stays
-// deterministic.
+// blank-lines → validate-syntax) inside a single process. Files within a pass
+// are processed concurrently; results are reported in input order so the
+// output stays deterministic.
 //
 // oxfmt runs *before* the project passes, never after. It is an internal step
 // that normalises the file; the project passes then impose the style fmtkit
@@ -221,6 +221,13 @@ export async function main(): Promise<void> {
 	await runOxfmt(pipelineOptions);
 
 	await runPass('fluent-chains', formatTargets, options.check, processFluentChainsFile);
+
+	// fluent-chains (and the expanded-calls pass it applies) turns single-line
+	// statements multiline, creating blank-line obligations the first pass
+	// could not see. Without this second pass the pipeline only converges on
+	// its next invocation, so a format-then-diff gate rejects freshly
+	// formatted code.
+	await runPass('blank-lines', formatTargets, options.check, processBlankLinesFile);
 
 	await runValidate(syntaxTargets);
 }

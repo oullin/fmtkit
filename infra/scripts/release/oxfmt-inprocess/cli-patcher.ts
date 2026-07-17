@@ -100,7 +100,9 @@ export class OxfmtCliPatcher {
 			return written;
 		}
 
-		return ok({ cliPath, apiModuleSpecifier: bindings.value.moduleSpecifier });
+		return ok(
+			{ cliPath, apiModuleSpecifier: bindings.value.moduleSpecifier },
+		);
 	}
 
 	/**

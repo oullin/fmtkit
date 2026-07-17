@@ -6,12 +6,20 @@ import { test } from 'node:test';
 import { dirExists, listSourceFiles, processFile } from '#devx/files';
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-files-'));
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-devx-files-',
+		),
+	);
 
 	try {
 		await fn(dir);
 	} finally {
-		await rm(dir, { recursive: true, force: true });
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
 	}
 }
 
@@ -25,11 +33,20 @@ test('dirExists reports existing directories and missing paths', async () => {
 
 test('listSourceFiles returns TypeScript and Vue files only', async () => {
 	await withTempDir(async (dir) => {
-		await writeFile(join(dir, 'component.vue'), '<script setup lang="ts">\nconst value = 1;\n</script>\n');
+		await writeFile(
+			join(dir, 'component.vue'),
+			'<script setup lang="ts">\nconst value = 1;\n</script>\n',
+		);
 
-		await writeFile(join(dir, 'source.ts'), 'const value = 1;\n');
+		await writeFile(
+			join(dir, 'source.ts'),
+			'const value = 1;\n',
+		);
 
-		await writeFile(join(dir, 'notes.md'), '# Notes\n');
+		await writeFile(
+			join(dir, 'notes.md'),
+			'# Notes\n',
+		);
 
 		const files = (await listSourceFiles(dir)).map((file) => {
 			return file.slice(dir.length + 1);
@@ -74,7 +91,10 @@ test('processFile rewrites Vue script blocks and reports unchanged files', async
 	await withTempDir(async (dir) => {
 		const file = join(dir, 'component.vue');
 
-		await writeFile(file, ['<script setup lang="ts">', 'const value = 1;', 'if (value) console.log(value);', '</script>', ''].join('\n'));
+		await writeFile(
+			file,
+			['<script setup lang="ts">', 'const value = 1;', 'if (value) console.log(value);', '</script>', ''].join('\n'),
+		);
 
 		assert.equal(await processFile(file, false), true);
 

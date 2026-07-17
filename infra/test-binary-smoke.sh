@@ -69,4 +69,41 @@ if ! diff <(printf '%s' "$expected_vue") app.vue; then
 	exit 1
 fi
 
+# The lint step has to enforce the bundled .oxlintrc, typescript rules included.
+# This fails open, which is why it is worth a fixture: without the config oxlint
+# still runs and still exits 0, it just stops reporting anything the config
+# turned on. consistent-type-imports is the probe because it fires only when the
+# bundled config reaches oxlint — it is off in oxlint's defaults. Kept in its own
+# fixture so the exit code belongs to lint alone.
+lint_fixture="${tmp_root}/lint-fixture"
+
+mkdir -p "$lint_fixture"
+cd "$lint_fixture"
+
+git init --quiet .
+
+printf 'export type Foo = { a: number };\n' > types.ts
+printf "import { Foo } from './types';\n\nexport const value: Foo = { a: 1 };\n" > uses.ts
+
+# One probe per plugin the config names. oxlint's `plugins` field *overwrites*
+# the base set rather than extending it, so dropping a name here silently
+# switches its rules off — which is how the oxc plugin went missing once already.
+printf 'export function erasing(y: number): number {\n\treturn y * 0;\n}\n' > oxc.ts
+
+lint_log="${tmp_root}/lint.log"
+
+if XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint . > "$lint_log" 2>&1; then
+	printf 'lint exited 0 on files that violate the bundled config\n' >&2
+	cat "$lint_log" >&2
+	exit 1
+fi
+
+for rule in 'typescript(consistent-type-imports)' 'oxc(erasing-op)'; do
+	if ! grep -qF "$rule" "$lint_log"; then
+		printf 'the bundled oxlint config did not report %s\n' "$rule" >&2
+		cat "$lint_log" >&2
+		exit 1
+	fi
+done
+
 printf 'binary smoke test passed\n'

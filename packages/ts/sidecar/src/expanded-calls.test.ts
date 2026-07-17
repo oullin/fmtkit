@@ -64,4 +64,14 @@ describe('expanded call formatter', () => {
 
 		assert.equal(formatExpandedCalls(input, 'types.d.ts'), input);
 	});
+
+	it('re-indents a multiline object argument to its new depth', () => {
+		// The object's inner lines were written against the statement's indent.
+		// Expanding pushes the object one level deeper, so they have to move with
+		// it — oxfmt used to hide this by collapsing the call straight back.
+		const input = ['function send() {', '\tconst response = fetch(url, {', '\t\t...init,', '\t\theaders,', '\t});', '}', ''].join('\n');
+		const expected = ['function send() {', '\tconst response = fetch(', '\t\turl,', '\t\t{', '\t\t\t...init,', '\t\t\theaders,', '\t\t},', '\t);', '}', ''].join('\n');
+
+		assert.equal(formatExpandedCalls(input, 'fixture.ts'), expected);
+	});
 });

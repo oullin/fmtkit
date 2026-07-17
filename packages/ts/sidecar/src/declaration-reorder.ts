@@ -153,7 +153,9 @@ function canReorderConstGroup(source: string, group: Node[]): boolean {
 			continue;
 		}
 
-		const names = declaredNames([group[i]]);
+		const names = declaredNames(
+			[group[i]],
+		);
 
 		if (
 			group.slice(i + 1).some((node) => {
@@ -216,7 +218,10 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 		.join('');
 
 	const firstStart = getStart(group[0]);
-	const lastEnd = getEnd(group.at(-1)!);
+
+	const lastEnd = getEnd(
+		group.at(-1)!,
+	);
 
 	if (firstStart < 0 || lastEnd < 0) {
 		return null;
@@ -270,7 +275,11 @@ export function computeDeclarationReorderEdits(content: string, virtualName: str
 		}
 
 		for (const group of constGroups) {
-			const edit = groupEdit(content, group, canReorderConstGroup(content, group));
+			const edit = groupEdit(
+				content,
+				group,
+				canReorderConstGroup(content, group),
+			);
 
 			if (edit) {
 				edits.push(edit);

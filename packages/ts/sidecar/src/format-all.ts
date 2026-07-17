@@ -6,10 +6,18 @@ import { processFluentChainsFile } from '#sidecar/fluent-chains';
 import { isNotFoundError, isTargetFile } from '#sidecar/pass-utils';
 import { validateFile } from '#sidecar/validate-syntax';
 
-// format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
-// → oxfmt → validate-syntax) inside a single process. Files within a pass are
-// processed concurrently; results are reported in input order so the output
-// stays deterministic.
+// format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains →
+// validate-syntax) inside a single process. Files within a pass are processed
+// concurrently; results are reported in input order so the output stays
+// deterministic.
+//
+// oxfmt runs *before* the project passes, never after. It is an internal step
+// that normalises the file; the project passes then impose the style fmtkit
+// actually ships. Re-running oxfmt at the end would undo them — it collapses
+// anything that fits in printWidth, which is most of what expanded-calls and
+// fluent-chains just expanded. The output is therefore deliberately not what
+// bare oxfmt would produce: fmtkit's format is the pipeline's output, so check
+// it by running the pipeline, not by running oxfmt.
 
 type CliOptions = {
 	check: boolean;
@@ -89,17 +97,21 @@ export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => 
 }
 
 export async function runPass(label: string, files: string[], check: boolean, processOne: (file: string, check: boolean) => Promise<boolean>): Promise<void> {
-	const outcomes = await mapPool(files, availableParallelism(), async (file): Promise<PassOutcome> => {
-		try {
-			return { file, changed: await processOne(file, check), missing: false };
-		} catch (err) {
-			if (isNotFoundError(err)) {
-				return { file, changed: false, missing: true };
-			}
+	const outcomes = await mapPool(
+		files,
+		availableParallelism(),
+		async (file): Promise<PassOutcome> => {
+			try {
+				return { file, changed: await processOne(file, check), missing: false };
+			} catch (err) {
+				if (isNotFoundError(err)) {
+					return { file, changed: false, missing: true };
+				}
 
-			throw err;
-		}
-	});
+				throw err;
+			}
+		},
+	);
 
 	let changedCount = 0;
 
@@ -140,7 +152,11 @@ export function runOxfmt(options: CliOptions): Promise<void> {
 
 	const runChunk = (chunk: string[]): Promise<void> => {
 		return new Promise((resolvePromise, rejectPromise) => {
-			const child = spawn(bin, [...args, ...chunk], { stdio: 'inherit' });
+			const child = spawn(
+				bin,
+				[...args, ...chunk],
+				{ stdio: 'inherit' },
+			);
 
 			child.on('error', rejectPromise);
 
@@ -168,7 +184,11 @@ export function runOxfmt(options: CliOptions): Promise<void> {
 }
 
 async function runValidate(files: string[]): Promise<void> {
-	const failures = (await mapPool(files, availableParallelism(), validateFile)).flat();
+	const failures = (await mapPool(
+		files,
+		availableParallelism(),
+		validateFile,
+	)).flat();
 
 	if (failures.length > 0) {
 		console.error(failures.join('\n'));
@@ -180,7 +200,10 @@ async function runValidate(files: string[]): Promise<void> {
 }
 
 export async function main(): Promise<void> {
-	const options = parseArgs(process.argv.slice(2));
+	const options = parseArgs(
+		process.argv.slice(2),
+	);
+
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 
 	const syntaxTargets = [
@@ -198,8 +221,6 @@ export async function main(): Promise<void> {
 	await runOxfmt(pipelineOptions);
 
 	await runPass('fluent-chains', formatTargets, options.check, processFluentChainsFile);
-
-	await runOxfmt(pipelineOptions);
 
 	await runValidate(syntaxTargets);
 }

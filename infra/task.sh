@@ -6,7 +6,7 @@ set -euo pipefail
 # single package live in packages/go/infra/task.sh instead; the release tag
 # machinery is under infra/release/.
 #
-# usage: task.sh <format|fmtkit|build|gofmt|coverage|with-env|help> [args...]
+# usage: task.sh <format|fmtkit|self-check|build|gofmt|coverage|with-env|help> [args...]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/host-target.sh"
@@ -19,6 +19,8 @@ usage: task.sh <task> [args...]
                       are resolved against the repo root, "." means all of it
   fmtkit <cmd> ...    run any fmtkit command (format-all, check, version, ...)
                       through the same self-built binary
+  self-check          assert the repo is fmtkit-formatted: format-all over a
+                      clean tree and fail if anything moved
   build               build the local fmtkit-go binary into storage/bin
   gofmt               run gofmt -w over the Go module
   coverage            enforce the Go and TS coverage gates
@@ -132,6 +134,44 @@ run_format() {
 	run_fmtkit format "${fmtkit_args[@]}"
 }
 
+# Asserts this repository is formatted the way fmtkit formats it — by running
+# fmtkit over it and failing if anything moved.
+#
+# This is the only honest way to check the tree. fmtkit's format is the
+# pipeline's output (blank-lines -> oxfmt -> fluent-chains), and the project
+# passes run *after* oxfmt and deliberately diverge from it: they expand calls
+# and chains that oxfmt, left to itself, would collapse back. So bare
+# `oxfmt --check` disagrees with correctly formatted source by design, and using
+# it here would be checking the tree against a tool that is not the formatter.
+#
+# The pipeline has no read-only mode for TS, so this formats and then diffs.
+# It is meant for CI and for a clean tree; it rewrites files in place.
+# run_fmtkit ends in `exec`, so it runs in a subshell to keep this one alive for
+# the diff.
+run_self_check() {
+	cd "$REPO_ROOT"
+
+	if [[ -n "$(git status --porcelain)" ]]; then
+		printf 'self-check: the working tree is dirty; commit or stash first\n' >&2
+		git status --short >&2
+		exit 1
+	fi
+
+	(run_fmtkit format-all)
+
+	if git diff --quiet; then
+		printf 'repository is fmtkit-formatted\n'
+		exit 0
+	fi
+
+	printf '\nself-check: fmtkit reformatted the following; commit the result:\n' >&2
+	git diff --name-only >&2
+	printf '\n' >&2
+	git --no-pager diff >&2
+
+	exit 1
+}
+
 run_build() {
 	local host_os host_arch build_dir_path bin_path
 
@@ -171,6 +211,9 @@ case "$task" in
 		;;
 	fmtkit)
 		run_fmtkit "$@"
+		;;
+	self-check)
+		run_self_check
 		;;
 	build)
 		run_build

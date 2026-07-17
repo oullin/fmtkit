@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	driverconfig "go.ollin.sh/fmtkit/driver/config"
+	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 	driverreport "go.ollin.sh/fmtkit/driver/report"
 	"go.ollin.sh/fmtkit/formatter"
 	formatterconfig "go.ollin.sh/fmtkit/formatter/config"
@@ -18,6 +19,10 @@ type Runner struct {
 	stdout io.Writer
 	stderr io.Writer
 	parser parser
+
+	// selection is how much of the working tree the formatter covers. The zero
+	// value covers everything, which is what `fmtkit go` and `fmtkit check` want.
+	selection sourcefiles.Selection
 }
 
 func NewRunner(stdout, stderr io.Writer) Runner {
@@ -26,6 +31,15 @@ func NewRunner(stdout, stderr io.Writer) Runner {
 		stderr: stderr,
 		parser: newParser(stderr),
 	}
+}
+
+// NewScopedRunner returns a Runner whose formatter covers only the part of the
+// working tree that selection names.
+func NewScopedRunner(stdout, stderr io.Writer, selection sourcefiles.Selection) Runner {
+	runner := NewRunner(stdout, stderr)
+	runner.selection = selection
+
+	return runner
 }
 
 func (r Runner) Run(mode Mode, args []string) int {
@@ -88,6 +102,23 @@ func (r Runner) Run(mode Mode, args []string) int {
 }
 
 func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Config) (formatterengine.Report, error) {
+	if r.selection == sourcefiles.SelectionChanged {
+		files, err := changedGoFiles(paths, cfg)
+
+		if err != nil {
+			return formatterengine.Report{}, err
+		}
+
+		switch mode {
+		case CheckMode:
+			return formatter.CheckFiles(files, cfg)
+		case FormatMode:
+			return formatter.FormatFiles(files, cfg)
+		default:
+			return formatterengine.Report{}, fmt.Errorf("unsupported mode %q", mode)
+		}
+	}
+
 	switch mode {
 	case CheckMode:
 		return formatter.Check(paths, cfg)
@@ -96,6 +127,55 @@ func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Conf
 	default:
 		return formatterengine.Report{}, fmt.Errorf("unsupported mode %q", mode)
 	}
+}
+
+// changedGoFiles narrows the files the formatter owns down to the ones the
+// working tree has touched.
+//
+// It intersects rather than asking git for `*.go` directly: the engine's walk is
+// what applies cfg's exclusions (vendor, not_path/not_name, generated files),
+// and git knows nothing about those. Taking the engine's list and keeping only
+// what git reports as changed preserves both. Outside a git work tree there is
+// no such thing as "changed", so the error surfaces rather than silently
+// formatting everything.
+func changedGoFiles(paths []string, cfg formatterconfig.Config) ([]string, error) {
+	owned, err := formatterengine.CollectGoFiles(paths, cfg)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(owned) == 0 {
+		return nil, nil
+	}
+
+	cwd, err := os.Getwd()
+
+	if err != nil {
+		return nil, fmt.Errorf("resolve cwd: %w", err)
+	}
+
+	touched, err := sourcefiles.ChangedPaths(cwd, paths)
+
+	if err != nil {
+		return nil, err
+	}
+
+	changed := make(map[string]struct{}, len(touched))
+
+	for _, path := range touched {
+		changed[path] = struct{}{}
+	}
+
+	files := make([]string, 0, len(owned))
+
+	for _, path := range owned {
+		if _, ok := changed[path]; ok {
+			files = append(files, path)
+		}
+	}
+
+	return files, nil
 }
 
 func exitCode(mode Mode, result driverreport.Combined) int {

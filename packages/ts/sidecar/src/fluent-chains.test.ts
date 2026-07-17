@@ -7,26 +7,45 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { formatFluentChains } from '#sidecar/fluent-chains';
 
-const script = fileURLToPath(import.meta.resolve('#sidecar/fluent-chains'));
-const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
+const script = fileURLToPath(
+	import.meta.resolve('#sidecar/fluent-chains'),
+);
+const tsx = fileURLToPath(
+	import.meta.resolve('tsx/cli'),
+);
 
 function run(command: string, args: string[], cwd: string): void {
-	const result = spawnSync(command, args, { cwd, encoding: 'utf8' });
+	const result = spawnSync(
+		command,
+		args,
+		{ cwd, encoding: 'utf8' },
+	);
 
 	assert.equal(result.status, 0, result.stderr || result.stdout);
 }
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-fluent-chains-'));
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-fluent-chains-',
+		),
+	);
 
 	try {
 		for (const [file, content] of Object.entries(files)) {
-			await writeFile(join(dir, file), content);
+			await writeFile(
+				join(dir, file),
+				content,
+			);
 		}
 
 		await fn(dir);
 	} finally {
-		await rm(dir, { recursive: true, force: true });
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
 	}
 }
 
@@ -84,22 +103,22 @@ describe('fluent chain formatter', () => {
 	it('formats Vue script blocks through the CLI', async () => {
 		await withFixture(
 			{
-				'DashboardRoute.vue': [
-					'<script setup lang="ts">',
-					"export const meRoutes = createRouter<{ Bindings: WorkerEnv; Variables: IdentityVariables }>().use('*', bindEnv).use(identityMiddleware).get('/', getMe).get('/sessions', getSessions);",
-					'</script>',
-					'',
-				].join('\n'),
-			},
+					'DashboardRoute.vue': [
+						'<script setup lang="ts">',
+						"export const meRoutes = createRouter<{ Bindings: WorkerEnv; Variables: IdentityVariables }>().use('*', bindEnv).use(identityMiddleware).get('/', getMe).get('/sessions', getSessions);",
+						'</script>',
+						'',
+					].join('\n'),
+				},
 			async (dir) => {
-				run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
-				run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
+					run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
+					run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
 
-				const output = await readFile(join(dir, 'DashboardRoute.vue'), 'utf8');
+					const output = await readFile(join(dir, 'DashboardRoute.vue'), 'utf8');
 
-				assert.match(output, /createRouter<\{ Bindings: WorkerEnv; Variables: IdentityVariables \}>\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)/);
-				assert.match(output, /\.get\('\/', getMe\)\n\t\.get\('\/sessions', getSessions\);/);
-			},
+					assert.match(output, /createRouter<\{ Bindings: WorkerEnv; Variables: IdentityVariables \}>\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)/);
+					assert.match(output, /\.get\('\/', getMe\)\n\t\.get\('\/sessions', getSessions\);/);
+				},
 		);
 	});
 
@@ -108,69 +127,69 @@ describe('fluent chain formatter', () => {
 
 		await withFixture(
 			{
-				'StructuredData.vue': [
-					'<script type="application/ld+json">',
-					jsonLd,
-					'</script>',
-					'<script setup lang="ts">',
-					"export const meRoutes = createRouter().use('*', bindEnv).get('/', getMe);",
-					'</script>',
-					'',
-				].join('\n'),
-			},
+					'StructuredData.vue': [
+						'<script type="application/ld+json">',
+						jsonLd,
+						'</script>',
+						'<script setup lang="ts">',
+						"export const meRoutes = createRouter().use('*', bindEnv).get('/', getMe);",
+						'</script>',
+						'',
+					].join('\n'),
+				},
 			async (dir) => {
-				run(process.execPath, [tsx, script, 'StructuredData.vue'], dir);
+					run(process.execPath, [tsx, script, 'StructuredData.vue'], dir);
 
-				const output = await readFile(join(dir, 'StructuredData.vue'), 'utf8');
+					const output = await readFile(join(dir, 'StructuredData.vue'), 'utf8');
 
-				assert.ok(output.includes(['<script type="application/ld+json">', jsonLd, '</script>'].join('\n')));
-				assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.get\('\/', getMe\);/);
-			},
+					assert.ok(output.includes(['<script type="application/ld+json">', jsonLd, '</script>'].join('\n')));
+					assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.get\('\/', getMe\);/);
+				},
 		);
 	});
 
 	it('formats Drizzle queries in Vue script blocks through the CLI', async () => {
 		await withFixture(
 			{
-				'DashboardData.vue': [
-					'<script setup lang="ts">',
-					"import { and, eq, gt } from 'drizzle-orm';",
-					'const rows = await db.select().from(sessions).where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, now)));',
-					'</script>',
-					'',
-				].join('\n'),
-			},
+					'DashboardData.vue': [
+						'<script setup lang="ts">',
+						"import { and, eq, gt } from 'drizzle-orm';",
+						'const rows = await db.select().from(sessions).where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, now)));',
+						'</script>',
+						'',
+					].join('\n'),
+				},
 			async (dir) => {
-				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
-				run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+					run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+					run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
 
-				const output = await readFile(join(dir, 'DashboardData.vue'), 'utf8');
+					const output = await readFile(join(dir, 'DashboardData.vue'), 'utf8');
 
-				assert.match(output, /\.where\(\n\t\tand\(\n\t\t\teq\(sessions\.userId, userId\),\n\t\t\tgt\(sessions\.expiresAt, now\),\n\t\t\),\n\t\);/);
-			},
+					assert.match(output, /\.where\(\n\t\tand\(\n\t\t\teq\(sessions\.userId, userId\),\n\t\t\tgt\(sessions\.expiresAt, now\),\n\t\t\),\n\t\);/);
+				},
 		);
 	});
 
 	it('formats expanded call arguments in Vue script blocks through the CLI', async () => {
 		await withFixture(
 			{
-				'AuthProvider.vue': [
-					'<script setup lang="ts">',
-					'function createAuth() {',
-					'\treturn betterAuth(buildAuthConfig(env, db, mailer, app, options)) as unknown as SasuAuth;',
-					'}',
-					'</script>',
-					'',
-				].join('\n'),
-			},
+					'AuthProvider.vue': [
+						'<script setup lang="ts">',
+						'function createAuth() {',
+						'\treturn betterAuth(buildAuthConfig(env, db, mailer, app, options)) as unknown as SasuAuth;',
+						'}',
+						'</script>',
+						'',
+					].join('\n'),
+				},
 			async (dir) => {
-				run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
-				run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
+					run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
+					run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
 
-				const output = await readFile(join(dir, 'AuthProvider.vue'), 'utf8');
+					const output = await readFile(join(dir, 'AuthProvider.vue'), 'utf8');
 
-				assert.match(output, /return betterAuth\(\n\t\tbuildAuthConfig\(env, db, mailer, app, options\),\n\t\) as unknown as SasuAuth;/);
-			},
+					assert.match(output, /return betterAuth\(\n\t\tbuildAuthConfig\(env, db, mailer, app, options\),\n\t\) as unknown as SasuAuth;/);
+				},
 		);
 	});
 });

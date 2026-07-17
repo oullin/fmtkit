@@ -186,7 +186,10 @@ export async function writeFileAtomic(file: string, content: string): Promise<vo
 		await rename(tmp, file);
 	} catch (err) {
 		try {
-			await rm(tmp, { force: true });
+			await rm(
+				tmp,
+				{ force: true },
+			);
 		} catch {
 			// Ignore cleanup failures so the original write/rename error surfaces.
 		}

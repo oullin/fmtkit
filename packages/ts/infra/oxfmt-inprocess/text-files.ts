@@ -38,7 +38,9 @@ export class NodeTextFiles implements TextFiles {
 	 */
 	readText(path: string): Result<string, OxfmtFileUnreadable> {
 		try {
-			return ok(readFileSync(path, 'utf8'));
+			return ok(
+				readFileSync(path, 'utf8'),
+			);
 		} catch (cause) {
 			return err(new OxfmtFileUnreadable(path, cause));
 		}

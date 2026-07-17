@@ -12,7 +12,13 @@ importers:
         specifier: 0.2.4
         version: 0.2.4(@types/node@26.1.1)(esbuild@0.28.0)(tsx@4.23.1)(typescript@6.0.3)(vite@8.0.16(@types/node@26.1.1)(esbuild@0.28.0)(tsx@4.23.1))
 
-  packages/devx:
+  packages/go/driver: {}
+
+  packages/go/formatter: {}
+
+  packages/go/vet: {}
+
+  packages/ts/sidecar:
     devDependencies:
       '@types/node':
         specifier: 26.1.1
@@ -32,12 +38,6 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
-
-  packages/driver: {}
-
-  packages/formatter: {}
-
-  packages/vet: {}
 
 packages:
 

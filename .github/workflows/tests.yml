@@ -37,8 +37,6 @@ jobs:
               with:
                   go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-packages/go/go.mod
-packages/go/go.sum|cache-dependency-path: |
                       packages/go/go.mod
                       packages/go/go.sum
 
@@ -75,8 +73,6 @@ packages/go/go.sum|cache-dependency-path: |
               with:
                   go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-packages/go/go.mod
-packages/go/go.sum|cache-dependency-path: |
                       packages/go/go.mod
                       packages/go/go.sum
 
@@ -109,8 +105,6 @@ packages/go/go.sum|cache-dependency-path: |
               with:
                   go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-packages/go/go.mod
-packages/go/go.sum|cache-dependency-path: |
                       packages/go/go.mod
                       packages/go/go.sum
 
@@ -172,8 +166,6 @@ packages/go/go.sum|cache-dependency-path: |
               with:
                   go-version-file: packages/go/go.mod
                   cache-dependency-path: |
-packages/go/go.mod
-packages/go/go.sum|cache-dependency-path: |
                       packages/go/go.mod
                       packages/go/go.sum
 

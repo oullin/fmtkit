@@ -25,7 +25,11 @@ function unwrapExpression(node: Node | undefined): Node | undefined {
 }
 
 function calleeParens(source: string, call: Node): CallParens | null {
-	return callParens(source, call, unwrapExpression(call.callee as Node | undefined));
+	return callParens(
+		source,
+		call,
+		unwrapExpression(call.callee as Node | undefined),
+	);
 }
 
 function callArguments(call: Node): Node[] {
@@ -164,7 +168,10 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	});
 
 	const separator = `,\n${argIndent}`;
-	const trailingComma = canUseTrailingComma(args.at(-1)) ? ',' : '';
+
+	const trailingComma = canUseTrailingComma(
+		args.at(-1),
+	) ? ',' : '';
 
 	return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;
 }
@@ -174,7 +181,11 @@ function formatCall(source: string, call: Node, comments: Node[], indent: string
 	const formattedParens = formatCallParens(source, call, comments, indent, baseIndent);
 
 	if (!parens || formattedParens === null) {
-		return rebaseIndent(sourceOf(source, call), baseIndent, indent);
+		return rebaseIndent(
+			sourceOf(source, call),
+			baseIndent,
+			indent,
+		);
 	}
 
 	return `${source.slice(getStart(call), parens.open)}${formattedParens}`;
@@ -185,11 +196,19 @@ function formatCall(source: string, call: Node, comments: Node[], indent: string
 // the source yet however deep the recursion goes.
 function formatNode(source: string, node: Node, comments: Node[], indent: string, baseIndent: string): string {
 	if (node.type !== 'CallExpression') {
-		return rebaseIndent(sourceOf(source, node), baseIndent, indent);
+		return rebaseIndent(
+			sourceOf(source, node),
+			baseIndent,
+			indent,
+		);
 	}
 
 	if (!shouldExpandCall(node)) {
-		return rebaseIndent(sourceOf(source, node), baseIndent, indent);
+		return rebaseIndent(
+			sourceOf(source, node),
+			baseIndent,
+			indent,
+		);
 	}
 
 	return formatCall(source, node, comments, indent, baseIndent);
@@ -231,10 +250,11 @@ export function computeExpandedCallEdits(content: string, virtualName: string): 
 			return;
 		}
 
-		const indent = lineIndent(content, getStart(node));
+		const indent = lineIndent(
+			content,
+			getStart(node),
+		);
 
-		// The call has not moved, so every argument's source is still based at
-		// this statement's indent — that is what nested levels rebase away from.
 		const replacement = formatCallParens(content, node, comments, indent, indent);
 		const current = content.slice(parens.open, parens.close + 1);
 

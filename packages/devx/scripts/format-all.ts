@@ -97,17 +97,21 @@ export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => 
 }
 
 export async function runPass(label: string, files: string[], check: boolean, processOne: (file: string, check: boolean) => Promise<boolean>): Promise<void> {
-	const outcomes = await mapPool(files, availableParallelism(), async (file): Promise<PassOutcome> => {
-		try {
-			return { file, changed: await processOne(file, check), missing: false };
-		} catch (err) {
-			if (isNotFoundError(err)) {
-				return { file, changed: false, missing: true };
-			}
+	const outcomes = await mapPool(
+		files,
+		availableParallelism(),
+		async (file): Promise<PassOutcome> => {
+			try {
+				return { file, changed: await processOne(file, check), missing: false };
+			} catch (err) {
+				if (isNotFoundError(err)) {
+					return { file, changed: false, missing: true };
+				}
 
-			throw err;
-		}
-	});
+				throw err;
+			}
+		},
+	);
 
 	let changedCount = 0;
 
@@ -148,7 +152,11 @@ export function runOxfmt(options: CliOptions): Promise<void> {
 
 	const runChunk = (chunk: string[]): Promise<void> => {
 		return new Promise((resolvePromise, rejectPromise) => {
-			const child = spawn(bin, [...args, ...chunk], { stdio: 'inherit' });
+			const child = spawn(
+				bin,
+				[...args, ...chunk],
+				{ stdio: 'inherit' },
+			);
 
 			child.on('error', rejectPromise);
 
@@ -176,7 +184,11 @@ export function runOxfmt(options: CliOptions): Promise<void> {
 }
 
 async function runValidate(files: string[]): Promise<void> {
-	const failures = (await mapPool(files, availableParallelism(), validateFile)).flat();
+	const failures = (await mapPool(
+		files,
+		availableParallelism(),
+		validateFile,
+	)).flat();
 
 	if (failures.length > 0) {
 		console.error(failures.join('\n'));
@@ -188,7 +200,10 @@ async function runValidate(files: string[]): Promise<void> {
 }
 
 export async function main(): Promise<void> {
-	const options = parseArgs(process.argv.slice(2));
+	const options = parseArgs(
+		process.argv.slice(2),
+	);
+
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 
 	const syntaxTargets = [

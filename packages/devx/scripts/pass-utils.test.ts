@@ -64,11 +64,13 @@ test('lineIndent returns the leading whitespace of the position line', () => {
 });
 
 test('nonOverlappingEdits drops overlapping edits and sorts by start', () => {
-	const kept = nonOverlappingEdits([
-		{ start: 10, end: 20, replacement: 'b' },
-		{ start: 0, end: 5, replacement: 'a' },
-		{ start: 15, end: 25, replacement: 'c' },
-	]);
+	const kept = nonOverlappingEdits(
+		[
+			{ start: 10, end: 20, replacement: 'b' },
+			{ start: 0, end: 5, replacement: 'a' },
+			{ start: 15, end: 25, replacement: 'c' },
+		],
+	);
 
 	assert.deepEqual(
 		kept.map((edit) => {
@@ -112,7 +114,12 @@ test('isJavaScriptOrTypeScript accepts JS/TS langs and module types, rejects oth
 });
 
 test('writeFileAtomic replaces the file content and leaves no temp files', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-atomic-'));
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-devx-atomic-',
+		),
+	);
 
 	try {
 		const file = join(dir, 'target.ts');
@@ -125,6 +132,9 @@ test('writeFileAtomic replaces the file content and leaves no temp files', async
 
 		assert.deepEqual(await readdir(dir), ['target.ts']);
 	} finally {
-		await rm(dir, { recursive: true, force: true });
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
 	}
 });

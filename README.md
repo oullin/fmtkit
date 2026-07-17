@@ -62,8 +62,9 @@ fmtkit format-all --quiet
 ```
 
 **`format` covers what you changed; `format-all` covers everything.** `format`
-covers the files the working tree has touched — modified and untracked — so an
-everyday format stays proportional to your diff rather than the repo.
+covers the files that diverge from HEAD — modified (staged or not) and
+untracked — so an everyday format stays proportional to your diff rather than
+the repo.
 `format-all` covers every non-ignored file, and is what a CI gate wants: a
 changed-file scope would pass vacuously on a fresh checkout, where nothing is
 modified. Both skip anything `.gitignore`d, and both need a git working tree.

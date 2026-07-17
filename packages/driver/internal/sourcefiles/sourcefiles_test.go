@@ -191,6 +191,61 @@ func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 	}
 }
 
+func TestCollectChangedIncludesStagedFiles(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
+	writeFile(t, filepath.Join(dir, "removed.ts"), "const removed = 1;\n")
+	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	gitAdd(t, dir, "staged.ts", "removed.ts", "untouched.ts")
+	gitCommit(t, dir)
+
+	// Fully staged: the working tree and index agree, but HEAD does not. This is
+	// the pre-commit-hook shape, where everything is added before the hook runs.
+	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 2;\n")
+	gitAdd(t, dir, "staged.ts")
+
+	// A staged deletion leaves no file to format and must stay out.
+	run(t, dir, "git", "rm", "-q", "removed.ts")
+
+	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{filepath.Join(dir, "staged.ts")}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func TestCollectChangedWorksBeforeTheFirstCommit(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
+	gitAdd(t, dir, "staged.ts")
+
+	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+
+	want := []string{filepath.Join(dir, "staged.ts")}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
 func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")

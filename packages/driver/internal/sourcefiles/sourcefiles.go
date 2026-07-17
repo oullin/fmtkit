@@ -27,21 +27,33 @@ const (
 	// This is what `format-all` runs against.
 	SelectionAll Selection = iota
 
-	// SelectionChanged covers only what the working tree has actually touched:
-	// modified-but-tracked plus untracked. This is what `format` runs against,
-	// so an everyday format stays proportional to the diff rather than the repo.
+	// SelectionChanged covers only what has actually diverged from HEAD:
+	// modified-but-tracked (staged or not) plus untracked. This is what `format`
+	// runs against, so an everyday format stays proportional to the diff rather
+	// than the repo.
 	SelectionChanged
 )
 
-// gitArgs returns the `git ls-files` selection flags for s.
-func (s Selection) gitArgs() []string {
+// gitCommands returns the git invocations whose combined output lists the
+// files s covers under scope. Every command prints NUL-separated paths
+// relative to the directory git runs in.
+func (s Selection) gitCommands(scope string) [][]string {
 	if s == SelectionChanged {
-		// --modified is relative to the index, so a staged-and-unmodified file is
-		// deliberately not "changed" here.
-		return []string{"--others", "--modified"}
+		return [][]string{
+			// Untracked files, plus tracked ones whose working-tree copy differs
+			// from the index.
+			{"ls-files", "--others", "--modified", "--exclude-standard", "-z", "--", scope},
+
+			// Staged changes are invisible to ls-files' worktree-vs-index view —
+			// a pre-commit hook would otherwise see nothing to format — so they
+			// come from an index-vs-HEAD diff. --relative keeps paths cwd-relative
+			// like ls-files; --diff-filter=d drops staged deletions, which leave
+			// no file to format.
+			{"diff", "--cached", "--name-only", "--relative", "--diff-filter=d", "-z", "--", scope},
+		}
 	}
 
-	return []string{"--cached", "--others"}
+	return [][]string{{"ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope}}
 }
 
 // Collect lists the TS/Vue files under the given scopes.
@@ -51,9 +63,10 @@ func Collect(opts Options) ([]string, []string, error) {
 	})
 }
 
-// ChangedPaths lists every file the working tree has modified or added under
-// the given scopes, whatever its extension. Callers do their own filtering —
-// the Go formatter, for one, has its own notion of which files it owns.
+// ChangedPaths lists every file that diverges from HEAD — modified, staged, or
+// added — under the given scopes, whatever its extension. Callers do their own
+// filtering — the Go formatter, for one, has its own notion of which files it
+// owns.
 func ChangedPaths(cwd string, scopes []string) ([]string, error) {
 	files, _, err := collect(cwd, scopes, SelectionChanged, func(string) bool {
 		return true
@@ -132,10 +145,22 @@ func collect(cwd string, scopes []string, selection Selection, keep func(string)
 }
 
 func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
-	args := []string{"ls-files"}
-	args = append(args, selection.gitArgs()...)
-	args = append(args, "--exclude-standard", "-z", "--", scope)
+	entries := []string{}
 
+	for _, args := range selection.gitCommands(scope) {
+		found, err := runGit(cwd, args)
+
+		if err != nil {
+			return nil, err
+		}
+
+		entries = append(entries, found...)
+	}
+
+	return entries, nil
+}
+
+func runGit(cwd string, args []string) ([]string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = cwd
 
@@ -152,7 +177,7 @@ func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
 			reason = err.Error()
 		}
 
-		return nil, fmt.Errorf("git ls-files failed: %s", reason)
+		return nil, fmt.Errorf("git %s failed: %s", args[0], reason)
 	}
 
 	parts := bytes.Split(out, []byte{0})

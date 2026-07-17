@@ -10,9 +10,9 @@ import (
 	"github.com/oullin/fmtkit/packages/driver/internal/tsruntime"
 )
 
-// runFormat formats what the working tree has touched — modified and untracked
-// files — so an everyday format stays proportional to the diff. Use format-all
-// to cover every file.
+// runFormat formats what diverges from HEAD — modified files, staged or not,
+// plus untracked ones — so an everyday format stays proportional to the diff.
+// Use format-all to cover every file.
 func (a App) runFormat(args []string) int {
 	opts, paths, err := parseFormatArgs(args)
 

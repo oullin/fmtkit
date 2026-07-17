@@ -7,7 +7,7 @@ import (
 
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprintf(w, "usage: fmtkit <format|format-all|go|ts|lint|check|version|help> [args...]\n")
-	_, _ = fmt.Fprintf(w, "  format [--ts] [--go] [--quiet] [paths...]  format modified and untracked files\n")
+	_, _ = fmt.Fprintf(w, "  format [--ts] [--go] [--quiet] [paths...]  format changed files (vs HEAD) and untracked ones\n")
 	_, _ = fmt.Fprintf(w, "  format-all [--ts] [--go] [--quiet]       format every file, against .\n")
 	_, _ = fmt.Fprintf(w, "      --ts   only TS/Vue formatting + lint; --go   only Go formatting; default: all\n")
 	_, _ = fmt.Fprintf(w, "  go <check|format|sources|version|help>  run the Go formatter CLI\n")

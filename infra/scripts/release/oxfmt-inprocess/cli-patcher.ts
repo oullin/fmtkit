@@ -124,13 +124,15 @@ export class OxfmtCliPatcher {
 			}
 		}
 
-		const imported = cliSource.replace(TINYPOOL_IMPORT, ShimSource.importStatement(bindings));
+		// The replacer functions keep any `$` in the shim source literal; as a
+		// plain replacement string it would expand as a substitution pattern.
+		const imported = cliSource.replace(TINYPOOL_IMPORT, () => ShimSource.importStatement(bindings));
 
 		if (!WORKER_PROXY_REGION.test(imported)) {
 			return err(new CliAnchorMissing('the worker-proxy region', cliPath));
 		}
 
-		const patched = imported.replace(WORKER_PROXY_REGION, ShimSource.workerProxyRegion());
+		const patched = imported.replace(WORKER_PROXY_REGION, () => ShimSource.workerProxyRegion());
 
 		for (const residue of RESIDUE) {
 			if (patched.includes(residue)) {

@@ -15,7 +15,7 @@ import {
 	parseCleanly,
 	scriptAttribute,
 	writeFileAtomic,
-} from '#devx/pass-utils';
+} from '#sidecar/pass-utils';
 
 test('parseCleanly returns the program and comments for valid source', () => {
 	const parsed = parseCleanly('sample.ts', 'const one = 1; // note\n');
@@ -112,7 +112,7 @@ test('isJavaScriptOrTypeScript accepts JS/TS langs and module types, rejects oth
 });
 
 test('writeFileAtomic replaces the file content and leaves no temp files', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-atomic-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-atomic-'));
 
 	try {
 		const file = join(dir, 'target.ts');

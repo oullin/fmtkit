@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeDeclarationReorderEdits } from '#devx/declaration-reorder';
-import { applyEdits } from '#devx/edits';
+import { computeDeclarationReorderEdits } from '#sidecar/declaration-reorder';
+import { applyEdits } from '#sidecar/edits';
 
 function reorder(source: string): string {
 	const edits = computeDeclarationReorderEdits(source, 'sample.ts');

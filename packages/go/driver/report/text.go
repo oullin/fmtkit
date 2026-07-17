@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	formatterengine "github.com/oullin/fmtkit/packages/formatter/engine"
+	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
 )
 
 // RenderText writes the human-readable text report representation.

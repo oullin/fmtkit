@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/cli"
-	"github.com/oullin/fmtkit/packages/driver/internal/orchestrator"
-	"github.com/oullin/fmtkit/packages/driver/internal/tsruntime"
+	"go.ollin.sh/fmtkit/driver/internal/cli"
+	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
+	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
 )
 
 // runFormat formats the given paths, defaulting to the whole pipeline.

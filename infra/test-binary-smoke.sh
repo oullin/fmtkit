@@ -6,9 +6,9 @@ set -euo pipefail
 # oxc-parser/oxfmt/oxlint napi bindings, and the in-process Go formatter.
 # Requires bash, git, go, node, npm, and bun.
 
-repo_root="$(cd "$(dirname "$0")/../../.." && pwd)"
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
-"${repo_root}/infra/scripts/release/stage-ts-assets.sh" host
+"${repo_root}/packages/ts/infra/stage-ts-assets.sh" host
 
 tmp_root="$(mktemp -d)"
 
@@ -23,7 +23,7 @@ bin="${tmp_root}/fmtkit"
 (
 	cd "$repo_root"
 
-	go build -tags fmtkit_sidecar -o "$bin" ./packages/driver/cmd/fmtkit
+	go -C packages/go build -tags fmtkit_sidecar -o "$bin" ./driver/cmd/fmtkit
 )
 
 fixture="${tmp_root}/fixture"

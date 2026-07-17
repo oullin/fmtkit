@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/embedded"
+	"go.ollin.sh/fmtkit/driver/internal/embedded"
 )
 
 // SupportDirEnv points at a pre-extracted toolchain directory and skips
@@ -78,7 +78,7 @@ func Resolve(version string) (Support, error) {
 		return Support{}, errors.New(
 			"this fmtkit build carries no TS toolchain (built without the fmtkit_sidecar tag); " +
 				"point " + SupportDirEnv + " at a staged toolchain directory " +
-				"(see infra/scripts/release/stage-ts-assets.sh), or use a release binary",
+				"(see packages/ts/infra/stage-ts-assets.sh), or use a release binary",
 		)
 	}
 

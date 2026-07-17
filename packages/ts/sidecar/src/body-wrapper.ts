@@ -1,6 +1,6 @@
-import { getEnd, getStart, visit } from '#devx/ast';
-import { lineIndent, parseCleanly } from '#devx/pass-utils';
-import type { Edit, Node } from '#devx/types';
+import { getEnd, getStart, visit } from '#sidecar/ast';
+import { lineIndent, parseCleanly } from '#sidecar/pass-utils';
+import type { Edit, Node } from '#sidecar/types';
 
 const STATEMENT_BODY_KEYS: Record<string, string[]> = {
 	DoWhileStatement: ['body'],

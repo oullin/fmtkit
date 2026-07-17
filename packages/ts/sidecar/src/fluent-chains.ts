@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { getEnd, getStart, visit } from '#devx/ast';
-import { formatDrizzleQueries } from '#devx/drizzle-queries';
-import { applyEdits } from '#devx/edits';
-import { formatExpandedCalls } from '#devx/expanded-calls';
-import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isNotFoundError, isTargetFile, lineIndent, parseCleanly, unwrapChainExpression, writeFileAtomic } from '#devx/pass-utils';
-import type { Edit, Node } from '#devx/types';
+import { getEnd, getStart, visit } from '#sidecar/ast';
+import { formatDrizzleQueries } from '#sidecar/drizzle-queries';
+import { applyEdits } from '#sidecar/edits';
+import { formatExpandedCalls } from '#sidecar/expanded-calls';
+import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isNotFoundError, isTargetFile, lineIndent, parseCleanly, unwrapChainExpression, writeFileAtomic } from '#sidecar/pass-utils';
+import type { Edit, Node } from '#sidecar/types';
 
 const cwd = process.cwd();
 

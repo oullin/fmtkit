@@ -44,7 +44,7 @@ switch (mode) {
 		// import; blank argv[1] so only the explicit main() call below runs.
 		process.argv[1] = '';
 
-		const { main } = await import('#devx/format-all');
+		const { main } = await import('#sidecar/format-all');
 
 		await main();
 

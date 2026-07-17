@@ -1,4 +1,4 @@
-import type { Edit } from '#devx/types';
+import type { Edit } from '#sidecar/types';
 
 export function applyEdits(source: string, edits: Edit[]): string {
 	const sorted = [...edits].sort((a, b) => {

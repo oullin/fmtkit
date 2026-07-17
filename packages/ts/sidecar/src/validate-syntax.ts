@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { parseSync } from 'oxc-parser';
-import { extractVueScripts, isJavaScriptOrTypeScript, isNotFoundError, scriptAttribute } from '#devx/pass-utils';
+import { extractVueScripts, isJavaScriptOrTypeScript, isNotFoundError, scriptAttribute } from '#sidecar/pass-utils';
 
 const cwd = process.cwd();
 

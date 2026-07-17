@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/driver/testutil"
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 // TestMain pins a color-free environment: CI task runners export FORCE_COLOR,

@@ -1,6 +1,6 @@
-import { collectStatementLists, getEnd, getStart, visit } from '#devx/ast';
-import { isConstDeclaration, lineIndent, lineStart, parseCleanly } from '#devx/pass-utils';
-import type { Edit, Node } from '#devx/types';
+import { collectStatementLists, getEnd, getStart, visit } from '#sidecar/ast';
+import { isConstDeclaration, lineIndent, lineStart, parseCleanly } from '#sidecar/pass-utils';
+import type { Edit, Node } from '#sidecar/types';
 
 function isMultiline(source: string, node: Node): boolean {
 	const start = getStart(node);

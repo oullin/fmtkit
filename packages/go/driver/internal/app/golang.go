@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/cli"
+	"go.ollin.sh/fmtkit/driver/internal/cli"
 )
 
 // runGo mirrors the fmtkit-go command surface so `fmtkit go ...` behaves like

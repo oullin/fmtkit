@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { formatFluentChains } from '#devx/fluent-chains';
+import { formatFluentChains } from '#sidecar/fluent-chains';
 
-const script = fileURLToPath(import.meta.resolve('#devx/fluent-chains'));
+const script = fileURLToPath(import.meta.resolve('#sidecar/fluent-chains'));
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 function run(command: string, args: string[], cwd: string): void {

@@ -1,6 +1,6 @@
 # fmtkit
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/oullin/fmtkit/packages/driver.svg)](https://pkg.go.dev/github.com/oullin/fmtkit/packages/driver)
+[![Go Reference](https://pkg.go.dev/badge/go.ollin.sh/fmtkit/driver.svg)](https://pkg.go.dev/go.ollin.sh/fmtkit/driver)
 [![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
 [![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
@@ -14,7 +14,7 @@
 - Runs `go vet ./...` automatically when invoked inside a Go module or workspace.
 - Three output modes: `text` for humans, `json` for scripts, `agent` for CI and AI tools.
 - One self-contained `fmtkit` binary (Homebrew or GitHub Releases), or a Go-only CLI (`fmtkit-go`).
-- Engine in [`packages/formatter/engine`](packages/formatter/engine) is importable from Go.
+- Engine in [`packages/go/formatter/engine`](packages/go/formatter/engine) is importable from Go.
 
 ## Install
 
@@ -41,7 +41,7 @@ Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums
 **With Go** (good for local hacking and contributors):
 
 ```bash
-go install github.com/oullin/fmtkit/packages/driver/cmd/fmtkit-go@latest
+go install go.ollin.sh/fmtkit/driver/cmd/fmtkit-go@latest
 fmtkit-go check .
 fmtkit-go format .
 ```
@@ -86,7 +86,7 @@ fmtkit-go check .
 fmtkit-go format ./core ./demo/api
 fmtkit-go check --format json .
 fmtkit-go check --format agent .
-fmtkit-go check ./packages/formatter/rules/spacing/spacing.go
+fmtkit-go check ./packages/go/formatter/rules/spacing/spacing.go
 ```
 
 ## Configuration
@@ -248,10 +248,10 @@ make check                 # Go formatter in check mode
 ```
 
 The first run stages the host TS toolchain assets into
-`packages/driver/internal/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
+`packages/go/driver/internal/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
 few seconds); later runs reuse them and re-stage only when the support scripts,
 the tool pins, or the `.oxfmtrc.json` / `.oxlintrc.json` configs change. The
-inner loop is then a plain `go run`.
+inner loop is then a plain incremental `go build`.
 
 That loop points `FMTKIT_SUPPORT_DIR` at the staged assets rather than embedding
 them, which keeps it fast. The embedded-asset path a release actually uses is
@@ -260,10 +260,14 @@ covered by `vp run test:binary`.
 Package layout:
 
 ```text
-packages/driver/      Stand-alone Go CLI, config loading, report rendering
-packages/vet/         Vet planning and automatic go vet execution
-packages/formatter/   Formatter planning, engine, rules, and formatters
-packages/devx/        Oxc-based formatting for supported non-Go file types
+packages/go/              The Go module (go.ollin.sh/fmtkit)
+packages/go/driver/       Stand-alone Go CLI, config loading, report rendering
+packages/go/vet/          Vet planning and automatic go vet execution
+packages/go/formatter/    Formatter planning, engine, rules, and formatters
+packages/go/infra/        Go-toolchain task runner
+packages/ts/sidecar/      Oxc-based formatting for supported non-Go file types
+packages/ts/infra/        Staging for the bun-compiled TS toolchain assets
+infra/                    Repo-wide tasks, shared shell lib, release scripts
 ```
 
 The pipeline runs `source → spacing rule → gofmt → goimports`, skipping any stage disabled in config. New rules can be added by implementing the `Rule` interface (`Name()`, `Apply()`) and registering them with the rule set before the engine is constructed.

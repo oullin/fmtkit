@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const script = fileURLToPath(import.meta.resolve('#devx/blank-lines'));
+const script = fileURLToPath(import.meta.resolve('#sidecar/blank-lines'));
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 function run(command: string, args: string[], cwd: string): void {

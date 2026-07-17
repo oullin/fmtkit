@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(dirname "$0")/../tasks/env.sh"
+source "$(dirname "$0")/../lib/env.sh"
 
 dist_dir="${DIST_DIR}"
 release_platforms="${RELEASE_PLATFORMS:-darwin/amd64 darwin/arm64 linux/amd64 linux/arm64}"

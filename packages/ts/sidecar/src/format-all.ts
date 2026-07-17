@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { processFile as processBlankLinesFile } from '#devx/files';
-import { processFluentChainsFile } from '#devx/fluent-chains';
-import { isNotFoundError, isTargetFile } from '#devx/pass-utils';
-import { validateFile } from '#devx/validate-syntax';
+import { processFile as processBlankLinesFile } from '#sidecar/files';
+import { processFluentChainsFile } from '#sidecar/fluent-chains';
+import { isNotFoundError, isTargetFile } from '#sidecar/pass-utils';
+import { validateFile } from '#sidecar/validate-syntax';
 
 // format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains
 // → oxfmt → validate-syntax) inside a single process. Files within a pass are

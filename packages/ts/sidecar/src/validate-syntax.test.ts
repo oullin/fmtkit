@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const script = fileURLToPath(import.meta.resolve('#devx/validate-syntax'));
+const script = fileURLToPath(import.meta.resolve('#sidecar/validate-syntax'));
 const tsx = fileURLToPath(import.meta.resolve('tsx/cli'));
 
 async function withFixture(files: Record<string, string>, fn: (dir: string) => Promise<void>): Promise<void> {

@@ -1,8 +1,8 @@
-import { getEnd, getStart, visit } from '#devx/ast';
-import { applyEdits } from '#devx/edits';
-import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf } from '#devx/pass-utils';
-import type { CallParens } from '#devx/pass-utils';
-import type { Edit, Node } from '#devx/types';
+import { getEnd, getStart, visit } from '#sidecar/ast';
+import { applyEdits } from '#sidecar/edits';
+import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf } from '#sidecar/pass-utils';
+import type { CallParens } from '#sidecar/pass-utils';
+import type { Edit, Node } from '#sidecar/types';
 
 const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression']);
 

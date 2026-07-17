@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/app"
+	"go.ollin.sh/fmtkit/driver/internal/app"
 )
 
 var version = "dev"

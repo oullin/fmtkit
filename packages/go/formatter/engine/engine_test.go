@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/driver/testutil"
-	"github.com/oullin/fmtkit/packages/formatter/config"
-	"github.com/oullin/fmtkit/packages/formatter/engine"
-	"github.com/oullin/fmtkit/packages/formatter/rules"
-	"github.com/oullin/fmtkit/packages/formatter/rules/spacing"
+	"go.ollin.sh/fmtkit/driver/testutil"
+	"go.ollin.sh/fmtkit/formatter/config"
+	"go.ollin.sh/fmtkit/formatter/engine"
+	"go.ollin.sh/fmtkit/formatter/rules"
+	"go.ollin.sh/fmtkit/formatter/rules/spacing"
 	"golang.org/x/tools/imports"
 )
 

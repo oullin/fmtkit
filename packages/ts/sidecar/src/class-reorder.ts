@@ -1,7 +1,7 @@
-import { collectClassBodies, getEnd, getStart } from '#devx/ast';
-import { parseCleanly } from '#devx/pass-utils';
-import { classifyMember } from '#devx/rules';
-import type { Edit, Node } from '#devx/types';
+import { collectClassBodies, getEnd, getStart } from '#sidecar/ast';
+import { parseCleanly } from '#sidecar/pass-utils';
+import { classifyMember } from '#sidecar/rules';
+import type { Edit, Node } from '#sidecar/types';
 
 function containsComment(s: string): boolean {
 	return /\/\/|\/\*/.test(s);

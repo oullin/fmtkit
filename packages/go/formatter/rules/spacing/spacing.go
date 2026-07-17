@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/oullin/fmtkit/packages/formatter/rules"
+	"go.ollin.sh/fmtkit/formatter/rules"
 )
 
 // Rule enforces blank-line and type-order spacing rules.

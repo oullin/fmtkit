@@ -1,5 +1,5 @@
-import { isConstDeclaration } from '#devx/pass-utils';
-import type { Node } from '#devx/types';
+import { isConstDeclaration } from '#sidecar/pass-utils';
+import type { Node } from '#sidecar/types';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
 const LOOP_STATEMENTS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement']);

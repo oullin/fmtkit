@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 export APP="${APP:-fmtkit-go}"
-export GO_WORKDIR="${GO_WORKDIR:-.}"
-export CMD="${CMD:-./packages/driver/cmd/fmtkit-go}"
+export CMD="${CMD:-./driver/cmd/fmtkit-go}"
 export CGO_ENABLED="${CGO_ENABLED:-0}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-export REPO_ROOT="${REPO_ROOT:-$(cd "${script_dir}/../../.." && pwd -P)}"
+export REPO_ROOT="${REPO_ROOT:-$(cd "${script_dir}/../.." && pwd -P)}"
+export GO_WORKDIR="${GO_WORKDIR:-${REPO_ROOT}/packages/go}"
 export VERSION="${VERSION:-$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)}"
 export STORAGE_DIR="${STORAGE_DIR:-${REPO_ROOT}/storage}"
 export CACHE_DIR="${CACHE_DIR:-${STORAGE_DIR}/.cache}"

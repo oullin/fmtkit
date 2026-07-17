@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 )
 
 func main() {

@@ -2,19 +2,19 @@
 set -euo pipefail
 
 # Builds the self-contained TS toolchain assets embedded into the `fmtkit`
-# release binary (see packages/driver/internal/tsruntime):
+# release binary (see packages/go/driver/internal/tsruntime):
 #
-#   - fmtkit-ts-sidecar  bun-compiled bundle of packages/devx/scripts/sidecar.ts
+#   - fmtkit-ts-sidecar  bun-compiled bundle of packages/ts/sidecar/src/sidecar.ts
 #   - oxc-parser.node    napi binding, loaded via NAPI_RS_NATIVE_LIBRARY_PATH
 #   - oxfmt.node         napi binding for the oxfmt CLI
 #   - oxlint.node        napi binding for the oxlint CLI
 #   - .oxfmtrc.json      repo-root config, the default for projects without one
 #   - .oxlintrc.json     repo-root config, the default for projects without one
 #
-# Output lands in packages/driver/internal/embedded/bin/<target>/, next to the
+# Output lands in packages/go/driver/internal/embedded/bin/<target>/, next to the
 # package that embeds it: go:embed cannot reach outside its own directory.
 #
-# Tool versions come from packages/devx/package.json devDependencies. Requires
+# Tool versions come from packages/ts/sidecar/package.json devDependencies. Requires
 # bash, node, npm, and bun.
 #
 # usage: stage-ts-assets.sh <all|host|goos_goarch...>
@@ -30,9 +30,9 @@ if [[ $# -eq 0 ]]; then
 fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/driver/internal/embedded/bin}"
+dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/go/driver/internal/embedded/bin}"
 
-source "${root}/infra/scripts/host-target.sh"
+source "${root}/infra/lib/host-target.sh"
 
 all_targets=(darwin_arm64 darwin_amd64 linux_arm64 linux_amd64)
 
@@ -86,7 +86,7 @@ for tool in node npm bun; do
 done
 
 pin() {
-	node -e "const p = require('${root}/packages/devx/package.json'); const v = p.devDependencies['$1']; if (!v) { throw new Error('no pin for $1'); } console.log(v);"
+	node -e "const p = require('${root}/packages/ts/sidecar/package.json'); const v = p.devDependencies['$1']; if (!v) { throw new Error('no pin for $1'); } console.log(v);"
 }
 
 oxfmt_pin="$(pin oxfmt)"
@@ -96,19 +96,19 @@ oxc_parser_pin="$(pin oxc-parser)"
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 
-# Mirror the layout sidecar.ts expects in the repo: the scripts next to their
-# package.json (for the #devx imports map) with node_modules one level up.
-mkdir -p "${workdir}/scripts"
+# Mirror the layout sidecar.ts expects in the repo: the sources next to their
+# package.json (for the #sidecar imports map) with node_modules one level up.
+mkdir -p "${workdir}/src"
 
-for script in "${root}"/packages/devx/scripts/*.ts; do
+for script in "${root}"/packages/ts/sidecar/src/*.ts; do
 	case "${script##*/}" in
 		*.test.ts) continue ;;
 	esac
 
-	cp "${script}" "${workdir}/scripts/"
+	cp "${script}" "${workdir}/src/"
 done
 
-cp "${root}/packages/devx/scripts/package.json" "${workdir}/scripts/package.json"
+cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 
 (
 	cd "${workdir}"
@@ -123,9 +123,9 @@ cp "${root}/packages/devx/scripts/package.json" "${workdir}/scripts/package.json
 # Tinypool child_process pool whose worker entry scripts do not survive
 # `bun build --compile` (they resolve to non-existent /$bunfs/root/ paths), which
 # hangs the binary on any such file. Rewrite oxfmt to do that work in-process
-# before it is bundled. See infra/scripts/release/oxfmt-inprocess for the full
+# before it is bundled. See packages/ts/infra/oxfmt-inprocess for the full
 # rationale. Run by node directly (type stripping) so staging needs no tsx.
-node "${root}/infra/scripts/release/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
+node "${root}/packages/ts/infra/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
 
 # The napi bindings stay external: every target loads them from files staged
 # next to the sidecar through NAPI_RS_NATIVE_LIBRARY_PATH, which keeps the JS
@@ -186,7 +186,7 @@ for target in "${targets[@]}"; do
 			--target "$(bun_target "${target}")" \
 			--outfile "${out}/fmtkit-ts-sidecar" \
 			"${bun_externals[@]}" \
-			"${workdir}/scripts/sidecar.ts" >/dev/null
+			"${workdir}/src/sidecar.ts" >/dev/null
 	)
 
 	fetch_binding "@oxc-parser/binding-${suffix}@${oxc_parser_pin}" "parser.${suffix}.node" "${out}/oxc-parser.node"

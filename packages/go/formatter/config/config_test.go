@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/formatter/config"
+	"go.ollin.sh/fmtkit/formatter/config"
 )
 
 func TestDefault(t *testing.T) {

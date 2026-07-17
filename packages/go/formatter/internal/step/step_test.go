@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/formatter/internal/step"
+	"go.ollin.sh/fmtkit/formatter/internal/step"
 )
 
 func TestGofmtFormatter(t *testing.T) {

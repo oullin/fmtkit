@@ -1,7 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { extractVueScripts, isJavaScriptOrTypeScript, writeFileAtomic } from '#devx/pass-utils';
-import { processSegment } from '#devx/segment';
+import { extractVueScripts, isJavaScriptOrTypeScript, writeFileAtomic } from '#sidecar/pass-utils';
+import { processSegment } from '#sidecar/segment';
 
 export async function dirExists(dir: string): Promise<boolean> {
 	try {

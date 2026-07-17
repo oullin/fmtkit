@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/oullin/fmtkit/packages/driver/internal/tsruntime"
+	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
 )
 
 func (a App) runTS(paths []string) int {

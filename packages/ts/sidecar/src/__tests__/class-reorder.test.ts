@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeReorderEdits } from '#devx/class-reorder';
-import { applyEdits } from '#devx/edits';
+import { computeReorderEdits } from '#sidecar/class-reorder';
+import { applyEdits } from '#sidecar/edits';
 
 test('class members are reordered as properties, constructors, then methods', () => {
 	const input = ['class Example {', '\trun() {}', '\tvalue = 1;', '\tconstructor() {}', '}', ''].join('\n');

@@ -13,7 +13,7 @@ import (
 // TestMain pins a color-free environment: CI task runners export FORCE_COLOR,
 // which would inject ANSI codes into the captured output these tests assert.
 
-// The stub outputs mirror infra/scripts/tasks/test-fmtkit-entrypoint.sh so
+// The stub outputs mirror infra/test-binary-smoke.sh so
 // the Go orchestrator preserves the entrypoint's summary contract.
 
 type invocation struct {

@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
-import { processFile } from '#devx/files';
-import { isNotFoundError, isTargetFile } from '#devx/pass-utils';
+import { processFile } from '#sidecar/files';
+import { isNotFoundError, isTargetFile } from '#sidecar/pass-utils';
 
 const cwd = process.cwd();
 const rawArgs = process.argv.slice(2);

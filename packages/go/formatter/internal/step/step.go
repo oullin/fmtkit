@@ -3,7 +3,7 @@ package step
 import (
 	"go/format"
 
-	"github.com/oullin/fmtkit/packages/formatter/engine"
+	"go.ollin.sh/fmtkit/formatter/engine"
 	"golang.org/x/tools/imports"
 )
 

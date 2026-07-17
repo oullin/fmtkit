@@ -1,8 +1,8 @@
-import { computeInsertPositions, insertBlankLines } from '#devx/blank-line-inserter';
-import { computeBodyWrapEdits } from '#devx/body-wrapper';
-import { computeReorderEdits } from '#devx/class-reorder';
-import { computeDeclarationReorderEdits } from '#devx/declaration-reorder';
-import { applyEdits } from '#devx/edits';
+import { computeInsertPositions, insertBlankLines } from '#sidecar/blank-line-inserter';
+import { computeBodyWrapEdits } from '#sidecar/body-wrapper';
+import { computeReorderEdits } from '#sidecar/class-reorder';
+import { computeDeclarationReorderEdits } from '#sidecar/declaration-reorder';
+import { applyEdits } from '#sidecar/edits';
 
 function applyBodyWraps(content: string, virtualName: string): string {
 	let current = content;

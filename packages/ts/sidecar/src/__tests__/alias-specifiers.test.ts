@@ -21,7 +21,7 @@ const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx'])
 // specifier the alias map would need, so its relative imports are exempt.
 const exemptFiles = new Set(['sidecar.ts']);
 
-const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#devx/ast')));
+const scriptsDir = dirname(fileURLToPath(import.meta.resolve('#sidecar/ast')));
 
 function isRelativeSpecifier(value: string): boolean {
 	return value.startsWith('./') || value.startsWith('../');

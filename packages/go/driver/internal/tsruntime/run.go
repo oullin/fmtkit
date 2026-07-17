@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 )
 
 // RunOptions describes one TS toolchain invocation.

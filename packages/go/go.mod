@@ -1,4 +1,4 @@
-module github.com/oullin/fmtkit
+module go.ollin.sh/fmtkit
 
 go 1.26.4
 

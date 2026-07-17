@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { mapPool, parseArgs, runOxfmt, runPass } from '#devx/format-all';
+import { mapPool, parseArgs, runOxfmt, runPass } from '#sidecar/format-all';
 
 const execFileAsync = promisify(execFile);
 const tsxBin = resolve(import.meta.dirname, '../node_modules/.bin/tsx');
@@ -102,7 +102,7 @@ test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
 });
 
 test('runOxfmt chunks large file lists', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-oxfmt-chunks-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-oxfmt-chunks-'));
 
 	try {
 		const bin = join(dir, 'oxfmt');
@@ -130,7 +130,7 @@ printf '%s\\n' "$#" >> "${log}"
 });
 
 test('format-all pipeline formats files and exits 0 end-to-end', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-format-all-'));
 
 	try {
 		const file = join(dir, 'app.ts');
@@ -154,7 +154,7 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 });
 
 test('format-all pipeline deduplicates repeated input paths', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-dup-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-format-all-dup-'));
 
 	try {
 		const file = join(dir, 'app.ts');
@@ -172,7 +172,7 @@ test('format-all pipeline deduplicates repeated input paths', async () => {
 });
 
 test('format-all pipeline exits 1 when validation finds syntax errors', async () => {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-format-all-bad-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-format-all-bad-'));
 
 	try {
 		const file = join(dir, 'broken.ts');

@@ -1,4 +1,4 @@
-import type { Node } from '#devx/types';
+import type { Node } from '#sidecar/types';
 
 const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	Program: 'body',

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/driver/testutil"
-	"github.com/oullin/fmtkit/packages/formatter/config"
+	"go.ollin.sh/fmtkit/driver/testutil"
+	"go.ollin.sh/fmtkit/formatter/config"
 )
 
 func TestFilterFiles(t *testing.T) {

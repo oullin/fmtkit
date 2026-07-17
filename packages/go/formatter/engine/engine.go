@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/oullin/fmtkit/packages/formatter/config"
-	"github.com/oullin/fmtkit/packages/formatter/rules"
+	"go.ollin.sh/fmtkit/formatter/config"
+	"go.ollin.sh/fmtkit/formatter/rules"
 )
 
 // Formatter applies a single formatting pass to Go source.

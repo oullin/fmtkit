@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/oullin/fmtkit/packages/driver/testutil"
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 func TestRunCheckFailsOnStyleChanges(t *testing.T) {

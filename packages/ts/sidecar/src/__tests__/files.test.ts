@@ -3,10 +3,10 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { dirExists, listSourceFiles, processFile } from '#devx/files';
+import { dirExists, listSourceFiles, processFile } from '#sidecar/files';
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
-	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-devx-files-'));
+	const dir = await mkdtemp(join(tmpdir(), 'fmtkit-sidecar-files-'));
 
 	try {
 		await fn(dir);

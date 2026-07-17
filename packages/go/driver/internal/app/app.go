@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/cli"
+	"go.ollin.sh/fmtkit/driver/internal/cli"
 )
 
 // App is the fmtkit command surface. The version is injected by the binary so

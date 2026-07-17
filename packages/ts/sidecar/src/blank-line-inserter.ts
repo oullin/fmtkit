@@ -1,6 +1,6 @@
-import { collectStatementLists, getEnd, getStart } from '#devx/ast';
-import { parseCleanly } from '#devx/pass-utils';
-import { needsBlankLine } from '#devx/rules';
+import { collectStatementLists, getEnd, getStart } from '#sidecar/ast';
+import { parseCleanly } from '#sidecar/pass-utils';
+import { needsBlankLine } from '#sidecar/rules';
 
 function countNewlines(source: string, from: number, to: number): number {
 	let count = 0;

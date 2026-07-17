@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatDrizzleQueries } from '#devx/drizzle-queries';
-import { formatFluentChains } from '#devx/fluent-chains';
+import { formatDrizzleQueries } from '#sidecar/drizzle-queries';
+import { formatFluentChains } from '#sidecar/fluent-chains';
 
 describe('Drizzle query formatter', () => {
 	it('formats nested where predicates after fluent-chain splitting', () => {

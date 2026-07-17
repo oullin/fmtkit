@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { formatExpandedCalls } from '#devx/expanded-calls';
+import { formatExpandedCalls } from '#sidecar/expanded-calls';
 
 describe('expanded call formatter', () => {
 	it('expands a returned cast wrapper around a nested call argument', () => {

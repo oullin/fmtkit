@@ -1,7 +1,7 @@
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { parseSync } from 'oxc-parser';
-import { getEnd, getStart } from '#devx/ast';
-import type { Edit, Node } from '#devx/types';
+import { getEnd, getStart } from '#sidecar/ast';
+import type { Edit, Node } from '#sidecar/types';
 
 export type ParseResult = {
 	program: Node;

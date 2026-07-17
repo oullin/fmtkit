@@ -3,7 +3,7 @@ package cli
 import (
 	"io"
 
-	"github.com/oullin/fmtkit/packages/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 )
 
 func RunSources(args []string, stdout, stderr io.Writer) int {

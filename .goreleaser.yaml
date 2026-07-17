@@ -3,7 +3,7 @@ version: 2
 project_name: fmtkit
 
 # Build output belongs under storage/ like every other artifact this repo
-# produces; infra/scripts/tasks/env.sh rejects a repo-root dist/.
+# produces; infra/lib/env.sh rejects a repo-root dist/.
 dist: storage/dist
 
 # Releases stage every platform; PR validation sets FMTKIT_STAGE_TARGETS=host
@@ -13,11 +13,12 @@ env:
 
 before:
     hooks:
-        - ./infra/scripts/release/stage-ts-assets.sh {{ .Env.FMTKIT_STAGE_TARGETS }}
+        - ./packages/ts/infra/stage-ts-assets.sh {{ .Env.FMTKIT_STAGE_TARGETS }}
 
 builds:
     - id: fmtkit
-      main: ./packages/driver/cmd/fmtkit
+      dir: packages/go
+      main: ./driver/cmd/fmtkit
       binary: fmtkit
       env:
           - CGO_ENABLED=0

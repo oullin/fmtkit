@@ -34,7 +34,12 @@ class SidecarRuntimeDto {
 		Object.freeze(this);
 	}
 
-	/** Parse the sidecar mode inputs once, preferring the CLI argument. */
+	/**
+	 * Parse the sidecar mode inputs once, preferring the CLI argument.
+	 *
+	 * @param input - The untrusted CLI and environment mode values.
+	 * @returns An immutable runtime selection.
+	 */
 	static from(input: unknown): SidecarRuntimeDto {
 		const parsed = SidecarRuntimeDto.#schema.parse(input);
 

@@ -44,37 +44,73 @@ export class Ast {
 			: [];
 	}
 
-	/** Lazily validate and read a trusted node's optional `name` property. */
+	/**
+	 * Lazily validate and read a trusted node's optional `name` property.
+	 *
+	 * @param node - The node whose name to read.
+	 * @returns The validated name, or `undefined` when it is absent or invalid.
+	 */
 	static nodeName(node: Node): string | undefined {
 		return Ast.#stringValue(node.name);
 	}
 
-	/** Lazily validate and read a trusted node's optional `kind` property. */
+	/**
+	 * Lazily validate and read a trusted node's optional `kind` property.
+	 *
+	 * @param node - The node whose declaration kind to read.
+	 * @returns The validated kind, or `undefined` when it is absent or invalid.
+	 */
 	static declarationKind(node: Node): string | undefined {
 		return Ast.#stringValue(node.kind);
 	}
 
-	/** Lazily validate and read a trusted literal or comment's string value. */
+	/**
+	 * Lazily validate and read a trusted literal or comment's string value.
+	 *
+	 * @param node - The literal or comment node whose value to read.
+	 * @returns The validated value, or `undefined` when it is absent or invalid.
+	 */
 	static stringValue(node: Node): string | undefined {
 		return Ast.#stringValue(node.value);
 	}
 
-	/** Report whether an AST node is a `const` variable declaration. */
+	/**
+	 * Report whether an AST node is a `const` variable declaration.
+	 *
+	 * @param node - The node to inspect.
+	 * @returns `true` when the node declares one or more constants.
+	 */
 	static isConstDeclaration(node: Node): boolean {
 		return node.type === 'VariableDeclaration' && Ast.declarationKind(node) === 'const';
 	}
 
-	/** Read a node's source start with its range as a fallback. */
+	/**
+	 * Read a node's source start with its range as a fallback.
+	 *
+	 * @param node - The node whose start offset to read.
+	 * @returns The source start, or `-1` when no position is available.
+	 */
 	static getStart(node: Node): number {
 		return node.start ?? node.range?.[0] ?? -1;
 	}
 
-	/** Read a node's source end with its range as a fallback. */
+	/**
+	 * Read a node's source end with its range as a fallback.
+	 *
+	 * @param node - The node whose end offset to read.
+	 * @returns The source end, or `-1` when no position is available.
+	 */
 	static getEnd(node: Node): number {
 		return node.end ?? node.range?.[1] ?? -1;
 	}
 
-	/** Visit every validated node in depth-first order. */
+	/**
+	 * Visit every validated node in depth-first order.
+	 *
+	 * @param node - The root node to traverse.
+	 * @param visitor - The operation invoked once for each node.
+	 * @returns Nothing.
+	 */
 	static visit(node: Node, visitor: (node: Node) => void): void {
 		visitor(node);
 
@@ -91,7 +127,12 @@ export class Ast {
 		}
 	}
 
-	/** Collect statement arrays that participate in blank-line rules. */
+	/**
+	 * Collect statement arrays that participate in blank-line rules.
+	 *
+	 * @param program - The program root to traverse.
+	 * @returns Statement lists in depth-first traversal order.
+	 */
 	static collectStatementLists(program: Node): Node[][] {
 		const lists: Node[][] = [];
 
@@ -110,7 +151,12 @@ export class Ast {
 		return lists;
 	}
 
-	/** Collect every class body below a parsed program. */
+	/**
+	 * Collect every class body below a parsed program.
+	 *
+	 * @param program - The program root to traverse.
+	 * @returns Class bodies in depth-first traversal order.
+	 */
 	static collectClassBodies(program: Node): Node[] {
 		const bodies: Node[] = [];
 

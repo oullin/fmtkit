@@ -4,7 +4,15 @@ import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
 
+/** Formats parser diagnostics for the standalone syntax-validation command. */
 class SyntaxErrorReporter {
+	/**
+	 * Format one parser diagnostic for console output.
+	 *
+	 * @param file - The source path associated with the diagnostic.
+	 * @param error - The parser diagnostic to render.
+	 * @returns A source-framed message, plain message, or stable fallback.
+	 */
 	static format(file: string, error: OxcErrorDto): string {
 		if (error.codeframe && error.codeframe.length > 0) {
 			return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;

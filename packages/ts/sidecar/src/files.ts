@@ -3,7 +3,12 @@ import { resolve } from 'node:path';
 
 /** Reads source-file inventories from the local filesystem. */
 export class Files {
-	/** Report whether a path exists as a directory. */
+	/**
+	 * Report whether a path exists as a directory.
+	 *
+	 * @param directory - The path to inspect.
+	 * @returns `true` when the path identifies an existing directory.
+	 */
 	static async dirExists(directory: string): Promise<boolean> {
 		try {
 			return (await stat(directory)).isDirectory();
@@ -12,7 +17,12 @@ export class Files {
 		}
 	}
 
-	/** List TypeScript and Vue files below a directory recursively. */
+	/**
+	 * List TypeScript and Vue files below a directory recursively.
+	 *
+	 * @param directory - The directory tree to scan.
+	 * @returns Absolute paths to the discovered TypeScript and Vue files.
+	 */
 	static async listSourceFiles(directory: string): Promise<string[]> {
 		const entries = await readdir(
 			directory,

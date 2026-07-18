@@ -100,6 +100,16 @@ export class CliOptionsDto {
 
 /** Reports pipeline values without coupling formatting passes to the console. */
 class FormatAllReporter {
+	/**
+	 * Report one formatting pass and decide whether execution may continue.
+	 *
+	 * @param label - The formatting pass label.
+	 * @param files - The source paths requested for the pass.
+	 * @param mode - Whether the pass checked or wrote source.
+	 * @param outcomes - The ordered outcomes produced by the pass.
+	 * @param failureNoun - The change description used in check-mode guidance.
+	 * @returns `true` when no outcome or pending change makes the pass fail.
+	 */
 	static reportPass(label: string, files: readonly string[], mode: FormatMode, outcomes: PassOutcome[], failureNoun: string): boolean {
 		let changedCount = 0;
 
@@ -132,6 +142,13 @@ class FormatAllReporter {
 		return true;
 	}
 
+	/**
+	 * Format one parser diagnostic for console output.
+	 *
+	 * @param file - The source path associated with the diagnostic.
+	 * @param error - The parser diagnostic to render.
+	 * @returns A source-framed message, plain message, or stable fallback.
+	 */
 	static formatError(file: string, error: OxcErrorDto): string {
 		if (error.codeframe && error.codeframe.length > 0) {
 			return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
@@ -144,6 +161,13 @@ class FormatAllReporter {
 		return `[validate-syntax] ${file}: syntax validation failed`;
 	}
 
+	/**
+	 * Report syntax-validation failures and decide whether execution succeeded.
+	 *
+	 * @param files - The source paths requested for validation.
+	 * @param failures - The ordered read and parse failures.
+	 * @returns `true` when no reportable validation failure remains.
+	 */
 	static reportValidation(files: readonly string[], failures: ValidationFailure[]): boolean {
 		const diagnostics: string[] = [];
 
@@ -177,7 +201,11 @@ class FormatAllReporter {
 	}
 }
 
-/** Run the full formatting CLI and map outcome values to console output and status. */
+/**
+ * Run the full formatting CLI and map outcome values to console output and status.
+ *
+ * @returns Nothing after reporting outcomes and setting the process status.
+ */
 export async function main(): Promise<void> {
 	const parsed = CliOptionsDto.parse(process.argv.slice(2));
 

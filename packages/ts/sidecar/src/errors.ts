@@ -27,7 +27,12 @@ export class OxcErrorDto {
 		Object.freeze(this);
 	}
 
-	/** Parse one Oxc diagnostic at the parser boundary. */
+	/**
+	 * Parse one Oxc diagnostic at the parser boundary.
+	 *
+	 * @param error - The untrusted diagnostic payload.
+	 * @returns An immutable DTO containing only reporter fields.
+	 */
 	static from(error: unknown): OxcErrorDto {
 		const parsed = OxcErrorDto.#schema.safeParse(error);
 

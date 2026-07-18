@@ -9,10 +9,38 @@
  * napi-rs NAPI_RS_NATIVE_LIBRARY_PATH override.
  */
 import { dirname, join } from 'node:path';
+import { z } from 'zod';
 
-const modes = ['pipeline', 'oxfmt', 'oxlint'] as const;
+type Mode = 'pipeline' | 'oxfmt' | 'oxlint';
 
-type Mode = (typeof modes)[number];
+const ModeSchema = z.enum(['pipeline', 'oxfmt', 'oxlint']);
+
+/** Immutable sidecar mode selected from CLI and environment boundaries. */
+class SidecarRuntimeDto {
+	/** The selected sidecar mode, or `undefined` for usage output. */
+	readonly mode: Mode | undefined;
+	/** Whether the selected mode came from the positional CLI argument. */
+	readonly consumeArgument: boolean;
+
+	static readonly #schema = z.object({
+		argument: ModeSchema.optional().catch(undefined),
+		environment: ModeSchema.optional().catch(undefined),
+	});
+
+	private constructor(mode: Mode | undefined, consumeArgument: boolean) {
+		this.mode = mode;
+		this.consumeArgument = consumeArgument;
+
+		Object.freeze(this);
+	}
+
+	/** Parse the sidecar mode inputs once, preferring the CLI argument. */
+	static from(input: unknown): SidecarRuntimeDto {
+		const parsed = SidecarRuntimeDto.#schema.parse(input);
+
+		return new SidecarRuntimeDto(parsed.argument ?? parsed.environment, parsed.argument !== undefined);
+	}
+}
 
 const here = dirname(process.execPath);
 
@@ -22,26 +50,15 @@ const bindings: Record<Mode, string> = {
 	oxlint: join(here, 'oxlint.node'),
 };
 
-/**
- * Narrow a raw CLI or environment string to a known sidecar mode.
- *
- * @param value - The candidate mode string.
- * @returns The matching mode, or `undefined` when it is not one.
- */
-function parseMode(value: string | undefined): Mode | undefined {
-	return modes.find((m) => {
-		return m === value;
-	});
-}
+const runtime = SidecarRuntimeDto.from({
+	argument: process.argv[2],
+	environment: process.env.FMTKIT_SIDECAR_MODE,
+});
 
-let mode = parseMode(process.argv[2]);
+const mode = runtime.mode;
 
-if (mode) {
+if (runtime.consumeArgument) {
 	process.argv.splice(2, 1);
-} else {
-	// The pipeline spawns this executable as its `--oxfmt-bin` with oxfmt's own
-	// argv, so the mode has to travel through the environment instead.
-	mode = parseMode(process.env.FMTKIT_SIDECAR_MODE);
 }
 
 switch (mode) {

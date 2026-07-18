@@ -1,4 +1,4 @@
-import type { Node } from '#sidecar/types';
+import { Node } from '#sidecar/node-schema';
 
 const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	Program: 'body',
@@ -8,136 +8,109 @@ const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	ClassBody: 'body',
 };
 
-/**
- * Narrow an unknown value to an AST node.
- *
- * @param value - The value to inspect.
- * @returns `true` when `value` is an object carrying a string `type`.
- */
-export function isNode(value: unknown): value is Node {
-	if (typeof value !== 'object' || value === null) {
-		return false;
-	}
-
-	if (!('type' in value)) {
-		return false;
-	}
-
-	return typeof value.type === 'string';
-}
-
-/**
- * Read a child node off a parent property.
- *
- * @param node - The parent node.
- * @param key - The property to read.
- * @returns The child when the property holds a node, `undefined` otherwise.
- */
-export function childNode(node: Node, key: string): Node | undefined {
-	const value = node[key];
-
-	return isNode(value) ? value : undefined;
-}
-
-/**
- * Read an array of child nodes off a parent property.
- *
- * @param node - The parent node.
- * @param key - The property to read.
- * @returns The property's node entries, or an empty array when it is not an array.
- */
-export function childNodes(node: Node, key: string): Node[] {
-	const value = node[key];
-
-	return Array.isArray(value) ? value.filter(isNode) : [];
-}
-
-/**
- * Read a node's `name` property.
- *
- * @param node - The node to inspect.
- * @returns The name when it is a string, `undefined` otherwise.
- */
-export function nodeName(node: Node): string | undefined {
-	const name = node.name;
-
-	return typeof name === 'string' ? name : undefined;
-}
-
-/**
- * Read a node's `kind` property.
- *
- * @param node - The node to inspect.
- * @returns The kind when it is a string, `undefined` otherwise.
- */
-export function declarationKind(node: Node): string | undefined {
-	const kind = node.kind;
-
-	return typeof kind === 'string' ? kind : undefined;
-}
-
-/**
- * Report whether an AST node is a `const` variable declaration.
- *
- * @param node - The node to inspect.
- * @returns `true` for `const` variable declarations.
- */
-export function isConstDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && declarationKind(node) === 'const';
-}
-
-export function getStart(n: Node): number {
-	return typeof n.start === 'number' ? n.start : (n.range?.[0] ?? -1);
-}
-
-export function getEnd(n: Node): number {
-	return typeof n.end === 'number' ? n.end : (n.range?.[1] ?? -1);
-}
-
-export function visit(node: Node, fn: (n: Node) => void): void {
-	fn(node);
-
-	for (const key of Object.keys(node)) {
+/** Traverses and reads recursively validated AST nodes. */
+export class Ast {
+	/**
+	 * Read a child node off a parent property.
+	 *
+	 * @param node - The parent node.
+	 * @param key - The property to read.
+	 * @returns The child when the property holds a node, `undefined` otherwise.
+	 */
+	static childNode(node: Node, key: string): Node | undefined {
 		const value = node[key];
 
-		if (Array.isArray(value)) {
-			for (const child of value) {
-				if (isNode(child)) {
-					visit(child, fn);
+		return value instanceof Node ? value : undefined;
+	}
+
+	/**
+	 * Read an array of child nodes off a parent property.
+	 *
+	 * @param node - The parent node.
+	 * @param key - The property to read.
+	 * @returns The property's node entries, or an empty array when it is not an array.
+	 */
+	static childNodes(node: Node, key: string): Node[] {
+		const value = node[key];
+
+		return Array.isArray(value)
+			? value.filter((child): child is Node => {
+					return child instanceof Node;
+				})
+			: [];
+	}
+
+	/** Read a node's schema-validated `name` property. */
+	static nodeName(node: Node): string | undefined {
+		return node.name;
+	}
+
+	/** Read a node's schema-validated `kind` property. */
+	static declarationKind(node: Node): string | undefined {
+		return node.kind;
+	}
+
+	/** Report whether an AST node is a `const` variable declaration. */
+	static isConstDeclaration(node: Node): boolean {
+		return node.type === 'VariableDeclaration' && Ast.declarationKind(node) === 'const';
+	}
+
+	/** Read a node's source start with its range as a fallback. */
+	static getStart(node: Node): number {
+		return node.start ?? node.range?.[0] ?? -1;
+	}
+
+	/** Read a node's source end with its range as a fallback. */
+	static getEnd(node: Node): number {
+		return node.end ?? node.range?.[1] ?? -1;
+	}
+
+	/** Visit every validated node in depth-first order. */
+	static visit(node: Node, visitor: (node: Node) => void): void {
+		visitor(node);
+
+		for (const value of Object.values(node)) {
+			if (Array.isArray(value)) {
+				for (const child of value) {
+					if (child instanceof Node) {
+						Ast.visit(child, visitor);
+					}
 				}
+			} else if (value instanceof Node) {
+				Ast.visit(value, visitor);
 			}
-		} else if (isNode(value)) {
-			visit(value, fn);
 		}
 	}
-}
 
-export function collectStatementLists(program: Node): Node[][] {
-	const lists: Node[][] = [];
+	/** Collect statement arrays that participate in blank-line rules. */
+	static collectStatementLists(program: Node): Node[][] {
+		const lists: Node[][] = [];
 
-	visit(program, (n) => {
-		const key = STATEMENT_LIST_KEYS[n.type];
+		Ast.visit(program, (node) => {
+			const key = STATEMENT_LIST_KEYS[node.type];
 
-		if (key && Array.isArray(n[key])) {
-			lists.push(childNodes(n, key));
-		}
+			if (key && Array.isArray(node[key])) {
+				lists.push(Ast.childNodes(node, key));
+			}
 
-		if (n.type === 'SwitchStatement' && Array.isArray(n.cases)) {
-			lists.push(childNodes(n, 'cases'));
-		}
-	});
+			if (node.type === 'SwitchStatement' && Array.isArray(node.cases)) {
+				lists.push(Ast.childNodes(node, 'cases'));
+			}
+		});
 
-	return lists;
-}
+		return lists;
+	}
 
-export function collectClassBodies(program: Node): Node[] {
-	const bodies: Node[] = [];
+	/** Collect every class body below a parsed program. */
+	static collectClassBodies(program: Node): Node[] {
+		const bodies: Node[] = [];
 
-	visit(program, (n) => {
-		if (n.type === 'ClassBody') {
-			bodies.push(n);
-		}
-	});
+		Ast.visit(program, (node) => {
+			if (node.type === 'ClassBody') {
+				bodies.push(node);
+			}
+		});
 
-	return bodies;
+		return bodies;
+	}
 }

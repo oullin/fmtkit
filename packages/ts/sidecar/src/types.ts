@@ -1,10 +1,4 @@
-export type Node = {
-	type: string;
-	start?: number;
-	end?: number;
-	range?: [number, number];
-	[key: string]: unknown;
-};
+export type { Node } from '#sidecar/node-schema';
 
 export type Edit = {
 	start: number;

@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
-import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
+import { Ast } from '#sidecar/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { Edits } from '#sidecar/edits';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
-import { isTargetFile } from '#sidecar/file-targets';
+import { FileTargets } from '#sidecar/file-targets';
 import { isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
@@ -25,93 +25,92 @@ type FluentChain = {
 	links: ChainLink[];
 };
 
-function detectIndent(content: string): string {
-	const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
+/** Formats fluent chains and the structured calls composed with them. */
+export class FluentChains {
+	static #detectIndent(content: string): string {
+		const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
 
-	return match?.[0] ?? '\t';
-}
-
-function memberCallLink(source: string, member: Node, object: Node, comments: Node[]): ChainLink | null {
-	if (member.computed) {
-		return null;
+		return match?.[0] ?? '\t';
 	}
 
-	const property = childNode(member, 'property');
-
-	if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
-		return null;
-	}
-
-	const objectEnd = getEnd(object);
-	const propertyStart = getStart(property);
-
-	if (objectEnd < 0 || propertyStart < 0 || propertyStart <= objectEnd) {
-		return null;
-	}
-
-	if (SourceText.hasCommentBetween(comments, objectEnd, propertyStart)) {
-		return null;
-	}
-
-	const separator = source.slice(objectEnd, propertyStart);
-
-	if (separator.includes('//') || separator.includes('/*')) {
-		return null;
-	}
-
-	const operator = separator.replace(/[ \t\r\n]/g, '');
-
-	if (operator !== '.' && operator !== '?.') {
-		return null;
-	}
-
-	return {
-		start: objectEnd,
-		end: propertyStart,
-		operator,
-	};
-}
-
-function collectFluentChain(source: string, outer: Node, comments: Node[]): FluentChain | null {
-	let call: Node = outer;
-
-	const links: ChainLink[] = [];
-
-	while (call.type === 'CallExpression') {
-		const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
-
-		if (callee?.type !== 'MemberExpression') {
-			break;
-		}
-
-		const object = SourceText.unwrapChainExpression(childNode(callee, 'object'));
-
-		if (object?.type !== 'CallExpression') {
-			break;
-		}
-
-		const link = memberCallLink(source, callee, object, comments);
-
-		if (!link) {
+	static #memberCallLink(source: string, member: Node, object: Node, comments: readonly Node[]): ChainLink | null {
+		if (member.computed) {
 			return null;
 		}
 
-		links.push(link);
-		call = object;
+		const property = Ast.childNode(member, 'property');
+
+		if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
+			return null;
+		}
+
+		const objectEnd = Ast.getEnd(object);
+		const propertyStart = Ast.getStart(property);
+
+		if (objectEnd < 0 || propertyStart < 0 || propertyStart <= objectEnd) {
+			return null;
+		}
+
+		if (SourceText.hasCommentBetween(comments, objectEnd, propertyStart)) {
+			return null;
+		}
+
+		const separator = source.slice(objectEnd, propertyStart);
+
+		if (separator.includes('//') || separator.includes('/*')) {
+			return null;
+		}
+
+		const operator = separator.replace(/[ \t\r\n]/g, '');
+
+		if (operator !== '.' && operator !== '?.') {
+			return null;
+		}
+
+		return {
+			start: objectEnd,
+			end: propertyStart,
+			operator,
+		};
 	}
 
-	if (links.length < 2) {
-		return null;
+	static #collectFluentChain(source: string, outer: Node, comments: readonly Node[]): FluentChain | null {
+		let call: Node = outer;
+
+		const links: ChainLink[] = [];
+
+		while (call.type === 'CallExpression') {
+			const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+
+			if (callee?.type !== 'MemberExpression') {
+				break;
+			}
+
+			const object = SourceText.unwrapChainExpression(Ast.childNode(callee, 'object'));
+
+			if (object?.type !== 'CallExpression') {
+				break;
+			}
+
+			const link = FluentChains.#memberCallLink(source, callee, object, comments);
+
+			if (!link) {
+				return null;
+			}
+
+			links.push(link);
+			call = object;
+		}
+
+		if (links.length < 2) {
+			return null;
+		}
+
+		return {
+			base: call,
+			links,
+		};
 	}
-
-	return {
-		base: call,
-		links,
-	};
-}
-
-/** Formats fluent chains and the structured calls composed with them. */
-export class FluentChains {
 	/**
 	 * Compute edits that split fluent-chain links across lines.
 	 *
@@ -128,20 +127,20 @@ export class FluentChains {
 
 		const comments = parsed.value.comments;
 		const edits = new Map<string, Edit>();
-		const indentStep = detectIndent(content);
+		const indentStep = FluentChains.#detectIndent(content);
 
-		visit(parsed.value.program, (node) => {
+		Ast.visit(parsed.value.program, (node) => {
 			if (node.type !== 'CallExpression') {
 				return;
 			}
 
-			const chain = collectFluentChain(content, node, comments);
+			const chain = FluentChains.#collectFluentChain(content, node, comments);
 
 			if (!chain) {
 				return;
 			}
 
-			const baseStart = getStart(chain.base);
+			const baseStart = Ast.getStart(chain.base);
 
 			if (baseStart < 0) {
 				return;
@@ -201,7 +200,7 @@ export class FluentChains {
 		}
 
 		const original = read.value;
-		const updated = file.endsWith('.vue') ? processVueFile(original, file) : FluentChains.format(original, file);
+		const updated = file.endsWith('.vue') ? FluentChains.#processVueFile(original, file) : FluentChains.format(original, file);
 
 		if (updated === original) {
 			return ok(false);
@@ -217,72 +216,73 @@ export class FluentChains {
 
 		return ok(true);
 	}
-}
 
-function processVueFile(original: string, file: string): string {
-	let updated = original;
+	static #processVueFile(original: string, file: string): string {
+		let updated = original;
 
-	const segments = VueScript.extractBlocks(original).filter((segment) => {
-		return VueScript.isJavaScriptOrTypeScript(segment.openTag);
-	});
+		const segments = VueScript.extractBlocks(original).filter((segment) => {
+			return VueScript.isJavaScriptOrTypeScript(segment.openTag);
+		});
 
-	for (const segment of [...segments].reverse()) {
-		const rewritten = FluentChains.format(segment.content, `${file}.script.ts`);
+		for (const segment of [...segments].reverse()) {
+			const rewritten = FluentChains.format(segment.content, `${file}.script.ts`);
 
-		if (rewritten === segment.content) {
-			continue;
+			if (rewritten === segment.content) {
+				continue;
+			}
+
+			updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
 		}
 
-		updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
+		return updated;
 	}
 
-	return updated;
-}
+	/** Run the standalone fluent-chain formatter entrypoint. */
+	static async main(): Promise<void> {
+		const rawArgs = process.argv.slice(2);
+		const mode = rawArgs.includes('--check') ? 'check' : 'write';
 
-async function main(): Promise<void> {
-	const rawArgs = process.argv.slice(2);
-	const mode = rawArgs.includes('--check') ? 'check' : 'write';
+		const { NodeProcessRunner } = await import('#sidecar/process-runner');
 
-	const { NodeProcessRunner } = await import('#sidecar/process-runner');
+		const { NodeSourceFiles } = await import('#sidecar/source-files');
 
-	const { NodeSourceFiles } = await import('#sidecar/source-files');
+		const { FormatPipeline } = await import('#sidecar/format-pipeline');
 
-	const { FormatPipeline } = await import('#sidecar/format-pipeline');
+		const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
-	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+		const files = rawArgs
+			.filter((arg) => {
+				return arg !== '--check';
+			})
+			.filter(FileTargets.isTargetFile);
 
-	const files = rawArgs
-		.filter((arg) => {
-			return arg !== '--check';
-		})
-		.filter(isTargetFile);
+		const outcomes = await pipeline.runPass('fluent-chains', files, mode, (file, passMode) => {
+			return pipeline.formatFluentFile(file, passMode);
+		});
 
-	const outcomes = await pipeline.runPass('fluent-chains', files, mode, (file, passMode) => {
-		return pipeline.formatFluentFile(file, passMode);
-	});
+		const changedCount = outcomes.filter((outcome) => {
+			if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
+				console.warn(`[fluent-chains] path not found, skipping: ${outcome.file}`);
+			} else if (outcome.error) {
+				throw outcome.error;
+			} else if (outcome.changed) {
+				console.log(`[fluent-chains] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
+			}
 
-	const changedCount = outcomes.filter((outcome) => {
-		if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
-			console.warn(`[fluent-chains] path not found, skipping: ${outcome.file}`);
-		} else if (outcome.error) {
-			throw outcome.error;
-		} else if (outcome.changed) {
-			console.log(`[fluent-chains] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
+			return outcome.changed;
+		}).length;
+
+		if (mode === 'check' && changedCount > 0) {
+			console.error(`[fluent-chains] ${changedCount} file(s) need fluent-chain edits. Run "pnpm format" to fix.`);
+			process.exit(1);
 		}
 
-		return outcome.changed;
-	}).length;
-
-	if (mode === 'check' && changedCount > 0) {
-		console.error(`[fluent-chains] ${changedCount} file(s) need fluent-chain edits. Run "pnpm format" to fix.`);
-		process.exit(1);
+		console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
 	}
-
-	console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	main().catch((err: unknown) => {
+	FluentChains.main().catch((err: unknown) => {
 		console.error(err);
 		process.exit(1);
 	});

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { processSegment } from '#sidecar/segment';
+import { Segment } from '#sidecar/segment';
 
 interface Case {
 	name: string;
@@ -130,7 +130,7 @@ describe('blank-line rules', () => {
 	for (const c of cases) {
 		it(c.name, () => {
 			const virtualName = c.name.endsWith('.js') ? 'fixture.js' : 'fixture.ts';
-			const out = processSegment(c.input, virtualName);
+			const out = Segment.process(c.input, virtualName);
 
 			assert.equal(out, c.expected);
 		});
@@ -139,8 +139,8 @@ describe('blank-line rules', () => {
 	it('is idempotent: running twice produces no further changes', () => {
 		const input = ['import { a } from "node:a";', 'import { b } from "node:b";', 'export function run() {', '\treturn a(b());', '}', ''].join('\n');
 
-		const once = processSegment(input, 'fixture.ts');
-		const twice = processSegment(once, 'fixture.ts');
+		const once = Segment.process(input, 'fixture.ts');
+		const twice = Segment.process(once, 'fixture.ts');
 
 		assert.equal(twice, once);
 	});

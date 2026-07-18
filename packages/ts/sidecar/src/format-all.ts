@@ -1,7 +1,8 @@
 import { pathToFileURL } from 'node:url';
-import type { OxcError } from 'oxc-parser';
+import { z } from 'zod';
 import { UnexpectedCliArgument } from '#sidecar/errors';
-import { isTargetFile } from '#sidecar/file-targets';
+import type { OxcErrorDto } from '#sidecar/errors';
+import { FileTargets } from '#sidecar/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
@@ -9,160 +10,176 @@ import { err, isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
 import { NodeSourceFiles } from '#sidecar/source-files';
 
-/** Parsed command-line options for the full formatting pipeline. */
-export type CliOptions = {
+/** Immutable command-line options for the full formatting pipeline. */
+export class CliOptionsDto {
 	/** Whether the pipeline checks source or writes changes. */
-	mode: FormatMode;
+	readonly mode: FormatMode;
 
 	/** The oxfmt executable, or `null` to skip external formatting. */
-	oxfmtBin: string | null;
+	readonly oxfmtBin: string | null;
 
 	/** The oxfmt configuration path, or `null` to use its defaults. */
-	oxfmtConfig: string | null;
+	readonly oxfmtConfig: string | null;
 
 	/** Files eligible for formatting passes. */
-	readonly formatFiles: string[];
+	readonly formatFiles: readonly string[];
 
 	/** Files eligible for final syntax validation. */
-	readonly syntaxFiles: string[];
-};
+	readonly syntaxFiles: readonly string[];
 
-/**
- * Parse the full-pipeline command line.
- *
- * @param argv - Arguments after the executable and script path.
- * @returns Parsed options, or the unexpected argument as a typed value.
- */
-export function parseArgs(argv: string[]): Result<CliOptions, UnexpectedCliArgument> {
-	const options: CliOptions = {
-		mode: 'write',
-		oxfmtBin: null,
-		oxfmtConfig: null,
-		formatFiles: [],
-		syntaxFiles: [],
-	};
+	static readonly #argvSchema = z.array(z.string());
 
-	let section: 'formatFiles' | 'syntaxFiles' | null = null;
+	static readonly #schema = z.object({
+		mode: z.enum(['check', 'write']),
+		oxfmtBin: z.string().nullable(),
+		oxfmtConfig: z.string().nullable(),
+		formatFiles: z.array(z.string()),
+		syntaxFiles: z.array(z.string()),
+	});
 
-	for (let i = 0; i < argv.length; i++) {
-		const arg = argv[i];
+	private constructor(value: { mode: FormatMode; oxfmtBin: string | null; oxfmtConfig: string | null; formatFiles: string[]; syntaxFiles: string[] }) {
+		this.mode = value.mode;
+		this.oxfmtBin = value.oxfmtBin;
+		this.oxfmtConfig = value.oxfmtConfig;
+		this.formatFiles = Object.freeze(value.formatFiles);
+		this.syntaxFiles = Object.freeze(value.syntaxFiles);
 
-		if (arg === undefined) {
-			continue;
-		}
-
-		if (arg === '--check') {
-			options.mode = 'check';
-			section = null;
-		} else if (arg === '--oxfmt-bin') {
-			options.oxfmtBin = argv[++i] ?? null;
-			section = null;
-		} else if (arg === '--oxfmt-config') {
-			options.oxfmtConfig = argv[++i] ?? null;
-			section = null;
-		} else if (arg === '--format-files') {
-			section = 'formatFiles';
-		} else if (arg === '--syntax-files') {
-			section = 'syntaxFiles';
-		} else if (section) {
-			options[section].push(arg);
-		} else {
-			return err(new UnexpectedCliArgument(arg));
-		}
+		Object.setPrototypeOf(this, Object.prototype);
+		Object.freeze(this);
 	}
 
-	return ok(options);
-}
+	/**
+	 * Parse the full-pipeline command line.
+	 *
+	 * @param input - Arguments after the executable and script path.
+	 * @returns Parsed options, or the unexpected argument as a typed value.
+	 */
+	static parse(input: unknown): Result<CliOptionsDto, UnexpectedCliArgument> {
+		const argv = CliOptionsDto.#argvSchema.parse(input);
 
-function reportPass(label: string, files: string[], mode: FormatMode, outcomes: PassOutcome[], failureNoun: string): boolean {
-	let changedCount = 0;
+		const candidate = {
+			mode: 'write' as FormatMode,
+			oxfmtBin: null as string | null,
+			oxfmtConfig: null as string | null,
+			formatFiles: [] as string[],
+			syntaxFiles: [] as string[],
+		};
 
-	for (const outcome of outcomes) {
-		if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
-			console.warn(`[${label}] path not found, skipping: ${outcome.file}`);
+		let section: 'formatFiles' | 'syntaxFiles' | null = null;
 
-			continue;
-		}
+		for (let index = 0; index < argv.length; index++) {
+			const argument = argv[index];
 
-		if (outcome.error) {
-			console.error(outcome.error);
-
-			return false;
-		}
-
-		if (!outcome.changed) {
-			continue;
-		}
-
-		changedCount++;
-		console.log(`[${label}] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
-	}
-
-	if (mode === 'check' && changedCount > 0) {
-		console.error(`[${label}] ${changedCount} file(s) need ${failureNoun}. Run "pnpm format" to fix.`);
-
-		return false;
-	}
-
-	console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
-
-	return true;
-}
-
-function formatError(file: string, error: OxcError): string {
-	if (typeof error.codeframe === 'string' && error.codeframe.length > 0) {
-		return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
-	}
-
-	if (typeof error.message === 'string' && error.message.length > 0) {
-		return `[validate-syntax] ${file}: ${error.message}`;
-	}
-
-	return `[validate-syntax] ${file}: syntax validation failed`;
-}
-
-function reportValidation(files: string[], failures: ValidationFailure[]): boolean {
-	const diagnostics: string[] = [];
-
-	for (const failure of failures) {
-		if (failure.error._tag === 'SourceFileUnreadable') {
-			if (failure.error.isNotFound()) {
-				console.warn(`[validate-syntax] path not found, skipping: ${failure.file}`);
-
+			if (argument === undefined) {
 				continue;
 			}
 
-			console.error(failure.error);
+			if (argument === '--check') {
+				candidate.mode = 'check';
+				section = null;
+			} else if (argument === '--oxfmt-bin') {
+				candidate.oxfmtBin = argv[++index] ?? null;
+				section = null;
+			} else if (argument === '--oxfmt-config') {
+				candidate.oxfmtConfig = argv[++index] ?? null;
+				section = null;
+			} else if (argument === '--format-files') {
+				section = 'formatFiles';
+			} else if (argument === '--syntax-files') {
+				section = 'syntaxFiles';
+			} else if (section) {
+				candidate[section].push(argument);
+			} else {
+				return err(new UnexpectedCliArgument(argument));
+			}
+		}
+
+		return ok(new CliOptionsDto(CliOptionsDto.#schema.parse(candidate)));
+	}
+}
+
+/** Reports pipeline values without coupling formatting passes to the console. */
+class FormatAllReporter {
+	static reportPass(label: string, files: readonly string[], mode: FormatMode, outcomes: PassOutcome[], failureNoun: string): boolean {
+		let changedCount = 0;
+
+		for (const outcome of outcomes) {
+			if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
+				console.warn(`[${label}] path not found, skipping: ${outcome.file}`);
+				continue;
+			}
+
+			if (outcome.error) {
+				console.error(outcome.error);
+
+				return false;
+			}
+
+			if (outcome.changed) {
+				changedCount++;
+				console.log(`[${label}] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
+			}
+		}
+
+		if (mode === 'check' && changedCount > 0) {
+			console.error(`[${label}] ${changedCount} file(s) need ${failureNoun}. Run "pnpm format" to fix.`);
 
 			return false;
 		}
 
-		for (const error of failure.error.errors) {
-			diagnostics.push(formatError(failure.file, error));
+		console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
+
+		return true;
+	}
+
+	static formatError(file: string, error: OxcErrorDto): string {
+		if (error.codeframe && error.codeframe.length > 0) {
+			return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
 		}
+
+		if (error.message && error.message.length > 0) {
+			return `[validate-syntax] ${file}: ${error.message}`;
+		}
+
+		return `[validate-syntax] ${file}: syntax validation failed`;
 	}
 
-	if (diagnostics.length > 0) {
-		console.error(diagnostics.join('\n'));
-		console.error(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.`);
+	static reportValidation(files: readonly string[], failures: ValidationFailure[]): boolean {
+		const diagnostics: string[] = [];
 
-		return false;
+		for (const failure of failures) {
+			if (failure.error._tag === 'SourceFileUnreadable') {
+				if (failure.error.isNotFound()) {
+					console.warn(`[validate-syntax] path not found, skipping: ${failure.file}`);
+					continue;
+				}
+
+				console.error(failure.error);
+
+				return false;
+			}
+
+			for (const error of failure.error.errors) {
+				diagnostics.push(FormatAllReporter.formatError(failure.file, error));
+			}
+		}
+
+		if (diagnostics.length > 0) {
+			console.error(diagnostics.join('\n'));
+			console.error(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.`);
+
+			return false;
+		}
+
+		console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
+
+		return true;
 	}
-
-	console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
-
-	return true;
 }
 
-/**
- * Run the full formatting CLI and map outcome values to console output and status.
- *
- * @returns Nothing after setting `process.exitCode` when the pipeline fails.
- */
+/** Run the full formatting CLI and map outcome values to console output and status. */
 export async function main(): Promise<void> {
-	const parsed = parseArgs(
-		process.argv.slice(2),
-	);
+	const parsed = CliOptionsDto.parse(process.argv.slice(2));
 
 	if (isErr(parsed)) {
 		console.error(parsed.error);
@@ -172,23 +189,13 @@ export async function main(): Promise<void> {
 	}
 
 	const options = parsed.value;
-	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
-
-	const syntaxTargets = [
-		...new Set(
-			options.syntaxFiles.filter((file) => {
-				return file.endsWith('.ts') || file.endsWith('.vue');
-			}),
-		),
-	];
-
+	const formatTargets = [...new Set(options.formatFiles.filter(FileTargets.isTargetFile))];
+	const syntaxTargets = [...new Set(options.syntaxFiles.filter((file) => file.endsWith('.ts') || file.endsWith('.vue')))];
 	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
-	const blankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => {
-		return pipeline.formatFile(file, mode);
-	});
+	const blankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => pipeline.formatFile(file, mode));
 
-	if (!reportPass('blank-lines', formatTargets, options.mode, blankLines, 'edits')) {
+	if (!FormatAllReporter.reportPass('blank-lines', formatTargets, options.mode, blankLines, 'edits')) {
 		process.exitCode = 1;
 
 		return;
@@ -203,11 +210,9 @@ export async function main(): Promise<void> {
 		return;
 	}
 
-	const fluentChains = await pipeline.runPass('fluent-chains', formatTargets, options.mode, (file, mode) => {
-		return pipeline.formatFluentFile(file, mode);
-	});
+	const fluentChains = await pipeline.runPass('fluent-chains', formatTargets, options.mode, (file, mode) => pipeline.formatFluentFile(file, mode));
 
-	if (!reportPass('fluent-chains', formatTargets, options.mode, fluentChains, 'edits')) {
+	if (!FormatAllReporter.reportPass('fluent-chains', formatTargets, options.mode, fluentChains, 'edits')) {
 		process.exitCode = 1;
 
 		return;
@@ -215,17 +220,15 @@ export async function main(): Promise<void> {
 
 	// Fluent and expanded calls create blank-line obligations the first pass
 	// cannot see, so the second pass makes one invocation reach a fixed point.
-	const finalBlankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => {
-		return pipeline.formatFile(file, mode);
-	});
+	const finalBlankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => pipeline.formatFile(file, mode));
 
-	if (!reportPass('blank-lines', formatTargets, options.mode, finalBlankLines, 'edits')) {
+	if (!FormatAllReporter.reportPass('blank-lines', formatTargets, options.mode, finalBlankLines, 'edits')) {
 		process.exitCode = 1;
 
 		return;
 	}
 
-	if (!reportValidation(syntaxTargets, await pipeline.validate(syntaxTargets))) {
+	if (!FormatAllReporter.reportValidation(syntaxTargets, await pipeline.validate(syntaxTargets))) {
 		process.exitCode = 1;
 	}
 }

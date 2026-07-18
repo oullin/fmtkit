@@ -3,16 +3,10 @@ import { readdir, readFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { parseSync } from 'oxc-parser';
-
-type Node = {
-	type?: string;
-	source?: unknown;
-	callee?: unknown;
-	arguments?: unknown[];
-	value?: unknown;
-	[key: string]: unknown;
-};
+import { Ast } from '#sidecar/ast';
+import { isErr } from '#sidecar/result';
+import { Sources } from '#sidecar/sources';
+import type { Node } from '#sidecar/types';
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const exemptFiles = new Set(['sidecar.ts']);
@@ -27,40 +21,8 @@ function isRelativeSpecifier(value: string): boolean {
 	return value.startsWith('./') || value.startsWith('../');
 }
 
-function sourceValue(source: unknown): string | null {
-	if (typeof source === 'string') {
-		return source;
-	}
-
-	if (source && typeof source === 'object' && 'value' in source) {
-		const value = (source as { value?: unknown }).value;
-
-		return typeof value === 'string' ? value : null;
-	}
-
-	return null;
-}
-
-function visit(node: unknown, fn: (node: Node) => void): void {
-	if (!node || typeof node !== 'object') {
-		return;
-	}
-
-	if (Array.isArray(node)) {
-		for (const child of node) {
-			visit(child, fn);
-		}
-
-		return;
-	}
-
-	const current = node as Node;
-
-	fn(current);
-
-	for (const value of Object.values(current)) {
-		visit(value, fn);
-	}
+function sourceValue(source: Node | undefined): string | null {
+	return source?.stringValue ?? null;
 }
 
 function isSourceFile(name: string): boolean {
@@ -93,12 +55,18 @@ async function listSourceFiles(dir: string): Promise<string[]> {
 }
 
 function collectModuleSpecifiers(file: string, source: string): string[] {
-	const parsed = parseSync(file, source) as unknown as { program: Node };
+	const parsed = Sources.parse(file, source);
 	const specifiers: string[] = [];
 
-	visit(parsed.program, (node) => {
+	if (isErr(parsed)) {
+		return specifiers;
+	}
+
+	Ast.visit(parsed.value.program, (node) => {
 		if (node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
-			const specifier = sourceValue(node.source);
+			const specifier = sourceValue(
+				Ast.childNode(node, 'source'),
+			);
 
 			if (specifier) {
 				specifiers.push(specifier);
@@ -106,15 +74,19 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 		}
 
 		if (node.type === 'ImportExpression') {
-			const specifier = sourceValue(node.source);
+			const specifier = sourceValue(
+				Ast.childNode(node, 'source'),
+			);
 
 			if (specifier) {
 				specifiers.push(specifier);
 			}
 		}
 
-		if (node.type === 'CallExpression' && (node.callee as Node | undefined)?.type === 'Identifier' && (node.callee as { name?: unknown }).name === 'require') {
-			const specifier = sourceValue(node.arguments?.[0]);
+		const callee = Ast.childNode(node, 'callee');
+
+		if (node.type === 'CallExpression' && callee?.type === 'Identifier' && callee.name === 'require') {
+			const specifier = sourceValue(Ast.childNodes(node, 'arguments')[0]);
 
 			if (specifier) {
 				specifiers.push(specifier);

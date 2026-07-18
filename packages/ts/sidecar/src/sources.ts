@@ -1,18 +1,8 @@
 import { parseSync } from 'oxc-parser';
-import { isNode } from '#sidecar/ast';
 import { SourceUnparsable } from '#sidecar/errors';
+import { ParsedSourceDto } from '#sidecar/node-schema';
 import { err, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
-import type { Node } from '#sidecar/types';
-
-/** The syntax tree and comments produced for valid source text. */
-export type ParseResult = {
-	/** The parsed program root. */
-	readonly program: Node;
-
-	/** The parsed comments represented as traversable nodes. */
-	readonly comments: Node[];
-};
 
 /** Parses source text without exposing a broken syntax tree to formatting passes. */
 export class Sources {
@@ -23,23 +13,19 @@ export class Sources {
 	 * @param content - The source text to parse.
 	 * @returns The trustworthy syntax tree, or the parser diagnostics as a value.
 	 */
-	static parse(virtualName: string, content: string): Result<ParseResult, SourceUnparsable> {
+	static parse(virtualName: string, content: string): Result<ParsedSourceDto, SourceUnparsable> {
 		const parsed = parseSync(virtualName, content);
 
 		if (parsed.errors.length > 0) {
 			return err(new SourceUnparsable(virtualName, parsed.errors));
 		}
 
-		const program: unknown = parsed.program;
+		const validated = ParsedSourceDto.from({ program: parsed.program, comments: parsed.comments });
 
-		if (!isNode(program)) {
+		if (!validated.success) {
 			return err(new SourceUnparsable(virtualName, []));
 		}
 
-		const comments: unknown[] = Array.isArray(parsed.comments) ? parsed.comments : [];
-
-		return ok(
-			{ program, comments: comments.filter(isNode) },
-		);
+		return ok(validated.data);
 	}
 }

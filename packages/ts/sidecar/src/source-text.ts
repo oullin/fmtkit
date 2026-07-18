@@ -1,4 +1,4 @@
-import { childNode, getEnd, getStart } from '#sidecar/ast';
+import { Ast } from '#sidecar/ast';
 import type { Node } from '#sidecar/types';
 
 /** The opening and closing argument-parenthesis offsets of a call. */
@@ -45,7 +45,7 @@ export class SourceText {
 	 * @returns The node's source text.
 	 */
 	static sourceOf(source: string, node: Node): string {
-		return source.slice(getStart(node), getEnd(node));
+		return source.slice(Ast.getStart(node), Ast.getEnd(node));
 	}
 
 	/**
@@ -56,10 +56,10 @@ export class SourceText {
 	 * @param to - The inclusive upper offset.
 	 * @returns `true` when a comment is contained by the range.
 	 */
-	static hasCommentBetween(comments: Node[], from: number, to: number): boolean {
+	static hasCommentBetween(comments: readonly Node[], from: number, to: number): boolean {
 		return comments.some((comment) => {
-			const start = getStart(comment);
-			const end = getEnd(comment);
+			const start = Ast.getStart(comment);
+			const end = Ast.getEnd(comment);
 
 			return start >= from && end <= to;
 		});
@@ -74,8 +74,8 @@ export class SourceText {
 	 * @returns The parenthesis offsets, or `null` when they cannot be located.
 	 */
 	static callParens(source: string, call: Node, callee: Node | undefined): CallParens | null {
-		const calleeEnd = callee ? getEnd(callee) : -1;
-		const callEnd = getEnd(call);
+		const calleeEnd = callee ? Ast.getEnd(callee) : -1;
+		const callEnd = Ast.getEnd(call);
 
 		if (calleeEnd < 0 || callEnd < 0) {
 			return null;
@@ -104,7 +104,7 @@ export class SourceText {
 	 */
 	static unwrapChainExpression(node: Node | undefined): Node | undefined {
 		if (node?.type === 'ChainExpression') {
-			return childNode(node, 'expression');
+			return Ast.childNode(node, 'expression');
 		}
 
 		return node;

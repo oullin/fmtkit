@@ -1,268 +1,262 @@
-import { childNode, childNodes, collectStatementLists, getEnd, getStart, isConstDeclaration, isNode, nodeName, visit } from '#sidecar/ast';
+import { Ast } from '#sidecar/ast';
+import { Node } from '#sidecar/node-schema';
 import { isErr } from '#sidecar/result';
 import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
-import type { Edit, Node } from '#sidecar/types';
+import type { Edit } from '#sidecar/types';
 
-function isMultiline(source: string, node: Node): boolean {
-	const start = getStart(node);
-	const end = getEnd(node);
+/** Reorders declarations only where the transformation is side-effect safe. */
+export class DeclarationReorder {
+	static #isMultiline(source: string, node: Node): boolean {
+		const start = Ast.getStart(node);
+		const end = Ast.getEnd(node);
 
-	return start >= 0 && end >= 0 && source.slice(start, end).includes('\n');
-}
-
-function nodeSource(source: string, node: Node): string {
-	const start = getStart(node);
-	const end = getEnd(node);
-
-	return `${SourceText.lineIndent(source, start)}${source.slice(start, end)}`;
-}
-
-function isSideEffectSafeExpression(node: Node | undefined): boolean {
-	if (!node) {
-		return true;
+		return start >= 0 && end >= 0 && source.slice(start, end).includes('\n');
 	}
 
-	switch (node.type) {
-		case 'ArrowFunctionExpression':
+	static #nodeSource(source: string, node: Node): string {
+		const start = Ast.getStart(node);
+		const end = Ast.getEnd(node);
 
-		case 'FunctionExpression':
+		return `${SourceText.lineIndent(source, start)}${source.slice(start, end)}`;
+	}
 
-		case 'Identifier':
-
-		case 'Literal':
+	static #isSideEffectSafeExpression(node: Node | undefined): boolean {
+		if (!node) {
 			return true;
-
-		case 'ArrayExpression': {
-			const elements = node.elements;
-
-			return (
-				Array.isArray(elements) &&
-				elements.every((element) => {
-					if (element === null) {
-						return true;
-					}
-
-					return isNode(element) && isSideEffectSafeExpression(element);
-				})
-			);
 		}
 
-		case 'ObjectExpression': {
-			const properties = node.properties;
+		switch (node.type) {
+			case 'ArrowFunctionExpression':
 
-			return (
-				Array.isArray(properties) &&
-				properties.every((property) => {
-					if (!isNode(property)) {
-						return false;
-					}
+			case 'FunctionExpression':
 
-					if (property.type === 'SpreadElement') {
-						return isSideEffectSafeExpression(
-							childNode(property, 'argument'),
-						);
-					}
+			case 'Identifier':
 
-					if (property.type !== 'ObjectProperty' && property.type !== 'Property') {
-						return false;
-					}
+			case 'Literal':
+				return true;
 
-					const computed = Boolean(property.computed);
-					const key = childNode(property, 'key');
-					const value = childNode(property, 'value');
+			case 'ArrayExpression': {
+				const elements = node.elements;
 
-					return (!computed || isSideEffectSafeExpression(key)) && isSideEffectSafeExpression(value);
-				})
-			);
+				return (
+					Array.isArray(elements) &&
+					elements.every((element) => {
+						if (element === null) {
+							return true;
+						}
+
+						return element instanceof Node && DeclarationReorder.#isSideEffectSafeExpression(element);
+					})
+				);
+			}
+
+			case 'ObjectExpression': {
+				const properties = node.properties;
+
+				return (
+					Array.isArray(properties) &&
+					properties.every((property) => {
+						if (!(property instanceof Node)) {
+							return false;
+						}
+
+						if (property.type === 'SpreadElement') {
+							return DeclarationReorder.#isSideEffectSafeExpression(Ast.childNode(property, 'argument'));
+						}
+
+						if (property.type !== 'ObjectProperty' && property.type !== 'Property') {
+							return false;
+						}
+
+						const computed = Boolean(property.computed);
+						const key = Ast.childNode(property, 'key');
+						const value = Ast.childNode(property, 'value');
+
+						return (!computed || DeclarationReorder.#isSideEffectSafeExpression(key)) && DeclarationReorder.#isSideEffectSafeExpression(value);
+					})
+				);
+			}
+
+			case 'TemplateLiteral': {
+				const expressions = node.expressions;
+
+				return (
+					Array.isArray(expressions) &&
+					expressions.every((expression) => {
+						return expression instanceof Node && DeclarationReorder.#isSideEffectSafeExpression(expression);
+					})
+				);
+			}
+
+			default:
+				return false;
 		}
+	}
 
-		case 'TemplateLiteral': {
-			const expressions = node.expressions;
-
-			return (
-				Array.isArray(expressions) &&
-				expressions.every((expression) => {
-					return isNode(expression) && isSideEffectSafeExpression(expression);
-				})
-			);
-		}
-
-		default:
+	static #isSafeConstDeclaration(node: Node): boolean {
+		if (!Ast.isConstDeclaration(node)) {
 			return false;
+		}
+
+		return (
+			Array.isArray(node.declarations) &&
+			Ast.childNodes(node, 'declarations').every((declaration) => {
+				const id = Ast.childNode(declaration, 'id');
+
+				return id?.type === 'Identifier' && DeclarationReorder.#isSideEffectSafeExpression(Ast.childNode(declaration, 'init'));
+			})
+		);
 	}
-}
 
-function isSafeConstDeclaration(node: Node): boolean {
-	if (!isConstDeclaration(node)) {
-		return false;
-	}
+	static #declaredNames(nodes: Node[]): Set<string> {
+		const names = new Set<string>();
 
-	return (
-		Array.isArray(node.declarations) &&
-		childNodes(node, 'declarations').every((declaration) => {
-			const id = childNode(declaration, 'id');
+		for (const node of nodes) {
+			for (const declaration of Ast.childNodes(node, 'declarations')) {
+				const id = Ast.childNode(declaration, 'id');
+				const name = id ? Ast.nodeName(id) : undefined;
 
-			return id?.type === 'Identifier' && isSideEffectSafeExpression(
-				childNode(declaration, 'init'),
-			);
-		})
-	);
-}
-
-function declaredNames(nodes: Node[]): Set<string> {
-	const names = new Set<string>();
-
-	for (const node of nodes) {
-		for (const declaration of childNodes(node, 'declarations')) {
-			const id = childNode(declaration, 'id');
-			const name = id ? nodeName(id) : undefined;
-
-			if (id?.type === 'Identifier' && typeof name === 'string') {
-				names.add(name);
+				if (id?.type === 'Identifier' && name !== undefined) {
+					names.add(name);
+				}
 			}
 		}
+
+		return names;
 	}
 
-	return names;
-}
+	static #usesAnyIdentifier(node: Node, names: Set<string>): boolean {
+		let found = false;
 
-function usesAnyIdentifier(node: Node, names: Set<string>): boolean {
-	let found = false;
+		Ast.visit(node, (child) => {
+			if (found || child.type !== 'Identifier') {
+				return;
+			}
 
-	visit(node, (child) => {
-		if (found || child.type !== 'Identifier') {
-			return;
-		}
+			const name = Ast.nodeName(child);
 
-		const name = nodeName(child);
+			if (name !== undefined && names.has(name)) {
+				found = true;
+			}
+		});
 
-		if (typeof name === 'string' && names.has(name)) {
-			found = true;
-		}
-	});
-
-	return found;
-}
-
-function canReorderConstGroup(source: string, group: Node[]): boolean {
-	if (
-		!group.every((node) => {
-			return isSafeConstDeclaration(node);
-		})
-	) {
-		return false;
+		return found;
 	}
 
-	for (let i = 0; i < group.length; i++) {
-		const node = group[i];
-
-		if (!node || !isMultiline(source, node)) {
-			continue;
-		}
-
-		const names = declaredNames(
-			[node],
-		);
-
+	static #canReorderConstGroup(source: string, group: Node[]): boolean {
 		if (
-			group.slice(i + 1).some((node) => {
-				return !isMultiline(source, node) && usesAnyIdentifier(node, names);
+			!group.every((node) => {
+				return DeclarationReorder.#isSafeConstDeclaration(node);
 			})
 		) {
 			return false;
 		}
-	}
 
-	return true;
-}
+		for (let i = 0; i < group.length; i++) {
+			const node = group[i];
 
-function splitGroups(list: Node[], predicate: (node: Node) => boolean): Node[][] {
-	const groups: Node[][] = [];
-
-	let current: Node[] = [];
-
-	for (const node of list) {
-		if (!predicate(node)) {
-			if (current.length > 1) {
-				groups.push(current);
+			if (!node || !DeclarationReorder.#isMultiline(source, node)) {
+				continue;
 			}
 
-			current = [];
-			continue;
+			const names = DeclarationReorder.#declaredNames([node]);
+
+			if (
+				group.slice(i + 1).some((node) => {
+					return !DeclarationReorder.#isMultiline(source, node) && DeclarationReorder.#usesAnyIdentifier(node, names);
+				})
+			) {
+				return false;
+			}
 		}
 
-		current.push(node);
+		return true;
 	}
 
-	if (current.length > 1) {
-		groups.push(current);
+	static #splitGroups(list: Node[], predicate: (node: Node) => boolean): Node[][] {
+		const groups: Node[][] = [];
+
+		let current: Node[] = [];
+
+		for (const node of list) {
+			if (!predicate(node)) {
+				if (current.length > 1) {
+					groups.push(current);
+				}
+
+				current = [];
+				continue;
+			}
+
+			current.push(node);
+		}
+
+		if (current.length > 1) {
+			groups.push(current);
+		}
+
+		return groups;
 	}
 
-	return groups;
-}
+	static #groupEdit(source: string, group: Node[], canReorder: boolean): Edit | null {
+		const singleLine = group.filter((node) => {
+			return !DeclarationReorder.#isMultiline(source, node);
+		});
+		const multiline = group.filter((node) => {
+			return DeclarationReorder.#isMultiline(source, node);
+		});
 
-function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | null {
-	const singleLine = group.filter((node) => {
-		return !isMultiline(source, node);
-	});
-	const multiline = group.filter((node) => {
-		return isMultiline(source, node);
-	});
+		if (singleLine.length === 0 || multiline.length === 0) {
+			return null;
+		}
 
-	if (singleLine.length === 0 || multiline.length === 0) {
-		return null;
+		const desired = canReorder ? [...singleLine, ...multiline] : group;
+
+		const replacement = desired
+			.map((node, index) => {
+				const previous = desired[index - 1];
+				const separator = previous && (DeclarationReorder.#isMultiline(source, previous) || DeclarationReorder.#isMultiline(source, node)) ? '\n\n' : index > 0 ? '\n' : '';
+
+				return `${separator}${DeclarationReorder.#nodeSource(source, node)}`;
+			})
+			.join('');
+
+		const first = group[0];
+		const last = group.at(-1);
+
+		if (!first || !last) {
+			return null;
+		}
+
+		const firstStart = Ast.getStart(first);
+		const lastEnd = Ast.getEnd(last);
+
+		if (firstStart < 0 || lastEnd < 0) {
+			return null;
+		}
+
+		const start = SourceText.lineStart(source, firstStart);
+		const current = source.slice(start, lastEnd);
+
+		if (current === replacement) {
+			return null;
+		}
+
+		const alreadyOrdered = desired.every((node, index) => {
+			return node === group[index];
+		});
+
+		if (!canReorder && !alreadyOrdered) {
+			return null;
+		}
+
+		return {
+			start,
+			end: lastEnd,
+			replacement,
+		};
 	}
-
-	const desired = canReorder ? [...singleLine, ...multiline] : group;
-
-	const replacement = desired
-		.map((node, index) => {
-			const previous = desired[index - 1];
-			const separator = previous && (isMultiline(source, previous) || isMultiline(source, node)) ? '\n\n' : index > 0 ? '\n' : '';
-
-			return `${separator}${nodeSource(source, node)}`;
-		})
-		.join('');
-
-	const first = group[0];
-	const last = group.at(-1);
-
-	if (!first || !last) {
-		return null;
-	}
-
-	const firstStart = getStart(first);
-	const lastEnd = getEnd(last);
-
-	if (firstStart < 0 || lastEnd < 0) {
-		return null;
-	}
-
-	const start = SourceText.lineStart(source, firstStart);
-	const current = source.slice(start, lastEnd);
-
-	if (current === replacement) {
-		return null;
-	}
-
-	const alreadyOrdered = desired.every((node, index) => {
-		return node === group[index];
-	});
-
-	if (!canReorder && !alreadyOrdered) {
-		return null;
-	}
-
-	return {
-		start,
-		end: lastEnd,
-		replacement,
-	};
-}
-
-/** Reorders declarations only where the transformation is side-effect safe. */
-export class DeclarationReorder {
 	/**
 	 * Compute declaration-ordering edits.
 	 *
@@ -277,18 +271,18 @@ export class DeclarationReorder {
 			return [];
 		}
 
-		const lists = collectStatementLists(parsed.value.program);
+		const lists = Ast.collectStatementLists(parsed.value.program);
 		const edits: Edit[] = [];
 
 		for (const list of lists) {
-			const importGroups = splitGroups(list, (node) => {
+			const importGroups = DeclarationReorder.#splitGroups(list, (node) => {
 				return node.type === 'ImportDeclaration';
 			});
 
-			const constGroups = splitGroups(list, isConstDeclaration);
+			const constGroups = DeclarationReorder.#splitGroups(list, Ast.isConstDeclaration);
 
 			for (const group of importGroups) {
-				const edit = groupEdit(content, group, true);
+				const edit = DeclarationReorder.#groupEdit(content, group, true);
 
 				if (edit) {
 					edits.push(edit);
@@ -296,11 +290,7 @@ export class DeclarationReorder {
 			}
 
 			for (const group of constGroups) {
-				const edit = groupEdit(
-					content,
-					group,
-					canReorderConstGroup(content, group),
-				);
+				const edit = DeclarationReorder.#groupEdit(content, group, DeclarationReorder.#canReorderConstGroup(content, group));
 
 				if (edit) {
 					edits.push(edit);

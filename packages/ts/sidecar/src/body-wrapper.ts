@@ -1,4 +1,4 @@
-import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
+import { Ast } from '#sidecar/ast';
 import { isErr } from '#sidecar/result';
 import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
@@ -14,35 +14,35 @@ const STATEMENT_BODY_KEYS: Record<string, string[]> = {
 	WithStatement: ['body'],
 };
 
-function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null {
-	if (body.type === 'BlockStatement') {
-		return null;
-	}
-
-	if (body.type === 'IfStatement' && owner.type === 'IfStatement' && owner.alternate === body) {
-		return null;
-	}
-
-	const start = getStart(body);
-	const end = getEnd(body);
-	const ownerStart = getStart(owner);
-
-	if (start < 0 || end < 0 || ownerStart < 0) {
-		return null;
-	}
-
-	const indent = SourceText.lineIndent(source, ownerStart);
-	const bodySource = source.slice(start, end);
-
-	return {
-		start,
-		end,
-		replacement: `{\n${indent}\t${bodySource}\n${indent}}`,
-	};
-}
-
 /** Wraps unbraced statement bodies without changing unparsable source. */
 export class BodyWrapper {
+	static #wrapStatementBody(source: string, owner: Node, body: Node): Edit | null {
+		if (body.type === 'BlockStatement') {
+			return null;
+		}
+
+		if (body.type === 'IfStatement' && owner.type === 'IfStatement' && owner.alternate === body) {
+			return null;
+		}
+
+		const start = Ast.getStart(body);
+		const end = Ast.getEnd(body);
+		const ownerStart = Ast.getStart(owner);
+
+		if (start < 0 || end < 0 || ownerStart < 0) {
+			return null;
+		}
+
+		const indent = SourceText.lineIndent(source, ownerStart);
+		const bodySource = source.slice(start, end);
+
+		return {
+			start,
+			end,
+			replacement: `{\n${indent}\t${bodySource}\n${indent}}`,
+		};
+	}
+
 	/**
 	 * Compute edits that wrap unbraced statement bodies.
 	 *
@@ -59,7 +59,7 @@ export class BodyWrapper {
 
 		const edits: Edit[] = [];
 
-		visit(parsed.value.program, (node) => {
+		Ast.visit(parsed.value.program, (node) => {
 			const bodyKeys = STATEMENT_BODY_KEYS[node.type];
 
 			if (!bodyKeys) {
@@ -67,13 +67,13 @@ export class BodyWrapper {
 			}
 
 			for (const key of bodyKeys) {
-				const body = childNode(node, key);
+				const body = Ast.childNode(node, key);
 
 				if (!body) {
 					continue;
 				}
 
-				const edit = wrapStatementBody(content, node, body);
+				const edit = BodyWrapper.#wrapStatementBody(content, node, body);
 
 				if (edit) {
 					edits.push(edit);

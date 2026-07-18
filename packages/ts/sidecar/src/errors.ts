@@ -1,14 +1,45 @@
 import type { OxcError } from 'oxc-parser';
+import { z } from 'zod';
 
-function hasCode(cause: unknown, code: string): boolean {
-	return typeof cause === 'object' && cause !== null && 'code' in cause && cause.code === code;
+/** Immutable parser diagnostic fields consumed by sidecar reporters. */
+export class OxcErrorDto {
+	/** The parser's human-readable message, when present. */
+	readonly message: string | undefined;
+
+	/** The parser's rendered source codeframe, when present. */
+	readonly codeframe: string | undefined;
+
+	static readonly #schema = z
+		.object({
+			message: z.string()
+				.optional()
+				.catch(undefined),
+			codeframe: z.string()
+				.optional()
+				.catch(undefined),
+		})
+		.passthrough();
+
+	private constructor(message: string | undefined, codeframe: string | undefined) {
+		this.message = message;
+		this.codeframe = codeframe;
+
+		Object.freeze(this);
+	}
+
+	/** Parse one Oxc diagnostic at the parser boundary. */
+	static from(error: unknown): OxcErrorDto {
+		const parsed = OxcErrorDto.#schema.safeParse(error);
+
+		return parsed.success ? new OxcErrorDto(parsed.data.message, parsed.data.codeframe) : new OxcErrorDto(undefined, undefined);
+	}
 }
 
 /** Source text could not be parsed into a trustworthy syntax tree. */
 export class SourceUnparsable extends Error {
 	readonly _tag = 'SourceUnparsable';
 	readonly virtualName: string;
-	readonly errors: readonly OxcError[];
+	readonly errors: readonly OxcErrorDto[];
 
 	/**
 	 * @param virtualName - The filename supplied to the parser.
@@ -18,12 +49,14 @@ export class SourceUnparsable extends Error {
 		super(`cannot parse ${virtualName}`);
 
 		this.virtualName = virtualName;
-		this.errors = errors;
+		this.errors = Object.freeze(errors.map(OxcErrorDto.from));
 	}
 }
 
 /** A source file could not be read. */
 export class SourceFileUnreadable extends Error {
+	static readonly #causeSchema = z.object({ code: z.string() }).passthrough();
+
 	readonly _tag = 'SourceFileUnreadable';
 	readonly path: string;
 	override readonly cause: unknown;
@@ -45,7 +78,9 @@ export class SourceFileUnreadable extends Error {
 	 * @returns `true` when the underlying filesystem error is `ENOENT`.
 	 */
 	isNotFound(): boolean {
-		return hasCode(this.cause, 'ENOENT');
+		const parsed = SourceFileUnreadable.#causeSchema.safeParse(this.cause);
+
+		return parsed.success && parsed.data.code === 'ENOENT';
 	}
 }
 

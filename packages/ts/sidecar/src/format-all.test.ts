@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { SourceFileUnreadable } from '#sidecar/errors';
-import { parseArgs } from '#sidecar/format-all';
+import { CliOptionsDto } from '#sidecar/format-all';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { err, isErr, ok } from '#sidecar/result';
@@ -17,9 +17,7 @@ const formatAllScript = resolve(import.meta.dirname, 'format-all.ts');
 const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
 test('parseArgs splits flags and file sections', () => {
-	const options = parseArgs(
-		['--check', '--oxfmt-bin', '/bin/oxfmt', '--oxfmt-config', '/etc/oxfmtrc.json', '--format-files', 'a.ts', 'b.vue', '--syntax-files', 'a.ts', 'types.d.ts'],
-	);
+	const options = CliOptionsDto.parse(['--check', '--oxfmt-bin', '/bin/oxfmt', '--oxfmt-config', '/etc/oxfmtrc.json', '--format-files', 'a.ts', 'b.vue', '--syntax-files', 'a.ts', 'types.d.ts']);
 
 	assert.equal(isErr(options), false);
 
@@ -33,9 +31,7 @@ test('parseArgs splits flags and file sections', () => {
 });
 
 test('parseArgs accepts empty file sections and rejects stray arguments', () => {
-	const options = parseArgs(
-		['--format-files', '--syntax-files'],
-	);
+	const options = CliOptionsDto.parse(['--format-files', '--syntax-files']);
 
 	assert.equal(isErr(options), false);
 
@@ -47,9 +43,7 @@ test('parseArgs accepts empty file sections and rejects stray arguments', () => 
 
 	assert.deepEqual(options.value.syntaxFiles, []);
 
-	const unexpected = parseArgs(
-		['stray.ts'],
-	);
+	const unexpected = CliOptionsDto.parse(['stray.ts']);
 
 	assert.ok(isErr(unexpected));
 

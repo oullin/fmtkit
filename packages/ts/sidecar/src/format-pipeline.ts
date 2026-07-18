@@ -4,7 +4,7 @@ import { FluentChains } from '#sidecar/fluent-chains';
 import type { ProcessRunner } from '#sidecar/process-runner';
 import { isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
-import { processSegment } from '#sidecar/segment';
+import { Segment } from '#sidecar/segment';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
 import { Sources } from '#sidecar/sources';
 import { VueScript } from '#sidecar/vue-script';
@@ -55,50 +55,48 @@ export type ValidationFailure = {
 
 type ProcessOne = (file: string, mode: FormatMode) => Promise<Result<boolean, SourceFileError>>;
 
-async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-	const results = new Array<R>(items.length);
-
-	let nextIndex = 0;
-
-	async function worker(): Promise<void> {
-		while (true) {
-			const index = nextIndex++;
-
-			if (index >= items.length) {
-				return;
-			}
-
-			const item = items[index];
-
-			if (item === undefined) {
-				continue;
-			}
-
-			results[index] = await fn(item);
-		}
-	}
-
-	const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker);
-
-	await Promise.all(workers);
-
-	return results;
-}
-
-function scriptExtension(openingTag: string): 'ts' | 'tsx' {
-	const lang = VueScript.attribute(openingTag, 'lang') ?? '';
-
-	return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
-}
-
-function scriptPrefix(content: string, scriptStart: number): string {
-	return content.slice(0, scriptStart).replace(/[^\r\n]/g, ' ');
-}
-
 /** Coordinates formatting and validation through narrow filesystem and process ports. */
 export class FormatPipeline {
 	readonly #sourceFiles: SourceFiles;
 	readonly #processRunner: ProcessRunner;
+
+	static async #mapPool<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+		const results = new Array<R>(items.length);
+
+		let nextIndex = 0;
+
+		const worker = async (): Promise<void> => {
+			while (true) {
+				const index = nextIndex++;
+
+				if (index >= items.length) {
+					return;
+				}
+
+				const item = items[index];
+
+				if (item !== undefined) {
+					results[index] = await operation(item);
+				}
+			}
+		};
+
+		const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker);
+
+		await Promise.all(workers);
+
+		return results;
+	}
+
+	static #scriptExtension(openingTag: string): 'ts' | 'tsx' {
+		const lang = VueScript.attribute(openingTag, 'lang') ?? '';
+
+		return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
+	}
+
+	static #scriptPrefix(content: string, scriptStart: number): string {
+		return content.slice(0, scriptStart).replace(/[^\r\n]/g, ' ');
+	}
 
 	/**
 	 * @param dependencies - The filesystem and process ports used by the pipeline.
@@ -134,7 +132,7 @@ export class FormatPipeline {
 			});
 
 			for (const segment of [...segments].reverse()) {
-				const rewritten = processSegment(segment.content, `${path}.script.ts`);
+				const rewritten = Segment.process(segment.content, `${path}.script.ts`);
 
 				if (rewritten === segment.content) {
 					continue;
@@ -143,7 +141,7 @@ export class FormatPipeline {
 				updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
 			}
 		} else {
-			updated = processSegment(original, path);
+			updated = Segment.process(original, path);
 		}
 
 		return this.#writeChanged(path, original, updated, mode);
@@ -170,19 +168,15 @@ export class FormatPipeline {
 	 * @returns One effect-free reporting outcome per input path.
 	 */
 	async runPass(label: string, files: string[], mode: FormatMode, processOne: ProcessOne): Promise<PassOutcome[]> {
-		return mapPool(
-			files,
-			availableParallelism(),
-			async (file): Promise<PassOutcome> => {
-				const outcome = await processOne(file, mode);
+		return FormatPipeline.#mapPool(files, availableParallelism(), async (file): Promise<PassOutcome> => {
+			const outcome = await processOne(file, mode);
 
-				if (isErr(outcome)) {
-					return { label, file, changed: false, error: outcome.error };
-				}
+			if (isErr(outcome)) {
+				return { label, file, changed: false, error: outcome.error };
+			}
 
-				return { label, file, changed: outcome.value, error: null };
-			},
-		);
+			return { label, file, changed: outcome.value, error: null };
+		});
 	}
 
 	/**
@@ -218,40 +212,36 @@ export class FormatPipeline {
 	 * @returns Carried read and parse failures in deterministic input order.
 	 */
 	async validate(files: string[]): Promise<ValidationFailure[]> {
-		const failures = await mapPool(
-			files,
-			availableParallelism(),
-			async (file): Promise<ValidationFailure[]> => {
-				const read = await this.#sourceFiles.readText(file);
+		const failures = await FormatPipeline.#mapPool(files, availableParallelism(), async (file): Promise<ValidationFailure[]> => {
+			const read = await this.#sourceFiles.readText(file);
 
-				if (isErr(read)) {
-					return [{ file, error: read.error }];
+			if (isErr(read)) {
+				return [{ file, error: read.error }];
+			}
+
+			if (!file.endsWith('.vue')) {
+				const parsed = Sources.parse(file, read.value);
+
+				return isErr(parsed) ? [{ file, error: parsed.error }] : [];
+			}
+
+			const vueFailures: ValidationFailure[] = [];
+
+			for (const block of VueScript.extractBlocks(read.value)) {
+				if (!VueScript.isJavaScriptOrTypeScript(block.openTag)) {
+					continue;
 				}
 
-				if (!file.endsWith('.vue')) {
-					const parsed = Sources.parse(file, read.value);
+				const virtualContent = FormatPipeline.#scriptPrefix(read.value, block.start) + block.content;
+				const parsed = Sources.parse(`${file}.script.${FormatPipeline.#scriptExtension(block.openTag)}`, virtualContent);
 
-					return isErr(parsed) ? [{ file, error: parsed.error }] : [];
+				if (isErr(parsed)) {
+					vueFailures.push({ file, error: parsed.error });
 				}
+			}
 
-				const vueFailures: ValidationFailure[] = [];
-
-				for (const block of VueScript.extractBlocks(read.value)) {
-					if (!VueScript.isJavaScriptOrTypeScript(block.openTag)) {
-						continue;
-					}
-
-					const virtualContent = scriptPrefix(read.value, block.start) + block.content;
-					const parsed = Sources.parse(`${file}.script.${scriptExtension(block.openTag)}`, virtualContent);
-
-					if (isErr(parsed)) {
-						vueFailures.push({ file, error: parsed.error });
-					}
-				}
-
-				return vueFailures;
-			},
-		);
+			return vueFailures;
+		});
 
 		return failures.flat();
 	}

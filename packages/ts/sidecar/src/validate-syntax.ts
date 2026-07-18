@@ -1,19 +1,21 @@
 import { pathToFileURL } from 'node:url';
-import type { OxcError } from 'oxc-parser';
+import type { OxcErrorDto } from '#sidecar/errors';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
 
-function formatError(file: string, error: OxcError): string {
-	if (typeof error.codeframe === 'string' && error.codeframe.length > 0) {
-		return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
-	}
+class SyntaxErrorReporter {
+	static format(file: string, error: OxcErrorDto): string {
+		if (error.codeframe && error.codeframe.length > 0) {
+			return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
+		}
 
-	if (typeof error.message === 'string' && error.message.length > 0) {
-		return `[validate-syntax] ${file}: ${error.message}`;
-	}
+		if (error.message && error.message.length > 0) {
+			return `[validate-syntax] ${file}: ${error.message}`;
+		}
 
-	return `[validate-syntax] ${file}: syntax validation failed`;
+		return `[validate-syntax] ${file}: syntax validation failed`;
+	}
 }
 
 async function main(): Promise<void> {
@@ -44,7 +46,7 @@ async function main(): Promise<void> {
 		}
 
 		for (const error of failure.error.errors) {
-			diagnostics.push(formatError(failure.file, error));
+			diagnostics.push(SyntaxErrorReporter.format(failure.file, error));
 		}
 	}
 

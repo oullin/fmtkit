@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { dirExists, listSourceFiles } from '#sidecar/files';
+import { Files } from '#sidecar/files';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { isErr } from '#sidecar/result';
@@ -39,9 +39,9 @@ async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
 
 test('dirExists reports existing directories and missing paths', async () => {
 	await withTempDir(async (dir) => {
-		assert.equal(await dirExists(dir), true);
+		assert.equal(await Files.dirExists(dir), true);
 
-		assert.equal(await dirExists(join(dir, 'missing')), false);
+		assert.equal(await Files.dirExists(join(dir, 'missing')), false);
 	});
 });
 
@@ -62,7 +62,7 @@ test('listSourceFiles returns TypeScript and Vue files only', async () => {
 			'# Notes\n',
 		);
 
-		const files = (await listSourceFiles(dir)).map((file) => {
+		const files = (await Files.listSourceFiles(dir)).map((file) => {
 			return file.slice(dir.length + 1);
 		});
 

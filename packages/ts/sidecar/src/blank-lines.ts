@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { isTargetFile } from '#sidecar/file-targets';
+import { FileTargets } from '#sidecar/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
 		.filter((arg) => {
 			return arg !== '--check';
 		})
-		.filter(isTargetFile);
+		.filter(FileTargets.isTargetFile);
 
 	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 

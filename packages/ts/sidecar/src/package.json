@@ -31,6 +31,8 @@
 		"#sidecar/files.js": "./files.ts",
 		"#sidecar/fluent-chains": "./fluent-chains.ts",
 		"#sidecar/fluent-chains.js": "./fluent-chains.ts",
+		"#sidecar/node-schema": "./node-schema.ts",
+		"#sidecar/node-schema.js": "./node-schema.ts",
 		"#sidecar/process-runner": "./process-runner.ts",
 		"#sidecar/process-runner.js": "./process-runner.ts",
 		"#sidecar/result": "./result.ts",

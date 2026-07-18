@@ -1,22 +1,22 @@
-import { collectStatementLists, getEnd, getStart } from '#sidecar/ast';
+import { Ast } from '#sidecar/ast';
 import { isErr } from '#sidecar/result';
 import { Rules } from '#sidecar/rules';
 import { Sources } from '#sidecar/sources';
 
-function countNewlines(source: string, from: number, to: number): number {
-	let count = 0;
-
-	for (let i = from; i < to; i++) {
-		if (source.charCodeAt(i) === 10) {
-			count++;
-		}
-	}
-
-	return count;
-}
-
 /** Computes and applies the blank lines required by formatter rules. */
 export class BlankLines {
+	static #countNewlines(source: string, from: number, to: number): number {
+		let count = 0;
+
+		for (let i = from; i < to; i++) {
+			if (source.charCodeAt(i) === 10) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
 	/**
 	 * Compute positions where a blank line must be inserted.
 	 *
@@ -31,7 +31,7 @@ export class BlankLines {
 			return [];
 		}
 
-		const lists = collectStatementLists(parsed.value.program);
+		const lists = Ast.collectStatementLists(parsed.value.program);
 		const positions: number[] = [];
 
 		for (const list of lists) {
@@ -47,14 +47,14 @@ export class BlankLines {
 					continue;
 				}
 
-				const prevEnd = getEnd(prev);
-				const nextStart = getStart(next);
+				const prevEnd = Ast.getEnd(prev);
+				const nextStart = Ast.getStart(next);
 
 				if (prevEnd < 0 || nextStart < 0 || nextStart <= prevEnd) {
 					continue;
 				}
 
-				if (countNewlines(content, prevEnd, nextStart) >= 2) {
+				if (BlankLines.#countNewlines(content, prevEnd, nextStart) >= 2) {
 					continue;
 				}
 

@@ -92,6 +92,7 @@ pin() {
 oxfmt_pin="$(pin oxfmt)"
 oxlint_pin="$(pin oxlint)"
 oxc_parser_pin="$(pin oxc-parser)"
+zod_pin="$(pin zod)"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -116,7 +117,8 @@ cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 	npm install --no-save --no-audit --no-fund \
 		"oxfmt@${oxfmt_pin}" \
 		"oxlint@${oxlint_pin}" \
-		"oxc-parser@${oxc_parser_pin}" >/dev/null
+		"oxc-parser@${oxc_parser_pin}" \
+		"zod@${zod_pin}" >/dev/null
 )
 
 # oxfmt formats embedded code (Vue <template>/<style>, markdown, HTML) through a

@@ -1,4 +1,4 @@
-import { getEnd, getStart, visit } from '#sidecar/ast';
+import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
 import { lineIndent, parseCleanly } from '#sidecar/pass-utils';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -56,7 +56,7 @@ export function computeBodyWrapEdits(content: string, virtualName: string): Edit
 		}
 
 		for (const key of bodyKeys) {
-			const body = node[key] as Node | undefined;
+			const body = childNode(node, key);
 
 			if (!body) {
 				continue;

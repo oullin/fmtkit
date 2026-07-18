@@ -1,4 +1,4 @@
-import { collectStatementLists, getEnd, getStart, visit } from '#sidecar/ast';
+import { childNode, childNodes, collectStatementLists, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
 import { isConstDeclaration, lineIndent, lineStart, parseCleanly } from '#sidecar/pass-utils';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -32,33 +32,43 @@ function isSideEffectSafeExpression(node: Node | undefined): boolean {
 			return true;
 
 		case 'ArrayExpression': {
-			const elements = node.elements as (Node | null)[] | undefined;
+			const elements = node.elements;
 
 			return (
 				Array.isArray(elements) &&
 				elements.every((element) => {
-					return element === null || isSideEffectSafeExpression(element);
+					if (element === null) {
+						return true;
+					}
+
+					return isNode(element) && isSideEffectSafeExpression(element);
 				})
 			);
 		}
 
 		case 'ObjectExpression': {
-			const properties = node.properties as Node[] | undefined;
+			const properties = node.properties;
 
 			return (
 				Array.isArray(properties) &&
 				properties.every((property) => {
+					if (!isNode(property)) {
+						return false;
+					}
+
 					if (property.type === 'SpreadElement') {
-						return isSideEffectSafeExpression(property.argument as Node | undefined);
+						return isSideEffectSafeExpression(
+							childNode(property, 'argument'),
+						);
 					}
 
 					if (property.type !== 'ObjectProperty' && property.type !== 'Property') {
 						return false;
 					}
 
-					const computed = Boolean((property as { computed?: unknown }).computed);
-					const key = property.key as Node | undefined;
-					const value = property.value as Node | undefined;
+					const computed = Boolean(property.computed);
+					const key = childNode(property, 'key');
+					const value = childNode(property, 'value');
 
 					return (!computed || isSideEffectSafeExpression(key)) && isSideEffectSafeExpression(value);
 				})
@@ -66,12 +76,12 @@ function isSideEffectSafeExpression(node: Node | undefined): boolean {
 		}
 
 		case 'TemplateLiteral': {
-			const expressions = node.expressions as Node[] | undefined;
+			const expressions = node.expressions;
 
 			return (
 				Array.isArray(expressions) &&
 				expressions.every((expression) => {
-					return isSideEffectSafeExpression(expression);
+					return isNode(expression) && isSideEffectSafeExpression(expression);
 				})
 			);
 		}
@@ -86,14 +96,14 @@ function isSafeConstDeclaration(node: Node): boolean {
 		return false;
 	}
 
-	const declarations = node.declarations as Node[] | undefined;
-
 	return (
-		Array.isArray(declarations) &&
-		declarations.every((declaration) => {
-			const id = declaration.id as Node | undefined;
+		Array.isArray(node.declarations) &&
+		childNodes(node, 'declarations').every((declaration) => {
+			const id = childNode(declaration, 'id');
 
-			return id?.type === 'Identifier' && isSideEffectSafeExpression(declaration.init as Node | undefined);
+			return id?.type === 'Identifier' && isSideEffectSafeExpression(
+				childNode(declaration, 'init'),
+			);
 		})
 	);
 }
@@ -102,15 +112,9 @@ function declaredNames(nodes: Node[]): Set<string> {
 	const names = new Set<string>();
 
 	for (const node of nodes) {
-		const declarations = node.declarations as Node[] | undefined;
-
-		if (!Array.isArray(declarations)) {
-			continue;
-		}
-
-		for (const declaration of declarations) {
-			const id = declaration.id as Node | undefined;
-			const name = (id as { name?: unknown } | undefined)?.name;
+		for (const declaration of childNodes(node, 'declarations')) {
+			const id = childNode(declaration, 'id');
+			const name = id ? nodeName(id) : undefined;
 
 			if (id?.type === 'Identifier' && typeof name === 'string') {
 				names.add(name);
@@ -129,7 +133,7 @@ function usesAnyIdentifier(node: Node, names: Set<string>): boolean {
 			return;
 		}
 
-		const name = (child as { name?: unknown }).name;
+		const name = nodeName(child);
 
 		if (typeof name === 'string' && names.has(name)) {
 			found = true;
@@ -149,12 +153,14 @@ function canReorderConstGroup(source: string, group: Node[]): boolean {
 	}
 
 	for (let i = 0; i < group.length; i++) {
-		if (!isMultiline(source, group[i])) {
+		const node = group[i];
+
+		if (!node || !isMultiline(source, node)) {
 			continue;
 		}
 
 		const names = declaredNames(
-			[group[i]],
+			[node],
 		);
 
 		if (
@@ -217,11 +223,15 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 		})
 		.join('');
 
-	const firstStart = getStart(group[0]);
+	const first = group[0];
+	const last = group.at(-1);
 
-	const lastEnd = getEnd(
-		group.at(-1)!,
-	);
+	if (!first || !last) {
+		return null;
+	}
+
+	const firstStart = getStart(first);
+	const lastEnd = getEnd(last);
 
 	if (firstStart < 0 || lastEnd < 0) {
 		return null;

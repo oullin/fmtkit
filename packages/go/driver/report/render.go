@@ -49,7 +49,7 @@ func combinedResult(report Combined) string {
 		return "fail"
 	}
 
-	return report.Formatter.Result
+	return string(report.Formatter.Result)
 }
 
 func vetStatus(report vet.Report) string {

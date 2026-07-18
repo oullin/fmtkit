@@ -2,6 +2,7 @@ package sourcefiles
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -57,8 +58,8 @@ func (s Selection) gitCommands(scope string) [][]string {
 }
 
 // Collect lists the TS/Vue files under the given scopes.
-func Collect(opts Options) ([]string, []string, error) {
-	return collect(opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
+	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
 		return isTargetFile(path, opts.IncludeDeclarations)
 	})
 }
@@ -67,15 +68,15 @@ func Collect(opts Options) ([]string, []string, error) {
 // added — under the given scopes, whatever its extension. Callers do their own
 // filtering — the Go formatter, for one, has its own notion of which files it
 // owns.
-func ChangedPaths(cwd string, scopes []string) ([]string, error) {
-	files, _, err := collect(cwd, scopes, SelectionChanged, func(string) bool {
+func ChangedPaths(ctx context.Context, cwd string, scopes []string) ([]string, error) {
+	files, _, err := collect(ctx, cwd, scopes, SelectionChanged, func(string) bool {
 		return true
 	})
 
 	return files, err
 }
 
-func collect(cwd string, scopes []string, selection Selection, keep func(string) bool) ([]string, []string, error) {
+func collect(ctx context.Context, cwd string, scopes []string, selection Selection, keep func(string) bool) ([]string, []string, error) {
 	if strings.TrimSpace(cwd) == "" {
 		var err error
 
@@ -111,7 +112,7 @@ func collect(cwd string, scopes []string, selection Selection, keep func(string)
 			return nil, warnings, err
 		}
 
-		entries, err := gitFiles(cwd, absolute, selection)
+		entries, err := gitFiles(ctx, cwd, absolute, selection)
 
 		if err != nil {
 			return nil, warnings, err
@@ -144,11 +145,11 @@ func collect(cwd string, scopes []string, selection Selection, keep func(string)
 	return files, warnings, nil
 }
 
-func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
+func gitFiles(ctx context.Context, cwd, scope string, selection Selection) ([]string, error) {
 	entries := []string{}
 
 	for _, args := range selection.gitCommands(scope) {
-		found, err := runGit(cwd, args)
+		found, err := runGit(ctx, cwd, args)
 
 		if err != nil {
 			return nil, err
@@ -160,8 +161,8 @@ func gitFiles(cwd, scope string, selection Selection) ([]string, error) {
 	return entries, nil
 }
 
-func runGit(cwd string, args []string) ([]string, error) {
-	cmd := exec.Command("git", args...)
+func runGit(ctx context.Context, cwd string, args []string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = cwd
 
 	var stderr bytes.Buffer
@@ -174,10 +175,10 @@ func runGit(cwd string, args []string) ([]string, error) {
 		reason := strings.TrimSpace(stderr.String())
 
 		if reason == "" {
-			reason = err.Error()
+			return nil, fmt.Errorf("git %s failed: %w", args[0], err)
 		}
 
-		return nil, fmt.Errorf("git %s failed: %s", args[0], reason)
+		return nil, fmt.Errorf("git %s failed: %s: %w", args[0], reason, err)
 	}
 
 	parts := bytes.Split(out, []byte{0})

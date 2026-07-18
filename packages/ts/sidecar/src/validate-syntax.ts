@@ -10,14 +10,10 @@ type ParseError = {
 	codeframe?: unknown;
 };
 
-type ParseResult = {
-	errors?: ParseError[];
-};
-
 function parseErrors(virtualName: string, content: string): ParseError[] {
-	const parsed = parseSync(virtualName, content) as ParseResult;
+	const parsed = parseSync(virtualName, content);
 
-	return parsed.errors ?? [];
+	return parsed.errors;
 }
 
 function formatError(file: string, error: ParseError): string {

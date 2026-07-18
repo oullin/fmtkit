@@ -1,4 +1,4 @@
-import { getEnd, getStart, visit } from '#sidecar/ast';
+import { childNode, childNodes, getEnd, getStart, isNode, visit } from '#sidecar/ast';
 import { applyEdits } from '#sidecar/edits';
 import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf } from '#sidecar/pass-utils';
 import type { CallParens } from '#sidecar/pass-utils';
@@ -18,7 +18,7 @@ function unwrapExpression(node: Node | undefined): Node | undefined {
 			current.type === 'TSNonNullExpression' ||
 			current.type === 'TSTypeAssertion')
 	) {
-		current = current.expression as Node | undefined;
+		current = childNode(current, 'expression');
 	}
 
 	return current;
@@ -28,18 +28,20 @@ function calleeParens(source: string, call: Node): CallParens | null {
 	return callParens(
 		source,
 		call,
-		unwrapExpression(call.callee as Node | undefined),
+		unwrapExpression(
+			childNode(call, 'callee'),
+		),
 	);
 }
 
 function callArguments(call: Node): Node[] {
-	const args = call.arguments;
-
-	return Array.isArray(args) ? (args as Node[]) : [];
+	return childNodes(call, 'arguments');
 }
 
 function isMethodCall(call: Node): boolean {
-	const callee = unwrapExpression(call.callee as Node | undefined);
+	const callee = unwrapExpression(
+		childNode(call, 'callee'),
+	);
 
 	return callee?.type === 'MemberExpression';
 }
@@ -64,14 +66,14 @@ function collectParents(node: Node, parents: WeakMap<Node, Node>): void {
 
 		if (Array.isArray(value)) {
 			for (const child of value) {
-				if (child && typeof child === 'object' && typeof (child as Node).type === 'string') {
-					parents.set(child as Node, node);
-					collectParents(child as Node, parents);
+				if (isNode(child)) {
+					parents.set(child, node);
+					collectParents(child, parents);
 				}
 			}
-		} else if (typeof (value as Node).type === 'string') {
-			parents.set(value as Node, node);
-			collectParents(value as Node, parents);
+		} else if (isNode(value)) {
+			parents.set(value, node);
+			collectParents(value, parents);
 		}
 	}
 }

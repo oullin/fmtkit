@@ -29,6 +29,10 @@ export function computeInsertPositions(content: string, virtualName: string): nu
 			const prev = list[i - 1];
 			const next = list[i];
 
+			if (!prev || !next) {
+				continue;
+			}
+
 			if (!needsBlankLine(prev, next)) {
 				continue;
 			}

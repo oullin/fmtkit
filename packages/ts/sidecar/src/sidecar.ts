@@ -22,16 +22,26 @@ const bindings: Record<Mode, string> = {
 	oxlint: join(here, 'oxlint.node'),
 };
 
-let mode: Mode | undefined;
+/**
+ * Narrow a raw CLI or environment string to a known sidecar mode.
+ *
+ * @param value - The candidate mode string.
+ * @returns The matching mode, or `undefined` when it is not one.
+ */
+function parseMode(value: string | undefined): Mode | undefined {
+	return modes.find((m) => {
+		return m === value;
+	});
+}
 
-if (modes.includes(process.argv[2] as Mode)) {
-	mode = process.argv[2] as Mode;
+let mode = parseMode(process.argv[2]);
 
+if (mode) {
 	process.argv.splice(2, 1);
-} else if (modes.includes(process.env.FMTKIT_SIDECAR_MODE as Mode)) {
+} else {
 	// The pipeline spawns this executable as its `--oxfmt-bin` with oxfmt's own
 	// argv, so the mode has to travel through the environment instead.
-	mode = process.env.FMTKIT_SIDECAR_MODE as Mode;
+	mode = parseMode(process.env.FMTKIT_SIDECAR_MODE);
 }
 
 switch (mode) {

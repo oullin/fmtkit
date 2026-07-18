@@ -1,6 +1,6 @@
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { parseSync } from 'oxc-parser';
-import { getEnd, getStart } from '#sidecar/ast';
+import { childNode, declarationKind, getEnd, getStart, isNode } from '#sidecar/ast';
 import type { Edit, Node } from '#sidecar/types';
 
 export type ParseResult = {
@@ -26,13 +26,20 @@ let atomicWriteCounter = 0;
 // parseCleanly returns null when the source has syntax errors, so passes
 // never compute edits from a broken tree.
 export function parseCleanly(virtualName: string, content: string): ParseResult | null {
-	const parsed = parseSync(virtualName, content) as unknown as { program: Node; comments?: Node[]; errors?: unknown[] };
+	const parsed = parseSync(virtualName, content);
 
-	if (parsed.errors && parsed.errors.length > 0) {
+	if (parsed.errors.length > 0) {
 		return null;
 	}
 
-	return { program: parsed.program, comments: parsed.comments ?? [] };
+	const program: unknown = parsed.program;
+	const comments: unknown[] = parsed.comments;
+
+	if (!isNode(program)) {
+		return null;
+	}
+
+	return { program, comments: comments.filter(isNode) };
 }
 
 export function isDeclarationFile(virtualName: string): boolean {
@@ -73,14 +80,14 @@ export function hasCommentBetween(comments: Node[], from: number, to: number): b
 
 export function unwrapChainExpression(node: Node | undefined): Node | undefined {
 	if (node?.type === 'ChainExpression') {
-		return node.expression as Node | undefined;
+		return childNode(node, 'expression');
 	}
 
 	return node;
 }
 
 export function isConstDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'const';
+	return node.type === 'VariableDeclaration' && declarationKind(node) === 'const';
 }
 
 // callParens locates the argument parentheses of a call whose callee has
@@ -140,11 +147,11 @@ export function extractVueScripts(content: string): VueScriptBlock[] {
 	let match: RegExpExecArray | null;
 
 	while ((match = VUE_SCRIPT_REGEX.exec(content)) !== null) {
-		const openTag = match[1];
+		const openTag = match[1] ?? '';
 
 		blocks.push({
 			openTag,
-			content: match[2],
+			content: match[2] ?? '',
 			start: match.index + openTag.length,
 		});
 	}
@@ -155,8 +162,9 @@ export function extractVueScripts(content: string): VueScriptBlock[] {
 export function scriptAttribute(openTag: string, name: string): string | null {
 	const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
 	const match = openTag.match(pattern);
+	const value = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
 
-	return match ? (match[1] ?? match[2] ?? match[3]).toLowerCase() : null;
+	return value === undefined ? null : value.toLowerCase();
 }
 
 export function isJavaScriptOrTypeScript(openTag: string): boolean {

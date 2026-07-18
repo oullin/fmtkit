@@ -1,3 +1,4 @@
+import { childNode, childNodes, declarationKind, isNode, nodeName } from '#sidecar/ast';
 import { isConstDeclaration } from '#sidecar/pass-utils';
 import type { Node } from '#sidecar/types';
 
@@ -62,7 +63,7 @@ function isIdentifierNamed(node: Node | undefined, names: Set<string>): boolean 
 		return false;
 	}
 
-	const name = (node as { name?: unknown }).name;
+	const name = nodeName(node);
 
 	return typeof name === 'string' && names.has(name);
 }
@@ -72,26 +73,28 @@ function isVuePrimitiveCall(node: Node | undefined): boolean {
 		return false;
 	}
 
-	return isIdentifierNamed(node.callee as Node | undefined, VUE_PRIMITIVE_CALLS);
+	return isIdentifierNamed(
+		childNode(node, 'callee'),
+		VUE_PRIMITIVE_CALLS,
+	);
 }
 
 function isVuePrimitiveStatement(node: Node): boolean {
 	if (node.type === 'ExpressionStatement') {
-		return isVuePrimitiveCall(node.expression as Node | undefined);
+		return isVuePrimitiveCall(
+			childNode(node, 'expression'),
+		);
 	}
 
-	if (node.type !== 'VariableDeclaration' || (node as { kind?: unknown }).kind !== 'const') {
+	if (node.type !== 'VariableDeclaration' || declarationKind(node) !== 'const') {
 		return false;
 	}
 
-	const declarations = node.declarations as Node[] | undefined;
-
-	return (
-		Array.isArray(declarations) &&
-		declarations.some((declaration) => {
-			return isVuePrimitiveCall(declaration.init as Node | undefined);
-		})
-	);
+	return childNodes(node, 'declarations').some((declaration) => {
+		return isVuePrimitiveCall(
+			childNode(declaration, 'init'),
+		);
+	});
 }
 
 function needsBlankLineAbove(next: Node): boolean {
@@ -116,7 +119,7 @@ function isTypeDeclarationAbove(prev: Node): boolean {
 	}
 
 	if (prev.type === 'ExportNamedDeclaration') {
-		const declType = (prev.declaration as Node | undefined)?.type;
+		const declType = childNode(prev, 'declaration')?.type;
 
 		return declType ? TS_TYPE_DECLARATION_TYPES.has(declType) : false;
 	}
@@ -134,7 +137,7 @@ function isStructuredPreviousStatement(prev: Node): boolean {
 	}
 
 	if (prev.type === 'ExportNamedDeclaration' || prev.type === 'ExportDefaultDeclaration') {
-		const declType = (prev.declaration as Node | undefined)?.type;
+		const declType = childNode(prev, 'declaration')?.type;
 
 		return Boolean(declType && STRUCTURED_PREVIOUS_STATEMENTS.has(declType));
 	}
@@ -151,7 +154,7 @@ function isPropertyToMethodTransition(prev: Node, next: Node): boolean {
 }
 
 function isLetDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'let';
+	return node.type === 'VariableDeclaration' && declarationKind(node) === 'let';
 }
 
 function containsAwait(node: Node): boolean {
@@ -171,12 +174,12 @@ function containsAwait(node: Node): boolean {
 		if (Array.isArray(value)) {
 			if (
 				value.some((child) => {
-					return child && typeof child === 'object' && typeof (child as Node).type === 'string' && containsAwait(child as Node);
+					return isNode(child) && containsAwait(child);
 				})
 			) {
 				return true;
 			}
-		} else if (typeof (value as Node).type === 'string' && containsAwait(value as Node)) {
+		} else if (isNode(value) && containsAwait(value)) {
 			return true;
 		}
 	}
@@ -237,7 +240,7 @@ export function classifyMember(node: Node): 'property' | 'constructor' | 'method
 		return 'property';
 	}
 
-	if (node.type === 'MethodDefinition' && (node as { kind?: string }).kind === 'constructor') {
+	if (node.type === 'MethodDefinition' && declarationKind(node) === 'constructor') {
 		return 'constructor';
 	}
 

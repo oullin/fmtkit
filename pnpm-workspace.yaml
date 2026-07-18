@@ -1,3 +1,4 @@
 packages:
     - packages/go/*
+    - packages/ts/infra
     - packages/ts/sidecar

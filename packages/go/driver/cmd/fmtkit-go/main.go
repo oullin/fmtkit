@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"go.ollin.sh/fmtkit/driver/internal/cli"
 )
@@ -11,10 +14,14 @@ import (
 var version = "dev"
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+
+	defer stop()
+
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout, stderr io.Writer) int {
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		printUsage(stderr)
 
@@ -25,13 +32,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "check":
 		return cli.
 			NewRunner(stdout, stderr).
-			Run(cli.CheckMode, args[1:])
+			Run(ctx, cli.CheckMode, args[1:])
 	case "format":
 		return cli.
 			NewRunner(stdout, stderr).
-			Run(cli.FormatMode, args[1:])
+			Run(ctx, cli.FormatMode, args[1:])
 	case "sources":
-		return cli.RunSources(args[1:], stdout, stderr)
+		return cli.RunSources(ctx, args[1:], stdout, stderr)
 	case "version", "--version", "-version":
 		_, _ = fmt.Fprintf(stdout, "fmtkit %s\n", version)
 

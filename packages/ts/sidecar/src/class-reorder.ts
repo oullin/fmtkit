@@ -1,4 +1,4 @@
-import { collectClassBodies, getEnd, getStart } from '#sidecar/ast';
+import { childNodes, collectClassBodies, getEnd, getStart } from '#sidecar/ast';
 import { parseCleanly } from '#sidecar/pass-utils';
 import { classifyMember } from '#sidecar/rules';
 import type { Edit, Node } from '#sidecar/types';
@@ -8,10 +8,17 @@ function containsComment(s: string): boolean {
 }
 
 function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): boolean {
+	const first = members[0];
+	const last = members[members.length - 1];
+
+	if (!first || !last) {
+		return false;
+	}
+
 	const bodyStart = getStart(body);
 	const bodyEnd = getEnd(body);
-	const firstStart = getStart(members[0]);
-	const lastEnd = getEnd(members[members.length - 1]);
+	const firstStart = getStart(first);
+	const lastEnd = getEnd(last);
 
 	if (containsComment(
 		source.slice(bodyStart + 1, firstStart),
@@ -20,7 +27,14 @@ function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): 
 	}
 
 	for (let i = 0; i < members.length - 1; i++) {
-		const gap = source.slice(getEnd(members[i]), getStart(members[i + 1]));
+		const current = members[i];
+		const following = members[i + 1];
+
+		if (!current || !following) {
+			continue;
+		}
+
+		const gap = source.slice(getEnd(current), getStart(following));
 
 		if (containsComment(gap)) {
 			return true;
@@ -33,9 +47,9 @@ function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): 
 }
 
 function computeClassReorderEdit(source: string, body: Node): Edit | null {
-	const members = body.body as Node[] | undefined;
+	const members = childNodes(body, 'body');
 
-	if (!Array.isArray(members) || members.length < 2) {
+	if (members.length < 2) {
 		return null;
 	}
 
@@ -76,7 +90,14 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 		return null;
 	}
 
-	const firstStart = getStart(members[0]);
+	const firstMember = members[0];
+	const lastOriginal = members[members.length - 1];
+
+	if (!firstMember || !lastOriginal) {
+		return null;
+	}
+
+	const firstStart = getStart(firstMember);
 	const prefix = source.slice(bodyStart + 1, firstStart);
 	const indentMatch = prefix.match(/\n([ \t]*)$/);
 
@@ -90,7 +111,6 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 		return source.slice(getStart(m), getEnd(m));
 	});
 
-	const lastOriginal = members[members.length - 1];
 	const closing = source.slice(getEnd(lastOriginal), bodyEnd - 1);
 	const replacement = `\n${indent}${memberSlices.join(`\n${indent}`)}${closing}`;
 

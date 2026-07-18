@@ -49,6 +49,10 @@ export function parseArgs(argv: string[]): CliOptions {
 	for (let i = 0; i < argv.length; i++) {
 		const arg = argv[i];
 
+		if (arg === undefined) {
+			continue;
+		}
+
 		if (arg === '--check') {
 			options.check = true;
 			section = null;
@@ -85,7 +89,13 @@ export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => 
 				return;
 			}
 
-			results[index] = await fn(items[index]);
+			const item = items[index];
+
+			if (item === undefined) {
+				continue;
+			}
+
+			results[index] = await fn(item);
 		}
 	}
 

@@ -28,6 +28,8 @@
 		"#sidecar/files.js": "./src/files.ts",
 		"#sidecar/fluent-chains": "./src/fluent-chains.ts",
 		"#sidecar/fluent-chains.js": "./src/fluent-chains.ts",
+		"#sidecar/result": "./src/result.ts",
+		"#sidecar/result.js": "./src/result.ts",
 		"#sidecar/rules": "./src/rules.ts",
 		"#sidecar/rules.js": "./src/rules.ts",
 		"#sidecar/segment": "./src/segment.ts",

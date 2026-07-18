@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -24,7 +25,7 @@ func New(version string, stdout, stderr io.Writer) App {
 }
 
 // Run dispatches a subcommand to its handler; each mode lives in its own file.
-func (a App) Run(args []string) int {
+func (a App) Run(ctx context.Context, args []string) int {
 	if len(args) == 0 {
 		printUsage(a.stderr)
 
@@ -36,19 +37,19 @@ func (a App) Run(args []string) int {
 
 	switch mode {
 	case "format":
-		return a.runFormat(rest)
+		return a.runFormat(ctx, rest)
 	case "format-all":
-		return a.runFormatAll(rest)
+		return a.runFormatAll(ctx, rest)
 	case "ts":
-		return a.runTS(rest)
+		return a.runTS(ctx, rest)
 	case "lint":
-		return a.runLint(rest)
+		return a.runLint(ctx, rest)
 	case "go":
-		return a.runGo(rest)
+		return a.runGo(ctx, rest)
 	case "check":
 		return cli.
 			NewRunner(a.stdout, a.stderr).
-			Run(cli.CheckMode, rest)
+			Run(ctx, cli.CheckMode, rest)
 	case "version", "--version", "-version":
 		return a.printVersion()
 	case "help", "--help", "-h":

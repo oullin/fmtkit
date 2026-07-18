@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -45,21 +46,21 @@ const (
 
 func stubTools(log *[]invocation, tsErr, lintErr error, goCode int) Tools {
 	return Tools{
-		TS: func(scopes []string, output io.Writer) error {
+		TS: func(_ context.Context, scopes []string, output io.Writer) error {
 			*log = append(*log, invocation{"ts", scopes})
 
 			_, _ = io.WriteString(output, stubTSOutput)
 
 			return tsErr
 		},
-		Lint: func(scopes []string, output io.Writer) error {
+		Lint: func(_ context.Context, scopes []string, output io.Writer) error {
 			*log = append(*log, invocation{"lint", scopes})
 
 			_, _ = io.WriteString(output, stubLintOutput)
 
 			return lintErr
 		},
-		Go: func(args []string, output io.Writer) int {
+		Go: func(_ context.Context, args []string, output io.Writer) int {
 			*log = append(*log, invocation{"go", args})
 
 			_, _ = io.WriteString(output, stubGoOutput)
@@ -79,7 +80,7 @@ func TestRunFormatRunsStepsInOrder(t *testing.T) {
 		Stderr: &stderr,
 	}
 
-	if code := pipeline.RunFormat([]string{"."}); code != 0 {
+	if code := pipeline.RunFormat(context.Background(), []string{"."}); code != 0 {
 		t.Fatalf("RunFormat = %d, want 0\n%s", code, stderr.String())
 	}
 
@@ -127,7 +128,7 @@ func TestRunFormatStreamsToolOutputLive(t *testing.T) {
 		Stderr: &stderr,
 	}
 
-	if code := pipeline.RunFormat(nil); code != 0 {
+	if code := pipeline.RunFormat(context.Background(), nil); code != 0 {
 		t.Fatalf("RunFormat = %d, want 0", code)
 	}
 
@@ -149,7 +150,7 @@ func TestRunFormatQuietHidesToolOutput(t *testing.T) {
 		Stderr: &stderr,
 	}
 
-	if code := pipeline.RunFormat(nil); code != 0 {
+	if code := pipeline.RunFormat(context.Background(), nil); code != 0 {
 		t.Fatalf("RunFormat = %d, want 0", code)
 	}
 
@@ -172,7 +173,7 @@ func TestRunFormatShortCircuitsOnTSFailure(t *testing.T) {
 		Stderr: &stderr,
 	}
 
-	if code := pipeline.RunFormat(nil); code != 1 {
+	if code := pipeline.RunFormat(context.Background(), nil); code != 1 {
 		t.Fatalf("RunFormat = %d, want 1", code)
 	}
 
@@ -200,7 +201,7 @@ func TestRunFormatQuietDumpsLogOnFailure(t *testing.T) {
 		Stderr: &stderr,
 	}
 
-	if code := pipeline.RunFormat(nil); code != 3 {
+	if code := pipeline.RunFormat(context.Background(), nil); code != 3 {
 		t.Fatalf("RunFormat = %d, want 3", code)
 	}
 

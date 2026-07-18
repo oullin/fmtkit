@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { getEnd, getStart, visit } from '#sidecar/ast';
+import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
 import { formatDrizzleQueries } from '#sidecar/drizzle-queries';
 import { applyEdits } from '#sidecar/edits';
 import { formatExpandedCalls } from '#sidecar/expanded-calls';
@@ -27,11 +27,11 @@ function detectIndent(content: string): string {
 }
 
 function memberCallLink(source: string, member: Node, object: Node, comments: Node[]): ChainLink | null {
-	if ((member as { computed?: unknown }).computed) {
+	if (member.computed) {
 		return null;
 	}
 
-	const property = member.property as Node | undefined;
+	const property = childNode(member, 'property');
 
 	if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
 		return null;
@@ -73,13 +73,17 @@ function collectFluentChain(source: string, outer: Node, comments: Node[]): Flue
 	const links: ChainLink[] = [];
 
 	while (call.type === 'CallExpression') {
-		const callee = unwrapChainExpression(call.callee as Node | undefined);
+		const callee = unwrapChainExpression(
+			childNode(call, 'callee'),
+		);
 
 		if (callee?.type !== 'MemberExpression') {
 			break;
 		}
 
-		const object = unwrapChainExpression(callee.object as Node | undefined);
+		const object = unwrapChainExpression(
+			childNode(callee, 'object'),
+		);
 
 		if (object?.type !== 'CallExpression') {
 			break;

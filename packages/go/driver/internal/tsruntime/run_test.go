@@ -2,6 +2,7 @@ package tsruntime
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,7 +76,7 @@ func TestRunPipelineInvokesSidecar(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	err := support.RunPipeline(RunOptions{Stdout: &stdout, Stderr: &stderr})
+	err := support.RunPipeline(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr})
 
 	if err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
@@ -123,7 +124,7 @@ func TestRunPipelineSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunPipeline(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := support.RunPipeline(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -141,7 +142,7 @@ func TestRunPipelineReportsMissingScopes(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	err := support.RunPipeline(RunOptions{
+	err := support.RunPipeline(context.Background(), RunOptions{
 		Scopes: []string{"missing-dir"},
 		Stdout: &stdout,
 		Stderr: &stderr,
@@ -171,7 +172,7 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -210,7 +211,7 @@ func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -228,7 +229,7 @@ func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v", err)
 	}
 
@@ -251,7 +252,7 @@ func TestRunLintHonorsOxlintBinOverride(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 

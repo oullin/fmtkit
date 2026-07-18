@@ -86,9 +86,15 @@ test('extractVueScripts returns every script block with its offset', () => {
 
 	assert.equal(blocks.length, 2);
 
-	assert.equal(blocks[0].openTag, '<script lang="yaml">');
+	const [first, second] = blocks;
 
-	assert.equal(content.slice(blocks[1].start, blocks[1].start + blocks[1].content.length), blocks[1].content);
+	assert.ok(first);
+
+	assert.ok(second);
+
+	assert.equal(first.openTag, '<script lang="yaml">');
+
+	assert.equal(content.slice(second.start, second.start + second.content.length), second.content);
 });
 
 test('scriptAttribute reads quoted and bare attribute values case-insensitively', () => {

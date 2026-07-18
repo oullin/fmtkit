@@ -1,6 +1,7 @@
 package tsruntime
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,18 @@ type RunOptions struct {
 	Stderr io.Writer
 }
 
+// overrides carries the environment overrides a TS toolchain invocation
+// honours, resolved once at the entry points rather than ad hoc deep in the
+// call paths.
+type overrides struct {
+	pipelineBin  string
+	oxfmtBin     string
+	oxlintBin    string
+	oxfmtConfig  string
+	oxlintConfig string
+	sourcesCwd   string
+}
+
 const (
 	PipelineBinEnv  = "FMTKIT_TS_PIPELINE_BIN"
 	OxfmtBinEnv     = "OXFMT_BIN"
@@ -32,17 +45,31 @@ const (
 	SourcesCwdEnv   = "FMTKIT_SOURCES_CWD"
 )
 
+// readOverrides gathers every environment override in one place.
+func readOverrides() overrides {
+	return overrides{
+		pipelineBin:  os.Getenv(PipelineBinEnv),
+		oxfmtBin:     os.Getenv(OxfmtBinEnv),
+		oxlintBin:    os.Getenv(OxlintBinEnv),
+		oxfmtConfig:  os.Getenv(OxfmtConfigEnv),
+		oxlintConfig: os.Getenv(OxlintConfigEnv),
+		sourcesCwd:   os.Getenv(SourcesCwdEnv),
+	}
+}
+
 // RunPipeline runs the full TS/Vue formatting pipeline (blank-lines -> oxfmt
 // -> fluent-chains -> validate-syntax). oxfmt is an internal normalising step,
 // not the last word: the project passes run after it and own the final style.
-func (s Support) RunPipeline(opts RunOptions) error {
-	cwd, err := sourcesCwd()
+func (s Support) RunPipeline(ctx context.Context, opts RunOptions) error {
+	env := readOverrides()
+
+	cwd, err := sourcesCwd(env)
 
 	if err != nil {
 		return err
 	}
 
-	formatFiles, warnings, err := collect(cwd, opts.Scopes, false, opts.Selection)
+	formatFiles, warnings, err := collect(ctx, cwd, opts.Scopes, false, opts.Selection)
 
 	if err != nil {
 		return err
@@ -52,23 +79,21 @@ func (s Support) RunPipeline(opts RunOptions) error {
 		_, _ = fmt.Fprintf(opts.Stderr, "[sources] %s\n", warning)
 	}
 
-	syntaxFiles, _, err := collect(cwd, opts.Scopes, true, opts.Selection)
+	syntaxFiles, _, err := collect(ctx, cwd, opts.Scopes, true, opts.Selection)
 
 	if err != nil {
 		return err
 	}
 
-	oxfmtBin := os.Getenv(OxfmtBinEnv)
-
 	args := []string{"pipeline"}
 
-	if oxfmtBin != "" {
-		args = append(args, "--oxfmt-bin", oxfmtBin)
+	if env.oxfmtBin != "" {
+		args = append(args, "--oxfmt-bin", env.oxfmtBin)
 	} else {
 		args = append(args, "--oxfmt-bin", s.Sidecar())
 	}
 
-	if config := s.oxfmtConfigFor(cwd); config != "" {
+	if config := s.oxfmtConfigFor(cwd, env); config != "" {
 		args = append(args, "--oxfmt-config", config)
 	}
 
@@ -77,18 +102,20 @@ func (s Support) RunPipeline(opts RunOptions) error {
 	args = append(args, "--syntax-files")
 	args = append(args, syntaxFiles...)
 
-	return s.spawn(pipelineBin(s.Sidecar()), args, opts)
+	return s.spawn(ctx, pipelineBin(env, s.Sidecar()), args, opts)
 }
 
 // RunLint lints the collected TS/Vue files with oxlint.
-func (s Support) RunLint(opts RunOptions) error {
-	cwd, err := sourcesCwd()
+func (s Support) RunLint(ctx context.Context, opts RunOptions) error {
+	env := readOverrides()
+
+	cwd, err := sourcesCwd(env)
 
 	if err != nil {
 		return err
 	}
 
-	files, warnings, err := collect(cwd, opts.Scopes, false, opts.Selection)
+	files, warnings, err := collect(ctx, cwd, opts.Scopes, false, opts.Selection)
 
 	if err != nil {
 		return err
@@ -106,33 +133,33 @@ func (s Support) RunLint(opts RunOptions) error {
 
 	var args []string
 
-	bin := os.Getenv(OxlintBinEnv)
+	bin := env.oxlintBin
 
 	if bin == "" {
 		bin = s.Sidecar()
 		args = append(args, "oxlint")
 	}
 
-	if config := s.oxlintConfigFor(cwd); config != "" {
+	if config := s.oxlintConfigFor(cwd, env); config != "" {
 		args = append(args, "--config", config)
 	}
 
 	args = append(args, files...)
 
-	return s.spawn(bin, args, opts)
+	return s.spawn(ctx, bin, args, opts)
 }
 
-func pipelineBin(sidecar string) string {
-	if bin := os.Getenv(PipelineBinEnv); bin != "" {
-		return bin
+func pipelineBin(env overrides, sidecar string) string {
+	if env.pipelineBin != "" {
+		return env.pipelineBin
 	}
 
 	return sidecar
 }
 
-func sourcesCwd() (string, error) {
-	if cwd := os.Getenv(SourcesCwdEnv); cwd != "" {
-		return cwd, nil
+func sourcesCwd(env overrides) (string, error) {
+	if env.sourcesCwd != "" {
+		return env.sourcesCwd, nil
 	}
 
 	cwd, err := os.Getwd()
@@ -144,8 +171,8 @@ func sourcesCwd() (string, error) {
 	return cwd, nil
 }
 
-func collect(cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
-	return sourcefiles.Collect(sourcefiles.Options{
+func collect(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
+	return sourcefiles.Collect(ctx, sourcefiles.Options{
 		Cwd:                 cwd,
 		IncludeDeclarations: includeDeclarations,
 		Scopes:              scopes,
@@ -156,9 +183,9 @@ func collect(cwd string, scopes []string, includeDeclarations bool, selection so
 // oxfmtConfigFor mirrors the entrypoint rule: a project-local .oxfmtrc.*
 // wins via oxfmt's own auto-discovery, otherwise fall back to the bundled
 // configuration.
-func (s Support) oxfmtConfigFor(cwd string) string {
-	if config := os.Getenv(OxfmtConfigEnv); config != "" {
-		return existingFile(config)
+func (s Support) oxfmtConfigFor(cwd string, env overrides) string {
+	if env.oxfmtConfig != "" {
+		return existingFile(env.oxfmtConfig)
 	}
 
 	if matches, err := filepath.Glob(filepath.Join(cwd, ".oxfmtrc.*")); err == nil && len(matches) > 0 {
@@ -170,9 +197,9 @@ func (s Support) oxfmtConfigFor(cwd string) string {
 
 // oxlintConfigFor treats both the extensionless .oxlintrc and .oxlintrc.* as
 // project configuration.
-func (s Support) oxlintConfigFor(cwd string) string {
-	if config := os.Getenv(OxlintConfigEnv); config != "" {
-		return existingFile(config)
+func (s Support) oxlintConfigFor(cwd string, env overrides) string {
+	if env.oxlintConfig != "" {
+		return existingFile(env.oxlintConfig)
 	}
 
 	if existingFile(filepath.Join(cwd, ".oxlintrc")) != "" {
@@ -186,8 +213,8 @@ func (s Support) oxlintConfigFor(cwd string) string {
 	return s.OxlintConfig()
 }
 
-func (s Support) spawn(bin string, args []string, opts RunOptions) error {
-	cmd := exec.Command(bin, args...)
+func (s Support) spawn(ctx context.Context, bin string, args []string, opts RunOptions) error {
+	cmd := exec.CommandContext(ctx, bin, args...)
 
 	cmd.Stdout = opts.Stdout
 	cmd.Stderr = opts.Stderr

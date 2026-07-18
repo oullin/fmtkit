@@ -1,4 +1,4 @@
-import { getEnd, getStart, visit } from '#sidecar/ast';
+import { childNode, childNodes, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
 import { applyEdits } from '#sidecar/edits';
 import { callParens as sharedCallParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf, unwrapChainExpression } from '#sidecar/pass-utils';
 import type { Edit, Node } from '#sidecar/types';
@@ -105,7 +105,7 @@ const SET_OPERATION_HELPERS = new Set(['except', 'intersect', 'union', 'unionAll
 const DRIZZLE_OBJECT_KEYS = new Set(['columns', 'extras', 'limit', 'offset', 'onUpdate', 'orderBy', 'set', 'target', 'targetWhere', 'where', 'with']);
 
 function localName(node: Node | undefined): string | null {
-	return node?.type === 'Identifier' ? (((node as { name?: unknown }).name as string | undefined) ?? null) : null;
+	return node?.type === 'Identifier' ? (nodeName(node) ?? null) : null;
 }
 
 function literalValue(node: Node | undefined): string | null {
@@ -113,17 +113,19 @@ function literalValue(node: Node | undefined): string | null {
 		return null;
 	}
 
-	const value = (node as { value?: unknown }).value;
+	const value = node.value;
 
 	return typeof value === 'string' ? value : null;
 }
 
 function propertyName(member: Node | undefined): string | null {
-	if (member?.type !== 'MemberExpression' || (member as { computed?: unknown }).computed) {
+	if (member?.type !== 'MemberExpression' || member.computed) {
 		return null;
 	}
 
-	return localName(member.property as Node | undefined);
+	return localName(
+		childNode(member, 'property'),
+	);
 }
 
 function calleeName(callee: Node | undefined, imports: DrizzleImports): string | null {
@@ -137,9 +139,13 @@ function calleeName(callee: Node | undefined, imports: DrizzleImports): string |
 		return name ? (imports.locals.get(name) ?? null) : null;
 	}
 
-	if (callee.type === 'MemberExpression' && !(callee as { computed?: unknown }).computed) {
-		const object = callee.object as Node | undefined;
-		const property = localName(callee.property as Node | undefined);
+	if (callee.type === 'MemberExpression' && !callee.computed) {
+		const object = childNode(callee, 'object');
+
+		const property = localName(
+			childNode(callee, 'property'),
+		);
+
 		const objectName = localName(object);
 
 		if (objectName && property && imports.namespaces.has(objectName)) {
@@ -152,25 +158,29 @@ function calleeName(callee: Node | undefined, imports: DrizzleImports): string |
 
 function collectDrizzleImports(program: Node): DrizzleImports {
 	const imports: DrizzleImports = { locals: new Map(), namespaces: new Set() };
-	const body = Array.isArray(program.body) ? (program.body as Node[]) : [];
+	const body = childNodes(program, 'body');
 
 	for (const statement of body) {
 		if (statement.type !== 'ImportDeclaration') {
 			continue;
 		}
 
-		const source = literalValue(statement.source as Node | undefined);
+		const source = literalValue(
+			childNode(statement, 'source'),
+		);
 
 		if (!source?.startsWith(DRIZZLE_MODULE)) {
 			continue;
 		}
 
-		const specifiers = Array.isArray(statement.specifiers) ? (statement.specifiers as Node[]) : [];
-
-		for (const specifier of specifiers) {
+		for (const specifier of childNodes(statement, 'specifiers')) {
 			if (specifier.type === 'ImportSpecifier') {
-				const imported = localName(specifier.imported as Node | undefined);
-				const local = localName(specifier.local as Node | undefined);
+				const imported = localName(
+					childNode(specifier, 'imported'),
+				);
+				const local = localName(
+					childNode(specifier, 'local'),
+				);
 
 				if (imported && local) {
 					imports.locals.set(local, imported);
@@ -178,7 +188,9 @@ function collectDrizzleImports(program: Node): DrizzleImports {
 			}
 
 			if (specifier.type === 'ImportNamespaceSpecifier') {
-				const local = localName(specifier.local as Node | undefined);
+				const local = localName(
+					childNode(specifier, 'local'),
+				);
 
 				if (local) {
 					imports.namespaces.add(local);
@@ -202,11 +214,15 @@ function chainHasQueryMember(node: Node | undefined): boolean {
 			return true;
 		}
 
-		return chainHasQueryMember(current.object as Node | undefined);
+		return chainHasQueryMember(
+			childNode(current, 'object'),
+		);
 	}
 
 	if (current.type === 'CallExpression') {
-		return chainHasQueryMember(current.callee as Node | undefined);
+		return chainHasQueryMember(
+			childNode(current, 'callee'),
+		);
 	}
 
 	return false;
@@ -226,7 +242,7 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 	}
 
 	if (current.type === 'MemberExpression') {
-		const object = current.object as Node | undefined;
+		const object = childNode(current, 'object');
 		const property = propertyName(current);
 
 		if (property === 'query') {
@@ -237,7 +253,9 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 	}
 
 	if (current.type === 'CallExpression') {
-		const callee = unwrapChainExpression(current.callee as Node | undefined);
+		const callee = unwrapChainExpression(
+			childNode(current, 'callee'),
+		);
 
 		if (callee?.type === 'Identifier') {
 			const imported = calleeName(callee, imports);
@@ -249,10 +267,16 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 			const method = propertyName(callee);
 
 			if (method && DRIZZLE_CHAIN_METHODS.has(method)) {
-				return isDrizzleReceiver(callee.object as Node | undefined, imports);
+				return isDrizzleReceiver(
+					childNode(callee, 'object'),
+					imports,
+				);
 			}
 
-			return isDrizzleReceiver(callee.object as Node | undefined, imports);
+			return isDrizzleReceiver(
+				childNode(callee, 'object'),
+				imports,
+			);
 		}
 	}
 
@@ -260,13 +284,17 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 }
 
 function methodName(call: Node): string | null {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
 
 	return callee?.type === 'MemberExpression' ? propertyName(callee) : null;
 }
 
 function isDrizzleMethodCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
 
 	if (callee?.type !== 'MemberExpression') {
 		return false;
@@ -278,36 +306,52 @@ function isDrizzleMethodCall(call: Node, imports: DrizzleImports): boolean {
 		return false;
 	}
 
-	return isDrizzleReceiver(callee.object as Node | undefined, imports);
+	return isDrizzleReceiver(
+		childNode(callee, 'object'),
+		imports,
+	);
 }
 
 function isRelationalQueryCall(call: Node, imports: DrizzleImports): boolean {
 	const name = methodName(call);
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
 
 	if ((name !== 'findMany' && name !== 'findFirst') || callee?.type !== 'MemberExpression') {
 		return false;
 	}
 
-	return chainHasQueryMember(callee.object as Node | undefined) && isDrizzleReceiver(callee.object as Node | undefined, imports);
+	const object = childNode(callee, 'object');
+
+	return chainHasQueryMember(object) && isDrizzleReceiver(object, imports);
 }
 
 function isImportedHelperCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
+
 	const name = calleeName(callee, imports);
 
 	return Boolean(name && DRIZZLE_HELPERS.has(name));
 }
 
 function isSetOperationCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
+
 	const name = calleeName(callee, imports);
 
 	return Boolean(name && SET_OPERATION_HELPERS.has(name));
 }
 
 function callDisplayName(source: string, call: Node, imports: DrizzleImports): string {
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
 
 	if (callee?.type === 'Identifier') {
 		return sourceOf(source, callee);
@@ -328,12 +372,14 @@ function callParens(source: string, call: Node): { open: number; close: number }
 	return sharedCallParens(
 		source,
 		call,
-		unwrapChainExpression(call.callee as Node | undefined),
+		unwrapChainExpression(
+			childNode(call, 'callee'),
+		),
 	);
 }
 
 function shouldFormatObjectExpression(node: Node): boolean {
-	const properties = Array.isArray(node.properties) ? (node.properties as Node[]) : [];
+	const properties = childNodes(node, 'properties');
 
 	if (properties.length > 1) {
 		return true;
@@ -344,8 +390,11 @@ function shouldFormatObjectExpression(node: Node): boolean {
 			return true;
 		}
 
-		const key = localName(property.key as Node | undefined);
-		const value = property.value as Node | undefined;
+		const key = localName(
+			childNode(property, 'key'),
+		);
+
+		const value = childNode(property, 'value');
 
 		if (!value) {
 			return false;
@@ -360,9 +409,9 @@ function shouldFormatObjectExpression(node: Node): boolean {
 }
 
 function shouldFormatArrayExpression(node: Node): boolean {
-	const elements = Array.isArray(node.elements) ? (node.elements as Array<Node | null>) : [];
+	const elements = Array.isArray(node.elements) ? node.elements : [];
 
-	return elements.length > 1 || elements.some((element) => Boolean(element && (element.type === 'ObjectExpression' || element.type === 'CallExpression')));
+	return elements.length > 1 || elements.some((element) => Boolean(isNode(element) && (element.type === 'ObjectExpression' || element.type === 'CallExpression')));
 }
 
 function isComplexArgument(node: Node, imports: DrizzleImports): boolean {
@@ -390,7 +439,7 @@ function isStructuralArgument(node: Node, imports: DrizzleImports): boolean {
 }
 
 function shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boolean {
-	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
+	const args = childNodes(call, 'arguments');
 
 	if (args.length === 0) {
 		return false;
@@ -434,7 +483,7 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 		return sourceOf(source, node);
 	}
 
-	const elements = Array.isArray(node.elements) ? (node.elements as Array<Node | null>) : [];
+	const elements = Array.isArray(node.elements) ? node.elements : [];
 
 	if (elements.length === 0) {
 		return '[]';
@@ -443,7 +492,7 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 	const nextIndent = `${indent}\t`;
 
 	const formatted = elements.map((element) => {
-		return element ? formatNode(source, element, imports, comments, nextIndent) : '';
+		return isNode(element) ? formatNode(source, element, imports, comments, nextIndent) : '';
 	});
 
 	return `[\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent}]`;
@@ -458,7 +507,7 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 		return sourceOf(source, node);
 	}
 
-	const properties = Array.isArray(node.properties) ? (node.properties as Node[]) : [];
+	const properties = childNodes(node, 'properties');
 
 	if (properties.length === 0) {
 		return '{}';
@@ -471,14 +520,14 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 			return sourceOf(source, property);
 		}
 
-		const key = property.key as Node | undefined;
-		const value = property.value as Node | undefined;
+		const key = childNode(property, 'key');
+		const value = childNode(property, 'value');
 
-		if (!key || !value || (property as { computed?: unknown }).computed || (property as { method?: unknown }).method) {
+		if (!key || !value || property.computed || property.method) {
 			return sourceOf(source, property);
 		}
 
-		if ((property as { shorthand?: unknown }).shorthand) {
+		if (property.shorthand) {
 			return sourceOf(source, property);
 		}
 
@@ -498,11 +547,13 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 	}
 
 	const importedName = calleeName(
-		unwrapChainExpression(call.callee as Node | undefined),
+		unwrapChainExpression(
+			childNode(call, 'callee'),
+		),
 		imports,
 	);
 
-	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
+	const args = childNodes(call, 'arguments');
 
 	if (!importedName || !MULTILINE_HELPERS.has(importedName) || args.length === 0) {
 		return sourceOf(source, call);
@@ -523,7 +574,7 @@ function formatSetOperationCall(source: string, call: Node, imports: DrizzleImpo
 		return sourceOf(source, call);
 	}
 
-	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
+	const args = childNodes(call, 'arguments');
 
 	if (args.length < 2) {
 		return sourceOf(source, call);
@@ -559,7 +610,7 @@ function formatNode(source: string, node: Node, imports: DrizzleImports, comment
 
 function formatCallArguments(source: string, call: Node, imports: DrizzleImports, comments: Node[]): Edit | null {
 	const parens = callParens(source, call);
-	const args = Array.isArray(call.arguments) ? (call.arguments as Node[]) : [];
+	const args = childNodes(call, 'arguments');
 
 	if (!parens || args.length === 0) {
 		return null;
@@ -569,8 +620,12 @@ function formatCallArguments(source: string, call: Node, imports: DrizzleImports
 		return null;
 	}
 
-	const callee = unwrapChainExpression(call.callee as Node | undefined);
-	const indentPos = callee?.type === 'MemberExpression' ? getStart(callee.property as Node) : getStart(call);
+	const callee = unwrapChainExpression(
+		childNode(call, 'callee'),
+	);
+
+	const property = callee ? childNode(callee, 'property') : undefined;
+	const indentPos = callee?.type === 'MemberExpression' && property ? getStart(property) : getStart(call);
 	const indent = lineIndent(source, indentPos);
 	const argIndent = `${indent}\t`;
 	const formatted = args.map((arg) => formatNode(source, arg, imports, comments, argIndent));
@@ -613,7 +668,9 @@ export function computeDrizzleQueryEdits(content: string, virtualName: string): 
 		}
 
 		if (isDrizzleMethodCall(node, imports) || isRelationalQueryCall(node, imports) || isSetOperationCall(node, imports)) {
-			if (isSetOperationCall(node, imports) && (node.arguments as Node[] | undefined)?.length && (node.arguments as Node[]).length < 2) {
+			const args = childNodes(node, 'arguments');
+
+			if (isSetOperationCall(node, imports) && args.length > 0 && args.length < 2) {
 				return;
 			}
 

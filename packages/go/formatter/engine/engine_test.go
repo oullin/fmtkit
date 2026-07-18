@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"go/format"
@@ -76,7 +77,7 @@ func defaultFormatters() []engine.Formatter {
 }
 
 func TestCheckFilesWithNoFilesPasses(t *testing.T) {
-	report, err := engine.New(config.Default(), nil, nil).CheckFiles(nil)
+	report, err := engine.New(config.Default(), nil, nil).CheckFiles(context.Background(), nil)
 
 	if err != nil {
 		t.Fatalf("check files: %v", err)
@@ -98,7 +99,7 @@ func run() {
 }
 `)
 
-	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).CheckFiles([]string{path})
+	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).CheckFiles(context.Background(), []string{path})
 
 	if err != nil {
 		t.Fatalf("check files: %v", err)
@@ -124,7 +125,7 @@ func run() {
 }
 `)
 
-	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).FormatFiles([]string{path})
+	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).FormatFiles(context.Background(), []string{path})
 
 	if err != nil {
 		t.Fatalf("format files: %v", err)
@@ -249,7 +250,7 @@ func run() {
 }
 `)
 
-	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Check([]string{root})
+	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Check(context.Background(), []string{root})
 
 	if err != nil {
 		t.Fatalf("check: %v", err)
@@ -285,7 +286,7 @@ func run() {
 }
 `)
 
-	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Format([]string{root})
+	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Format(context.Background(), []string{root})
 
 	if err != nil {
 		t.Fatalf("format: %v", err)
@@ -341,7 +342,7 @@ func TestProcessFileReportsReadRuleAndFormatterErrors(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			report, err := engine.New(config.Default(), tt.rules, tt.formatters).CheckFiles(tt.files)
+			report, err := engine.New(config.Default(), tt.rules, tt.formatters).CheckFiles(context.Background(), tt.files)
 
 			if err != nil {
 				t.Fatalf("check files: %v", err)
@@ -371,15 +372,18 @@ func TestFormatFilesReportsWriteErrors(t *testing.T) {
 	path := filepath.Join(root, "sample.go")
 	testutil.WriteGoFile(t, path, "package sample\n")
 
-	if err := os.Chmod(path, 0o444); err != nil {
+	// The engine replaces files atomically via a sibling temp file, so a
+	// read-only directory is what makes the write fail: the temp file can
+	// never be created next to the source.
+	if err := os.Chmod(root, 0o555); err != nil {
 		t.Fatalf("chmod readonly: %v", err)
 	}
 
 	t.Cleanup(func() {
-		_ = os.Chmod(path, 0o644)
+		_ = os.Chmod(root, 0o755)
 	})
 
-	report, err := engine.New(config.Default(), nil, []engine.Formatter{rewriteFormatter{}}).FormatFiles([]string{path})
+	report, err := engine.New(config.Default(), nil, []engine.Formatter{rewriteFormatter{}}).FormatFiles(context.Background(), []string{path})
 
 	if err != nil {
 		t.Fatalf("format files: %v", err)
@@ -506,7 +510,7 @@ func run() {
 		cfg := config.Default()
 		cfg.Concurrency = concurrency
 
-		report, err := engine.New(cfg, defaultRules(), defaultFormatters()).Format([]string{root})
+		report, err := engine.New(cfg, defaultRules(), defaultFormatters()).Format(context.Background(), []string{root})
 
 		if err != nil {
 			t.Fatalf("format (concurrency=%d): %v", concurrency, err)
@@ -576,7 +580,7 @@ func run() config {
 }
 `)
 
-	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Format([]string{root})
+	report, err := engine.New(config.Default(), defaultRules(), defaultFormatters()).Format(context.Background(), []string{root})
 
 	if err != nil {
 		t.Fatalf("format: %v", err)

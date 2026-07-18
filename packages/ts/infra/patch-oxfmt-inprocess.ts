@@ -6,23 +6,27 @@
  *
  * usage: node patch-oxfmt-inprocess.ts <path/to/oxfmt/dist>
  */
-import { NodeTextFiles, OxfmtCliPatcher, isErr } from '#oxfmt-inprocess';
+import { NodeTextFiles, OxfmtCliPatcher, PatchCliDto, isErr } from '#oxfmt-inprocess';
 
 const NAME = 'patch-oxfmt-inprocess';
 const USAGE_EXIT_CODE = 2;
 
-const distDir = process.argv[2];
+function main(): void {
+	const options = PatchCliDto.parse(process.argv.slice(2));
 
-if (distDir === undefined || distDir.length === 0) {
-	process.stderr.write(`usage: node ${NAME}.ts <path/to/oxfmt/dist>\n`);
-	process.exit(USAGE_EXIT_CODE);
+	if (options === null) {
+		process.stderr.write(`usage: node ${NAME}.ts <path/to/oxfmt/dist>\n`);
+		process.exit(USAGE_EXIT_CODE);
+	}
+
+	const patched = new OxfmtCliPatcher(new NodeTextFiles()).patch(options.distDir);
+
+	if (isErr(patched)) {
+		process.stderr.write(`${NAME}: ${patched.error.message}\n`);
+		process.exit(1);
+	}
+
+	process.stderr.write(`${NAME}: rewrote ${patched.value.cliPath} to format embedded code in-process (api module: ${patched.value.apiModuleSpecifier})\n`);
 }
 
-const patched = new OxfmtCliPatcher(new NodeTextFiles()).patch(distDir);
-
-if (isErr(patched)) {
-	process.stderr.write(`${NAME}: ${patched.error.message}\n`);
-	process.exit(1);
-}
-
-process.stderr.write(`${NAME}: rewrote ${patched.value.cliPath} to format embedded code in-process (api module: ${patched.value.apiModuleSpecifier})\n`);
+main();

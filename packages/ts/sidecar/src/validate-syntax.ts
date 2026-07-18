@@ -1,8 +1,44 @@
 import { pathToFileURL } from 'node:url';
+import { z } from 'zod';
 import type { OxcErrorDto } from '#sidecar/errors';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
+
+/** Immutable command-line options for standalone syntax validation. */
+export class SyntaxCliDto {
+	/** TypeScript and Vue files eligible for syntax validation. */
+	readonly files: readonly string[];
+
+	static readonly #argvSchema = z.array(z.string());
+
+	static readonly #schema = z.object({
+		files: z.array(z.string()),
+	});
+
+	private constructor(value: { files: string[] }) {
+		this.files = Object.freeze(value.files);
+
+		Object.setPrototypeOf(this, Object.prototype);
+		Object.freeze(this);
+	}
+
+	/**
+	 * Parse the standalone syntax-validation command line.
+	 *
+	 * @param input - Arguments after the executable and script path.
+	 * @returns Immutable syntax-validation options.
+	 */
+	static parse(input: unknown): SyntaxCliDto {
+		const argv = SyntaxCliDto.#argvSchema.parse(input);
+
+		const files = argv.filter((file) => {
+			return file.endsWith('.ts') || file.endsWith('.vue');
+		});
+
+		return new SyntaxCliDto(SyntaxCliDto.#schema.parse({ files }));
+	}
+}
 
 /** Formats parser diagnostics for the standalone syntax-validation command. */
 class SyntaxErrorReporter {
@@ -28,10 +64,8 @@ class SyntaxErrorReporter {
 
 async function main(): Promise<void> {
 	const cwd = process.cwd();
-
-	const files = process.argv.slice(2).filter((file) => {
-		return file.endsWith('.ts') || file.endsWith('.vue');
-	});
+	const options = SyntaxCliDto.parse(process.argv.slice(2));
+	const files = [...options.files];
 
 	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 

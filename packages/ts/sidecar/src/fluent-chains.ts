@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { z } from 'zod';
 import { Ast } from '#sidecar/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { Edits } from '#sidecar/edits';
@@ -24,6 +25,49 @@ type FluentChain = {
 	base: Node;
 	links: ChainLink[];
 };
+
+/** Immutable command-line options for the standalone fluent-chain formatter. */
+export class FluentCliDto {
+	/** Whether the formatter checks source or writes changes. */
+	readonly mode: 'check' | 'write';
+
+	/** Files eligible for fluent-chain formatting. */
+	readonly files: readonly string[];
+
+	static readonly #argvSchema = z.array(z.string());
+
+	static readonly #schema = z.object({
+		mode: z.enum(['check', 'write']),
+		files: z.array(z.string()),
+	});
+
+	private constructor(value: { mode: 'check' | 'write'; files: string[] }) {
+		this.mode = value.mode;
+		this.files = Object.freeze(value.files);
+
+		Object.setPrototypeOf(this, Object.prototype);
+		Object.freeze(this);
+	}
+
+	/**
+	 * Parse the standalone fluent-chain command line.
+	 *
+	 * @param input - Arguments after the executable and script path.
+	 * @returns Immutable fluent-chain formatter options.
+	 */
+	static parse(input: unknown): FluentCliDto {
+		const argv = FluentCliDto.#argvSchema.parse(input);
+
+		const candidate = {
+			mode: argv.includes('--check') ? ('check' as const) : ('write' as const),
+			files: argv.filter((argument) => {
+				return argument !== '--check' && FileTargets.isTargetFile(argument);
+			}),
+		};
+
+		return new FluentCliDto(FluentCliDto.#schema.parse(candidate));
+	}
+}
 
 /** Formats fluent chains and the structured calls composed with them. */
 export class FluentChains {
@@ -243,8 +287,9 @@ export class FluentChains {
 	 * @returns Nothing after reporting outcomes and setting the process status.
 	 */
 	static async main(): Promise<void> {
-		const rawArgs = process.argv.slice(2);
-		const mode = rawArgs.includes('--check') ? 'check' : 'write';
+		const options = FluentCliDto.parse(process.argv.slice(2));
+		const files = [...options.files];
+		const { mode } = options;
 
 		const { NodeProcessRunner } = await import('#sidecar/process-runner');
 
@@ -253,12 +298,6 @@ export class FluentChains {
 		const { FormatPipeline } = await import('#sidecar/format-pipeline');
 
 		const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
-
-		const files = rawArgs
-			.filter((arg) => {
-				return arg !== '--check';
-			})
-			.filter(FileTargets.isTargetFile);
 
 		const outcomes = await pipeline.runPass('fluent-chains', files, mode, (file, passMode) => {
 			return pipeline.formatFluentFile(file, passMode);

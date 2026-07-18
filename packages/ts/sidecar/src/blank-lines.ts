@@ -1,20 +1,14 @@
 import { pathToFileURL } from 'node:url';
-import { FileTargets } from '#sidecar/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
+import { PassCliDto } from '#sidecar/pass-cli-dto';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
 
 async function main(): Promise<void> {
 	const cwd = process.cwd();
-	const rawArgs = process.argv.slice(2);
-	const mode = rawArgs.includes('--check') ? 'check' : 'write';
-
-	const files = rawArgs
-		.filter((arg) => {
-			return arg !== '--check';
-		})
-		.filter(FileTargets.isTargetFile);
-
+	const options = PassCliDto.parse(process.argv.slice(2));
+	const files = [...options.files];
+	const { mode } = options;
 	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
 	const outcomes = await pipeline.runPass('blank-lines', files, mode, (file, passMode) => {

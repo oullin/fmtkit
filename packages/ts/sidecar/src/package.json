@@ -33,6 +33,8 @@
 		"#sidecar/fluent-chains.js": "./fluent-chains.ts",
 		"#sidecar/node-schema": "./node-schema.ts",
 		"#sidecar/node-schema.js": "./node-schema.ts",
+		"#sidecar/pass-cli-dto": "./pass-cli-dto.ts",
+		"#sidecar/pass-cli-dto.js": "./pass-cli-dto.ts",
 		"#sidecar/process-runner": "./process-runner.ts",
 		"#sidecar/process-runner.js": "./process-runner.ts",
 		"#sidecar/result": "./result.ts",

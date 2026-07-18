@@ -1,10 +1,9 @@
 import { pathToFileURL } from 'node:url';
-import { z } from 'zod';
 import { Ast } from '#sidecar/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { Edits } from '#sidecar/edits';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
-import { FileTargets } from '#sidecar/file-targets';
+import { PassCliDto } from '#sidecar/pass-cli-dto';
 import { isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
@@ -25,49 +24,6 @@ type FluentChain = {
 	base: Node;
 	links: ChainLink[];
 };
-
-/** Immutable command-line options for the standalone fluent-chain formatter. */
-export class FluentCliDto {
-	/** Whether the formatter checks source or writes changes. */
-	readonly mode: 'check' | 'write';
-
-	/** Files eligible for fluent-chain formatting. */
-	readonly files: readonly string[];
-
-	static readonly #argvSchema = z.array(z.string());
-
-	static readonly #schema = z.object({
-		mode: z.enum(['check', 'write']),
-		files: z.array(z.string()),
-	});
-
-	private constructor(value: { mode: 'check' | 'write'; files: string[] }) {
-		this.mode = value.mode;
-		this.files = Object.freeze(value.files);
-
-		Object.setPrototypeOf(this, Object.prototype);
-		Object.freeze(this);
-	}
-
-	/**
-	 * Parse the standalone fluent-chain command line.
-	 *
-	 * @param input - Arguments after the executable and script path.
-	 * @returns Immutable fluent-chain formatter options.
-	 */
-	static parse(input: unknown): FluentCliDto {
-		const argv = FluentCliDto.#argvSchema.parse(input);
-
-		const candidate = {
-			mode: argv.includes('--check') ? ('check' as const) : ('write' as const),
-			files: argv.filter((argument) => {
-				return argument !== '--check' && FileTargets.isTargetFile(argument);
-			}),
-		};
-
-		return new FluentCliDto(FluentCliDto.#schema.parse(candidate));
-	}
-}
 
 /** Formats fluent chains and the structured calls composed with them. */
 export class FluentChains {
@@ -287,7 +243,7 @@ export class FluentChains {
 	 * @returns Nothing after reporting outcomes and setting the process status.
 	 */
 	static async main(): Promise<void> {
-		const options = FluentCliDto.parse(process.argv.slice(2));
+		const options = PassCliDto.parse(process.argv.slice(2));
 		const files = [...options.files];
 		const { mode } = options;
 

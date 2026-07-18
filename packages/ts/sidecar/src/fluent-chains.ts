@@ -237,7 +237,11 @@ export class FluentChains {
 		return updated;
 	}
 
-	/** Run the standalone fluent-chain formatter entrypoint. */
+	/**
+	 * Run the standalone fluent-chain formatter entrypoint.
+	 *
+	 * @returns Nothing after reporting outcomes and setting the process status.
+	 */
 	static async main(): Promise<void> {
 		const rawArgs = process.argv.slice(2);
 		const mode = rawArgs.includes('--check') ? 'check' : 'write';

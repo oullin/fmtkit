@@ -61,7 +61,12 @@ export class Node {
 
 	private constructor() {}
 
-	/** Recognise trusted descendant nodes without recursively materialising them. */
+	/**
+	 * Recognise trusted descendant nodes without recursively materialising them.
+	 *
+	 * @param value - The possible AST node.
+	 * @returns `true` when the value is an object carrying a node discriminator.
+	 */
 	static [Symbol.hasInstance](value: unknown): boolean {
 		return value instanceof Object && 'type' in value;
 	}

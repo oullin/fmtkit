@@ -42,3 +42,32 @@ test('NodeSourceFiles atomically replaces content and leaves no temp files', asy
 		);
 	}
 });
+
+test('NodeSourceFiles carries read and write failures', async () => {
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-failures-',
+		),
+	);
+
+	try {
+		const missing = join(dir, 'missing', 'target.ts');
+		const sourceFiles = new NodeSourceFiles();
+
+		const read = await sourceFiles.readText(missing);
+
+		const written = await sourceFiles.writeTextAtomic(missing, 'content\n');
+
+		assert.equal(isErr(read) && read.error._tag, 'SourceFileUnreadable');
+
+		assert.equal(isErr(written) && written.error._tag, 'SourceFileUnwritable');
+
+		assert.equal(isErr(written) && written.error.path, missing);
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
+});

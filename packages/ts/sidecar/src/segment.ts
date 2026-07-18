@@ -22,7 +22,13 @@ export class Segment {
 		return current;
 	}
 
-	/** Format one TypeScript-compatible source segment. */
+	/**
+	 * Format one TypeScript-compatible source segment.
+	 *
+	 * @param content - The source text to format.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns The source after every segment pass reaches its stable output.
+	 */
 	static process(content: string, virtualName: string): string {
 		const bodyWrapped = Segment.#applyBodyWraps(content, virtualName);
 		const classReorderEdits = ClassReorder.computeEdits(bodyWrapped, virtualName);

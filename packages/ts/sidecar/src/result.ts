@@ -5,7 +5,12 @@
  * functional by design rather than being wrapped in a class.
  */
 
-/** A computed value that is either a success or a typed failure. */
+/**
+ * A computed value that is either a success or a typed failure.
+ *
+ * @template T - The success type.
+ * @template E - The failure type.
+ */
 export type Result<T, E extends Error> = { readonly _tag: 'ok'; readonly value: T } | { readonly _tag: 'err'; readonly error: E };
 
 /**

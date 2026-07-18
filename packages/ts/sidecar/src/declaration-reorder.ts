@@ -1,6 +1,6 @@
-import { childNode, childNodes, collectStatementLists, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
-import { isConstDeclaration, lineIndent, lineStart } from '#sidecar/pass-utils';
+import { childNode, childNodes, collectStatementLists, getEnd, getStart, isConstDeclaration, isNode, nodeName, visit } from '#sidecar/ast';
 import { isErr } from '#sidecar/result';
+import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -15,7 +15,7 @@ function nodeSource(source: string, node: Node): string {
 	const start = getStart(node);
 	const end = getEnd(node);
 
-	return `${lineIndent(source, start)}${source.slice(start, end)}`;
+	return `${SourceText.lineIndent(source, start)}${source.slice(start, end)}`;
 }
 
 function isSideEffectSafeExpression(node: Node | undefined): boolean {
@@ -239,7 +239,7 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 		return null;
 	}
 
-	const start = lineStart(source, firstStart);
+	const start = SourceText.lineStart(source, firstStart);
 	const current = source.slice(start, lastEnd);
 
 	if (current === replacement) {

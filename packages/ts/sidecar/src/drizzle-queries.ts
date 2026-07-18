@@ -1,7 +1,8 @@
 import { childNode, childNodes, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
 import { Edits } from '#sidecar/edits';
-import { callParens as sharedCallParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, sourceOf, unwrapChainExpression } from '#sidecar/pass-utils';
+import { isDeclarationFile } from '#sidecar/file-targets';
 import { isErr } from '#sidecar/result';
+import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -9,6 +10,8 @@ type DrizzleImports = {
 	locals: Map<string, string>;
 	namespaces: Set<string>;
 };
+
+// Detection: identify Drizzle imports, receivers, calls, and structural arguments.
 
 const DRIZZLE_MODULE = 'drizzle-orm';
 const DRIZZLE_RECEIVERS = new Set(['db', 'tx']);
@@ -205,7 +208,7 @@ function collectDrizzleImports(program: Node): DrizzleImports {
 }
 
 function chainHasQueryMember(node: Node | undefined): boolean {
-	const current = unwrapChainExpression(node);
+	const current = SourceText.unwrapChainExpression(node);
 
 	if (!current) {
 		return false;
@@ -231,7 +234,7 @@ function chainHasQueryMember(node: Node | undefined): boolean {
 }
 
 function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boolean {
-	const current = unwrapChainExpression(node);
+	const current = SourceText.unwrapChainExpression(node);
 
 	if (!current) {
 		return false;
@@ -255,9 +258,7 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 	}
 
 	if (current.type === 'CallExpression') {
-		const callee = unwrapChainExpression(
-			childNode(current, 'callee'),
-		);
+		const callee = SourceText.unwrapChainExpression(childNode(current, 'callee'));
 
 		if (callee?.type === 'Identifier') {
 			const imported = calleeName(callee, imports);
@@ -286,17 +287,13 @@ function isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boo
 }
 
 function methodName(call: Node): string | null {
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	return callee?.type === 'MemberExpression' ? propertyName(callee) : null;
 }
 
 function isDrizzleMethodCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	if (callee?.type !== 'MemberExpression') {
 		return false;
@@ -317,9 +314,7 @@ function isDrizzleMethodCall(call: Node, imports: DrizzleImports): boolean {
 function isRelationalQueryCall(call: Node, imports: DrizzleImports): boolean {
 	const name = methodName(call);
 
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	if ((name !== 'findMany' && name !== 'findFirst') || callee?.type !== 'MemberExpression') {
 		return false;
@@ -331,9 +326,7 @@ function isRelationalQueryCall(call: Node, imports: DrizzleImports): boolean {
 }
 
 function isImportedHelperCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	const name = calleeName(callee, imports);
 
@@ -341,9 +334,7 @@ function isImportedHelperCall(call: Node, imports: DrizzleImports): boolean {
 }
 
 function isSetOperationCall(call: Node, imports: DrizzleImports): boolean {
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	const name = calleeName(callee, imports);
 
@@ -351,33 +342,25 @@ function isSetOperationCall(call: Node, imports: DrizzleImports): boolean {
 }
 
 function callDisplayName(source: string, call: Node, imports: DrizzleImports): string {
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	if (callee?.type === 'Identifier') {
-		return sourceOf(source, callee);
+		return SourceText.sourceOf(source, callee);
 	}
 
 	if (callee?.type === 'MemberExpression') {
 		const name = calleeName(callee, imports);
 
 		if (name) {
-			return sourceOf(source, callee);
+			return SourceText.sourceOf(source, callee);
 		}
 	}
 
-	return callee ? sourceOf(source, callee) : '';
+	return callee ? SourceText.sourceOf(source, callee) : '';
 }
 
 function callParens(source: string, call: Node): { open: number; close: number } | null {
-	return sharedCallParens(
-		source,
-		call,
-		unwrapChainExpression(
-			childNode(call, 'callee'),
-		),
-	);
+	return SourceText.callParens(source, call, SourceText.unwrapChainExpression(childNode(call, 'callee')));
 }
 
 function shouldFormatObjectExpression(node: Node): boolean {
@@ -476,13 +459,11 @@ function shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boole
 	return args.length > 1 && args.some((arg) => isComplexArgument(arg, imports));
 }
 
+// Emission: render recognised structures and produce non-overlapping edits.
+
 function formatArrayExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(
-		comments,
-		getStart(node),
-		getEnd(node),
-	)) {
-		return sourceOf(source, node);
+	if (SourceText.hasCommentBetween(comments, getStart(node), getEnd(node))) {
+		return SourceText.sourceOf(source, node);
 	}
 
 	const elements = Array.isArray(node.elements) ? node.elements : [];
@@ -501,12 +482,8 @@ function formatArrayExpression(source: string, node: Node, imports: DrizzleImpor
 }
 
 function formatObjectExpression(source: string, node: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(
-		comments,
-		getStart(node),
-		getEnd(node),
-	)) {
-		return sourceOf(source, node);
+	if (SourceText.hasCommentBetween(comments, getStart(node), getEnd(node))) {
+		return SourceText.sourceOf(source, node);
 	}
 
 	const properties = childNodes(node, 'properties');
@@ -519,46 +496,40 @@ function formatObjectExpression(source: string, node: Node, imports: DrizzleImpo
 
 	const formatted = properties.map((property) => {
 		if (property.type !== 'Property') {
-			return sourceOf(source, property);
+			return SourceText.sourceOf(source, property);
 		}
 
 		const key = childNode(property, 'key');
 		const value = childNode(property, 'value');
 
 		if (!key || !value || property.computed || property.method) {
-			return sourceOf(source, property);
+			return SourceText.sourceOf(source, property);
 		}
 
 		if (property.shorthand) {
-			return sourceOf(source, property);
+			return SourceText.sourceOf(source, property);
 		}
 
-		return `${sourceOf(source, key)}: ${formatNode(source, value, imports, comments, nextIndent)}`;
+		return `${SourceText.sourceOf(source, key)}: ${formatNode(source, value, imports, comments, nextIndent)}`;
 	});
 
 	return `{\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent}}`;
 }
 
 function formatHelperCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(
-		comments,
-		getStart(call),
-		getEnd(call),
-	)) {
-		return sourceOf(source, call);
+	if (SourceText.hasCommentBetween(comments, getStart(call), getEnd(call))) {
+		return SourceText.sourceOf(source, call);
 	}
 
 	const importedName = calleeName(
-		unwrapChainExpression(
-			childNode(call, 'callee'),
-		),
+		SourceText.unwrapChainExpression(childNode(call, 'callee')),
 		imports,
 	);
 
 	const args = childNodes(call, 'arguments');
 
 	if (!importedName || !MULTILINE_HELPERS.has(importedName) || args.length === 0) {
-		return sourceOf(source, call);
+		return SourceText.sourceOf(source, call);
 	}
 
 	const nextIndent = `${indent}\t`;
@@ -568,18 +539,14 @@ function formatHelperCall(source: string, call: Node, imports: DrizzleImports, c
 }
 
 function formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, comments: Node[], indent: string): string {
-	if (hasCommentBetween(
-		comments,
-		getStart(call),
-		getEnd(call),
-	)) {
-		return sourceOf(source, call);
+	if (SourceText.hasCommentBetween(comments, getStart(call), getEnd(call))) {
+		return SourceText.sourceOf(source, call);
 	}
 
 	const args = childNodes(call, 'arguments');
 
 	if (args.length < 2) {
-		return sourceOf(source, call);
+		return SourceText.sourceOf(source, call);
 	}
 
 	const nextIndent = `${indent}\t`;
@@ -607,7 +574,7 @@ function formatNode(source: string, node: Node, imports: DrizzleImports, comment
 		}
 	}
 
-	return sourceOf(source, node);
+	return SourceText.sourceOf(source, node);
 }
 
 function formatCallArguments(source: string, call: Node, imports: DrizzleImports, comments: Node[]): Edit | null {
@@ -618,17 +585,15 @@ function formatCallArguments(source: string, call: Node, imports: DrizzleImports
 		return null;
 	}
 
-	if (hasCommentBetween(comments, parens.open, parens.close)) {
+	if (SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
 		return null;
 	}
 
-	const callee = unwrapChainExpression(
-		childNode(call, 'callee'),
-	);
+	const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 	const property = callee ? childNode(callee, 'property') : undefined;
 	const indentPos = callee?.type === 'MemberExpression' && property ? getStart(property) : getStart(call);
-	const indent = lineIndent(source, indentPos);
+	const indent = SourceText.lineIndent(source, indentPos);
 	const argIndent = `${indent}\t`;
 	const formatted = args.map((arg) => formatNode(source, arg, imports, comments, argIndent));
 	const replacement = `(\n${argIndent}${formatted.join(`,\n${argIndent}`)},\n${indent})`;
@@ -697,7 +662,7 @@ export class DrizzleQueries {
 			}
 		});
 
-		return nonOverlappingEdits(edits);
+		return Edits.nonOverlapping(edits);
 	}
 
 	/**

@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import type { OxcError } from 'oxc-parser';
 import { UnexpectedCliArgument } from '#sidecar/errors';
+import { isTargetFile } from '#sidecar/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/format-pipeline';
-import { isTargetFile } from '#sidecar/pass-utils';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { err, isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';

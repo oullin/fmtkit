@@ -1,6 +1,6 @@
 import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
-import { lineIndent } from '#sidecar/pass-utils';
 import { isErr } from '#sidecar/result';
+import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -31,7 +31,7 @@ function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null
 		return null;
 	}
 
-	const indent = lineIndent(source, ownerStart);
+	const indent = SourceText.lineIndent(source, ownerStart);
 	const bodySource = source.slice(start, end);
 
 	return {

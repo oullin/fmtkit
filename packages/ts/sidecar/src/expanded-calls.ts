@@ -1,8 +1,9 @@
 import { childNode, childNodes, getEnd, getStart, isNode, visit } from '#sidecar/ast';
 import { Edits } from '#sidecar/edits';
-import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, sourceOf } from '#sidecar/pass-utils';
-import type { CallParens } from '#sidecar/pass-utils';
+import { isDeclarationFile } from '#sidecar/file-targets';
 import { isErr } from '#sidecar/result';
+import { SourceText } from '#sidecar/source-text';
+import type { CallParens } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
@@ -27,13 +28,7 @@ function unwrapExpression(node: Node | undefined): Node | undefined {
 }
 
 function calleeParens(source: string, call: Node): CallParens | null {
-	return callParens(
-		source,
-		call,
-		unwrapExpression(
-			childNode(call, 'callee'),
-		),
-	);
+	return SourceText.callParens(source, call, unwrapExpression(childNode(call, 'callee')));
 }
 
 function callArguments(call: Node): Node[] {
@@ -157,7 +152,7 @@ function formatCallParens(source: string, call: Node, comments: Node[], indent: 
 	const parens = calleeParens(source, call);
 	const args = callArguments(call);
 
-	if (!parens || args.length === 0 || hasCommentBetween(comments, parens.open, parens.close)) {
+	if (!parens || args.length === 0 || SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
 		return null;
 	}
 
@@ -186,7 +181,7 @@ function formatCall(source: string, call: Node, comments: Node[], indent: string
 
 	if (!parens || formattedParens === null) {
 		return rebaseIndent(
-			sourceOf(source, call),
+			SourceText.sourceOf(source, call),
 			baseIndent,
 			indent,
 		);
@@ -201,7 +196,7 @@ function formatCall(source: string, call: Node, comments: Node[], indent: string
 function formatNode(source: string, node: Node, comments: Node[], indent: string, baseIndent: string): string {
 	if (node.type !== 'CallExpression') {
 		return rebaseIndent(
-			sourceOf(source, node),
+			SourceText.sourceOf(source, node),
 			baseIndent,
 			indent,
 		);
@@ -209,7 +204,7 @@ function formatNode(source: string, node: Node, comments: Node[], indent: string
 
 	if (!shouldExpandCall(node)) {
 		return rebaseIndent(
-			sourceOf(source, node),
+			SourceText.sourceOf(source, node),
 			baseIndent,
 			indent,
 		);
@@ -259,14 +254,11 @@ export class ExpandedCalls {
 
 			const parens = calleeParens(content, node);
 
-			if (!parens || hasCommentBetween(comments, parens.open, parens.close)) {
+			if (!parens || SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
 				return;
 			}
 
-			const indent = lineIndent(
-				content,
-				getStart(node),
-			);
+			const indent = SourceText.lineIndent(content, getStart(node));
 
 			const replacement = formatCallParens(content, node, comments, indent, indent);
 			const current = content.slice(parens.open, parens.close + 1);
@@ -282,7 +274,7 @@ export class ExpandedCalls {
 			});
 		});
 
-		return nonOverlappingEdits(edits);
+		return Edits.nonOverlapping(edits);
 	}
 
 	/**

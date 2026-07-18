@@ -1,5 +1,4 @@
-import { childNode, childNodes, declarationKind, isNode, nodeName } from '#sidecar/ast';
-import { isConstDeclaration } from '#sidecar/pass-utils';
+import { childNode, childNodes, declarationKind, isConstDeclaration, isNode, nodeName } from '#sidecar/ast';
 import type { Node } from '#sidecar/types';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);

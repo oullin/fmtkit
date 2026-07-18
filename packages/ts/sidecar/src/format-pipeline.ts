@@ -1,13 +1,13 @@
 import { availableParallelism } from 'node:os';
 import type { OxfmtRunFailed, SourceFileUnreadable, SourceUnparsable } from '#sidecar/errors';
 import { FluentChains } from '#sidecar/fluent-chains';
-import { extractVueScripts, isJavaScriptOrTypeScript, scriptAttribute } from '#sidecar/pass-utils';
 import type { ProcessRunner } from '#sidecar/process-runner';
 import { isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
 import { processSegment } from '#sidecar/segment';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
 import { Sources } from '#sidecar/sources';
+import { VueScript } from '#sidecar/vue-script';
 
 const OXFMT_CHUNK_SIZE = 100;
 
@@ -86,7 +86,7 @@ async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise
 }
 
 function scriptExtension(openingTag: string): 'ts' | 'tsx' {
-	const lang = scriptAttribute(openingTag, 'lang') ?? '';
+	const lang = VueScript.attribute(openingTag, 'lang') ?? '';
 
 	return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
 }
@@ -129,8 +129,8 @@ export class FormatPipeline {
 		let updated = original;
 
 		if (path.endsWith('.vue')) {
-			const segments = extractVueScripts(original).filter((segment) => {
-				return isJavaScriptOrTypeScript(segment.openTag);
+			const segments = VueScript.extractBlocks(original).filter((segment) => {
+				return VueScript.isJavaScriptOrTypeScript(segment.openTag);
 			});
 
 			for (const segment of [...segments].reverse()) {
@@ -236,8 +236,8 @@ export class FormatPipeline {
 
 				const vueFailures: ValidationFailure[] = [];
 
-				for (const block of extractVueScripts(read.value)) {
-					if (!isJavaScriptOrTypeScript(block.openTag)) {
+				for (const block of VueScript.extractBlocks(read.value)) {
+					if (!VueScript.isJavaScriptOrTypeScript(block.openTag)) {
 						continue;
 					}
 

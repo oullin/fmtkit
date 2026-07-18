@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
+import { isTargetFile } from '#sidecar/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
-import { isTargetFile } from '#sidecar/pass-utils';
 import { NodeProcessRunner } from '#sidecar/process-runner';
 import { NodeSourceFiles } from '#sidecar/source-files';
 

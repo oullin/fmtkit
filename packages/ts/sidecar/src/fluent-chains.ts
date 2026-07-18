@@ -3,12 +3,14 @@ import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { Edits } from '#sidecar/edits';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
-import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isTargetFile, lineIndent, unwrapChainExpression } from '#sidecar/pass-utils';
+import { isTargetFile } from '#sidecar/file-targets';
 import { isErr, ok } from '#sidecar/result';
 import type { Result } from '#sidecar/result';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
+import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
+import { VueScript } from '#sidecar/vue-script';
 
 const cwd = process.cwd();
 
@@ -47,7 +49,7 @@ function memberCallLink(source: string, member: Node, object: Node, comments: No
 		return null;
 	}
 
-	if (hasCommentBetween(comments, objectEnd, propertyStart)) {
+	if (SourceText.hasCommentBetween(comments, objectEnd, propertyStart)) {
 		return null;
 	}
 
@@ -76,17 +78,13 @@ function collectFluentChain(source: string, outer: Node, comments: Node[]): Flue
 	const links: ChainLink[] = [];
 
 	while (call.type === 'CallExpression') {
-		const callee = unwrapChainExpression(
-			childNode(call, 'callee'),
-		);
+		const callee = SourceText.unwrapChainExpression(childNode(call, 'callee'));
 
 		if (callee?.type !== 'MemberExpression') {
 			break;
 		}
 
-		const object = unwrapChainExpression(
-			childNode(callee, 'object'),
-		);
+		const object = SourceText.unwrapChainExpression(childNode(callee, 'object'));
 
 		if (object?.type !== 'CallExpression') {
 			break;
@@ -149,7 +147,7 @@ export class FluentChains {
 				return;
 			}
 
-			const indent = `${lineIndent(content, baseStart)}${indentStep}`;
+			const indent = `${SourceText.lineIndent(content, baseStart)}${indentStep}`;
 
 			for (const link of chain.links) {
 				const replacement = `\n${indent}${link.operator}`;
@@ -224,8 +222,8 @@ export class FluentChains {
 function processVueFile(original: string, file: string): string {
 	let updated = original;
 
-	const segments = extractVueScripts(original).filter((segment) => {
-		return isJavaScriptOrTypeScript(segment.openTag);
+	const segments = VueScript.extractBlocks(original).filter((segment) => {
+		return VueScript.isJavaScriptOrTypeScript(segment.openTag);
 	});
 
 	for (const segment of [...segments].reverse()) {

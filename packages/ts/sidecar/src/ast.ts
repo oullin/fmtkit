@@ -76,6 +76,16 @@ export function declarationKind(node: Node): string | undefined {
 	return typeof kind === 'string' ? kind : undefined;
 }
 
+/**
+ * Report whether an AST node is a `const` variable declaration.
+ *
+ * @param node - The node to inspect.
+ * @returns `true` for `const` variable declarations.
+ */
+export function isConstDeclaration(node: Node): boolean {
+	return node.type === 'VariableDeclaration' && declarationKind(node) === 'const';
+}
+
 export function getStart(n: Node): number {
 	return typeof n.start === 'number' ? n.start : (n.range?.[0] ?? -1);
 }

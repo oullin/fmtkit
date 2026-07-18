@@ -41,7 +41,9 @@ test('parse() reads rolldown-aliased bindings and the hashed module specifier', 
 export { formatEmbeddedCode, formatEmbeddedDoc, formatFile, sortTailwindClasses };
 `;
 
-	const bindings = unwrapOk(ApiBindings.parse(workerSource, WORKER_PATH));
+	const bindings = unwrapOk(
+		ApiBindings.parse(workerSource, WORKER_PATH),
+	);
 
 	assert.equal(bindings.moduleSpecifier, './apis-CvFX8LhR.js');
 	assert.equal(bindings.formatFile, 'r');
@@ -54,7 +56,9 @@ test('parse() reads bare bindings, each exported under its own name', () => {
 	const workerSource = `import { formatEmbeddedCode, formatEmbeddedDoc, formatFile, sortTailwindClasses } from "./apis.js";
 `;
 
-	const bindings = unwrapOk(ApiBindings.parse(workerSource, WORKER_PATH));
+	const bindings = unwrapOk(
+		ApiBindings.parse(workerSource, WORKER_PATH),
+	);
 
 	assert.equal(bindings.moduleSpecifier, './apis.js');
 	assert.equal(bindings.formatFile, 'formatFile');
@@ -67,14 +71,18 @@ test('parse() tolerates a trailing comma in the import', () => {
 	const workerSource = `import { r as formatFile, t as formatEmbeddedCode, n as formatEmbeddedDoc, i as sortTailwindClasses, } from './apis.js';
 `;
 
-	const bindings = unwrapOk(ApiBindings.parse(workerSource, WORKER_PATH));
+	const bindings = unwrapOk(
+		ApiBindings.parse(workerSource, WORKER_PATH),
+	);
 
 	assert.equal(bindings.formatFile, 'r');
 	assert.equal(bindings.sortTailwindClasses, 'i');
 });
 
 test('parse() reports WorkerImportUnrecognised when the entry carries no API import', () => {
-	const error = unwrapErr(ApiBindings.parse('export {};\n', WORKER_PATH));
+	const error = unwrapErr(
+		ApiBindings.parse('export {};\n', WORKER_PATH),
+	);
 
 	assert.ok(error instanceof WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
@@ -86,7 +94,9 @@ test('parse() reports WorkerImportUnrecognised for a binding it cannot read', ()
 	const workerSource = `import { r as formatFile, 1bad } from './apis.js';
 `;
 
-	const error = unwrapErr(ApiBindings.parse(workerSource, WORKER_PATH));
+	const error = unwrapErr(
+		ApiBindings.parse(workerSource, WORKER_PATH),
+	);
 
 	assert.ok(error instanceof WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
@@ -98,7 +108,9 @@ test('parse() reports ApiExportMissing for the function the entry no longer re-e
 	const workerSource = `import { n as formatEmbeddedDoc, r as formatFile, t as formatEmbeddedCode } from './apis.js';
 `;
 
-	const error = unwrapErr(ApiBindings.parse(workerSource, WORKER_PATH));
+	const error = unwrapErr(
+		ApiBindings.parse(workerSource, WORKER_PATH),
+	);
 
 	assert.ok(error instanceof ApiExportMissing);
 	assert.equal(error._tag, 'ApiExportMissing');

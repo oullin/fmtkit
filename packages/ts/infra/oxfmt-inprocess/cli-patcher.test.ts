@@ -20,45 +20,6 @@ const REGION_MARKER = '//#region src-js/cli/worker-proxy.ts';
 const RUNTIME_ANCHOR = 'runtime: "child_process"';
 
 /**
- * A minimal `cli.js` shaped like oxfmt's real bundle: the Tinypool import, a
- * `worker-proxy` region holding every worker-pool reference (`Tinypool`,
- * `pool.run`, `pool = `, the child_process runtime), and `runCli` wiring
- * outside the region that the rewrite must leave untouched.
- */
-const CLI_SOURCE = `import { runCli, toFormatFileResult, toNullable } from "./chunks/cli-main.js";
-${TINYPOOL_IMPORT}
-${REGION_MARKER}
-let pool;
-async function initExternalFormatter(numThreads) {
-	pool = new Tinypool({
-		filename: new URL("./cli-worker.js", import.meta.url).href,
-		maxThreads: numThreads,
-		${RUNTIME_ANCHOR},
-	});
-}
-async function disposeExternalFormatter() {
-	await pool.destroy();
-}
-function formatFile(options, code) {
-	return toFormatFileResult(pool.run({ options, code }, { name: "formatFile" }));
-}
-function formatEmbeddedCode(options, code) {
-	return toNullable(pool.run({ options, code }, { name: "formatEmbeddedCode" }));
-}
-//#endregion
-runCli({ formatFile, formatEmbeddedCode, initExternalFormatter, disposeExternalFormatter });
-`;
-
-/**
- * A minimal `cli-worker.js` shaped like oxfmt's real worker entry: the four
- * API functions re-exported under rolldown's single-letter aliases from a
- * content-hashed module.
- */
-const WORKER_SOURCE = `import { i as sortTailwindClasses, n as formatEmbeddedDoc, r as formatFile, t as formatEmbeddedCode } from './apis-CvFX8LhR.js';
-export { formatEmbeddedCode, formatEmbeddedDoc, formatFile, sortTailwindClasses };
-`;
-
-/**
  * An in-memory `TextFiles`, so the patcher's behaviour is observed through
  * the results it returns and the contents it stores — no filesystem, no spies.
  *
@@ -114,6 +75,45 @@ class FakeTextFiles implements TextFiles {
 	}
 }
 
+/**
+ * A minimal `cli.js` shaped like oxfmt's real bundle: the Tinypool import, a
+ * `worker-proxy` region holding every worker-pool reference (`Tinypool`,
+ * `pool.run`, `pool = `, the child_process runtime), and `runCli` wiring
+ * outside the region that the rewrite must leave untouched.
+ */
+const CLI_SOURCE = `import { runCli, toFormatFileResult, toNullable } from "./chunks/cli-main.js";
+${TINYPOOL_IMPORT}
+${REGION_MARKER}
+let pool;
+async function initExternalFormatter(numThreads) {
+	pool = new Tinypool({
+		filename: new URL("./cli-worker.js", import.meta.url).href,
+		maxThreads: numThreads,
+		${RUNTIME_ANCHOR},
+	});
+}
+async function disposeExternalFormatter() {
+	await pool.destroy();
+}
+function formatFile(options, code) {
+	return toFormatFileResult(pool.run({ options, code }, { name: "formatFile" }));
+}
+function formatEmbeddedCode(options, code) {
+	return toNullable(pool.run({ options, code }, { name: "formatEmbeddedCode" }));
+}
+//#endregion
+runCli({ formatFile, formatEmbeddedCode, initExternalFormatter, disposeExternalFormatter });
+`;
+
+/**
+ * A minimal `cli-worker.js` shaped like oxfmt's real worker entry: the four
+ * API functions re-exported under rolldown's single-letter aliases from a
+ * content-hashed module.
+ */
+const WORKER_SOURCE = `import { i as sortTailwindClasses, n as formatEmbeddedDoc, r as formatFile, t as formatEmbeddedCode } from './apis-CvFX8LhR.js';
+export { formatEmbeddedCode, formatEmbeddedDoc, formatFile, sortTailwindClasses };
+`;
+
 /** A fake holding a pristine oxfmt install, ready to patch. */
 function pristineInstall(): FakeTextFiles {
 	return new FakeTextFiles([
@@ -153,7 +153,9 @@ function unwrapErr<T, E extends Error>(result: Result<T, E>): E {
 test('patch() rewrites the CLI in place and reports what changed', () => {
 	const files = pristineInstall();
 
-	const outcome = unwrapOk(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const outcome = unwrapOk(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.equal(outcome.cliPath, CLI_PATH);
 	assert.equal(outcome.apiModuleSpecifier, './apis-CvFX8LhR.js');
@@ -180,9 +182,13 @@ test('patch() on an already-patched CLI reports CliAlreadyPatched instead of nes
 	const files = pristineInstall();
 	const patcher = new OxfmtCliPatcher(files);
 
-	unwrapOk(patcher.patch(DIST_DIR));
+	unwrapOk(
+		patcher.patch(DIST_DIR),
+	);
 
-	const error = unwrapErr(patcher.patch(DIST_DIR));
+	const error = unwrapErr(
+		patcher.patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliAlreadyPatched);
 	assert.equal(error._tag, 'CliAlreadyPatched');
@@ -192,7 +198,9 @@ test('patch() on an already-patched CLI reports CliAlreadyPatched instead of nes
 test('patch() reports OxfmtFileUnreadable when cli.js cannot be read', () => {
 	const files = new FakeTextFiles([[WORKER_PATH, WORKER_SOURCE]]);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof OxfmtFileUnreadable);
 	assert.equal(error._tag, 'OxfmtFileUnreadable');
@@ -202,7 +210,9 @@ test('patch() reports OxfmtFileUnreadable when cli.js cannot be read', () => {
 test('patch() reports OxfmtFileUnreadable when cli-worker.js cannot be read', () => {
 	const files = new FakeTextFiles([[CLI_PATH, CLI_SOURCE]]);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof OxfmtFileUnreadable);
 	assert.equal(error._tag, 'OxfmtFileUnreadable');
@@ -215,7 +225,9 @@ test('patch() reports WorkerImportUnrecognised when the worker entry has no API 
 		[WORKER_PATH, 'export {};\n'],
 	]);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
@@ -225,12 +237,15 @@ test('patch() reports WorkerImportUnrecognised when the worker entry has no API 
 
 test('patch() reports ApiExportMissing when the worker entry drops a function', () => {
 	const withoutSort = WORKER_SOURCE.replace('i as sortTailwindClasses, ', '');
+
 	const files = new FakeTextFiles([
 		[CLI_PATH, CLI_SOURCE],
 		[WORKER_PATH, withoutSort],
 	]);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof ApiExportMissing);
 	assert.equal(error._tag, 'ApiExportMissing');
@@ -243,7 +258,9 @@ test('patch() reports CliAnchorMissing when the Tinypool import is gone', () => 
 
 	files.files.set(CLI_PATH, CLI_SOURCE.replace(`${TINYPOOL_IMPORT}\n`, ''));
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
@@ -256,7 +273,9 @@ test('patch() reports CliAnchorMissing when the worker-proxy region marker is go
 
 	files.files.set(CLI_PATH, CLI_SOURCE.replace(`${REGION_MARKER}\n`, ''));
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
@@ -269,7 +288,9 @@ test('patch() reports CliAnchorMissing when the child_process runtime is gone', 
 
 	files.files.set(CLI_PATH, CLI_SOURCE.replace(RUNTIME_ANCHOR, 'runtime: "worker_threads"'));
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
@@ -282,7 +303,9 @@ test('patch() reports CliAnchorMissing when the region never closes', () => {
 
 	files.files.set(CLI_PATH, CLI_SOURCE.replace('//#endregion\n', ''));
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
@@ -295,7 +318,9 @@ test('patch() reports CliPatchIncomplete when worker-pool code survives outside 
 
 	files.files.set(CLI_PATH, `${CLI_SOURCE}const leftover = Tinypool;\n`);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof CliPatchIncomplete);
 	assert.equal(error._tag, 'CliPatchIncomplete');
@@ -312,7 +337,9 @@ test('patch() reports OxfmtFileUnwritable when the rewritten CLI cannot be writt
 		[CLI_PATH],
 	);
 
-	const error = unwrapErr(new OxfmtCliPatcher(files).patch(DIST_DIR));
+	const error = unwrapErr(
+		new OxfmtCliPatcher(files).patch(DIST_DIR),
+	);
 
 	assert.ok(error instanceof OxfmtFileUnwritable);
 	assert.equal(error._tag, 'OxfmtFileUnwritable');

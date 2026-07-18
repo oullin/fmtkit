@@ -22,7 +22,7 @@ function isRelativeSpecifier(value: string): boolean {
 }
 
 function sourceValue(source: Node | undefined): string | null {
-	return source?.stringValue ?? null;
+	return source ? (Ast.stringValue(source) ?? null) : null;
 }
 
 function isSourceFile(name: string): boolean {

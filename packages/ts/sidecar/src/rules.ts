@@ -60,7 +60,13 @@ export class Rules {
 	}
 
 	static #isIdentifierNamed(node: Node | undefined, names: Set<string>): boolean {
-		return node?.type === 'Identifier' && node.name !== undefined && names.has(node.name);
+		if (node?.type !== 'Identifier') {
+			return false;
+		}
+
+		const name = Ast.nodeName(node);
+
+		return name !== undefined && names.has(name);
 	}
 
 	static #isVuePrimitiveCall(node: Node | undefined): boolean {

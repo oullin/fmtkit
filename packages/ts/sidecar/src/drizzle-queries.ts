@@ -121,7 +121,7 @@ export class DrizzleQueries {
 			return null;
 		}
 
-		return node.stringValue ?? null;
+		return Ast.stringValue(node) ?? null;
 	}
 
 	static #propertyName(member: Node | undefined): string | null {

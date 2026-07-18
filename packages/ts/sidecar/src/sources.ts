@@ -9,6 +9,12 @@ export class Sources {
 	/**
 	 * Parse source text into the structures used by formatting passes.
 	 *
+	 * Oxc output enters through `ParsedSourceDto`: Zod eagerly validates the
+	 * program/comments envelope and node heads. Nested structure and positions
+	 * remain trusted Oxc data, while `name`, `kind`, and string `value` reads are
+	 * validated lazily. This preserves one schema-guarded DTO boundary without
+	 * recursively rebuilding the full tree on every pipeline pass.
+	 *
 	 * @param virtualName - The filename used to select parser syntax and label errors.
 	 * @param content - The source text to parse.
 	 * @returns The trustworthy syntax tree, or the parser diagnostics as a value.

@@ -1,4 +1,6 @@
+import { z } from 'zod';
 import { Node } from '#sidecar/node-schema';
+import type { AstValue } from '#sidecar/node-schema';
 
 const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	Program: 'body',
@@ -8,8 +10,10 @@ const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	ClassBody: 'body',
 };
 
-/** Traverses and reads recursively validated AST nodes. */
+/** Traverses boundary-admitted AST nodes and validates narrow scalar reads. */
 export class Ast {
+	static readonly #stringSchema = z.string();
+
 	/**
 	 * Read a child node off a parent property.
 	 *
@@ -40,14 +44,19 @@ export class Ast {
 			: [];
 	}
 
-	/** Read a node's schema-validated `name` property. */
+	/** Lazily validate and read a trusted node's optional `name` property. */
 	static nodeName(node: Node): string | undefined {
-		return node.name;
+		return Ast.#stringValue(node.name);
 	}
 
-	/** Read a node's schema-validated `kind` property. */
+	/** Lazily validate and read a trusted node's optional `kind` property. */
 	static declarationKind(node: Node): string | undefined {
-		return node.kind;
+		return Ast.#stringValue(node.kind);
+	}
+
+	/** Lazily validate and read a trusted literal or comment's string value. */
+	static stringValue(node: Node): string | undefined {
+		return Ast.#stringValue(node.value);
 	}
 
 	/** Report whether an AST node is a `const` variable declaration. */
@@ -112,5 +121,11 @@ export class Ast {
 		});
 
 		return bodies;
+	}
+
+	static #stringValue(value: AstValue): string | undefined {
+		const parsed = Ast.#stringSchema.safeParse(value);
+
+		return parsed.success ? parsed.data : undefined;
 	}
 }

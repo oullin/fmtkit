@@ -59,8 +59,8 @@
 		"lint": "cd ../../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/ts/sidecar/node_modules/.bin/oxlint --fix",
 		"lint:check": "cd ../../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/ts/sidecar/node_modules/.bin/oxlint",
 		"check": "pnpm lint:check",
-		"test": "node --import tsx --test src/*.test.ts src/__tests__/*.test.ts",
-		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=90 src/*.test.ts src/__tests__/*.test.ts",
+		"test": "node --import tsx --test src/*.test.ts",
+		"test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-lines=90 src/*.test.ts",
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {

@@ -58,8 +58,9 @@ func readOverrides() overrides {
 }
 
 // RunPipeline runs the full TS/Vue formatting pipeline (blank-lines -> oxfmt
-// -> fluent-chains -> validate-syntax). oxfmt is an internal normalising step,
-// not the last word: the project passes run after it and own the final style.
+// -> fluent-chains -> blank-lines -> validate-syntax). oxfmt is an internal
+// normalising step, not the last word: the project passes run after it and
+// own the final style.
 func (s Support) RunPipeline(ctx context.Context, opts RunOptions) error {
 	env := readOverrides()
 

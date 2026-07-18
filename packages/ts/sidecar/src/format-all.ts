@@ -1,43 +1,41 @@
-import { spawn } from 'node:child_process';
-import { availableParallelism } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { processFile as processBlankLinesFile } from '#sidecar/files';
-import { processFluentChainsFile } from '#sidecar/fluent-chains';
-import { isNotFoundError, isTargetFile } from '#sidecar/pass-utils';
-import { validateFile } from '#sidecar/validate-syntax';
+import type { OxcError } from 'oxc-parser';
+import { UnexpectedCliArgument } from '#sidecar/errors';
+import { FormatPipeline } from '#sidecar/format-pipeline';
+import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/format-pipeline';
+import { isTargetFile } from '#sidecar/pass-utils';
+import { NodeProcessRunner } from '#sidecar/process-runner';
+import { err, isErr, ok } from '#sidecar/result';
+import type { Result } from '#sidecar/result';
+import { NodeSourceFiles } from '#sidecar/source-files';
 
-// format-all runs the full TS pipeline (blank-lines → oxfmt → fluent-chains →
-// blank-lines → validate-syntax) inside a single process. Files within a pass
-// are processed concurrently; results are reported in input order so the
-// output stays deterministic.
-//
-// oxfmt runs *before* the project passes, never after. It is an internal step
-// that normalises the file; the project passes then impose the style fmtkit
-// actually ships. Re-running oxfmt at the end would undo them — it collapses
-// anything that fits in printWidth, which is most of what expanded-calls and
-// fluent-chains just expanded. The output is therefore deliberately not what
-// bare oxfmt would produce: fmtkit's format is the pipeline's output, so check
-// it by running the pipeline, not by running oxfmt.
+/** Parsed command-line options for the full formatting pipeline. */
+export type CliOptions = {
+	/** Whether the pipeline checks source or writes changes. */
+	mode: FormatMode;
 
-type CliOptions = {
-	check: boolean;
+	/** The oxfmt executable, or `null` to skip external formatting. */
 	oxfmtBin: string | null;
+
+	/** The oxfmt configuration path, or `null` to use its defaults. */
 	oxfmtConfig: string | null;
-	formatFiles: string[];
-	syntaxFiles: string[];
+
+	/** Files eligible for formatting passes. */
+	readonly formatFiles: string[];
+
+	/** Files eligible for final syntax validation. */
+	readonly syntaxFiles: string[];
 };
 
-type PassOutcome = {
-	file: string;
-	changed: boolean;
-	missing: boolean;
-};
-
-const OXFMT_CHUNK_SIZE = 100;
-
-export function parseArgs(argv: string[]): CliOptions {
+/**
+ * Parse the full-pipeline command line.
+ *
+ * @param argv - Arguments after the executable and script path.
+ * @returns Parsed options, or the unexpected argument as a typed value.
+ */
+export function parseArgs(argv: string[]): Result<CliOptions, UnexpectedCliArgument> {
 	const options: CliOptions = {
-		check: false,
+		mode: 'write',
 		oxfmtBin: null,
 		oxfmtConfig: null,
 		formatFiles: [],
@@ -54,7 +52,7 @@ export function parseArgs(argv: string[]): CliOptions {
 		}
 
 		if (arg === '--check') {
-			options.check = true;
+			options.mode = 'check';
 			section = null;
 		} else if (arg === '--oxfmt-bin') {
 			options.oxfmtBin = argv[++i] ?? null;
@@ -69,67 +67,27 @@ export function parseArgs(argv: string[]): CliOptions {
 		} else if (section) {
 			options[section].push(arg);
 		} else {
-			throw new Error(`[format-all] unexpected argument: ${arg}`);
+			return err(new UnexpectedCliArgument(arg));
 		}
 	}
 
-	return options;
+	return ok(options);
 }
 
-export async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-	const results = new Array<R>(items.length);
-
-	let nextIndex = 0;
-
-	async function worker(): Promise<void> {
-		while (true) {
-			const index = nextIndex++;
-
-			if (index >= items.length) {
-				return;
-			}
-
-			const item = items[index];
-
-			if (item === undefined) {
-				continue;
-			}
-
-			results[index] = await fn(item);
-		}
-	}
-
-	const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker);
-
-	await Promise.all(workers);
-
-	return results;
-}
-
-export async function runPass(label: string, files: string[], check: boolean, processOne: (file: string, check: boolean) => Promise<boolean>): Promise<void> {
-	const outcomes = await mapPool(
-		files,
-		availableParallelism(),
-		async (file): Promise<PassOutcome> => {
-			try {
-				return { file, changed: await processOne(file, check), missing: false };
-			} catch (err) {
-				if (isNotFoundError(err)) {
-					return { file, changed: false, missing: true };
-				}
-
-				throw err;
-			}
-		},
-	);
-
+function reportPass(label: string, files: string[], mode: FormatMode, outcomes: PassOutcome[], failureNoun: string): boolean {
 	let changedCount = 0;
 
 	for (const outcome of outcomes) {
-		if (outcome.missing) {
+		if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
 			console.warn(`[${label}] path not found, skipping: ${outcome.file}`);
 
 			continue;
+		}
+
+		if (outcome.error) {
+			console.error(outcome.error);
+
+			return false;
 		}
 
 		if (!outcome.changed) {
@@ -137,83 +95,83 @@ export async function runPass(label: string, files: string[], check: boolean, pr
 		}
 
 		changedCount++;
-		console.log(`[${label}] ${check ? 'would change' : 'updated'} ${outcome.file}`);
+		console.log(`[${label}] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
 	}
 
-	if (check && changedCount > 0) {
-		console.error(`[${label}] ${changedCount} file(s) need edits. Run "pnpm format" to fix.`);
-		process.exit(1);
+	if (mode === 'check' && changedCount > 0) {
+		console.error(`[${label}] ${changedCount} file(s) need ${failureNoun}. Run "pnpm format" to fix.`);
+
+		return false;
 	}
 
-	console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${check ? 'would change' : 'changed'}`);
+	console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
+
+	return true;
 }
 
-export function runOxfmt(options: CliOptions): Promise<void> {
-	if (!options.oxfmtBin || options.formatFiles.length === 0) {
-		return Promise.resolve();
+function formatError(file: string, error: OxcError): string {
+	if (typeof error.codeframe === 'string' && error.codeframe.length > 0) {
+		return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
 	}
 
-	const args = options.oxfmtConfig ? ['--config', options.oxfmtConfig] : [];
-
-	args.push(options.check ? '--check' : '--write', '--no-error-on-unmatched-pattern');
-
-	const bin = options.oxfmtBin;
-	const files = options.formatFiles;
-
-	const runChunk = (chunk: string[]): Promise<void> => {
-		return new Promise((resolvePromise, rejectPromise) => {
-			const child = spawn(
-				bin,
-				[...args, ...chunk],
-				{ stdio: 'inherit' },
-			);
-
-			child.on('error', rejectPromise);
-
-			child.on('exit', (code, signal) => {
-				if (code === 0) {
-					resolvePromise();
-				} else {
-					rejectPromise(new Error(`[format-all] oxfmt exited with ${signal ?? code}`));
-				}
-			});
-		});
-	};
-
-	let promise = Promise.resolve();
-
-	for (let i = 0; i < files.length; i += OXFMT_CHUNK_SIZE) {
-		const chunk = files.slice(i, i + OXFMT_CHUNK_SIZE);
-
-		promise = promise.then(() => {
-			return runChunk(chunk);
-		});
+	if (typeof error.message === 'string' && error.message.length > 0) {
+		return `[validate-syntax] ${file}: ${error.message}`;
 	}
 
-	return promise;
+	return `[validate-syntax] ${file}: syntax validation failed`;
 }
 
-async function runValidate(files: string[]): Promise<void> {
-	const failures = (await mapPool(
-		files,
-		availableParallelism(),
-		validateFile,
-	)).flat();
+function reportValidation(files: string[], failures: ValidationFailure[]): boolean {
+	const diagnostics: string[] = [];
 
-	if (failures.length > 0) {
-		console.error(failures.join('\n'));
-		console.error(`[validate-syntax] ${failures.length} syntax error(s) found after formatting.`);
-		process.exit(1);
+	for (const failure of failures) {
+		if (failure.error._tag === 'SourceFileUnreadable') {
+			if (failure.error.isNotFound()) {
+				console.warn(`[validate-syntax] path not found, skipping: ${failure.file}`);
+
+				continue;
+			}
+
+			console.error(failure.error);
+
+			return false;
+		}
+
+		for (const error of failure.error.errors) {
+			diagnostics.push(formatError(failure.file, error));
+		}
+	}
+
+	if (diagnostics.length > 0) {
+		console.error(diagnostics.join('\n'));
+		console.error(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.`);
+
+		return false;
 	}
 
 	console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
+
+	return true;
 }
 
+/**
+ * Run the full formatting CLI and map outcome values to console output and status.
+ *
+ * @returns Nothing after setting `process.exitCode` when the pipeline fails.
+ */
 export async function main(): Promise<void> {
-	const options = parseArgs(
+	const parsed = parseArgs(
 		process.argv.slice(2),
 	);
 
+	if (isErr(parsed)) {
+		console.error(parsed.error);
+		process.exitCode = 1;
+
+		return;
+	}
+
+	const options = parsed.value;
 	const formatTargets = [...new Set(options.formatFiles.filter(isTargetFile))];
 
 	const syntaxTargets = [
@@ -224,27 +182,57 @@ export async function main(): Promise<void> {
 		),
 	];
 
-	const pipelineOptions = { ...options, formatFiles: formatTargets };
+	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
-	await runPass('blank-lines', formatTargets, options.check, processBlankLinesFile);
+	const blankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => {
+		return pipeline.formatFile(file, mode);
+	});
 
-	await runOxfmt(pipelineOptions);
+	if (!reportPass('blank-lines', formatTargets, options.mode, blankLines, 'edits')) {
+		process.exitCode = 1;
 
-	await runPass('fluent-chains', formatTargets, options.check, processFluentChainsFile);
+		return;
+	}
 
-	// fluent-chains (and the expanded-calls pass it applies) turns single-line
-	// statements multiline, creating blank-line obligations the first pass
-	// could not see. Without this second pass the pipeline only converges on
-	// its next invocation, so a format-then-diff gate rejects freshly
-	// formatted code.
-	await runPass('blank-lines', formatTargets, options.check, processBlankLinesFile);
+	const oxfmt = await pipeline.runOxfmt({ bin: options.oxfmtBin, config: options.oxfmtConfig, files: formatTargets, mode: options.mode });
 
-	await runValidate(syntaxTargets);
+	if (isErr(oxfmt)) {
+		console.error(oxfmt.error);
+		process.exitCode = 1;
+
+		return;
+	}
+
+	const fluentChains = await pipeline.runPass('fluent-chains', formatTargets, options.mode, (file, mode) => {
+		return pipeline.formatFluentFile(file, mode);
+	});
+
+	if (!reportPass('fluent-chains', formatTargets, options.mode, fluentChains, 'edits')) {
+		process.exitCode = 1;
+
+		return;
+	}
+
+	// Fluent and expanded calls create blank-line obligations the first pass
+	// cannot see, so the second pass makes one invocation reach a fixed point.
+	const finalBlankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => {
+		return pipeline.formatFile(file, mode);
+	});
+
+	if (!reportPass('blank-lines', formatTargets, options.mode, finalBlankLines, 'edits')) {
+		process.exitCode = 1;
+
+		return;
+	}
+
+	if (!reportValidation(syntaxTargets, await pipeline.validate(syntaxTargets))) {
+		process.exitCode = 1;
+	}
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	main().catch((err: unknown) => {
-		console.error(err);
-		process.exit(1);
+	main().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
 	});
 }

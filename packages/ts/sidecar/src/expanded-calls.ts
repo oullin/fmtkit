@@ -1,7 +1,9 @@
 import { childNode, childNodes, getEnd, getStart, isNode, visit } from '#sidecar/ast';
-import { applyEdits } from '#sidecar/edits';
-import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf } from '#sidecar/pass-utils';
+import { Edits } from '#sidecar/edits';
+import { callParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, sourceOf } from '#sidecar/pass-utils';
 import type { CallParens } from '#sidecar/pass-utils';
+import { isErr } from '#sidecar/result';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression']);
@@ -216,66 +218,83 @@ function formatNode(source: string, node: Node, comments: Node[], indent: string
 	return formatCall(source, node, comments, indent, baseIndent);
 }
 
-export function computeExpandedCallEdits(content: string, virtualName: string): Edit[] {
-	if (isDeclarationFile(virtualName)) {
-		return [];
-	}
-
-	const parsed = parseCleanly(virtualName, content);
-
-	if (!parsed) {
-		return [];
-	}
-
-	const comments = parsed.comments;
-	const parents = new WeakMap<Node, Node>();
-	const edits: Edit[] = [];
-
-	collectParents(parsed.program, parents);
-
-	visit(parsed.program, (node) => {
-		if (node.type !== 'CallExpression') {
-			return;
+/** Expands structurally complex call arguments into stable multiline layouts. */
+export class ExpandedCalls {
+	/**
+	 * Compute edits for calls whose arguments require a multiline layout.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Non-overlapping expanded-call edits.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		if (isDeclarationFile(virtualName)) {
+			return [];
 		}
 
-		if (!shouldExpandCall(node)) {
-			return;
+		const parsed = Sources.parse(virtualName, content);
+
+		if (isErr(parsed)) {
+			return [];
 		}
 
-		if (isNestedInsideUnexpandedCallArgument(node, parents)) {
-			return;
-		}
+		const comments = parsed.value.comments;
+		const parents = new WeakMap<Node, Node>();
+		const edits: Edit[] = [];
 
-		const parens = calleeParens(content, node);
+		collectParents(parsed.value.program, parents);
 
-		if (!parens || hasCommentBetween(comments, parens.open, parens.close)) {
-			return;
-		}
+		visit(parsed.value.program, (node) => {
+			if (node.type !== 'CallExpression') {
+				return;
+			}
 
-		const indent = lineIndent(
-			content,
-			getStart(node),
-		);
+			if (!shouldExpandCall(node)) {
+				return;
+			}
 
-		const replacement = formatCallParens(content, node, comments, indent, indent);
-		const current = content.slice(parens.open, parens.close + 1);
+			if (isNestedInsideUnexpandedCallArgument(node, parents)) {
+				return;
+			}
 
-		if (replacement === null || replacement === current) {
-			return;
-		}
+			const parens = calleeParens(content, node);
 
-		edits.push({
-			start: parens.open,
-			end: parens.close + 1,
-			replacement,
+			if (!parens || hasCommentBetween(comments, parens.open, parens.close)) {
+				return;
+			}
+
+			const indent = lineIndent(
+				content,
+				getStart(node),
+			);
+
+			const replacement = formatCallParens(content, node, comments, indent, indent);
+			const current = content.slice(parens.open, parens.close + 1);
+
+			if (replacement === null || replacement === current) {
+				return;
+			}
+
+			edits.push({
+				start: parens.open,
+				end: parens.close + 1,
+				replacement,
+			});
 		});
-	});
 
-	return nonOverlappingEdits(edits);
-}
+		return nonOverlappingEdits(edits);
+	}
 
-export function formatExpandedCalls(content: string, virtualName: string): string {
-	const edits = computeExpandedCallEdits(content, virtualName);
+	/**
+	 * Format calls whose arguments require a multiline layout.
+	 *
+	 * @param content - The source text to format.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns The formatted source, or the original source when no edits apply.
+	 */
+	static format(content: string, virtualName: string): string {
+		const edits = ExpandedCalls.computeEdits(content, virtualName);
 
-	return edits.length > 0 ? applyEdits(content, edits) : content;
+		return edits.length > 0 ? Edits.apply(content, edits) : content;
+	}
 }

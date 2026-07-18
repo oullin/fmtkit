@@ -1,5 +1,7 @@
 import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
-import { lineIndent, parseCleanly } from '#sidecar/pass-utils';
+import { lineIndent } from '#sidecar/pass-utils';
+import { isErr } from '#sidecar/result';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 const STATEMENT_BODY_KEYS: Record<string, string[]> = {
@@ -39,44 +41,54 @@ function wrapStatementBody(source: string, owner: Node, body: Node): Edit | null
 	};
 }
 
-export function computeBodyWrapEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
+/** Wraps unbraced statement bodies without changing unparsable source. */
+export class BodyWrapper {
+	/**
+	 * Compute edits that wrap unbraced statement bodies.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Non-overlapping body-wrap edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
 
-	if (!parsed) {
-		return [];
-	}
-
-	const edits: Edit[] = [];
-
-	visit(parsed.program, (node) => {
-		const bodyKeys = STATEMENT_BODY_KEYS[node.type];
-
-		if (!bodyKeys) {
-			return;
+		if (isErr(parsed)) {
+			return [];
 		}
 
-		for (const key of bodyKeys) {
-			const body = childNode(node, key);
+		const edits: Edit[] = [];
 
-			if (!body) {
-				continue;
+		visit(parsed.value.program, (node) => {
+			const bodyKeys = STATEMENT_BODY_KEYS[node.type];
+
+			if (!bodyKeys) {
+				return;
 			}
 
-			const edit = wrapStatementBody(content, node, body);
+			for (const key of bodyKeys) {
+				const body = childNode(node, key);
 
-			if (edit) {
-				edits.push(edit);
+				if (!body) {
+					continue;
+				}
+
+				const edit = wrapStatementBody(content, node, body);
+
+				if (edit) {
+					edits.push(edit);
+				}
 			}
-		}
-	});
-
-	return edits
-		.sort((a, b) => {
-			return a.start - b.start || b.end - b.start - (a.end - a.start);
-		})
-		.filter((edit, index, sorted) => {
-			return !sorted.some((other, otherIndex) => {
-				return otherIndex < index && edit.start < other.end;
-			});
 		});
+
+		return edits
+			.sort((a, b) => {
+				return a.start - b.start || b.end - b.start - (a.end - a.start);
+			})
+			.filter((edit, index, sorted) => {
+				return !sorted.some((other, otherIndex) => {
+					return otherIndex < index && edit.start < other.end;
+				});
+			});
+	}
 }

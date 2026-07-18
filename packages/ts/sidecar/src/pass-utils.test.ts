@@ -3,32 +3,33 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { SourceFileUnreadable } from '#sidecar/errors';
 
-import {
-	extractVueScripts,
-	isDeclarationFile,
-	isJavaScriptOrTypeScript,
-	isNotFoundError,
-	isTargetFile,
-	lineIndent,
-	nonOverlappingEdits,
-	parseCleanly,
-	scriptAttribute,
-	writeFileAtomic,
-} from '#sidecar/pass-utils';
+import { extractVueScripts, isDeclarationFile, isJavaScriptOrTypeScript, isTargetFile, lineIndent, nonOverlappingEdits, scriptAttribute } from '#sidecar/pass-utils';
+import { isErr } from '#sidecar/result';
+import { NodeSourceFiles } from '#sidecar/source-files';
+import { Sources } from '#sidecar/sources';
 
-test('parseCleanly returns the program and comments for valid source', () => {
-	const parsed = parseCleanly('sample.ts', 'const one = 1; // note\n');
+test('Sources.parse returns the program and comments for valid source', () => {
+	const parsed = Sources.parse('sample.ts', 'const one = 1; // note\n');
 
-	assert.ok(parsed);
+	assert.equal(isErr(parsed), false);
 
-	assert.equal(parsed.program.type, 'Program');
+	if (isErr(parsed)) {
+		return;
+	}
 
-	assert.equal(parsed.comments.length, 1);
+	assert.equal(parsed.value.program.type, 'Program');
+
+	assert.equal(parsed.value.comments.length, 1);
 });
 
-test('parseCleanly returns null for source with syntax errors', () => {
-	assert.equal(parseCleanly('sample.ts', 'const broken = {;\n'), null);
+test('Sources.parse carries parser errors for source with syntax errors', () => {
+	const parsed = Sources.parse('sample.ts', 'const broken = {;\n');
+
+	assert.equal(isErr(parsed), true);
+
+	assert.ok(isErr(parsed) && parsed.error.errors.length > 0);
 });
 
 test('isTargetFile accepts ts and vue but not declarations', () => {
@@ -47,12 +48,12 @@ test('isDeclarationFile only matches .d.ts', () => {
 	assert.equal(isDeclarationFile('app.ts'), false);
 });
 
-test('isNotFoundError matches ENOENT-shaped errors only', () => {
-	assert.equal(isNotFoundError({ code: 'ENOENT' }), true);
+test('SourceFileUnreadable identifies ENOENT-shaped causes only', () => {
+	assert.equal(new SourceFileUnreadable('missing.ts', { code: 'ENOENT' }).isNotFound(), true);
 
-	assert.equal(isNotFoundError({ code: 'EACCES' }), false);
+	assert.equal(new SourceFileUnreadable('denied.ts', { code: 'EACCES' }).isNotFound(), false);
 
-	assert.equal(isNotFoundError(new Error('nope')), false);
+	assert.equal(new SourceFileUnreadable('failed.ts', new Error('nope')).isNotFound(), false);
 });
 
 test('lineIndent returns the leading whitespace of the position line', () => {
@@ -119,7 +120,7 @@ test('isJavaScriptOrTypeScript accepts JS/TS langs and module types, rejects oth
 	assert.equal(isJavaScriptOrTypeScript('<script type="application/ld+json">'), false);
 });
 
-test('writeFileAtomic replaces the file content and leaves no temp files', async () => {
+test('NodeSourceFiles atomically replaces content and leaves no temp files', async () => {
 	const dir = await mkdtemp(
 		join(
 			tmpdir(),
@@ -132,7 +133,9 @@ test('writeFileAtomic replaces the file content and leaves no temp files', async
 
 		await writeFile(file, 'before\n');
 
-		await writeFileAtomic(file, 'after\n');
+		const written = await new NodeSourceFiles().writeTextAtomic(file, 'after\n');
+
+		assert.equal(isErr(written), false);
 
 		assert.equal(await readFile(file, 'utf8'), 'after\n');
 

@@ -1,7 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { extractVueScripts, isJavaScriptOrTypeScript, writeFileAtomic } from '#sidecar/pass-utils';
-import { processSegment } from '#sidecar/segment';
 
 export async function dirExists(dir: string): Promise<boolean> {
 	try {
@@ -34,38 +32,4 @@ export async function listSourceFiles(dir: string): Promise<string[]> {
 	}
 
 	return files;
-}
-
-export async function processFile(file: string, check: boolean): Promise<boolean> {
-	const original = await readFile(file, 'utf8');
-
-	let updated = original;
-
-	if (file.endsWith('.vue')) {
-		const segments = extractVueScripts(original).filter((segment) => {
-			return isJavaScriptOrTypeScript(segment.openTag);
-		});
-
-		for (const segment of [...segments].reverse()) {
-			const rewritten = processSegment(segment.content, `${file}.script.ts`);
-
-			if (rewritten === segment.content) {
-				continue;
-			}
-
-			updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
-		}
-	} else {
-		updated = processSegment(original, file);
-	}
-
-	if (updated === original) {
-		return false;
-	}
-
-	if (!check) {
-		await writeFileAtomic(file, updated);
-	}
-
-	return true;
 }

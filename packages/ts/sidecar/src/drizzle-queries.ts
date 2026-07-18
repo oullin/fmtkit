@@ -1,6 +1,8 @@
 import { childNode, childNodes, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
-import { applyEdits } from '#sidecar/edits';
-import { callParens as sharedCallParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, parseCleanly, sourceOf, unwrapChainExpression } from '#sidecar/pass-utils';
+import { Edits } from '#sidecar/edits';
+import { callParens as sharedCallParens, hasCommentBetween, isDeclarationFile, lineIndent, nonOverlappingEdits, sourceOf, unwrapChainExpression } from '#sidecar/pass-utils';
+import { isErr } from '#sidecar/result';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 type DrizzleImports = {
@@ -642,55 +644,72 @@ function formatCallArguments(source: string, call: Node, imports: DrizzleImports
 	};
 }
 
-export function computeDrizzleQueryEdits(content: string, virtualName: string): Edit[] {
-	if (isDeclarationFile(virtualName)) {
-		return [];
-	}
-
-	const parsed = parseCleanly(virtualName, content);
-
-	if (!parsed) {
-		return [];
-	}
-
-	const comments = parsed.comments;
-	const imports = collectDrizzleImports(parsed.program);
-
-	if (imports.locals.size === 0 && imports.namespaces.size === 0) {
-		return [];
-	}
-
-	const edits: Edit[] = [];
-
-	visit(parsed.program, (node) => {
-		if (node.type !== 'CallExpression') {
-			return;
+/** Formats recognised Drizzle query structures without touching unrelated calls. */
+export class DrizzleQueries {
+	/**
+	 * Compute edits for recognised Drizzle query structures.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Non-overlapping query-formatting edits.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		if (isDeclarationFile(virtualName)) {
+			return [];
 		}
 
-		if (isDrizzleMethodCall(node, imports) || isRelationalQueryCall(node, imports) || isSetOperationCall(node, imports)) {
-			const args = childNodes(node, 'arguments');
+		const parsed = Sources.parse(virtualName, content);
 
-			if (isSetOperationCall(node, imports) && args.length > 0 && args.length < 2) {
+		if (isErr(parsed)) {
+			return [];
+		}
+
+		const comments = parsed.value.comments;
+		const imports = collectDrizzleImports(parsed.value.program);
+
+		if (imports.locals.size === 0 && imports.namespaces.size === 0) {
+			return [];
+		}
+
+		const edits: Edit[] = [];
+
+		visit(parsed.value.program, (node) => {
+			if (node.type !== 'CallExpression') {
 				return;
 			}
 
-			if (!isSetOperationCall(node, imports) && !shouldFormatMethodArguments(node, imports)) {
-				return;
+			if (isDrizzleMethodCall(node, imports) || isRelationalQueryCall(node, imports) || isSetOperationCall(node, imports)) {
+				const args = childNodes(node, 'arguments');
+
+				if (isSetOperationCall(node, imports) && args.length > 0 && args.length < 2) {
+					return;
+				}
+
+				if (!isSetOperationCall(node, imports) && !shouldFormatMethodArguments(node, imports)) {
+					return;
+				}
+
+				const edit = formatCallArguments(content, node, imports, comments);
+
+				if (edit) {
+					edits.push(edit);
+				}
 			}
+		});
 
-			const edit = formatCallArguments(content, node, imports, comments);
+		return nonOverlappingEdits(edits);
+	}
 
-			if (edit) {
-				edits.push(edit);
-			}
-		}
-	});
+	/**
+	 * Format recognised Drizzle query structures.
+	 *
+	 * @param content - The source text to format.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns The formatted source, or the original source when no edits apply.
+	 */
+	static format(content: string, virtualName: string): string {
+		const edits = DrizzleQueries.computeEdits(content, virtualName);
 
-	return nonOverlappingEdits(edits);
-}
-
-export function formatDrizzleQueries(content: string, virtualName: string): string {
-	const edits = computeDrizzleQueryEdits(content, virtualName);
-
-	return edits.length > 0 ? applyEdits(content, edits) : content;
+		return edits.length > 0 ? Edits.apply(content, edits) : content;
+	}
 }

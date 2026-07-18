@@ -1,5 +1,7 @@
 import { childNode, childNodes, collectStatementLists, getEnd, getStart, isNode, nodeName, visit } from '#sidecar/ast';
-import { isConstDeclaration, lineIndent, lineStart, parseCleanly } from '#sidecar/pass-utils';
+import { isConstDeclaration, lineIndent, lineStart } from '#sidecar/pass-utils';
+import { isErr } from '#sidecar/result';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 function isMultiline(source: string, node: Node): boolean {
@@ -259,43 +261,53 @@ function groupEdit(source: string, group: Node[], canReorder: boolean): Edit | n
 	};
 }
 
-export function computeDeclarationReorderEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
+/** Reorders declarations only where the transformation is side-effect safe. */
+export class DeclarationReorder {
+	/**
+	 * Compute declaration-ordering edits.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Safe declaration-ordering edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
 
-	if (!parsed) {
-		return [];
-	}
+		if (isErr(parsed)) {
+			return [];
+		}
 
-	const lists = collectStatementLists(parsed.program);
-	const edits: Edit[] = [];
+		const lists = collectStatementLists(parsed.value.program);
+		const edits: Edit[] = [];
 
-	for (const list of lists) {
-		const importGroups = splitGroups(list, (node) => {
-			return node.type === 'ImportDeclaration';
-		});
+		for (const list of lists) {
+			const importGroups = splitGroups(list, (node) => {
+				return node.type === 'ImportDeclaration';
+			});
 
-		const constGroups = splitGroups(list, isConstDeclaration);
+			const constGroups = splitGroups(list, isConstDeclaration);
 
-		for (const group of importGroups) {
-			const edit = groupEdit(content, group, true);
+			for (const group of importGroups) {
+				const edit = groupEdit(content, group, true);
 
-			if (edit) {
-				edits.push(edit);
+				if (edit) {
+					edits.push(edit);
+				}
+			}
+
+			for (const group of constGroups) {
+				const edit = groupEdit(
+					content,
+					group,
+					canReorderConstGroup(content, group),
+				);
+
+				if (edit) {
+					edits.push(edit);
+				}
 			}
 		}
 
-		for (const group of constGroups) {
-			const edit = groupEdit(
-				content,
-				group,
-				canReorderConstGroup(content, group),
-			);
-
-			if (edit) {
-				edits.push(edit);
-			}
-		}
+		return edits;
 	}
-
-	return edits;
 }

@@ -1,13 +1,5 @@
-import { randomBytes } from 'node:crypto';
-import { rename, rm, writeFile } from 'node:fs/promises';
-import { parseSync } from 'oxc-parser';
-import { childNode, declarationKind, getEnd, getStart, isNode } from '#sidecar/ast';
+import { childNode, declarationKind, getEnd, getStart } from '#sidecar/ast';
 import type { Edit, Node } from '#sidecar/types';
-
-export type ParseResult = {
-	program: Node;
-	comments: Node[];
-};
 
 export type CallParens = {
 	open: number;
@@ -22,36 +14,12 @@ export type VueScriptBlock = {
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
-// parseCleanly returns null when the source has syntax errors, so passes
-// never compute edits from a broken tree.
-export function parseCleanly(virtualName: string, content: string): ParseResult | null {
-	const parsed = parseSync(virtualName, content);
-
-	if (parsed.errors.length > 0) {
-		return null;
-	}
-
-	const program: unknown = parsed.program;
-
-	if (!isNode(program)) {
-		return null;
-	}
-
-	const comments: unknown[] = Array.isArray(parsed.comments) ? parsed.comments : [];
-
-	return { program, comments: comments.filter(isNode) };
-}
-
 export function isDeclarationFile(virtualName: string): boolean {
 	return virtualName.endsWith('.d.ts');
 }
 
 export function isTargetFile(path: string): boolean {
 	return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || path.endsWith('.vue');
-}
-
-export function isNotFoundError(err: unknown): boolean {
-	return typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT';
 }
 
 export function sourceOf(source: string, node: Node): string {
@@ -181,29 +149,4 @@ export function isJavaScriptOrTypeScript(openTag: string): boolean {
 	}
 
 	return true;
-}
-
-// writeFileAtomic writes via a sibling temp file plus rename so a crash
-// mid-write can never leave a truncated source file behind. The temp name
-// carries a random suffix so it is unpredictable and cannot be pre-created
-// by another process.
-export async function writeFileAtomic(file: string, content: string): Promise<void> {
-	const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
-
-	try {
-		await writeFile(tmp, content);
-
-		await rename(tmp, file);
-	} catch (err) {
-		try {
-			await rm(
-				tmp,
-				{ force: true },
-			);
-		} catch {
-			// Ignore cleanup failures so the original write/rename error surfaces.
-		}
-
-		throw err;
-	}
 }

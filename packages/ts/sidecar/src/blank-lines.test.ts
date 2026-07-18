@@ -10,7 +10,7 @@ const script = fileURLToPath(
 	import.meta.resolve('#sidecar/blank-lines'),
 );
 const tsx = fileURLToPath(
-	import.meta.resolve('tsx/cli'),
+	import.meta.resolve('tsx'),
 );
 
 function run(command: string, args: string[], cwd: string): void {
@@ -76,7 +76,7 @@ test('adds expected blank lines in Vue script blocks', async () => {
 				].join('\n'),
 			},
 		async (dir) => {
-				run(process.execPath, [tsx, script, 'AgentDock.vue'], dir);
+				run(process.execPath, ['--import', tsx, script, 'AgentDock.vue'], dir);
 
 				const output = await readFile(join(dir, 'AgentDock.vue'), 'utf8');
 
@@ -105,8 +105,8 @@ test('keeps adjacent computed declarations syntactically valid', async () => {
 				].join('\n'),
 			},
 		async (dir) => {
-				run(process.execPath, [tsx, script, 'useAppController.ts'], dir);
-				run(process.execPath, [tsx, script, 'useAppController.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'useAppController.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'useAppController.ts'], dir);
 
 				const output = await readFile(join(dir, 'useAppController.ts'), 'utf8');
 
@@ -125,7 +125,7 @@ test('ignores untracked ignored files and declaration files', async () => {
 				'types.d.ts': ['declare const value: string;', 'declare function run(): string;', ''].join('\n'),
 			},
 		async (dir) => {
-				run(process.execPath, [tsx, script, 'tracked.ts', 'types.d.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'tracked.ts', 'types.d.ts'], dir);
 
 				const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 
@@ -149,7 +149,7 @@ test('skips tracked files missing from the working tree', async () => {
 		async (dir) => {
 				await unlink(join(dir, 'deleted.ts'));
 
-				run(process.execPath, [tsx, script, 'deleted.ts', 'kept.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'deleted.ts', 'kept.ts'], dir);
 
 				const kept = await readFile(join(dir, 'kept.ts'), 'utf8');
 
@@ -206,8 +206,8 @@ test('adds blank lines above loops after simple statements only', async () => {
 				].join('\n'),
 			},
 		async (dir) => {
-				run(process.execPath, [tsx, script, 'loops.ts'], dir);
-				run(process.execPath, [tsx, script, 'loops.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'loops.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'loops.ts'], dir);
 
 				const output = await readFile(join(dir, 'loops.ts'), 'utf8');
 
@@ -229,7 +229,7 @@ test('CLI uses modular formatter for body wrapping and declaration ordering', as
 				'tracked.ts': ['import {', '\ta,', '} from "a";', 'import { b } from "b";', 'function run() {', '\tif (ready) done();', '}', ''].join('\n'),
 			},
 		async (dir) => {
-				run(process.execPath, [tsx, script, 'tracked.ts'], dir);
+				run(process.execPath, ['--import', tsx, script, 'tracked.ts'], dir);
 
 				const tracked = await readFile(join(dir, 'tracked.ts'), 'utf8');
 

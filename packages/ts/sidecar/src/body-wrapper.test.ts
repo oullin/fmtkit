@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeBodyWrapEdits } from '#sidecar/body-wrapper';
-import { applyEdits } from '#sidecar/edits';
+import { BodyWrapper } from '#sidecar/body-wrapper';
+import { Edits } from '#sidecar/edits';
 
 function wrapOnce(source: string): string {
-	const edits = computeBodyWrapEdits(source, 'sample.ts');
+	const edits = BodyWrapper.computeEdits(source, 'sample.ts');
 
-	return edits.length > 0 ? applyEdits(source, edits) : source;
+	return edits.length > 0 ? Edits.apply(source, edits) : source;
 }
 
 function wrapFully(source: string): string {
@@ -56,9 +56,9 @@ test('wraps the loop body while keeping its comment', () => {
 test('leaves already-braced bodies alone', () => {
 	const source = 'if (ready) {\n\trun();\n}\n';
 
-	assert.deepEqual(computeBodyWrapEdits(source, 'sample.ts'), []);
+	assert.deepEqual(BodyWrapper.computeEdits(source, 'sample.ts'), []);
 });
 
 test('returns no edits for source with syntax errors', () => {
-	assert.deepEqual(computeBodyWrapEdits('if (broken run();\n', 'sample.ts'), []);
+	assert.deepEqual(BodyWrapper.computeEdits('if (broken run();\n', 'sample.ts'), []);
 });

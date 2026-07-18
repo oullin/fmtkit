@@ -187,62 +187,78 @@ function containsAwait(node: Node): boolean {
 	return false;
 }
 
-export function needsBlankLine(prev: Node, next: Node): boolean {
-	if (containsAwait(prev) || containsAwait(next)) {
-		return true;
+/** Encapsulates the formatter's statement and class-member layout rules. */
+export class Rules {
+	/**
+	 * Decide whether two adjacent statements require a blank line.
+	 *
+	 * @param prev - The previous statement.
+	 * @param next - The following statement.
+	 * @returns `true` when the pair must be separated by a blank line.
+	 */
+	static needsBlankLine(prev: Node, next: Node): boolean {
+		if (containsAwait(prev) || containsAwait(next)) {
+			return true;
+		}
+
+		if (needsBlankLineAbove(next)) {
+			return true;
+		}
+
+		if (isLoopStatement(next)) {
+			return !isStructuredPreviousStatement(prev);
+		}
+
+		if (isClassMethodPair(prev, next)) {
+			return true;
+		}
+
+		if (isPropertyToMethodTransition(prev, next)) {
+			return true;
+		}
+
+		if (isTypeDeclarationAbove(prev)) {
+			return true;
+		}
+
+		if (prev.type === 'ImportDeclaration' && next.type !== 'ImportDeclaration') {
+			return true;
+		}
+
+		if (isConstDeclaration(prev) !== isConstDeclaration(next)) {
+			return true;
+		}
+
+		if (isLetDeclaration(prev) !== isLetDeclaration(next)) {
+			return true;
+		}
+
+		if (prev.type === 'VariableDeclaration' && next.type !== 'VariableDeclaration') {
+			return true;
+		}
+
+		if (BLOCK_HAVING_STATEMENTS.has(prev.type)) {
+			return true;
+		}
+
+		return false;
 	}
 
-	if (needsBlankLineAbove(next)) {
-		return true;
+	/**
+	 * Classify a class member for stable ordering.
+	 *
+	 * @param node - The class member to classify.
+	 * @returns Its property, constructor, or method group.
+	 */
+	static classifyMember(node: Node): 'property' | 'constructor' | 'method' {
+		if (CLASS_PROPERTY_TYPES.has(node.type)) {
+			return 'property';
+		}
+
+		if (node.type === 'MethodDefinition' && declarationKind(node) === 'constructor') {
+			return 'constructor';
+		}
+
+		return 'method';
 	}
-
-	if (isLoopStatement(next)) {
-		return !isStructuredPreviousStatement(prev);
-	}
-
-	if (isClassMethodPair(prev, next)) {
-		return true;
-	}
-
-	if (isPropertyToMethodTransition(prev, next)) {
-		return true;
-	}
-
-	if (isTypeDeclarationAbove(prev)) {
-		return true;
-	}
-
-	if (prev.type === 'ImportDeclaration' && next.type !== 'ImportDeclaration') {
-		return true;
-	}
-
-	if (isConstDeclaration(prev) !== isConstDeclaration(next)) {
-		return true;
-	}
-
-	if (isLetDeclaration(prev) !== isLetDeclaration(next)) {
-		return true;
-	}
-
-	if (prev.type === 'VariableDeclaration' && next.type !== 'VariableDeclaration') {
-		return true;
-	}
-
-	if (BLOCK_HAVING_STATEMENTS.has(prev.type)) {
-		return true;
-	}
-
-	return false;
-}
-
-export function classifyMember(node: Node): 'property' | 'constructor' | 'method' {
-	if (CLASS_PROPERTY_TYPES.has(node.type)) {
-		return 'property';
-	}
-
-	if (node.type === 'MethodDefinition' && declarationKind(node) === 'constructor') {
-		return 'constructor';
-	}
-
-	return 'method';
 }

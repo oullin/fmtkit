@@ -1,6 +1,7 @@
 import { childNodes, collectClassBodies, getEnd, getStart } from '#sidecar/ast';
-import { parseCleanly } from '#sidecar/pass-utils';
-import { classifyMember } from '#sidecar/rules';
+import { isErr } from '#sidecar/result';
+import { Rules } from '#sidecar/rules';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 function containsComment(s: string): boolean {
@@ -58,7 +59,7 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	const methods: Node[] = [];
 
 	for (const member of members) {
-		const kind = classifyMember(member);
+		const kind = Rules.classifyMember(member);
 
 		if (kind === 'property') {
 			properties.push(member);
@@ -121,23 +122,33 @@ function computeClassReorderEdit(source: string, body: Node): Edit | null {
 	};
 }
 
-export function computeReorderEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
+/** Reorders class members into the formatter's stable class shape. */
+export class ClassReorder {
+	/**
+	 * Compute class-member ordering edits.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Class-member ordering edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
 
-	if (!parsed) {
-		return [];
-	}
-
-	const bodies = collectClassBodies(parsed.program);
-	const edits: Edit[] = [];
-
-	for (const body of bodies) {
-		const edit = computeClassReorderEdit(content, body);
-
-		if (edit) {
-			edits.push(edit);
+		if (isErr(parsed)) {
+			return [];
 		}
-	}
 
-	return edits;
+		const bodies = collectClassBodies(parsed.value.program);
+		const edits: Edit[] = [];
+
+		for (const body of bodies) {
+			const edit = computeClassReorderEdit(content, body);
+
+			if (edit) {
+				edits.push(edit);
+			}
+		}
+
+		return edits;
+	}
 }

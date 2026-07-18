@@ -1,10 +1,13 @@
-import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { childNode, getEnd, getStart, visit } from '#sidecar/ast';
-import { formatDrizzleQueries } from '#sidecar/drizzle-queries';
-import { applyEdits } from '#sidecar/edits';
-import { formatExpandedCalls } from '#sidecar/expanded-calls';
-import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isNotFoundError, isTargetFile, lineIndent, parseCleanly, unwrapChainExpression, writeFileAtomic } from '#sidecar/pass-utils';
+import { DrizzleQueries } from '#sidecar/drizzle-queries';
+import { Edits } from '#sidecar/edits';
+import { ExpandedCalls } from '#sidecar/expanded-calls';
+import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isTargetFile, lineIndent, unwrapChainExpression } from '#sidecar/pass-utils';
+import { isErr, ok } from '#sidecar/result';
+import type { Result } from '#sidecar/result';
+import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
 const cwd = process.cwd();
@@ -109,63 +112,113 @@ function collectFluentChain(source: string, outer: Node, comments: Node[]): Flue
 	};
 }
 
-export function computeFluentChainEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
+/** Formats fluent chains and the structured calls composed with them. */
+export class FluentChains {
+	/**
+	 * Compute edits that split fluent-chain links across lines.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Fluent-chain edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
 
-	if (!parsed) {
-		return [];
-	}
-
-	const comments = parsed.comments;
-	const edits = new Map<string, Edit>();
-	const indentStep = detectIndent(content);
-
-	visit(parsed.program, (node) => {
-		if (node.type !== 'CallExpression') {
-			return;
+		if (isErr(parsed)) {
+			return [];
 		}
 
-		const chain = collectFluentChain(content, node, comments);
+		const comments = parsed.value.comments;
+		const edits = new Map<string, Edit>();
+		const indentStep = detectIndent(content);
 
-		if (!chain) {
-			return;
-		}
-
-		const baseStart = getStart(chain.base);
-
-		if (baseStart < 0) {
-			return;
-		}
-
-		const indent = `${lineIndent(content, baseStart)}${indentStep}`;
-
-		for (const link of chain.links) {
-			const replacement = `\n${indent}${link.operator}`;
-
-			if (content.slice(link.start, link.end) === replacement) {
-				continue;
+		visit(parsed.value.program, (node) => {
+			if (node.type !== 'CallExpression') {
+				return;
 			}
 
-			edits.set(`${link.start}:${link.end}`, {
-				start: link.start,
-				end: link.end,
-				replacement,
-			});
+			const chain = collectFluentChain(content, node, comments);
+
+			if (!chain) {
+				return;
+			}
+
+			const baseStart = getStart(chain.base);
+
+			if (baseStart < 0) {
+				return;
+			}
+
+			const indent = `${lineIndent(content, baseStart)}${indentStep}`;
+
+			for (const link of chain.links) {
+				const replacement = `\n${indent}${link.operator}`;
+
+				if (content.slice(link.start, link.end) === replacement) {
+					continue;
+				}
+
+				edits.set(`${link.start}:${link.end}`, {
+					start: link.start,
+					end: link.end,
+					replacement,
+				});
+			}
+		});
+
+		return [...edits.values()].sort((a, b) => {
+			return a.start - b.start;
+		});
+	}
+
+	/**
+	 * Apply fluent-chain, Drizzle-query, and expanded-call formatting.
+	 *
+	 * @param content - The source text to format.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns The formatted source text.
+	 */
+	static format(content: string, virtualName: string): string {
+		const edits = FluentChains.computeEdits(content, virtualName);
+
+		const fluentFormatted = edits.length > 0 ? Edits.apply(content, edits) : content;
+		const drizzleFormatted = DrizzleQueries.format(fluentFormatted, virtualName);
+
+		return ExpandedCalls.format(drizzleFormatted, virtualName);
+	}
+
+	/**
+	 * Format one TypeScript or Vue file through an injected filesystem port.
+	 *
+	 * @param file - The source file to format.
+	 * @param mode - Whether to report changes or atomically write them.
+	 * @param sourceFiles - The filesystem port used for reads and writes.
+	 * @returns Whether the file changes, or the typed filesystem failure.
+	 */
+	static async formatFile(file: string, mode: 'check' | 'write', sourceFiles: SourceFiles): Promise<Result<boolean, SourceFileError>> {
+		const read = await sourceFiles.readText(file);
+
+		if (isErr(read)) {
+			return read;
 		}
-	});
 
-	return [...edits.values()].sort((a, b) => {
-		return a.start - b.start;
-	});
-}
+		const original = read.value;
+		const updated = file.endsWith('.vue') ? processVueFile(original, file) : FluentChains.format(original, file);
 
-export function formatFluentChains(content: string, virtualName: string): string {
-	const edits = computeFluentChainEdits(content, virtualName);
+		if (updated === original) {
+			return ok(false);
+		}
 
-	const fluentFormatted = edits.length > 0 ? applyEdits(content, edits) : content;
-	const drizzleFormatted = formatDrizzleQueries(fluentFormatted, virtualName);
+		if (mode === 'write') {
+			const written = await sourceFiles.writeTextAtomic(file, updated);
 
-	return formatExpandedCalls(drizzleFormatted, virtualName);
+			if (isErr(written)) {
+				return written;
+			}
+		}
+
+		return ok(true);
+	}
 }
 
 function processVueFile(original: string, file: string): string {
@@ -176,7 +229,7 @@ function processVueFile(original: string, file: string): string {
 	});
 
 	for (const segment of [...segments].reverse()) {
-		const rewritten = formatFluentChains(segment.content, `${file}.script.ts`);
+		const rewritten = FluentChains.format(segment.content, `${file}.script.ts`);
 
 		if (rewritten === segment.content) {
 			continue;
@@ -188,25 +241,17 @@ function processVueFile(original: string, file: string): string {
 	return updated;
 }
 
-export async function processFluentChainsFile(file: string, check: boolean): Promise<boolean> {
-	const original = await readFile(file, 'utf8');
-
-	const updated = file.endsWith('.vue') ? processVueFile(original, file) : formatFluentChains(original, file);
-
-	if (updated === original) {
-		return false;
-	}
-
-	if (!check) {
-		await writeFileAtomic(file, updated);
-	}
-
-	return true;
-}
-
 async function main(): Promise<void> {
 	const rawArgs = process.argv.slice(2);
-	const check = rawArgs.includes('--check');
+	const mode = rawArgs.includes('--check') ? 'check' : 'write';
+
+	const { NodeProcessRunner } = await import('#sidecar/process-runner');
+
+	const { NodeSourceFiles } = await import('#sidecar/source-files');
+
+	const { FormatPipeline } = await import('#sidecar/format-pipeline');
+
+	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
 	const files = rawArgs
 		.filter((arg) => {
@@ -214,33 +259,28 @@ async function main(): Promise<void> {
 		})
 		.filter(isTargetFile);
 
-	let changedCount = 0;
+	const outcomes = await pipeline.runPass('fluent-chains', files, mode, (file, passMode) => {
+		return pipeline.formatFluentFile(file, passMode);
+	});
 
-	for (const file of files) {
-		const changed = await processFluentChainsFile(file, check).catch((err: unknown) => {
-			if (isNotFoundError(err)) {
-				console.warn(`[fluent-chains] path not found, skipping: ${file}`);
-
-				return false;
-			}
-
-			throw err;
-		});
-
-		if (!changed) {
-			continue;
+	const changedCount = outcomes.filter((outcome) => {
+		if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
+			console.warn(`[fluent-chains] path not found, skipping: ${outcome.file}`);
+		} else if (outcome.error) {
+			throw outcome.error;
+		} else if (outcome.changed) {
+			console.log(`[fluent-chains] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
 		}
 
-		changedCount++;
-		console.log(`[fluent-chains] ${check ? 'would change' : 'updated'} ${file}`);
-	}
+		return outcome.changed;
+	}).length;
 
-	if (check && changedCount > 0) {
+	if (mode === 'check' && changedCount > 0) {
 		console.error(`[fluent-chains] ${changedCount} file(s) need fluent-chain edits. Run "pnpm format" to fix.`);
 		process.exit(1);
 	}
 
-	console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${check ? 'would change' : 'changed'}`);
+	console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

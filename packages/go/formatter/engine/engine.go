@@ -95,8 +95,18 @@ func (e *Engine) run(ctx context.Context, files []string, write bool) (Report, e
 		var wg sync.WaitGroup
 
 		for i, file := range files {
+			// Acquire a worker slot, but bail out promptly if the run is
+			// canceled while every slot is busy. Remaining files get a
+			// canceled result, matching the serial branch above.
+			select {
+			case <-ctx.Done():
+				results[i] = FileResult{File: file, Error: "canceled"}
+
+				continue
+			case sem <- struct{}{}:
+			}
+
 			wg.Add(1)
-			sem <- struct{}{}
 
 			go func(i int, file string) {
 				defer wg.Done()

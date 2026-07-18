@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { rename, rm, writeFile } from 'node:fs/promises';
 import { parseSync } from 'oxc-parser';
 import { childNode, declarationKind, getEnd, getStart, isNode } from '#sidecar/ast';
@@ -21,8 +22,6 @@ export type VueScriptBlock = {
 
 const VUE_SCRIPT_REGEX = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g;
 
-let atomicWriteCounter = 0;
-
 // parseCleanly returns null when the source has syntax errors, so passes
 // never compute edits from a broken tree.
 export function parseCleanly(virtualName: string, content: string): ParseResult | null {
@@ -33,11 +32,12 @@ export function parseCleanly(virtualName: string, content: string): ParseResult 
 	}
 
 	const program: unknown = parsed.program;
-	const comments: unknown[] = parsed.comments;
 
 	if (!isNode(program)) {
 		return null;
 	}
+
+	const comments: unknown[] = Array.isArray(parsed.comments) ? parsed.comments : [];
 
 	return { program, comments: comments.filter(isNode) };
 }
@@ -184,9 +184,11 @@ export function isJavaScriptOrTypeScript(openTag: string): boolean {
 }
 
 // writeFileAtomic writes via a sibling temp file plus rename so a crash
-// mid-write can never leave a truncated source file behind.
+// mid-write can never leave a truncated source file behind. The temp name
+// carries a random suffix so it is unpredictable and cannot be pre-created
+// by another process.
 export async function writeFileAtomic(file: string, content: string): Promise<void> {
-	const tmp = `${file}.${process.pid}.${atomicWriteCounter++}.tmp`;
+	const tmp = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
 
 	try {
 		await writeFile(tmp, content);

@@ -12,7 +12,10 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	defer stop()
+	// os.Exit skips deferred calls, so release the signal handler explicitly
+	// before exiting with the captured code.
+	code := sourcefiles.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 
-	os.Exit(sourcefiles.Run(ctx, os.Args[1:], os.Stdout, os.Stderr))
+	stop()
+	os.Exit(code)
 }

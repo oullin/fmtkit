@@ -17,9 +17,12 @@ var version = "dev"
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	defer stop()
-
-	os.Exit(app.
+	// os.Exit skips deferred calls, so release the signal handler explicitly
+	// before exiting with the captured code.
+	code := app.
 		New(version, os.Stdout, os.Stderr).
-		Run(ctx, os.Args[1:]))
+		Run(ctx, os.Args[1:])
+
+	stop()
+	os.Exit(code)
 }

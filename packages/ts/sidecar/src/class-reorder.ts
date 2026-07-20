@@ -1,123 +1,135 @@
-import { collectClassBodies, getEnd, getStart } from '#sidecar/ast';
-import { parseCleanly } from '#sidecar/pass-utils';
-import { classifyMember } from '#sidecar/rules';
+import { Ast } from '#sidecar/ast';
+import { isErr } from '#sidecar/result';
+import { Rules } from '#sidecar/rules';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
 
-function containsComment(s: string): boolean {
-	return /\/\/|\/\*/.test(s);
-}
-
-function hasCommentsAroundMembers(source: string, body: Node, members: Node[]): boolean {
-	const bodyStart = getStart(body);
-	const bodyEnd = getEnd(body);
-	const firstStart = getStart(members[0]);
-	const lastEnd = getEnd(members[members.length - 1]);
-
-	if (containsComment(
-		source.slice(bodyStart + 1, firstStart),
-	)) {
-		return true;
+/** Reorders class members into the formatter's stable class shape. */
+export class ClassReorder {
+	static #containsComment(source: string): boolean {
+		return /\/\/|\/\*/.test(source);
 	}
 
-	for (let i = 0; i < members.length - 1; i++) {
-		const gap = source.slice(getEnd(members[i]), getStart(members[i + 1]));
+	static #hasCommentsAroundMembers(source: string, body: Node, members: Node[]): boolean {
+		const first = members[0];
+		const last = members.at(-1);
 
-		if (containsComment(gap)) {
+		if (!first || !last) {
+			return false;
+		}
+
+		const bodyStart = Ast.getStart(body);
+		const bodyEnd = Ast.getEnd(body);
+		const firstStart = Ast.getStart(first);
+		const lastEnd = Ast.getEnd(last);
+
+		if (ClassReorder.#containsComment(source.slice(bodyStart + 1, firstStart))) {
 			return true;
 		}
-	}
 
-	return containsComment(
-		source.slice(lastEnd, bodyEnd - 1),
-	);
-}
+		for (let i = 0; i < members.length - 1; i++) {
+			const current = members[i];
+			const following = members[i + 1];
 
-function computeClassReorderEdit(source: string, body: Node): Edit | null {
-	const members = body.body as Node[] | undefined;
-
-	if (!Array.isArray(members) || members.length < 2) {
-		return null;
-	}
-
-	const properties: Node[] = [];
-	const ctors: Node[] = [];
-	const methods: Node[] = [];
-
-	for (const member of members) {
-		const kind = classifyMember(member);
-
-		if (kind === 'property') {
-			properties.push(member);
-		} else if (kind === 'constructor') {
-			ctors.push(member);
-		} else {
-			methods.push(member);
+			if (current && following && ClassReorder.#containsComment(source.slice(Ast.getEnd(current), Ast.getStart(following)))) {
+				return true;
+			}
 		}
+
+		return ClassReorder.#containsComment(source.slice(lastEnd, bodyEnd - 1));
 	}
 
-	const desired = [...properties, ...ctors, ...methods];
+	static #computeClassReorderEdit(source: string, body: Node): Edit | null {
+		const members = Ast.childNodes(body, 'body');
 
-	const isSameOrder = desired.every((m, i) => {
-		return m === members[i];
-	});
-
-	if (isSameOrder) {
-		return null;
-	}
-
-	const bodyStart = getStart(body);
-	const bodyEnd = getEnd(body);
-
-	if (bodyStart < 0 || bodyEnd < 0) {
-		return null;
-	}
-
-	if (hasCommentsAroundMembers(source, body, members)) {
-		return null;
-	}
-
-	const firstStart = getStart(members[0]);
-	const prefix = source.slice(bodyStart + 1, firstStart);
-	const indentMatch = prefix.match(/\n([ \t]*)$/);
-
-	if (!indentMatch) {
-		return null;
-	}
-
-	const indent = indentMatch[1];
-
-	const memberSlices = desired.map((m) => {
-		return source.slice(getStart(m), getEnd(m));
-	});
-
-	const lastOriginal = members[members.length - 1];
-	const closing = source.slice(getEnd(lastOriginal), bodyEnd - 1);
-	const replacement = `\n${indent}${memberSlices.join(`\n${indent}`)}${closing}`;
-
-	return {
-		start: bodyStart + 1,
-		end: bodyEnd - 1,
-		replacement,
-	};
-}
-
-export function computeReorderEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
-
-	if (!parsed) {
-		return [];
-	}
-
-	const bodies = collectClassBodies(parsed.program);
-	const edits: Edit[] = [];
-
-	for (const body of bodies) {
-		const edit = computeClassReorderEdit(content, body);
-
-		if (edit) {
-			edits.push(edit);
+		if (members.length < 2) {
+			return null;
 		}
+
+		const properties: Node[] = [];
+		const constructors: Node[] = [];
+		const methods: Node[] = [];
+
+		for (const member of members) {
+			const kind = Rules.classifyMember(member);
+
+			if (kind === 'property') {
+				properties.push(member);
+			} else if (kind === 'constructor') {
+				constructors.push(member);
+			} else {
+				methods.push(member);
+			}
+		}
+
+		const desired = [...properties, ...constructors, ...methods];
+
+		if (
+			desired.every((member, index) => {
+				return member === members[index];
+			})
+		) {
+			return null;
+		}
+
+		const bodyStart = Ast.getStart(body);
+		const bodyEnd = Ast.getEnd(body);
+
+		if (bodyStart < 0 || bodyEnd < 0 || ClassReorder.#hasCommentsAroundMembers(source, body, members)) {
+			return null;
+		}
+
+		const firstMember = members[0];
+		const lastOriginal = members.at(-1);
+
+		if (!firstMember || !lastOriginal) {
+			return null;
+		}
+
+		const prefix = source.slice(bodyStart + 1, Ast.getStart(firstMember));
+		const indent = prefix.match(/\n([ \t]*)$/)?.[1];
+
+		if (indent === undefined) {
+			return null;
+		}
+
+		const memberSlices = desired.map((member) => {
+			return source.slice(Ast.getStart(member), Ast.getEnd(member));
+		});
+
+		const closing = source.slice(Ast.getEnd(lastOriginal), bodyEnd - 1);
+
+		return {
+			start: bodyStart + 1,
+			end: bodyEnd - 1,
+			replacement: `\n${indent}${memberSlices.join(`\n${indent}`)}${closing}`,
+		};
 	}
 
-	return edits;
+	/**
+	 * Compute class-member ordering edits.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Class-member ordering edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
+
+		if (isErr(parsed)) {
+			return [];
+		}
+
+		const edits: Edit[] = [];
+
+		for (const body of Ast.collectClassBodies(parsed.value.program)) {
+			const edit = ClassReorder.#computeClassReorderEdit(content, body);
+
+			if (edit) {
+				edits.push(edit);
+			}
+		}
+
+		return edits;
+	}
 }

@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeDeclarationReorderEdits } from '#sidecar/declaration-reorder';
-import { applyEdits } from '#sidecar/edits';
+import { DeclarationReorder } from '#sidecar/declaration-reorder';
+import { Edits } from '#sidecar/edits';
 
 function reorder(source: string): string {
-	const edits = computeDeclarationReorderEdits(source, 'sample.ts');
+	const edits = DeclarationReorder.computeEdits(source, 'sample.ts');
 
-	return edits.length > 0 ? applyEdits(source, edits) : source;
+	return edits.length > 0 ? Edits.apply(source, edits) : source;
 }
 
 test('moves single-line consts ahead of a multiline const when initializers are side-effect free', () => {
@@ -44,5 +44,5 @@ test('reorders import groups so single-line imports precede multiline ones', () 
 });
 
 test('returns no edits for source with syntax errors', () => {
-	assert.deepEqual(computeDeclarationReorderEdits('const broken = {;\nconst small = 1;\n', 'sample.ts'), []);
+	assert.deepEqual(DeclarationReorder.computeEdits('const broken = {;\nconst small = 1;\n', 'sample.ts'), []);
 });

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -42,7 +43,7 @@ func NewScopedRunner(stdout, stderr io.Writer, selection sourcefiles.Selection) 
 	return runner
 }
 
-func (r Runner) Run(mode Mode, args []string) int {
+func (r Runner) Run(ctx context.Context, mode Mode, args []string) int {
 	opts, err := r.parser.Parse(mode, args)
 
 	if err != nil {
@@ -79,7 +80,7 @@ func (r Runner) Run(mode Mode, args []string) int {
 		formatterCfg.Concurrency = opts.jobs
 	}
 
-	formatterReport, err := r.runFormatter(mode, runPaths, formatterCfg)
+	formatterReport, err := r.runFormatter(ctx, mode, runPaths, formatterCfg)
 
 	if err != nil {
 		r.writeError("%v\n", err)
@@ -89,7 +90,7 @@ func (r Runner) Run(mode Mode, args []string) int {
 
 	result := driverreport.Combined{
 		Formatter: formatterReport,
-		Vet:       vet.Run(workRoot, cfg.VetConfig()),
+		Vet:       vet.Run(ctx, workRoot, cfg.VetConfig()),
 	}
 
 	if err := driverreport.Render(r.stdout, opts.outputFormat, reportRoot, mode.String(), result); err != nil {
@@ -101,9 +102,9 @@ func (r Runner) Run(mode Mode, args []string) int {
 	return exitCode(mode, result)
 }
 
-func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Config) (formatterengine.Report, error) {
+func (r Runner) runFormatter(ctx context.Context, mode Mode, paths []string, cfg formatterconfig.Config) (formatterengine.Report, error) {
 	if r.selection == sourcefiles.SelectionChanged {
-		files, err := changedGoFiles(paths, cfg)
+		files, err := changedGoFiles(ctx, paths, cfg)
 
 		if err != nil {
 			return formatterengine.Report{}, err
@@ -111,9 +112,9 @@ func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Conf
 
 		switch mode {
 		case CheckMode:
-			return formatter.CheckFiles(files, cfg)
+			return formatter.CheckFiles(ctx, files, cfg)
 		case FormatMode:
-			return formatter.FormatFiles(files, cfg)
+			return formatter.FormatFiles(ctx, files, cfg)
 		default:
 			return formatterengine.Report{}, fmt.Errorf("unsupported mode %q", mode)
 		}
@@ -121,9 +122,9 @@ func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Conf
 
 	switch mode {
 	case CheckMode:
-		return formatter.Check(paths, cfg)
+		return formatter.Check(ctx, paths, cfg)
 	case FormatMode:
-		return formatter.Format(paths, cfg)
+		return formatter.Format(ctx, paths, cfg)
 	default:
 		return formatterengine.Report{}, fmt.Errorf("unsupported mode %q", mode)
 	}
@@ -138,7 +139,7 @@ func (r Runner) runFormatter(mode Mode, paths []string, cfg formatterconfig.Conf
 // what git reports as changed preserves both. Outside a git work tree there is
 // no such thing as "changed", so the error surfaces rather than silently
 // formatting everything.
-func changedGoFiles(paths []string, cfg formatterconfig.Config) ([]string, error) {
+func changedGoFiles(ctx context.Context, paths []string, cfg formatterconfig.Config) ([]string, error) {
 	owned, err := formatterengine.CollectGoFiles(paths, cfg)
 
 	if err != nil {
@@ -155,7 +156,7 @@ func changedGoFiles(paths []string, cfg formatterconfig.Config) ([]string, error
 		return nil, fmt.Errorf("resolve cwd: %w", err)
 	}
 
-	touched, err := sourcefiles.ChangedPaths(cwd, paths)
+	touched, err := sourcefiles.ChangedPaths(ctx, cwd, paths)
 
 	if err != nil {
 		return nil, err
@@ -184,7 +185,7 @@ func exitCode(mode Mode, result driverreport.Combined) int {
 	}
 
 	if mode == CheckMode {
-		if result.Formatter.Result == "pass" {
+		if result.Formatter.Result == formatterengine.ResultPass {
 			return 0
 		}
 

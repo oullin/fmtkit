@@ -3,7 +3,21 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { dirExists, listSourceFiles, processFile } from '#sidecar/files';
+import { Files } from '#sidecar/files';
+import { FormatPipeline } from '#sidecar/format-pipeline';
+import { NodeProcessRunner } from '#sidecar/process-runner';
+import { isErr } from '#sidecar/result';
+import { NodeSourceFiles } from '#sidecar/source-files';
+
+const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+
+async function processFile(file: string, mode: 'check' | 'write'): Promise<boolean> {
+	const outcome = await pipeline.formatFile(file, mode);
+
+	assert.equal(isErr(outcome), false);
+
+	return isErr(outcome) ? false : outcome.value;
+}
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
 	const dir = await mkdtemp(
@@ -25,9 +39,9 @@ async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {
 
 test('dirExists reports existing directories and missing paths', async () => {
 	await withTempDir(async (dir) => {
-		assert.equal(await dirExists(dir), true);
+		assert.equal(await Files.dirExists(dir), true);
 
-		assert.equal(await dirExists(join(dir, 'missing')), false);
+		assert.equal(await Files.dirExists(join(dir, 'missing')), false);
 	});
 });
 
@@ -48,7 +62,7 @@ test('listSourceFiles returns TypeScript and Vue files only', async () => {
 			'# Notes\n',
 		);
 
-		const files = (await listSourceFiles(dir)).map((file) => {
+		const files = (await Files.listSourceFiles(dir)).map((file) => {
 			return file.slice(dir.length + 1);
 		});
 
@@ -63,7 +77,7 @@ test('processFile reports check changes without writing TypeScript files', async
 
 		await writeFile(file, original);
 
-		assert.equal(await processFile(file, true), true);
+		assert.equal(await processFile(file, 'check'), true);
 
 		assert.equal(await readFile(file, 'utf8'), original);
 	});
@@ -77,7 +91,7 @@ test('processFile leaves non-JS/TS Vue script blocks untouched', async () => {
 
 		await writeFile(file, `${yamlBlock}\n${tsBlock}\n`);
 
-		assert.equal(await processFile(file, false), true);
+		assert.equal(await processFile(file, 'write'), true);
 
 		const updated = await readFile(file, 'utf8');
 
@@ -96,12 +110,12 @@ test('processFile rewrites Vue script blocks and reports unchanged files', async
 			['<script setup lang="ts">', 'const value = 1;', 'if (value) console.log(value);', '</script>', ''].join('\n'),
 		);
 
-		assert.equal(await processFile(file, false), true);
+		assert.equal(await processFile(file, 'write'), true);
 
 		const updated = await readFile(file, 'utf8');
 
 		assert.match(updated, /if \(value\) \{\n\tconsole\.log\(value\);\n\}/);
 
-		assert.equal(await processFile(file, true), false);
+		assert.equal(await processFile(file, 'check'), false);
 	});
 });

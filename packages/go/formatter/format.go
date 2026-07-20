@@ -1,6 +1,8 @@
 package formatter
 
 import (
+	"context"
+
 	"go.ollin.sh/fmtkit/formatter/config"
 	"go.ollin.sh/fmtkit/formatter/engine"
 	"go.ollin.sh/fmtkit/formatter/internal/step"
@@ -37,25 +39,25 @@ func newEngine(cfg config.Config) *engine.Engine {
 }
 
 // Check reports formatting changes without writing them to disk.
-func Check(paths []string, cfg config.Config) (engine.Report, error) {
-	return newEngine(cfg).Check(paths)
+func Check(ctx context.Context, paths []string, cfg config.Config) (engine.Report, error) {
+	return newEngine(cfg).Check(ctx, paths)
 }
 
 // Format applies formatting changes and writes them to disk.
-func Format(paths []string, cfg config.Config) (engine.Report, error) {
-	return newEngine(cfg).Format(paths)
+func Format(ctx context.Context, paths []string, cfg config.Config) (engine.Report, error) {
+	return newEngine(cfg).Format(ctx, paths)
 }
 
 // CheckFiles reports formatting changes for an explicit list of Go files,
 // skipping the walk that Check does. The caller owns the list, so it is
 // responsible for having applied cfg's exclusions — see engine.CollectGoFiles.
-func CheckFiles(files []string, cfg config.Config) (engine.Report, error) {
-	return newEngine(cfg).CheckFiles(files)
+func CheckFiles(ctx context.Context, files []string, cfg config.Config) (engine.Report, error) {
+	return newEngine(cfg).CheckFiles(ctx, files)
 }
 
 // FormatFiles applies formatting changes to an explicit list of Go files,
 // skipping the walk that Format does. The caller owns the list, so it is
 // responsible for having applied cfg's exclusions — see engine.CollectGoFiles.
-func FormatFiles(files []string, cfg config.Config) (engine.Report, error) {
-	return newEngine(cfg).FormatFiles(files)
+func FormatFiles(ctx context.Context, files []string, cfg config.Config) (engine.Report, error) {
+	return newEngine(cfg).FormatFiles(ctx, files)
 }

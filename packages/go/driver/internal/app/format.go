@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -13,7 +14,7 @@ import (
 // runFormat formats what diverges from HEAD — modified files, staged or not,
 // plus untracked ones — so an everyday format stays proportional to the diff.
 // Use format-all to cover every file.
-func (a App) runFormat(args []string) int {
+func (a App) runFormat(ctx context.Context, args []string) int {
 	opts, paths, err := parseFormatArgs(args)
 
 	if err != nil {
@@ -24,13 +25,13 @@ func (a App) runFormat(args []string) int {
 		return 2
 	}
 
-	return a.runPipeline(paths, opts, sourcefiles.SelectionChanged)
+	return a.runPipeline(ctx, paths, opts, sourcefiles.SelectionChanged)
 }
 
 // runFormatAll covers every non-ignored file rather than just the working
 // tree's changes, pinned to the current directory, so it takes flags but
 // rejects paths.
-func (a App) runFormatAll(args []string) int {
+func (a App) runFormatAll(ctx context.Context, args []string) int {
 	opts, extra, err := parseFormatArgs(args)
 
 	if err != nil || len(extra) != 0 {
@@ -43,34 +44,34 @@ func (a App) runFormatAll(args []string) int {
 		return 2
 	}
 
-	return a.runPipeline([]string{"."}, opts, sourcefiles.SelectionAll)
+	return a.runPipeline(ctx, []string{"."}, opts, sourcefiles.SelectionAll)
 }
 
-func (a App) runPipeline(paths []string, opts formatOptions, selection sourcefiles.Selection) int {
+func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection sourcefiles.Selection) int {
 	pipeline := orchestrator.Pipeline{
 		Tools: orchestrator.Tools{
-			TS: func(scopes []string, output io.Writer) error {
+			TS: func(ctx context.Context, scopes []string, output io.Writer) error {
 				support, err := tsruntime.Resolve(a.version)
 
 				if err != nil {
 					return err
 				}
 
-				return support.RunPipeline(tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
+				return support.RunPipeline(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
 			},
-			Lint: func(scopes []string, output io.Writer) error {
+			Lint: func(ctx context.Context, scopes []string, output io.Writer) error {
 				support, err := tsruntime.Resolve(a.version)
 
 				if err != nil {
 					return err
 				}
 
-				return support.RunLint(tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
+				return support.RunLint(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
 			},
-			Go: func(args []string, output io.Writer) int {
+			Go: func(ctx context.Context, args []string, output io.Writer) int {
 				return cli.
 					NewScopedRunner(output, output, selection).
-					Run(cli.FormatMode, args[1:])
+					Run(ctx, cli.FormatMode, args[1:])
 			},
 		},
 		Steps:  opts.steps,
@@ -78,5 +79,5 @@ func (a App) runPipeline(paths []string, opts formatOptions, selection sourcefil
 		Stderr: a.stderr,
 	}
 
-	return pipeline.RunFormat(paths)
+	return pipeline.RunFormat(ctx, paths)
 }

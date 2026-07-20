@@ -9,10 +9,43 @@
  * napi-rs NAPI_RS_NATIVE_LIBRARY_PATH override.
  */
 import { dirname, join } from 'node:path';
+import { z } from 'zod';
 
-const modes = ['pipeline', 'oxfmt', 'oxlint'] as const;
+type Mode = 'pipeline' | 'oxfmt' | 'oxlint';
 
-type Mode = (typeof modes)[number];
+const ModeSchema = z.enum(['pipeline', 'oxfmt', 'oxlint']);
+
+/** Immutable sidecar mode selected from CLI and environment boundaries. */
+class SidecarRuntimeDto {
+	/** The selected sidecar mode, or `undefined` for usage output. */
+	readonly mode: Mode | undefined;
+	/** Whether the selected mode came from the positional CLI argument. */
+	readonly consumeArgument: boolean;
+
+	static readonly #schema = z.object({
+		argument: ModeSchema.optional().catch(undefined),
+		environment: ModeSchema.optional().catch(undefined),
+	});
+
+	private constructor(mode: Mode | undefined, consumeArgument: boolean) {
+		this.mode = mode;
+		this.consumeArgument = consumeArgument;
+
+		Object.freeze(this);
+	}
+
+	/**
+	 * Parse the sidecar mode inputs once, preferring the CLI argument.
+	 *
+	 * @param input - The untrusted CLI and environment mode values.
+	 * @returns An immutable runtime selection.
+	 */
+	static from(input: unknown): SidecarRuntimeDto {
+		const parsed = SidecarRuntimeDto.#schema.parse(input);
+
+		return new SidecarRuntimeDto(parsed.argument ?? parsed.environment, parsed.argument !== undefined);
+	}
+}
 
 const here = dirname(process.execPath);
 
@@ -22,16 +55,15 @@ const bindings: Record<Mode, string> = {
 	oxlint: join(here, 'oxlint.node'),
 };
 
-let mode: Mode | undefined;
+const runtime = SidecarRuntimeDto.from({
+	argument: process.argv[2],
+	environment: process.env.FMTKIT_SIDECAR_MODE,
+});
 
-if (modes.includes(process.argv[2] as Mode)) {
-	mode = process.argv[2] as Mode;
+const mode = runtime.mode;
 
+if (runtime.consumeArgument) {
 	process.argv.splice(2, 1);
-} else if (modes.includes(process.env.FMTKIT_SIDECAR_MODE as Mode)) {
-	// The pipeline spawns this executable as its `--oxfmt-bin` with oxfmt's own
-	// argv, so the mode has to travel through the environment instead.
-	mode = process.env.FMTKIT_SIDECAR_MODE as Mode;
 }
 
 switch (mode) {

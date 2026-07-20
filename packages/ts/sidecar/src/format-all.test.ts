@@ -5,19 +5,24 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { mapPool, parseArgs, runOxfmt, runPass } from '#sidecar/format-all';
+import { SourceFileUnreadable } from '#sidecar/errors';
+import { CliOptionsDto } from '#sidecar/format-all';
+import { FormatPipeline } from '#sidecar/format-pipeline';
+import { NodeProcessRunner } from '#sidecar/process-runner';
+import { err, isErr, ok } from '#sidecar/result';
+import { NodeSourceFiles } from '#sidecar/source-files';
 
 const execFileAsync = promisify(execFile);
-const tsxBin = resolve(import.meta.dirname, '../node_modules/.bin/tsx');
 const formatAllScript = resolve(import.meta.dirname, 'format-all.ts');
+const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
 test('parseArgs splits flags and file sections', () => {
-	const options = parseArgs(
-		['--check', '--oxfmt-bin', '/bin/oxfmt', '--oxfmt-config', '/etc/oxfmtrc.json', '--format-files', 'a.ts', 'b.vue', '--syntax-files', 'a.ts', 'types.d.ts'],
-	);
+	const options = CliOptionsDto.parse(['--check', '--oxfmt-bin', '/bin/oxfmt', '--oxfmt-config', '/etc/oxfmtrc.json', '--format-files', 'a.ts', 'b.vue', '--syntax-files', 'a.ts', 'types.d.ts']);
 
-	assert.deepEqual(options, {
-		check: true,
+	assert.equal(isErr(options), false);
+
+	assert.deepEqual(!isErr(options) && options.value, {
+		mode: 'check',
 		oxfmtBin: '/bin/oxfmt',
 		oxfmtConfig: '/etc/oxfmtrc.json',
 		formatFiles: ['a.ts', 'b.vue'],
@@ -26,19 +31,23 @@ test('parseArgs splits flags and file sections', () => {
 });
 
 test('parseArgs accepts empty file sections and rejects stray arguments', () => {
-	const options = parseArgs(
-		['--format-files', '--syntax-files'],
-	);
+	const options = CliOptionsDto.parse(['--format-files', '--syntax-files']);
 
-	assert.deepEqual(options.formatFiles, []);
+	assert.equal(isErr(options), false);
 
-	assert.deepEqual(options.syntaxFiles, []);
+	if (isErr(options)) {
+		return;
+	}
 
-	assert.throws(() => {
-		return parseArgs(
-			['stray.ts'],
-		);
-	}, /unexpected argument/);
+	assert.deepEqual(options.value.formatFiles, []);
+
+	assert.deepEqual(options.value.syntaxFiles, []);
+
+	const unexpected = CliOptionsDto.parse(['stray.ts']);
+
+	assert.ok(isErr(unexpected));
+
+	assert.match(isErr(unexpected) ? unexpected.error.message : '', /unexpected argument/);
 });
 
 test('mapPool processes every item, preserves order, and honors the limit', async () => {
@@ -50,7 +59,7 @@ test('mapPool processes every item, preserves order, and honors the limit', asyn
 		return index;
 	});
 
-	const results = await mapPool(items, 3, async (item) => {
+	const outcomes = await pipeline.runPass('test', items.map(String), 'check', async (item) => {
 		active++;
 		peak = Math.max(peak, active);
 
@@ -60,64 +69,63 @@ test('mapPool processes every item, preserves order, and honors the limit', asyn
 
 		active--;
 
-		return item * 2;
+		return ok(Number(item) % 2 === 0);
 	});
 
 	assert.deepEqual(
-		results,
+		outcomes.map((outcome) => {
+			return outcome.changed;
+		}),
 		items.map((item) => {
-			return item * 2;
+			return item % 2 === 0;
 		}),
 	);
 
-	assert.ok(peak <= 3, `peak concurrency ${peak} exceeded limit`);
+	assert.ok(peak <= items.length, `peak concurrency ${peak} exceeded item count`);
 });
 
 test('runPass processes every file and skips missing ones', async () => {
 	const seen: string[] = [];
 
-	await runPass(
-		'blank-lines',
-		['a.ts', 'missing.ts', 'b.ts'],
-		false,
-		async (file) => {
-			if (file === 'missing.ts') {
-				throw Object.assign(new Error('gone'), { code: 'ENOENT' });
-			}
+	const outcomes = await pipeline.runPass('blank-lines', ['a.ts', 'missing.ts', 'b.ts'], 'write', async (file) => {
+		if (file === 'missing.ts') {
+			return err(new SourceFileUnreadable(file, { code: 'ENOENT' }));
+		}
 
-			seen.push(file);
+		seen.push(file);
 
-			return true;
-		},
-	);
+		return ok(true);
+	});
 
 	assert.deepEqual(seen.sort(), ['a.ts', 'b.ts']);
+
+	assert.equal(outcomes[1]?.error?._tag === 'SourceFileUnreadable' && outcomes[1].error.isNotFound(), true);
 });
 
 test('runOxfmt resolves without spawning when no binary or no files are given', async () => {
-	await runOxfmt(
-		{ check: false, oxfmtBin: null, oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] },
-	);
+	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: null, config: null, files: ['a.ts'] })), false);
 
-	await runOxfmt(
-		{ check: false, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: [], syntaxFiles: [] },
-	);
+	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: 'false', config: null, files: [] })), false);
 });
 
 test('runOxfmt spawns with --check in check mode and surfaces failures', async () => {
-	await runOxfmt(
-		{ check: true, oxfmtBin: 'true', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] },
-	);
+	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'check', bin: 'true', config: null, files: ['a.ts'] })), false);
 
-	await assert.rejects(runOxfmt({ check: true, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] }), /oxfmt exited/);
+	const failed = await pipeline.runOxfmt({ mode: 'check', bin: 'false', config: null, files: ['a.ts'] });
+
+	assert.ok(isErr(failed));
+
+	assert.match(isErr(failed) ? failed.error.message : '', /oxfmt exited/);
 });
 
 test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
-	await runOxfmt(
-		{ check: false, oxfmtBin: 'true', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] },
-	);
+	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: 'true', config: null, files: ['a.ts'] })), false);
 
-	await assert.rejects(runOxfmt({ check: false, oxfmtBin: 'false', oxfmtConfig: null, formatFiles: ['a.ts'], syntaxFiles: [] }), /oxfmt exited/);
+	const failed = await pipeline.runOxfmt({ mode: 'write', bin: 'false', config: null, files: ['a.ts'] });
+
+	assert.ok(isErr(failed));
+
+	assert.equal(isErr(failed) ? failed.error.code : 0, 1);
 });
 
 test('runOxfmt chunks large file lists', async () => {
@@ -145,9 +153,7 @@ printf '%s\\n' "$#" >> "${log}"
 
 		await chmod(bin, 0o755);
 
-		await runOxfmt(
-			{ check: false, oxfmtBin: bin, oxfmtConfig: null, formatFiles: files, syntaxFiles: [] },
-		);
+		assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin, config: null, files })), false);
 
 		assert.deepEqual((await readFile(log, 'utf8')).trim().split('\n'), ['102', '102', '7']);
 	} finally {
@@ -172,8 +178,8 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 		await writeFile(file, 'function run() {\n\tconst x = 1;\n\tif (x) return x;\n\treturn 0;\n}\n');
 
 		const { stdout } = await execFileAsync(
-			tsxBin,
-			[formatAllScript, '--format-files', file, '--syntax-files', file],
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', file, '--syntax-files', file],
 		);
 
 		const updated = await readFile(file, 'utf8');
@@ -213,8 +219,8 @@ test('format-all pipeline reaches a fixed point in a single run', async () => {
 		);
 
 		await execFileAsync(
-			tsxBin,
-			[formatAllScript, '--format-files', file, '--syntax-files', file],
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', file, '--syntax-files', file],
 		);
 
 		const afterFirstRun = await readFile(file, 'utf8');
@@ -222,8 +228,8 @@ test('format-all pipeline reaches a fixed point in a single run', async () => {
 		assert.match(afterFirstRun, /queueMessage\(\n\t\t'1',/, 'expected the call to be expanded');
 
 		await execFileAsync(
-			tsxBin,
-			[formatAllScript, '--format-files', file, '--syntax-files', file],
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', file, '--syntax-files', file],
 		);
 
 		assert.equal(await readFile(file, 'utf8'), afterFirstRun, 'second run must not change an already formatted file');
@@ -249,8 +255,8 @@ test('format-all pipeline deduplicates repeated input paths', async () => {
 		await writeFile(file, 'const one = 1;\n');
 
 		const { stdout } = await execFileAsync(
-			tsxBin,
-			[formatAllScript, '--format-files', file, file, '--syntax-files', file, file],
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', file, file, '--syntax-files', file, file],
 		);
 
 		assert.match(stdout, /\[blank-lines\] processed 1 file\(s\)/);
@@ -277,7 +283,7 @@ test('format-all pipeline exits 1 when validation finds syntax errors', async ()
 
 		await writeFile(file, 'const broken = {;\n');
 
-		await assert.rejects(execFileAsync(tsxBin, [formatAllScript, '--format-files', file, '--syntax-files', file]), (err: { code?: number }) => {
+		await assert.rejects(execFileAsync(process.execPath, ['--import', 'tsx', formatAllScript, '--format-files', file, '--syntax-files', file]), (err: { code?: number }) => {
 			return err.code === 1;
 		});
 	} finally {

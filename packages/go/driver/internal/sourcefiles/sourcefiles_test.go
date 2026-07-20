@@ -1,6 +1,7 @@
 package sourcefiles
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,7 @@ func TestCollectFiltersSourceFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(Options{Cwd: dir, Scopes: []string{"src"}})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -42,7 +43,7 @@ func TestCollectCanIncludeDeclarationFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(Options{Cwd: dir, IncludeDeclarations: true, Scopes: []string{"src"}})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, IncludeDeclarations: true, Scopes: []string{"src"}})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -70,7 +71,7 @@ func TestCollectIncludesUntrackedAndIgnoresIgnored(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
 	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
-	files, warnings, err := Collect(Options{Cwd: dir})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -96,7 +97,7 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "other", "app.ts"), "const value = 2;\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(Options{
+	files, warnings, err := Collect(context.Background(), Options{
 		Cwd:    dir,
 		Scopes: []string{"src", filepath.Join(dir, "src", "app.ts"), "missing"},
 	})
@@ -171,7 +172,7 @@ func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
 	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
-	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -207,7 +208,7 @@ func TestCollectChangedIncludesStagedFiles(t *testing.T) {
 	// A staged deletion leaves no file to format and must stay out.
 	run(t, dir, "git", "rm", "-q", "removed.ts")
 
-	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -229,7 +230,7 @@ func TestCollectChangedWorksBeforeTheFirstCommit(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
 	gitAdd(t, dir, "staged.ts")
 
-	files, warnings, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -252,7 +253,7 @@ func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 	gitAdd(t, dir, "untouched.ts")
 	gitCommit(t, dir)
 
-	changed, _, err := Collect(Options{Cwd: dir, Selection: SelectionChanged})
+	changed, _, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
 
 	if err != nil {
 		t.Fatalf("collect changed: %v", err)
@@ -262,7 +263,7 @@ func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 		t.Fatalf("a clean working tree has no changes, got: %#v", changed)
 	}
 
-	all, _, err := Collect(Options{Cwd: dir, Selection: SelectionAll})
+	all, _, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionAll})
 
 	if err != nil {
 		t.Fatalf("collect all: %v", err)
@@ -281,7 +282,7 @@ func TestCollectDefaultsToAll(t *testing.T) {
 	gitAdd(t, dir, "untouched.ts")
 	gitCommit(t, dir)
 
-	files, _, err := Collect(Options{Cwd: dir})
+	files, _, err := Collect(context.Background(), Options{Cwd: dir})
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)

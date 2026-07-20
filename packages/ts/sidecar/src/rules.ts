@@ -1,5 +1,5 @@
-import { isConstDeclaration } from '#sidecar/pass-utils';
-import type { Node } from '#sidecar/types';
+import { Ast } from '#sidecar/ast';
+import { Node } from '#sidecar/node-schema';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
 const LOOP_STATEMENTS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement']);
@@ -45,201 +45,184 @@ const VUE_PRIMITIVE_CALLS = new Set([
 	'watchEffect',
 ]);
 
-function isExportWithDeclaration(n: Node): boolean {
-	if (n.type !== 'ExportNamedDeclaration' && n.type !== 'ExportDefaultDeclaration') {
-		return false;
-	}
-
-	return Boolean(n.declaration);
-}
-
-function isBlankLineAboveType(next: Node): boolean {
-	return BLANK_LINE_ABOVE_TYPES.has(next.type);
-}
-
-function isIdentifierNamed(node: Node | undefined, names: Set<string>): boolean {
-	if (node?.type !== 'Identifier') {
-		return false;
-	}
-
-	const name = (node as { name?: unknown }).name;
-
-	return typeof name === 'string' && names.has(name);
-}
-
-function isVuePrimitiveCall(node: Node | undefined): boolean {
-	if (!node || node.type !== 'CallExpression') {
-		return false;
-	}
-
-	return isIdentifierNamed(node.callee as Node | undefined, VUE_PRIMITIVE_CALLS);
-}
-
-function isVuePrimitiveStatement(node: Node): boolean {
-	if (node.type === 'ExpressionStatement') {
-		return isVuePrimitiveCall(node.expression as Node | undefined);
-	}
-
-	if (node.type !== 'VariableDeclaration' || (node as { kind?: unknown }).kind !== 'const') {
-		return false;
-	}
-
-	const declarations = node.declarations as Node[] | undefined;
-
-	return (
-		Array.isArray(declarations) &&
-		declarations.some((declaration) => {
-			return isVuePrimitiveCall(declaration.init as Node | undefined);
-		})
-	);
-}
-
-function needsBlankLineAbove(next: Node): boolean {
-	if (next.type === 'ReturnStatement') {
-		return true;
-	}
-
-	if (isVuePrimitiveStatement(next)) {
-		return true;
-	}
-
-	if (isBlankLineAboveType(next)) {
-		return true;
-	}
-
-	return isExportWithDeclaration(next);
-}
-
-function isTypeDeclarationAbove(prev: Node): boolean {
-	if (TS_TYPE_DECLARATION_TYPES.has(prev.type)) {
-		return true;
-	}
-
-	if (prev.type === 'ExportNamedDeclaration') {
-		const declType = (prev.declaration as Node | undefined)?.type;
-
-		return declType ? TS_TYPE_DECLARATION_TYPES.has(declType) : false;
-	}
-
-	return false;
-}
-
-function isLoopStatement(node: Node): boolean {
-	return LOOP_STATEMENTS.has(node.type);
-}
-
-function isStructuredPreviousStatement(prev: Node): boolean {
-	if (STRUCTURED_PREVIOUS_STATEMENTS.has(prev.type)) {
-		return true;
-	}
-
-	if (prev.type === 'ExportNamedDeclaration' || prev.type === 'ExportDefaultDeclaration') {
-		const declType = (prev.declaration as Node | undefined)?.type;
-
-		return Boolean(declType && STRUCTURED_PREVIOUS_STATEMENTS.has(declType));
-	}
-
-	return false;
-}
-
-function isClassMethodPair(prev: Node, next: Node): boolean {
-	return CLASS_METHOD_TYPES.has(prev.type) && CLASS_METHOD_TYPES.has(next.type);
-}
-
-function isPropertyToMethodTransition(prev: Node, next: Node): boolean {
-	return CLASS_PROPERTY_TYPES.has(prev.type) && CLASS_METHOD_TYPES.has(next.type);
-}
-
-function isLetDeclaration(node: Node): boolean {
-	return node.type === 'VariableDeclaration' && (node as { kind?: unknown }).kind === 'let';
-}
-
-function containsAwait(node: Node): boolean {
-	if (node.type === 'AwaitExpression') {
-		return true;
-	}
-
-	if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
-		return false;
-	}
-
-	for (const value of Object.values(node)) {
-		if (!value || typeof value !== 'object') {
-			continue;
+/** Encapsulates the formatter's statement and class-member layout rules. */
+export class Rules {
+	static #isExportWithDeclaration(node: Node): boolean {
+		if (node.type !== 'ExportNamedDeclaration' && node.type !== 'ExportDefaultDeclaration') {
+			return false;
 		}
 
-		if (Array.isArray(value)) {
-			if (
-				value.some((child) => {
-					return child && typeof child === 'object' && typeof (child as Node).type === 'string' && containsAwait(child as Node);
-				})
-			) {
-				return true;
-			}
-		} else if (typeof (value as Node).type === 'string' && containsAwait(value as Node)) {
+		return Boolean(node.declaration);
+	}
+
+	static #isBlankLineAboveType(next: Node): boolean {
+		return BLANK_LINE_ABOVE_TYPES.has(next.type);
+	}
+
+	static #isIdentifierNamed(node: Node | undefined, names: Set<string>): boolean {
+		if (node?.type !== 'Identifier') {
+			return false;
+		}
+
+		const name = Ast.nodeName(node);
+
+		return name !== undefined && names.has(name);
+	}
+
+	static #isVuePrimitiveCall(node: Node | undefined): boolean {
+		if (node?.type !== 'CallExpression') {
+			return false;
+		}
+
+		return Rules.#isIdentifierNamed(Ast.childNode(node, 'callee'), VUE_PRIMITIVE_CALLS);
+	}
+
+	static #isVuePrimitiveStatement(node: Node): boolean {
+		if (node.type === 'ExpressionStatement') {
+			return Rules.#isVuePrimitiveCall(Ast.childNode(node, 'expression'));
+		}
+
+		if (node.type !== 'VariableDeclaration' || Ast.declarationKind(node) !== 'const') {
+			return false;
+		}
+
+		return Ast.childNodes(node, 'declarations').some((declaration) => {
+			return Rules.#isVuePrimitiveCall(Ast.childNode(declaration, 'init'));
+		});
+	}
+
+	static #needsBlankLineAbove(next: Node): boolean {
+		if (next.type === 'ReturnStatement' || Rules.#isVuePrimitiveStatement(next) || Rules.#isBlankLineAboveType(next)) {
 			return true;
 		}
+
+		return Rules.#isExportWithDeclaration(next);
 	}
 
-	return false;
-}
+	static #isTypeDeclarationAbove(previous: Node): boolean {
+		if (TS_TYPE_DECLARATION_TYPES.has(previous.type)) {
+			return true;
+		}
 
-export function needsBlankLine(prev: Node, next: Node): boolean {
-	if (containsAwait(prev) || containsAwait(next)) {
-		return true;
+		if (previous.type === 'ExportNamedDeclaration') {
+			const declarationType = Ast.childNode(previous, 'declaration')?.type;
+
+			return declarationType ? TS_TYPE_DECLARATION_TYPES.has(declarationType) : false;
+		}
+
+		return false;
 	}
 
-	if (needsBlankLineAbove(next)) {
-		return true;
+	static #isLoopStatement(node: Node): boolean {
+		return LOOP_STATEMENTS.has(node.type);
 	}
 
-	if (isLoopStatement(next)) {
-		return !isStructuredPreviousStatement(prev);
+	static #isStructuredPreviousStatement(previous: Node): boolean {
+		if (STRUCTURED_PREVIOUS_STATEMENTS.has(previous.type)) {
+			return true;
+		}
+
+		if (previous.type === 'ExportNamedDeclaration' || previous.type === 'ExportDefaultDeclaration') {
+			const declarationType = Ast.childNode(previous, 'declaration')?.type;
+
+			return Boolean(declarationType && STRUCTURED_PREVIOUS_STATEMENTS.has(declarationType));
+		}
+
+		return false;
 	}
 
-	if (isClassMethodPair(prev, next)) {
-		return true;
+	static #isClassMethodPair(previous: Node, next: Node): boolean {
+		return CLASS_METHOD_TYPES.has(previous.type) && CLASS_METHOD_TYPES.has(next.type);
 	}
 
-	if (isPropertyToMethodTransition(prev, next)) {
-		return true;
+	static #isPropertyToMethodTransition(previous: Node, next: Node): boolean {
+		return CLASS_PROPERTY_TYPES.has(previous.type) && CLASS_METHOD_TYPES.has(next.type);
 	}
 
-	if (isTypeDeclarationAbove(prev)) {
-		return true;
+	static #isLetDeclaration(node: Node): boolean {
+		return node.type === 'VariableDeclaration' && Ast.declarationKind(node) === 'let';
 	}
 
-	if (prev.type === 'ImportDeclaration' && next.type !== 'ImportDeclaration') {
-		return true;
+	static #containsAwait(node: Node): boolean {
+		if (node.type === 'AwaitExpression') {
+			return true;
+		}
+
+		if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
+			return false;
+		}
+
+		for (const value of Object.values(node)) {
+			if (Array.isArray(value)) {
+				if (
+					value.some((child) => {
+						return child instanceof Node && Rules.#containsAwait(child);
+					})
+				) {
+					return true;
+				}
+			} else if (value instanceof Node && Rules.#containsAwait(value)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
-	if (isConstDeclaration(prev) !== isConstDeclaration(next)) {
-		return true;
+	/**
+	 * Decide whether two adjacent statements require a blank line.
+	 *
+	 * @param previous - The previous statement.
+	 * @param next - The following statement.
+	 * @returns `true` when the pair must be separated by a blank line.
+	 */
+	static needsBlankLine(previous: Node, next: Node): boolean {
+		if (Rules.#containsAwait(previous) || Rules.#containsAwait(next) || Rules.#needsBlankLineAbove(next)) {
+			return true;
+		}
+
+		if (Rules.#isLoopStatement(next)) {
+			return !Rules.#isStructuredPreviousStatement(previous);
+		}
+
+		if (Rules.#isClassMethodPair(previous, next) || Rules.#isPropertyToMethodTransition(previous, next) || Rules.#isTypeDeclarationAbove(previous)) {
+			return true;
+		}
+
+		if (previous.type === 'ImportDeclaration' && next.type !== 'ImportDeclaration') {
+			return true;
+		}
+
+		if (Ast.isConstDeclaration(previous) !== Ast.isConstDeclaration(next)) {
+			return true;
+		}
+
+		if (Rules.#isLetDeclaration(previous) !== Rules.#isLetDeclaration(next)) {
+			return true;
+		}
+
+		if (previous.type === 'VariableDeclaration' && next.type !== 'VariableDeclaration') {
+			return true;
+		}
+
+		return BLOCK_HAVING_STATEMENTS.has(previous.type);
 	}
 
-	if (isLetDeclaration(prev) !== isLetDeclaration(next)) {
-		return true;
+	/**
+	 * Classify a class member for stable ordering.
+	 *
+	 * @param node - The class member to classify.
+	 * @returns Its property, constructor, or method group.
+	 */
+	static classifyMember(node: Node): 'property' | 'constructor' | 'method' {
+		if (CLASS_PROPERTY_TYPES.has(node.type)) {
+			return 'property';
+		}
+
+		if (node.type === 'MethodDefinition' && Ast.declarationKind(node) === 'constructor') {
+			return 'constructor';
+		}
+
+		return 'method';
 	}
-
-	if (prev.type === 'VariableDeclaration' && next.type !== 'VariableDeclaration') {
-		return true;
-	}
-
-	if (BLOCK_HAVING_STATEMENTS.has(prev.type)) {
-		return true;
-	}
-
-	return false;
-}
-
-export function classifyMember(node: Node): 'property' | 'constructor' | 'method' {
-	if (CLASS_PROPERTY_TYPES.has(node.type)) {
-		return 'property';
-	}
-
-	if (node.type === 'MethodDefinition' && (node as { kind?: string }).kind === 'constructor') {
-		return 'constructor';
-	}
-
-	return 'method';
 }

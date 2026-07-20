@@ -14,8 +14,9 @@ set -euo pipefail
 # Output lands in packages/go/driver/internal/embedded/bin/<target>/, next to the
 # package that embeds it: go:embed cannot reach outside its own directory.
 #
-# Tool versions come from packages/ts/sidecar/package.json devDependencies. Requires
-# bash, node, npm, and bun.
+# Tool versions come from packages/ts/sidecar/package.json devDependencies;
+# patch-script versions come from packages/ts/infra/package.json. Requires bash,
+# node, npm, and bun.
 #
 # usage: stage-ts-assets.sh <all|host|goos_goarch...>
 
@@ -86,12 +87,19 @@ for tool in node npm bun; do
 done
 
 pin() {
-	node -e "const p = require('${root}/packages/ts/sidecar/package.json'); const v = p.devDependencies['$1']; if (!v) { throw new Error('no pin for $1'); } console.log(v);"
+	local package_json="$1"
+	local package="$2"
+
+	node -e "const p = require(process.argv[1]); const v = p.devDependencies[process.argv[2]]; if (!v) { throw new Error('no pin for ' + process.argv[2]); } console.log(v);" "${package_json}" "${package}"
 }
 
-oxfmt_pin="$(pin oxfmt)"
-oxlint_pin="$(pin oxlint)"
-oxc_parser_pin="$(pin oxc-parser)"
+sidecar_package_json="${root}/packages/ts/sidecar/package.json"
+infra_package_json="${root}/packages/ts/infra/package.json"
+
+oxfmt_pin="$(pin "${sidecar_package_json}" oxfmt)"
+oxlint_pin="$(pin "${sidecar_package_json}" oxlint)"
+oxc_parser_pin="$(pin "${sidecar_package_json}" oxc-parser)"
+zod_pin="$(pin "${infra_package_json}" zod)"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -116,7 +124,8 @@ cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 	npm install --no-save --no-audit --no-fund \
 		"oxfmt@${oxfmt_pin}" \
 		"oxlint@${oxlint_pin}" \
-		"oxc-parser@${oxc_parser_pin}" >/dev/null
+		"oxc-parser@${oxc_parser_pin}" \
+		"zod@${zod_pin}" >/dev/null
 )
 
 # oxfmt formats embedded code (Vue <template>/<style>, markdown, HTML) through a
@@ -125,6 +134,17 @@ cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 # hangs the binary on any such file. Rewrite oxfmt to do that work in-process
 # before it is bundled. See packages/ts/infra/oxfmt-inprocess for the full
 # rationale. Run by node directly (type stripping) so staging needs no tsx.
+# Its ESM imports resolve from the infra package, not the temporary workdir.
+if ! (
+	cd "${root}/packages/ts/infra"
+	node -e "import('zod')" >/dev/null 2>&1
+); then
+	printf 'stage-ts-assets: installing zod for the oxfmt patch script\n' >&2
+	npm install --no-save --no-audit --no-fund \
+		--prefix "${root}/packages/ts/infra" \
+		"zod@${zod_pin}" >/dev/null
+fi
+
 node "${root}/packages/ts/infra/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
 
 # The napi bindings stay external: every target loads them from files staged

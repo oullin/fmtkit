@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os/exec"
@@ -11,9 +12,9 @@ import (
 // Tools carries the three pipeline steps. The TS steps return an error whose
 // exec.ExitError code propagates; the Go step reports its exit code directly.
 type Tools struct {
-	TS   func(scopes []string, output io.Writer) error
-	Lint func(scopes []string, output io.Writer) error
-	Go   func(args []string, output io.Writer) int
+	TS   func(ctx context.Context, scopes []string, output io.Writer) error
+	Lint func(ctx context.Context, scopes []string, output io.Writer) error
+	Go   func(ctx context.Context, args []string, output io.Writer) int
 }
 
 // Steps selects which parts of the pipeline run; the zero value (no
@@ -45,7 +46,7 @@ func (s Steps) normalized() Steps {
 
 // RunFormat runs TS/Vue formatting, TS/Vue lint, and Go formatting against
 // the given paths.
-func (p Pipeline) RunFormat(paths []string) int {
+func (p Pipeline) RunFormat(ctx context.Context, paths []string) int {
 	if len(paths) == 0 {
 		paths = []string{"."}
 	}
@@ -60,7 +61,7 @@ func (p Pipeline) RunFormat(paths []string) int {
 	type step struct {
 		label     string
 		summarize func(string, *logger)
-		run       func(output io.Writer) int
+		run       func(ctx context.Context, output io.Writer) int
 	}
 
 	var steps []step
@@ -70,15 +71,15 @@ func (p Pipeline) RunFormat(paths []string) int {
 			step{
 				label:     "Running TS/Vue formatting",
 				summarize: summarizeTSFormat,
-				run: func(output io.Writer) int {
-					return exitCode(p.Tools.TS(paths, output), output)
+				run: func(ctx context.Context, output io.Writer) int {
+					return exitCode(p.Tools.TS(ctx, paths, output), output)
 				},
 			},
 			step{
 				label:     "Running TS/Vue lint",
 				summarize: summarizeTSLint,
-				run: func(output io.Writer) int {
-					return exitCode(p.Tools.Lint(paths, output), output)
+				run: func(ctx context.Context, output io.Writer) int {
+					return exitCode(p.Tools.Lint(ctx, paths, output), output)
 				},
 			},
 		)
@@ -88,14 +89,14 @@ func (p Pipeline) RunFormat(paths []string) int {
 		steps = append(steps, step{
 			label:     "Running Go formatting",
 			summarize: summarizeGoFormat,
-			run: func(output io.Writer) int {
-				return p.Tools.Go(append([]string{"format"}, paths...), output)
+			run: func(ctx context.Context, output io.Writer) int {
+				return p.Tools.Go(ctx, append([]string{"format"}, paths...), output)
 			},
 		})
 	}
 
 	for _, step := range steps {
-		if code := p.runStep(log, step.label, step.summarize, step.run); code != 0 {
+		if code := p.runStep(ctx, log, step.label, step.summarize, step.run); code != 0 {
 			return code
 		}
 	}
@@ -108,7 +109,7 @@ func (p Pipeline) RunFormat(paths []string) int {
 
 // runStep captures a step's combined output, streaming it live unless quiet,
 // and prints either its summary details or (on failure) the captured log.
-func (p Pipeline) runStep(log *logger, label string, summarize func(string, *logger), run func(io.Writer) int) int {
+func (p Pipeline) runStep(ctx context.Context, log *logger, label string, summarize func(string, *logger), run func(context.Context, io.Writer) int) int {
 	log.section(label)
 
 	var captured bytes.Buffer
@@ -122,7 +123,7 @@ func (p Pipeline) runStep(log *logger, label string, summarize func(string, *log
 		output = io.MultiWriter(&captured, live)
 	}
 
-	code := run(output)
+	code := run(ctx, output)
 
 	if live != nil {
 		_ = live.Close()

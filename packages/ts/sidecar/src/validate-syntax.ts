@@ -1,113 +1,111 @@
-import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { parseSync } from 'oxc-parser';
-import { extractVueScripts, isJavaScriptOrTypeScript, isNotFoundError, scriptAttribute } from '#sidecar/pass-utils';
+import { z } from 'zod';
+import type { OxcErrorDto } from '#sidecar/errors';
+import { FormatPipeline } from '#sidecar/format-pipeline';
+import { NodeProcessRunner } from '#sidecar/process-runner';
+import { NodeSourceFiles } from '#sidecar/source-files';
 
-const cwd = process.cwd();
+/** Immutable command-line options for standalone syntax validation. */
+export class SyntaxCliDto {
+	/** TypeScript and Vue files eligible for syntax validation. */
+	readonly files: readonly string[];
 
-type ParseError = {
-	message?: unknown;
-	codeframe?: unknown;
-};
+	static readonly #argvSchema = z.array(z.string());
 
-type ParseResult = {
-	errors?: ParseError[];
-};
-
-function parseErrors(virtualName: string, content: string): ParseError[] {
-	const parsed = parseSync(virtualName, content) as ParseResult;
-
-	return parsed.errors ?? [];
-}
-
-function formatError(file: string, error: ParseError): string {
-	if (typeof error.codeframe === 'string' && error.codeframe.length > 0) {
-		return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
-	}
-
-	if (typeof error.message === 'string' && error.message.length > 0) {
-		return `[validate-syntax] ${file}: ${error.message}`;
-	}
-
-	return `[validate-syntax] ${file}: syntax validation failed`;
-}
-
-function scriptExtension(openingTag: string): 'ts' | 'tsx' {
-	const lang = scriptAttribute(openingTag, 'lang') ?? '';
-
-	return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
-}
-
-function scriptPrefix(content: string, scriptStart: number): string {
-	return content.slice(0, scriptStart).replace(/[^\r\n]/g, ' ');
-}
-
-function validateVue(file: string, content: string): string[] {
-	const failures: string[] = [];
-
-	for (const block of extractVueScripts(content)) {
-		if (!isJavaScriptOrTypeScript(block.openTag)) {
-			continue;
-		}
-
-		const virtualContent = scriptPrefix(content, block.start) + block.content;
-		const errors = parseErrors(`${file}.script.${scriptExtension(block.openTag)}`, virtualContent);
-
-		for (const error of errors) {
-			failures.push(formatError(file, error));
-		}
-	}
-
-	return failures;
-}
-
-export async function validateFile(file: string): Promise<string[]> {
-	const content = await readFile(file, 'utf8').catch((err: unknown) => {
-		if (isNotFoundError(err)) {
-			console.warn(`[validate-syntax] path not found, skipping: ${file}`);
-
-			return null;
-		}
-
-		throw err;
+	static readonly #schema = z.object({
+		files: z.array(z.string()),
 	});
 
-	if (content === null) {
-		return [];
+	private constructor(value: { files: string[] }) {
+		this.files = Object.freeze(value.files);
+
+		Object.setPrototypeOf(this, Object.prototype);
+		Object.freeze(this);
 	}
 
-	if (file.endsWith('.vue')) {
-		return validateVue(file, content);
-	}
+	/**
+	 * Parse the standalone syntax-validation command line.
+	 *
+	 * @param input - Arguments after the executable and script path.
+	 * @returns Immutable syntax-validation options.
+	 */
+	static parse(input: unknown): SyntaxCliDto {
+		const argv = SyntaxCliDto.#argvSchema.parse(input);
 
-	return parseErrors(file, content).map((error) => {
-		return formatError(file, error);
-	});
+		const files = argv.filter((file) => {
+			return file.endsWith('.ts') || file.endsWith('.vue');
+		});
+
+		return new SyntaxCliDto(SyntaxCliDto.#schema.parse({ files }));
+	}
+}
+
+/** Formats parser diagnostics for the standalone syntax-validation command. */
+class SyntaxErrorReporter {
+	/**
+	 * Format one parser diagnostic for console output.
+	 *
+	 * @param file - The source path associated with the diagnostic.
+	 * @param error - The parser diagnostic to render.
+	 * @returns A source-framed message, plain message, or stable fallback.
+	 */
+	static format(file: string, error: OxcErrorDto): string {
+		if (error.codeframe && error.codeframe.length > 0) {
+			return `[validate-syntax] ${file}\n${error.codeframe.trimEnd()}`;
+		}
+
+		if (error.message && error.message.length > 0) {
+			return `[validate-syntax] ${file}: ${error.message}`;
+		}
+
+		return `[validate-syntax] ${file}: syntax validation failed`;
+	}
 }
 
 async function main(): Promise<void> {
-	const files = process.argv.slice(2).filter((file) => {
-		return file.endsWith('.ts') || file.endsWith('.vue');
-	});
+	const cwd = process.cwd();
+	const options = SyntaxCliDto.parse(process.argv.slice(2));
+	const files = [...options.files];
 
-	const failures: string[] = [];
+	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
-	for (const file of files) {
-		failures.push(...(await validateFile(file)));
+	const failures = await pipeline.validate(files);
+
+	const diagnostics: string[] = [];
+
+	for (const failure of failures) {
+		if (failure.error._tag === 'SourceFileUnreadable') {
+			if (failure.error.isNotFound()) {
+				console.warn(`[validate-syntax] path not found, skipping: ${failure.file}`);
+
+				continue;
+			}
+
+			console.error(failure.error);
+			process.exitCode = 1;
+
+			return;
+		}
+
+		for (const error of failure.error.errors) {
+			diagnostics.push(SyntaxErrorReporter.format(failure.file, error));
+		}
 	}
 
-	if (failures.length > 0) {
-		console.error(failures.join('\n'));
-		console.error(`[validate-syntax] ${failures.length} syntax error(s) found after formatting.`);
-		process.exit(1);
+	if (diagnostics.length > 0) {
+		console.error(diagnostics.join('\n'));
+		console.error(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.`);
+		process.exitCode = 1;
+
+		return;
 	}
 
 	console.log(`[validate-syntax] checked ${files.length} file(s) in ${cwd}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	main().catch((err: unknown) => {
-		console.error(err);
-		process.exit(1);
+	main().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
 	});
 }

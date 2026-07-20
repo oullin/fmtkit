@@ -4,7 +4,10 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"go.ollin.sh/fmtkit/driver/internal/app"
 )
@@ -12,7 +15,14 @@ import (
 var version = "dev"
 
 func main() {
-	os.Exit(app.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+
+	// os.Exit skips deferred calls, so release the signal handler explicitly
+	// before exiting with the captured code.
+	code := app.
 		New(version, os.Stdout, os.Stderr).
-		Run(os.Args[1:]))
+		Run(ctx, os.Args[1:])
+
+	stop()
+	os.Exit(code)
 }

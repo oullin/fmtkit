@@ -1,71 +1,42 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { extractVueScripts, isJavaScriptOrTypeScript, writeFileAtomic } from '#sidecar/pass-utils';
-import { processSegment } from '#sidecar/segment';
 
-export async function dirExists(dir: string): Promise<boolean> {
-	try {
-		const s = await stat(dir);
-
-		return s.isDirectory();
-	} catch {
-		return false;
-	}
-}
-
-export async function listSourceFiles(dir: string): Promise<string[]> {
-	const entries = await readdir(
-		dir,
-		{ recursive: true, withFileTypes: true },
-	);
-
-	const files: string[] = [];
-
-	for (const entry of entries) {
-		if (!entry.isFile()) {
-			continue;
+/** Reads source-file inventories from the local filesystem. */
+export class Files {
+	/**
+	 * Report whether a path exists as a directory.
+	 *
+	 * @param directory - The path to inspect.
+	 * @returns `true` when the path identifies an existing directory.
+	 */
+	static async dirExists(directory: string): Promise<boolean> {
+		try {
+			return (await stat(directory)).isDirectory();
+		} catch {
+			return false;
 		}
-
-		if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.vue')) {
-			continue;
-		}
-
-		files.push(resolve(entry.parentPath, entry.name));
 	}
 
-	return files;
-}
+	/**
+	 * List TypeScript and Vue files below a directory recursively.
+	 *
+	 * @param directory - The directory tree to scan.
+	 * @returns Absolute paths to the discovered TypeScript and Vue files.
+	 */
+	static async listSourceFiles(directory: string): Promise<string[]> {
+		const entries = await readdir(
+			directory,
+			{ recursive: true, withFileTypes: true },
+		);
 
-export async function processFile(file: string, check: boolean): Promise<boolean> {
-	const original = await readFile(file, 'utf8');
+		const files: string[] = [];
 
-	let updated = original;
-
-	if (file.endsWith('.vue')) {
-		const segments = extractVueScripts(original).filter((segment) => {
-			return isJavaScriptOrTypeScript(segment.openTag);
-		});
-
-		for (const segment of [...segments].reverse()) {
-			const rewritten = processSegment(segment.content, `${file}.script.ts`);
-
-			if (rewritten === segment.content) {
-				continue;
+		for (const entry of entries) {
+			if (entry.isFile() && (entry.name.endsWith('.ts') || entry.name.endsWith('.vue'))) {
+				files.push(resolve(entry.parentPath, entry.name));
 			}
-
-			updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
 		}
-	} else {
-		updated = processSegment(original, file);
-	}
 
-	if (updated === original) {
-		return false;
+		return files;
 	}
-
-	if (!check) {
-		await writeFileAtomic(file, updated);
-	}
-
-	return true;
 }

@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { formatFluentChains } from '#sidecar/fluent-chains';
+import { FluentChains } from '#sidecar/fluent-chains';
 
 const script = fileURLToPath(
 	import.meta.resolve('#sidecar/fluent-chains'),
 );
 const tsx = fileURLToPath(
-	import.meta.resolve('tsx/cli'),
+	import.meta.resolve('tsx'),
 );
 
 function run(command: string, args: string[], cwd: string): void {
@@ -65,39 +65,39 @@ describe('fluent chain formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(formatFluentChains(input, 'fixture.ts'), expected);
+		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
 	});
 
 	it('is idempotent for already split chains', () => {
 		const input = ['const routes = createRouter()', "\t.use('*', bindEnv)", "\t.get('/', getMe);", ''].join('\n');
 
-		assert.equal(formatFluentChains(formatFluentChains(input, 'fixture.ts'), 'fixture.ts'), input);
+		assert.equal(FluentChains.format(FluentChains.format(input, 'fixture.ts'), 'fixture.ts'), input);
 	});
 
 	it('uses the file indentation style for split chains', () => {
 		const input = ['function routes() {', "  return createRouter().use('*', bindEnv).get('/', getMe);", '}', ''].join('\n');
 		const expected = ['function routes() {', '  return createRouter()', "    .use('*', bindEnv)", "    .get('/', getMe);", '}', ''].join('\n');
 
-		assert.equal(formatFluentChains(input, 'fixture.ts'), expected);
+		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
 	});
 
 	it('leaves short value transform chains unchanged', () => {
 		const input = ['const normalized = value.trim().toLowerCase();', ''].join('\n');
 
-		assert.equal(formatFluentChains(input, 'fixture.ts'), input);
+		assert.equal(FluentChains.format(input, 'fixture.ts'), input);
 	});
 
 	it('preserves optional chain operators', () => {
 		const input = ["const result = makeClient()?.use(auth).get('/');", ''].join('\n');
 		const expected = ['const result = makeClient()', '\t?.use(auth)', "\t.get('/');", ''].join('\n');
 
-		assert.equal(formatFluentChains(input, 'fixture.ts'), expected);
+		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
 	});
 
 	it('skips chains with comments between links', () => {
 		const input = ['const routes = createRouter()', '\t// attach middleware first', "\t.use('*', bindEnv).get('/', getMe);", ''].join('\n');
 
-		assert.equal(formatFluentChains(input, 'fixture.ts'), input);
+		assert.equal(FluentChains.format(input, 'fixture.ts'), input);
 	});
 
 	it('formats Vue script blocks through the CLI', async () => {
@@ -111,8 +111,8 @@ describe('fluent chain formatter', () => {
 					].join('\n'),
 				},
 			async (dir) => {
-					run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
-					run(process.execPath, [tsx, script, 'DashboardRoute.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'DashboardRoute.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'DashboardRoute.vue'], dir);
 
 					const output = await readFile(join(dir, 'DashboardRoute.vue'), 'utf8');
 
@@ -138,7 +138,7 @@ describe('fluent chain formatter', () => {
 					].join('\n'),
 				},
 			async (dir) => {
-					run(process.execPath, [tsx, script, 'StructuredData.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'StructuredData.vue'], dir);
 
 					const output = await readFile(join(dir, 'StructuredData.vue'), 'utf8');
 
@@ -160,8 +160,8 @@ describe('fluent chain formatter', () => {
 					].join('\n'),
 				},
 			async (dir) => {
-					run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
-					run(process.execPath, [tsx, script, 'DashboardData.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'DashboardData.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'DashboardData.vue'], dir);
 
 					const output = await readFile(join(dir, 'DashboardData.vue'), 'utf8');
 
@@ -183,8 +183,8 @@ describe('fluent chain formatter', () => {
 					].join('\n'),
 				},
 			async (dir) => {
-					run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
-					run(process.execPath, [tsx, script, 'AuthProvider.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'AuthProvider.vue'], dir);
+					run(process.execPath, ['--import', tsx, script, 'AuthProvider.vue'], dir);
 
 					const output = await readFile(join(dir, 'AuthProvider.vue'), 'utf8');
 

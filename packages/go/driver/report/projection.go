@@ -38,7 +38,7 @@ func projectReport(cwd string, report Combined) projectedReport {
 
 func projectFormatterReport(cwd string, report Combined) projectedFormatterReport {
 	out := projectedFormatterReport{
-		Result:     report.Formatter.Result,
+		Result:     string(report.Formatter.Result),
 		Files:      report.Formatter.Files,
 		Changed:    report.Formatter.Changed,
 		Violations: report.Formatter.ViolationCount(),

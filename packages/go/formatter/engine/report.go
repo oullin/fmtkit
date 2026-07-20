@@ -2,6 +2,9 @@ package engine
 
 import "go.ollin.sh/fmtkit/formatter/rules"
 
+// Result classifies the outcome of an engine run.
+type Result string
+
 // FileResult describes the outcome for a single file.
 type FileResult struct {
 	File       string            `json:"file"`
@@ -20,12 +23,20 @@ type ErrorResult struct {
 
 // Report summarizes an engine run across one or more files.
 type Report struct {
-	Result  string        `json:"result"`
+	Result  Result        `json:"result"`
 	Files   int           `json:"files"`
 	Changed int           `json:"changed"`
 	Results []FileResult  `json:"results,omitempty"`
 	Errors  []ErrorResult `json:"errors,omitempty"`
 }
+
+// The Result values an engine run can report. The strings are part of the
+// JSON report contract, so they must stay as they are.
+const (
+	ResultPass  Result = "pass"
+	ResultFixed Result = "fixed"
+	ResultFail  Result = "fail"
+)
 
 // ViolationCount returns the total number of rule violations in the report.
 func (r Report) ViolationCount() int {

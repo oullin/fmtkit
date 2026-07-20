@@ -1,13 +1,14 @@
 package sourcefiles
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 )
 
-func Run(args []string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sources", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -32,7 +33,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	files, warnings, err := Collect(Options{
+	files, warnings, err := Collect(ctx, Options{
 		Cwd:                 cwd,
 		IncludeDeclarations: *includeDeclarations,
 		Scopes:              fs.Args(),

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +42,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stderr strings.Builder
 
 	// "dev" mirrors the unstamped binary: no embedded TS assets.
-	exitCode := New("dev", &stdout, &stderr).Run(args)
+	exitCode := New("dev", &stdout, &stderr).Run(context.Background(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

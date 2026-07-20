@@ -2,6 +2,7 @@ package vet
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -28,52 +29,80 @@ type Report struct {
 	Errors  []ErrorResult `json:"errors,omitempty"`
 }
 
+// toolchain abstracts the Go toolchain invocations the vet run needs, so tests
+// can drive run with a fake instead of swapping package-level state.
+type toolchain interface {
+	LookGo() (string, error)
+	EnvOutput(ctx context.Context, dir string, keys ...string) ([]byte, error)
+	ListModulesOutput(ctx context.Context, dir string) ([]byte, error)
+	VetOutput(ctx context.Context, dir string) ([]byte, error)
+}
+
+// execToolchain is the exec-backed toolchain used outside tests.
+type execToolchain struct{}
+
 // Default returns the default vet configuration.
 func Default() Config {
 	return Config{Enabled: true}
 }
 
-var lookGoPath = func() (string, error) {
+// LookGo resolves the go executable on PATH.
+func (execToolchain) LookGo() (string, error) {
 	return exec.LookPath("go")
 }
 
-// goBinary resolves the go executable via lookGoPath so the toolchain location is
-// sourced consistently (and honours the lookGoPath stub in tests), falling back to
-// the bare "go" name when resolution fails.
-func goBinary() string {
-	if path, err := lookGoPath(); err == nil {
+// EnvOutput runs `go env` for the given keys in dir.
+func (t execToolchain) EnvOutput(ctx context.Context, dir string, keys ...string) ([]byte, error) {
+	args := append([]string{"env"}, keys...)
+	cmd := exec.CommandContext(ctx, t.goBinary(), args...)
+	cmd.Dir = dir
+
+	return cmd.Output()
+}
+
+// ListModulesOutput lists the module directories of the module or workspace
+// rooted at dir.
+func (t execToolchain) ListModulesOutput(ctx context.Context, dir string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, t.goBinary(), "list", "-f", "{{.Dir}}", "-m")
+	cmd.Dir = dir
+
+	return cmd.Output()
+}
+
+// VetOutput runs `go vet ./...` in dir and returns its combined output.
+func (t execToolchain) VetOutput(ctx context.Context, dir string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, t.goBinary(), "vet", "./...")
+	cmd.Dir = dir
+
+	return cmd.CombinedOutput()
+}
+
+// goBinary resolves the go executable via LookGo so the toolchain location is
+// sourced consistently, falling back to the bare "go" name when resolution
+// fails.
+func (t execToolchain) goBinary() string {
+	if path, err := t.LookGo(); err == nil {
 		return path
 	}
 
 	return "go"
 }
 
-var goEnvOutput = func(workRoot string, keys ...string) ([]byte, error) {
-	args := append([]string{"env"}, keys...)
-	cmd := exec.Command(goBinary(), args...)
-	cmd.Dir = workRoot
-
-	return cmd.Output()
-}
-
-var goListModulesOutput = func(root string) ([]byte, error) {
-	cmd := exec.Command(goBinary(), "list", "-f", "{{.Dir}}", "-m")
-	cmd.Dir = root
-
-	return cmd.Output()
-}
-
 // Run executes automatic go vet checks for the current module or workspace.
-func Run(workRoot string, cfg Config) Report {
+func Run(ctx context.Context, workRoot string, cfg Config) Report {
+	return run(ctx, workRoot, cfg, execToolchain{})
+}
+
+func run(ctx context.Context, workRoot string, cfg Config, tc toolchain) Report {
 	if !cfg.Enabled {
 		return Report{}
 	}
 
-	if _, err := lookGoPath(); err != nil {
+	if _, err := tc.LookGo(); err != nil {
 		return Report{Skipped: true}
 	}
 
-	root, err := discoverVetRoot(workRoot)
+	root, err := discoverVetRoot(ctx, workRoot, tc)
 
 	if err != nil {
 		return Report{
@@ -90,7 +119,7 @@ func Run(workRoot string, cfg Config) Report {
 
 	report := Report{Root: root}
 
-	targets, err := discoverVetTargets(root)
+	targets, err := discoverVetTargets(ctx, root, tc)
 
 	if err != nil {
 		report.Errors = append(report.Errors, ErrorResult{
@@ -102,7 +131,7 @@ func Run(workRoot string, cfg Config) Report {
 	}
 
 	for _, target := range targets {
-		if vetError := runGoVet(target); vetError != nil {
+		if vetError := runGoVet(ctx, target, tc); vetError != nil {
 			report.Errors = append(report.Errors, *vetError)
 		}
 	}
@@ -115,8 +144,8 @@ func (r Report) ErrorCount() int {
 	return len(r.Errors)
 }
 
-func discoverVetRoot(workRoot string) (string, error) {
-	values, err := goEnv(workRoot, "GOWORK", "GOMOD")
+func discoverVetRoot(ctx context.Context, workRoot string, tc toolchain) (string, error) {
+	values, err := goEnv(ctx, workRoot, tc, "GOWORK", "GOMOD")
 
 	if err != nil {
 		return "", err
@@ -133,15 +162,16 @@ func discoverVetRoot(workRoot string) (string, error) {
 	return "", nil
 }
 
-func goEnv(workRoot string, keys ...string) ([]string, error) {
-	out, err := goEnvOutput(workRoot, keys...)
+func goEnv(ctx context.Context, workRoot string, tc toolchain, keys ...string) ([]string, error) {
+	out, err := tc.EnvOutput(ctx, workRoot, keys...)
 
 	if err != nil {
 		var exitErr *exec.ExitError
+
 		label := strings.Join(keys, " ")
 
 		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("resolve go %s: %s", label, strings.TrimSpace(string(exitErr.Stderr)))
+			return nil, fmt.Errorf("resolve go %s: %s: %w", label, strings.TrimSpace(string(exitErr.Stderr)), err)
 		}
 
 		return nil, fmt.Errorf("resolve go %s: %w", label, err)
@@ -184,18 +214,18 @@ func existingGoRoot(path string, filename string) (string, bool) {
 	return filepath.Dir(path), true
 }
 
-func discoverVetTargets(root string) ([]string, error) {
+func discoverVetTargets(ctx context.Context, root string, tc toolchain) ([]string, error) {
 	if strings.TrimSpace(root) == "" {
 		return nil, nil
 	}
 
-	out, err := goListModulesOutput(root)
+	out, err := tc.ListModulesOutput(ctx, root)
 
 	if err != nil {
 		var exitErr *exec.ExitError
 
 		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("resolve go vet targets: %s", strings.TrimSpace(string(exitErr.Stderr)))
+			return nil, fmt.Errorf("resolve go vet targets: %s: %w", strings.TrimSpace(string(exitErr.Stderr)), err)
 		}
 
 		return nil, fmt.Errorf("resolve go vet targets: %w", err)
@@ -223,15 +253,12 @@ func discoverVetTargets(root string) ([]string, error) {
 	return targets, nil
 }
 
-func runGoVet(root string) *ErrorResult {
+func runGoVet(ctx context.Context, root string, tc toolchain) *ErrorResult {
 	if strings.TrimSpace(root) == "" {
 		return nil
 	}
 
-	cmd := exec.Command(goBinary(), "vet", "./...")
-	cmd.Dir = root
-
-	out, err := cmd.CombinedOutput()
+	out, err := tc.VetOutput(ctx, root)
 
 	if err == nil {
 		return nil

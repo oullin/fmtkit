@@ -1,11 +1,16 @@
-import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { getEnd, getStart, visit } from '#sidecar/ast';
-import { formatDrizzleQueries } from '#sidecar/drizzle-queries';
-import { applyEdits } from '#sidecar/edits';
-import { formatExpandedCalls } from '#sidecar/expanded-calls';
-import { extractVueScripts, hasCommentBetween, isJavaScriptOrTypeScript, isNotFoundError, isTargetFile, lineIndent, parseCleanly, unwrapChainExpression, writeFileAtomic } from '#sidecar/pass-utils';
+import { Ast } from '#sidecar/ast';
+import { DrizzleQueries } from '#sidecar/drizzle-queries';
+import { Edits } from '#sidecar/edits';
+import { ExpandedCalls } from '#sidecar/expanded-calls';
+import { PassCliDto } from '#sidecar/pass-cli-dto';
+import { isErr, ok } from '#sidecar/result';
+import type { Result } from '#sidecar/result';
+import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
+import { SourceText } from '#sidecar/source-text';
+import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
+import { VueScript } from '#sidecar/vue-script';
 
 const cwd = process.cwd();
 
@@ -20,227 +25,263 @@ type FluentChain = {
 	links: ChainLink[];
 };
 
-function detectIndent(content: string): string {
-	const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
+/** Formats fluent chains and the structured calls composed with them. */
+export class FluentChains {
+	static #detectIndent(content: string): string {
+		const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
 
-	return match?.[0] ?? '\t';
-}
-
-function memberCallLink(source: string, member: Node, object: Node, comments: Node[]): ChainLink | null {
-	if ((member as { computed?: unknown }).computed) {
-		return null;
+		return match?.[0] ?? '\t';
 	}
 
-	const property = member.property as Node | undefined;
-
-	if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
-		return null;
-	}
-
-	const objectEnd = getEnd(object);
-	const propertyStart = getStart(property);
-
-	if (objectEnd < 0 || propertyStart < 0 || propertyStart <= objectEnd) {
-		return null;
-	}
-
-	if (hasCommentBetween(comments, objectEnd, propertyStart)) {
-		return null;
-	}
-
-	const separator = source.slice(objectEnd, propertyStart);
-
-	if (separator.includes('//') || separator.includes('/*')) {
-		return null;
-	}
-
-	const operator = separator.replace(/[ \t\r\n]/g, '');
-
-	if (operator !== '.' && operator !== '?.') {
-		return null;
-	}
-
-	return {
-		start: objectEnd,
-		end: propertyStart,
-		operator,
-	};
-}
-
-function collectFluentChain(source: string, outer: Node, comments: Node[]): FluentChain | null {
-	let call: Node = outer;
-
-	const links: ChainLink[] = [];
-
-	while (call.type === 'CallExpression') {
-		const callee = unwrapChainExpression(call.callee as Node | undefined);
-
-		if (callee?.type !== 'MemberExpression') {
-			break;
-		}
-
-		const object = unwrapChainExpression(callee.object as Node | undefined);
-
-		if (object?.type !== 'CallExpression') {
-			break;
-		}
-
-		const link = memberCallLink(source, callee, object, comments);
-
-		if (!link) {
+	static #memberCallLink(source: string, member: Node, object: Node, comments: readonly Node[]): ChainLink | null {
+		if (member.computed) {
 			return null;
 		}
 
-		links.push(link);
-		call = object;
-	}
+		const property = Ast.childNode(member, 'property');
 
-	if (links.length < 2) {
-		return null;
-	}
-
-	return {
-		base: call,
-		links,
-	};
-}
-
-export function computeFluentChainEdits(content: string, virtualName: string): Edit[] {
-	const parsed = parseCleanly(virtualName, content);
-
-	if (!parsed) {
-		return [];
-	}
-
-	const comments = parsed.comments;
-	const edits = new Map<string, Edit>();
-	const indentStep = detectIndent(content);
-
-	visit(parsed.program, (node) => {
-		if (node.type !== 'CallExpression') {
-			return;
+		if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
+			return null;
 		}
 
-		const chain = collectFluentChain(content, node, comments);
+		const objectEnd = Ast.getEnd(object);
+		const propertyStart = Ast.getStart(property);
 
-		if (!chain) {
-			return;
+		if (objectEnd < 0 || propertyStart < 0 || propertyStart <= objectEnd) {
+			return null;
 		}
 
-		const baseStart = getStart(chain.base);
-
-		if (baseStart < 0) {
-			return;
+		if (SourceText.hasCommentBetween(comments, objectEnd, propertyStart)) {
+			return null;
 		}
 
-		const indent = `${lineIndent(content, baseStart)}${indentStep}`;
+		const separator = source.slice(objectEnd, propertyStart);
 
-		for (const link of chain.links) {
-			const replacement = `\n${indent}${link.operator}`;
+		if (separator.includes('//') || separator.includes('/*')) {
+			return null;
+		}
 
-			if (content.slice(link.start, link.end) === replacement) {
+		const operator = separator.replace(/[ \t\r\n]/g, '');
+
+		if (operator !== '.' && operator !== '?.') {
+			return null;
+		}
+
+		return {
+			start: objectEnd,
+			end: propertyStart,
+			operator,
+		};
+	}
+
+	static #collectFluentChain(source: string, outer: Node, comments: readonly Node[]): FluentChain | null {
+		let call: Node = outer;
+
+		const links: ChainLink[] = [];
+
+		while (call.type === 'CallExpression') {
+			const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+
+			if (callee?.type !== 'MemberExpression') {
+				break;
+			}
+
+			const object = SourceText.unwrapChainExpression(Ast.childNode(callee, 'object'));
+
+			if (object?.type !== 'CallExpression') {
+				break;
+			}
+
+			const link = FluentChains.#memberCallLink(source, callee, object, comments);
+
+			if (!link) {
+				return null;
+			}
+
+			links.push(link);
+			call = object;
+		}
+
+		if (links.length < 2) {
+			return null;
+		}
+
+		return {
+			base: call,
+			links,
+		};
+	}
+	/**
+	 * Compute edits that split fluent-chain links across lines.
+	 *
+	 * @param content - The source text to inspect.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns Fluent-chain edits, or none for invalid source.
+	 */
+	static computeEdits(content: string, virtualName: string): Edit[] {
+		const parsed = Sources.parse(virtualName, content);
+
+		if (isErr(parsed)) {
+			return [];
+		}
+
+		const comments = parsed.value.comments;
+		const edits = new Map<string, Edit>();
+		const indentStep = FluentChains.#detectIndent(content);
+
+		Ast.visit(parsed.value.program, (node) => {
+			if (node.type !== 'CallExpression') {
+				return;
+			}
+
+			const chain = FluentChains.#collectFluentChain(content, node, comments);
+
+			if (!chain) {
+				return;
+			}
+
+			const baseStart = Ast.getStart(chain.base);
+
+			if (baseStart < 0) {
+				return;
+			}
+
+			const indent = `${SourceText.lineIndent(content, baseStart)}${indentStep}`;
+
+			for (const link of chain.links) {
+				const replacement = `\n${indent}${link.operator}`;
+
+				if (content.slice(link.start, link.end) === replacement) {
+					continue;
+				}
+
+				edits.set(`${link.start}:${link.end}`, {
+					start: link.start,
+					end: link.end,
+					replacement,
+				});
+			}
+		});
+
+		return [...edits.values()].sort((a, b) => {
+			return a.start - b.start;
+		});
+	}
+
+	/**
+	 * Apply fluent-chain, Drizzle-query, and expanded-call formatting.
+	 *
+	 * @param content - The source text to format.
+	 * @param virtualName - The filename used to parse the source.
+	 * @returns The formatted source text.
+	 */
+	static format(content: string, virtualName: string): string {
+		const edits = FluentChains.computeEdits(content, virtualName);
+
+		const fluentFormatted = edits.length > 0 ? Edits.apply(content, edits) : content;
+		const drizzleFormatted = DrizzleQueries.format(fluentFormatted, virtualName);
+
+		return ExpandedCalls.format(drizzleFormatted, virtualName);
+	}
+
+	/**
+	 * Format one TypeScript or Vue file through an injected filesystem port.
+	 *
+	 * @param file - The source file to format.
+	 * @param mode - Whether to report changes or atomically write them.
+	 * @param sourceFiles - The filesystem port used for reads and writes.
+	 * @returns Whether the file changes, or the typed filesystem failure.
+	 */
+	static async formatFile(file: string, mode: 'check' | 'write', sourceFiles: SourceFiles): Promise<Result<boolean, SourceFileError>> {
+		const read = await sourceFiles.readText(file);
+
+		if (isErr(read)) {
+			return read;
+		}
+
+		const original = read.value;
+		const updated = file.endsWith('.vue') ? FluentChains.#processVueFile(original, file) : FluentChains.format(original, file);
+
+		if (updated === original) {
+			return ok(false);
+		}
+
+		if (mode === 'write') {
+			const written = await sourceFiles.writeTextAtomic(file, updated);
+
+			if (isErr(written)) {
+				return written;
+			}
+		}
+
+		return ok(true);
+	}
+
+	static #processVueFile(original: string, file: string): string {
+		let updated = original;
+
+		const segments = VueScript.extractBlocks(original).filter((segment) => {
+			return VueScript.isJavaScriptOrTypeScript(segment.openTag);
+		});
+
+		for (const segment of [...segments].reverse()) {
+			const rewritten = FluentChains.format(segment.content, `${file}.script.ts`);
+
+			if (rewritten === segment.content) {
 				continue;
 			}
 
-			edits.set(`${link.start}:${link.end}`, {
-				start: link.start,
-				end: link.end,
-				replacement,
-			});
-		}
-	});
-
-	return [...edits.values()].sort((a, b) => {
-		return a.start - b.start;
-	});
-}
-
-export function formatFluentChains(content: string, virtualName: string): string {
-	const edits = computeFluentChainEdits(content, virtualName);
-
-	const fluentFormatted = edits.length > 0 ? applyEdits(content, edits) : content;
-	const drizzleFormatted = formatDrizzleQueries(fluentFormatted, virtualName);
-
-	return formatExpandedCalls(drizzleFormatted, virtualName);
-}
-
-function processVueFile(original: string, file: string): string {
-	let updated = original;
-
-	const segments = extractVueScripts(original).filter((segment) => {
-		return isJavaScriptOrTypeScript(segment.openTag);
-	});
-
-	for (const segment of [...segments].reverse()) {
-		const rewritten = formatFluentChains(segment.content, `${file}.script.ts`);
-
-		if (rewritten === segment.content) {
-			continue;
+			updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
 		}
 
-		updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
+		return updated;
 	}
 
-	return updated;
-}
+	/**
+	 * Run the standalone fluent-chain formatter entrypoint.
+	 *
+	 * @returns Nothing after reporting outcomes and setting the process status.
+	 */
+	static async main(): Promise<void> {
+		const options = PassCliDto.parse(process.argv.slice(2));
+		const files = [...options.files];
+		const { mode } = options;
 
-export async function processFluentChainsFile(file: string, check: boolean): Promise<boolean> {
-	const original = await readFile(file, 'utf8');
+		const { NodeProcessRunner } = await import('#sidecar/process-runner');
 
-	const updated = file.endsWith('.vue') ? processVueFile(original, file) : formatFluentChains(original, file);
+		const { NodeSourceFiles } = await import('#sidecar/source-files');
 
-	if (updated === original) {
-		return false;
-	}
+		const { FormatPipeline } = await import('#sidecar/format-pipeline');
 
-	if (!check) {
-		await writeFileAtomic(file, updated);
-	}
+		const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
-	return true;
-}
-
-async function main(): Promise<void> {
-	const rawArgs = process.argv.slice(2);
-	const check = rawArgs.includes('--check');
-
-	const files = rawArgs
-		.filter((arg) => {
-			return arg !== '--check';
-		})
-		.filter(isTargetFile);
-
-	let changedCount = 0;
-
-	for (const file of files) {
-		const changed = await processFluentChainsFile(file, check).catch((err: unknown) => {
-			if (isNotFoundError(err)) {
-				console.warn(`[fluent-chains] path not found, skipping: ${file}`);
-
-				return false;
-			}
-
-			throw err;
+		const outcomes = await pipeline.runPass('fluent-chains', files, mode, (file, passMode) => {
+			return pipeline.formatFluentFile(file, passMode);
 		});
 
-		if (!changed) {
-			continue;
+		const changedCount = outcomes.filter((outcome) => {
+			if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
+				console.warn(`[fluent-chains] path not found, skipping: ${outcome.file}`);
+			} else if (outcome.error) {
+				throw outcome.error;
+			} else if (outcome.changed) {
+				console.log(`[fluent-chains] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
+			}
+
+			return outcome.changed;
+		}).length;
+
+		if (mode === 'check' && changedCount > 0) {
+			console.error(`[fluent-chains] ${changedCount} file(s) need fluent-chain edits. Run "pnpm format" to fix.`);
+			process.exit(1);
 		}
 
-		changedCount++;
-		console.log(`[fluent-chains] ${check ? 'would change' : 'updated'} ${file}`);
+		console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
 	}
-
-	if (check && changedCount > 0) {
-		console.error(`[fluent-chains] ${changedCount} file(s) need fluent-chain edits. Run "pnpm format" to fix.`);
-		process.exit(1);
-	}
-
-	console.log(`[fluent-chains] processed ${files.length} file(s) in ${cwd}, ${changedCount} ${check ? 'would change' : 'changed'}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	main().catch((err: unknown) => {
+	FluentChains.main().catch((err: unknown) => {
 		console.error(err);
 		process.exit(1);
 	});

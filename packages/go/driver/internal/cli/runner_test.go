@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -98,7 +99,7 @@ func runInTempModulelessDir(t *testing.T, source string, mode Mode, extraArgs ..
 
 	var out, errOut bytes.Buffer
 
-	code = NewRunner(&out, &errOut).Run(mode, append(extraArgs, file))
+	code = NewRunner(&out, &errOut).Run(context.Background(), mode, append(extraArgs, file))
 
 	return code, out.String(), errOut.String(), file
 }
@@ -178,7 +179,7 @@ func TestRunnerRunRejectsUnknownFlag(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	if code := NewRunner(&out, &errOut).Run(CheckMode, []string{"--bogus"}); code != 1 {
+	if code := NewRunner(&out, &errOut).Run(context.Background(), CheckMode, []string{"--bogus"}); code != 1 {
 		t.Fatalf("exit = %d", code)
 	}
 }
@@ -280,7 +281,7 @@ func TestScopedRunnerFormatsOnlyTheWorkingTreesChanges(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(FormatMode, nil)
+	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(context.Background(), FormatMode, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -304,7 +305,7 @@ func TestUnscopedRunnerFormatsEveryOwnedFile(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewRunner(&out, &errOut).Run(FormatMode, nil)
+	code := NewRunner(&out, &errOut).Run(context.Background(), FormatMode, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -341,7 +342,7 @@ func TestScopedRunnerOnACleanTreeFormatsNothing(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(FormatMode, nil)
+	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(context.Background(), FormatMode, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())

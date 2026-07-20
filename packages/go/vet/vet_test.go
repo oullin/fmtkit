@@ -1,6 +1,7 @@
 package vet
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -10,6 +11,47 @@ import (
 
 	"go.ollin.sh/fmtkit/driver/testutil"
 )
+
+// fakeToolchain drives run with canned toolchain responses. Nil fields fall
+// back to a successful no-op, so each test only stubs what it exercises.
+type fakeToolchain struct {
+	lookGo      func() (string, error)
+	envOutput   func(dir string, keys ...string) ([]byte, error)
+	listModules func(dir string) ([]byte, error)
+	vetOutput   func(dir string) ([]byte, error)
+}
+
+func (f fakeToolchain) LookGo() (string, error) {
+	if f.lookGo != nil {
+		return f.lookGo()
+	}
+
+	return "go", nil
+}
+
+func (f fakeToolchain) EnvOutput(_ context.Context, dir string, keys ...string) ([]byte, error) {
+	if f.envOutput != nil {
+		return f.envOutput(dir, keys...)
+	}
+
+	return nil, nil
+}
+
+func (f fakeToolchain) ListModulesOutput(_ context.Context, dir string) ([]byte, error) {
+	if f.listModules != nil {
+		return f.listModules(dir)
+	}
+
+	return nil, nil
+}
+
+func (f fakeToolchain) VetOutput(_ context.Context, dir string) ([]byte, error) {
+	if f.vetOutput != nil {
+		return f.vetOutput(dir)
+	}
+
+	return nil, nil
+}
 
 func TestParseGoEnvValuesPreservesOrderAndEmptyLines(t *testing.T) {
 	t.Run("leading empty line falls back to gomod", func(t *testing.T) {
@@ -44,7 +86,7 @@ func TestDefaultEnablesVet(t *testing.T) {
 }
 
 func TestRunSkipsWhenDisabled(t *testing.T) {
-	report := Run(t.TempDir(), Config{Enabled: false})
+	report := Run(context.Background(), t.TempDir(), Config{Enabled: false})
 
 	if report.Root != "" || report.ErrorCount() != 0 {
 		t.Fatalf("expected empty report, got %#v", report)
@@ -52,13 +94,13 @@ func TestRunSkipsWhenDisabled(t *testing.T) {
 }
 
 func TestRunSkipsWhenGoToolchainUnavailable(t *testing.T) {
-	restore := stubLookGoPath(t, func() (string, error) {
-		return "", exec.ErrNotFound
-	})
+	tc := fakeToolchain{
+		lookGo: func() (string, error) {
+			return "", exec.ErrNotFound
+		},
+	}
 
-	defer restore()
-
-	report := Run(t.TempDir(), Default())
+	report := run(context.Background(), t.TempDir(), Default(), tc)
 
 	if !report.Skipped {
 		t.Fatalf("expected skipped report, got %#v", report)
@@ -79,19 +121,13 @@ func TestRunPrefersWorkspace(t *testing.T) {
 	testutil.WriteFile(t, workspaceFile, "go 1.26.4\n")
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
-	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
-		return []byte(workspaceFile + "\n" + moduleFile + "\n"), nil
-	})
+	tc := fakeToolchain{
+		envOutput: func(string, ...string) ([]byte, error) {
+			return []byte(workspaceFile + "\n" + moduleFile + "\n"), nil
+		},
+	}
 
-	defer restore()
-
-	restoreModules := stubGoListModulesOutput(t, func(string) ([]byte, error) {
-		return nil, nil
-	})
-
-	defer restoreModules()
-
-	report := Run(workRoot, Default())
+	report := run(context.Background(), workRoot, Default(), tc)
 
 	if report.Root != workspaceRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -105,19 +141,13 @@ func TestRunFallsBackToModuleWhenWorkspaceUnset(t *testing.T) {
 
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
-	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
-		return []byte("\n" + moduleFile + "\n"), nil
-	})
+	tc := fakeToolchain{
+		envOutput: func(string, ...string) ([]byte, error) {
+			return []byte("\n" + moduleFile + "\n"), nil
+		},
+	}
 
-	defer restore()
-
-	restoreModules := stubGoListModulesOutput(t, func(string) ([]byte, error) {
-		return nil, nil
-	})
-
-	defer restoreModules()
-
-	report := Run(workRoot, Default())
+	report := run(context.Background(), workRoot, Default(), tc)
 
 	if report.Root != moduleRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -153,7 +183,7 @@ use (
 )
 `)
 
-	report := Run(workspaceRoot, Default())
+	report := Run(context.Background(), workspaceRoot, Default())
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one vet error, got %#v", report)
@@ -169,13 +199,13 @@ use (
 }
 
 func TestRunReportsGoEnvLookupError(t *testing.T) {
-	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
-		return nil, &exec.ExitError{Stderr: []byte("go env failed\n")}
-	})
+	tc := fakeToolchain{
+		envOutput: func(string, ...string) ([]byte, error) {
+			return nil, &exec.ExitError{Stderr: []byte("go env failed\n")}
+		},
+	}
 
-	defer restore()
-
-	report := Run(t.TempDir(), Default())
+	report := run(context.Background(), t.TempDir(), Default(), tc)
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one error, got %#v", report)
@@ -187,7 +217,7 @@ func TestRunReportsGoEnvLookupError(t *testing.T) {
 }
 
 func TestRunSkipsOutsideModule(t *testing.T) {
-	report := Run(t.TempDir(), Default())
+	report := Run(context.Background(), t.TempDir(), Default())
 
 	if report.ErrorCount() != 0 {
 		t.Fatalf("expected empty report: %#v", report)
@@ -242,13 +272,13 @@ func TestExistingGoRootFiltersInvalidCandidates(t *testing.T) {
 }
 
 func TestGoEnvWrapsGenericErrors(t *testing.T) {
-	restore := stubGoEnvOutput(t, func(string, ...string) ([]byte, error) {
-		return nil, errors.New("boom")
-	})
+	tc := fakeToolchain{
+		envOutput: func(string, ...string) ([]byte, error) {
+			return nil, errors.New("boom")
+		},
+	}
 
-	defer restore()
-
-	_, err := goEnv(t.TempDir(), "GOWORK", "GOMOD")
+	_, err := goEnv(context.Background(), t.TempDir(), tc, "GOWORK", "GOMOD")
 
 	if err == nil {
 		t.Fatal("expected error")
@@ -256,38 +286,5 @@ func TestGoEnvWrapsGenericErrors(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "resolve go GOWORK GOMOD: boom") {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func stubLookGoPath(t *testing.T, fn func() (string, error)) func() {
-	t.Helper()
-
-	previous := lookGoPath
-	lookGoPath = fn
-
-	return func() {
-		lookGoPath = previous
-	}
-}
-
-func stubGoEnvOutput(t *testing.T, fn func(string, ...string) ([]byte, error)) func() {
-	t.Helper()
-
-	previous := goEnvOutput
-	goEnvOutput = fn
-
-	return func() {
-		goEnvOutput = previous
-	}
-}
-
-func stubGoListModulesOutput(t *testing.T, fn func(string) ([]byte, error)) func() {
-	t.Helper()
-
-	previous := goListModulesOutput
-	goListModulesOutput = fn
-
-	return func() {
-		goListModulesOutput = previous
 	}
 }

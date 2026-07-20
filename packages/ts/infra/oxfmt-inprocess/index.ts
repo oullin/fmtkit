@@ -9,6 +9,7 @@ export { OxfmtCliPatcher } from '#oxfmt-inprocess/cli-patcher';
 export type { PatchOutcome } from '#oxfmt-inprocess/cli-patcher';
 export { ApiExportMissing, CliAlreadyPatched, CliAnchorMissing, CliPatchIncomplete, OxfmtFileUnreadable, OxfmtFileUnwritable, WorkerImportUnrecognised } from '#oxfmt-inprocess/errors';
 export type { OxfmtPatchError } from '#oxfmt-inprocess/errors';
+export { PatchCliDto } from '#oxfmt-inprocess/patch-cli-dto';
 export { err, isErr, ok } from '#oxfmt-inprocess/result';
 export type { Result } from '#oxfmt-inprocess/result';
 export { SHIM_MARKER, ShimSource } from '#oxfmt-inprocess/shim-source';

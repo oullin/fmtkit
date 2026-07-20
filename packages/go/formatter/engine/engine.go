@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -34,40 +35,40 @@ func New(cfg config.Config, rr []rules.Rule, ff []Formatter) *Engine {
 }
 
 // Check reports formatting changes without writing them to disk.
-func (e *Engine) Check(paths []string) (Report, error) {
+func (e *Engine) Check(ctx context.Context, paths []string) (Report, error) {
 	files, err := CollectGoFiles(paths, e.cfg)
 
 	if err != nil {
 		return Report{}, err
 	}
 
-	return e.run(files, false)
+	return e.run(ctx, files, false)
 }
 
 // Format applies formatting changes and writes them to disk.
-func (e *Engine) Format(paths []string) (Report, error) {
+func (e *Engine) Format(ctx context.Context, paths []string) (Report, error) {
 	files, err := CollectGoFiles(paths, e.cfg)
 
 	if err != nil {
 		return Report{}, err
 	}
 
-	return e.run(files, true)
+	return e.run(ctx, files, true)
 }
 
 // CheckFiles reports formatting changes for an explicit list of files.
-func (e *Engine) CheckFiles(files []string) (Report, error) {
-	return e.run(files, false)
+func (e *Engine) CheckFiles(ctx context.Context, files []string) (Report, error) {
+	return e.run(ctx, files, false)
 }
 
 // FormatFiles applies formatting changes to an explicit list of files.
-func (e *Engine) FormatFiles(files []string) (Report, error) {
-	return e.run(files, true)
+func (e *Engine) FormatFiles(ctx context.Context, files []string) (Report, error) {
+	return e.run(ctx, files, true)
 }
 
-func (e *Engine) run(files []string, write bool) (Report, error) {
+func (e *Engine) run(ctx context.Context, files []string, write bool) (Report, error) {
 	report := Report{
-		Result: "pass",
+		Result: ResultPass,
 		Files:  len(files),
 	}
 
@@ -80,7 +81,13 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 
 	if workers <= 1 {
 		for i, file := range files {
-			results[i] = e.processFile(file, write)
+			if ctx.Err() != nil {
+				results[i] = FileResult{File: file, Error: "canceled"}
+
+				continue
+			}
+
+			results[i] = e.processFile(ctx, file, write)
 		}
 	} else {
 		sem := make(chan struct{}, workers)
@@ -88,15 +95,31 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 		var wg sync.WaitGroup
 
 		for i, file := range files {
+			// Acquire a worker slot, but bail out promptly if the run is
+			// canceled while every slot is busy. Remaining files get a
+			// canceled result, matching the serial branch above.
+			select {
+			case <-ctx.Done():
+				results[i] = FileResult{File: file, Error: "canceled"}
+
+				continue
+			case sem <- struct{}{}:
+			}
+
 			wg.Add(1)
-			sem <- struct{}{}
 
 			go func(i int, file string) {
 				defer wg.Done()
 
 				defer func() { <-sem }()
 
-				results[i] = e.processFile(file, write)
+				if ctx.Err() != nil {
+					results[i] = FileResult{File: file, Error: "canceled"}
+
+					return
+				}
+
+				results[i] = e.processFile(ctx, file, write)
 			}(i, file)
 		}
 
@@ -113,11 +136,11 @@ func (e *Engine) run(files []string, write bool) (Report, error) {
 
 	switch {
 	case report.ErrorCount() > 0:
-		report.Result = "fail"
+		report.Result = ResultFail
 	case write && report.Changed > 0:
-		report.Result = "fixed"
+		report.Result = ResultFixed
 	case !write && report.Changed > 0:
-		report.Result = "fail"
+		report.Result = ResultFail
 	}
 
 	return report, nil
@@ -144,7 +167,7 @@ func effectiveConcurrency(configured, fileCount int) int {
 	return n
 }
 
-func (e *Engine) processFile(path string, write bool) FileResult {
+func (e *Engine) processFile(ctx context.Context, path string, write bool) FileResult {
 	original, err := os.ReadFile(path)
 
 	if err != nil {
@@ -194,7 +217,7 @@ func (e *Engine) processFile(path string, write bool) FileResult {
 	result.Diff = generateDiff(string(original), string(current))
 
 	if write {
-		if err := os.WriteFile(path, current, 0o644); err != nil {
+		if err := writeFileAtomic(path, current); err != nil {
 			result.Error = fmt.Sprintf("write file: %v", err)
 			result.Changed = false
 

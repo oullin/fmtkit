@@ -18,6 +18,9 @@ func SidecarAssets() (fs.FS, bool) {
 	sub, err := fs.Sub(sidecarAssets, "bin/darwin_amd64")
 
 	if err != nil {
+		// A failing fs.Sub on an embed.FS is a build defect, not a runtime
+		// condition: the path is compiled in, so panicking at startup is the
+		// right response.
 		panic(err)
 	}
 

@@ -27,12 +27,6 @@ type FluentChain = {
 
 /** Formats fluent chains and the structured calls composed with them. */
 export class FluentChains {
-	static #detectIndent(content: string): string {
-		const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
-
-		return match?.[0] ?? '\t';
-	}
-
 	static #memberCallLink(source: string, member: Node, object: Node, comments: readonly Node[]): ChainLink | null {
 		if (member.computed) {
 			return null;
@@ -127,7 +121,7 @@ export class FluentChains {
 
 		const comments = parsed.value.comments;
 		const edits = new Map<string, Edit>();
-		const indentStep = FluentChains.#detectIndent(content);
+		const indentStep = SourceText.detectIndentUnit(content);
 
 		Ast.visit(parsed.value.program, (node) => {
 			if (node.type !== 'CallExpression') {

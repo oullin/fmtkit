@@ -65,6 +65,24 @@ describe('expanded call formatter', () => {
 		assert.equal(ExpandedCalls.format(input, 'types.d.ts'), input);
 	});
 
+	it('nests with four spaces when the source is space-indented', () => {
+		const input = ['function run() {', '    return outer(inner(deep(a, b)), tail);', '}', ''].join('\n');
+		const expected = ['function run() {', '    return outer(', '        inner(', '            deep(a, b),', '        ),', '        tail,', '    );', '}', ''].join('\n');
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), expected);
+		assert.ok(!once.includes('\t'), 'expanded output must not introduce tabs into a space-indented file');
+	});
+
+	it('nests a space-indented top-level call one level deep with spaces', () => {
+		const input = ['export default defineConfig({', '    cacheDir: "../../storage/.cache",', '    test: { globals: true },', '});', ''].join('\n');
+		const output = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.ok(!output.includes('\t'), 'space-indented expansion must not introduce tabs');
+		assert.match(output, /defineConfig\(\n {4}\{/);
+	});
+
 	it('re-indents a multiline object argument to its new depth', () => {
 		// The object's inner lines were written against the statement's indent.
 		// Expanding pushes the object one level deeper, so they have to move with

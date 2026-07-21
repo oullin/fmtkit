@@ -38,6 +38,23 @@ export class SourceText {
 	}
 
 	/**
+	 * Infer the file's per-level indentation unit from its content.
+	 *
+	 * The unit is read from the leading whitespace of the first indented,
+	 * non-comment line so that inserted nesting matches the surrounding style
+	 * (spaces or tabs) instead of a hardcoded tab. Files with no indented line
+	 * yet fall back to a tab.
+	 *
+	 * @param content - The source text being formatted.
+	 * @returns The detected indent unit, or a tab when none can be inferred.
+	 */
+	static detectIndentUnit(content: string): string {
+		const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
+
+		return match?.[0] ?? '\t';
+	}
+
+	/**
 	 * Slice the source range occupied by an AST node.
 	 *
 	 * @param source - The complete source text.

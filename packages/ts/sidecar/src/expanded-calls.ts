@@ -145,7 +145,7 @@ export class ExpandedCalls {
 			.join('\n');
 	}
 
-	static #formatCallParens(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string): string | null {
+	static #formatCallParens(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string | null {
 		const parens = ExpandedCalls.#calleeParens(source, call);
 		const args = ExpandedCalls.#callArguments(call);
 
@@ -157,10 +157,10 @@ export class ExpandedCalls {
 			return null;
 		}
 
-		const argIndent = `${indent}\t`;
+		const argIndent = `${indent}${indentUnit}`;
 
 		const formattedArgs = args.map((arg) => {
-			return ExpandedCalls.#formatNode(source, arg, comments, argIndent, baseIndent);
+			return ExpandedCalls.#formatNode(source, arg, comments, argIndent, baseIndent, indentUnit);
 		});
 
 		const separator = `,\n${argIndent}`;
@@ -169,9 +169,9 @@ export class ExpandedCalls {
 		return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;
 	}
 
-	static #formatCall(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string): string {
+	static #formatCall(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string {
 		const parens = ExpandedCalls.#calleeParens(source, call);
-		const formattedParens = ExpandedCalls.#formatCallParens(source, call, comments, indent, baseIndent);
+		const formattedParens = ExpandedCalls.#formatCallParens(source, call, comments, indent, baseIndent, indentUnit);
 
 		if (!parens || formattedParens === null) {
 			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, call), baseIndent, indent);
@@ -183,7 +183,7 @@ export class ExpandedCalls {
 	// indent is where node will sit once expanded; baseIndent is where its source
 	// text came from and is threaded down unchanged, because nothing has moved in
 	// the source yet however deep the recursion goes.
-	static #formatNode(source: string, node: Node, comments: readonly Node[], indent: string, baseIndent: string): string {
+	static #formatNode(source: string, node: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string {
 		if (node.type !== 'CallExpression') {
 			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, node), baseIndent, indent);
 		}
@@ -192,7 +192,7 @@ export class ExpandedCalls {
 			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, node), baseIndent, indent);
 		}
 
-		return ExpandedCalls.#formatCall(source, node, comments, indent, baseIndent);
+		return ExpandedCalls.#formatCall(source, node, comments, indent, baseIndent, indentUnit);
 	}
 	/**
 	 * Compute edits for calls whose arguments require a multiline layout.
@@ -215,6 +215,7 @@ export class ExpandedCalls {
 		const comments = parsed.value.comments;
 		const parents = new WeakMap<Node, Node>();
 		const edits: Edit[] = [];
+		const indentUnit = SourceText.detectIndentUnit(content);
 
 		ExpandedCalls.#collectParents(parsed.value.program, parents);
 
@@ -239,7 +240,7 @@ export class ExpandedCalls {
 
 			const indent = SourceText.lineIndent(content, Ast.getStart(node));
 
-			const replacement = ExpandedCalls.#formatCallParens(content, node, comments, indent, indent);
+			const replacement = ExpandedCalls.#formatCallParens(content, node, comments, indent, indent, indentUnit);
 			const current = content.slice(parens.open, parens.close + 1);
 
 			if (replacement === null || replacement === current) {

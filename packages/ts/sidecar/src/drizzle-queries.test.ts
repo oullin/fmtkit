@@ -191,6 +191,30 @@ describe('Drizzle query formatter', () => {
 		assert.equal(FluentChains.format(FluentChains.format(input, 'fixture.ts'), 'fixture.ts'), input);
 	});
 
+	it('nests with four spaces when the source is space-indented', () => {
+		const input = ["import { and, eq } from 'drizzle-orm';", 'function load() {', '    const rows = db.select().from(users).where(and(eq(users.id, id), eq(users.active, true)));', '}', ''].join(
+			'\n',
+		);
+
+		const expected = [
+			"import { and, eq } from 'drizzle-orm';",
+			'function load() {',
+			'    const rows = db.select().from(users).where(',
+			'        and(',
+			'            eq(users.id, id),',
+			'            eq(users.active, true),',
+			'        ),',
+			'    );',
+			'}',
+			'',
+		].join('\n');
+
+		const output = DrizzleQueries.format(input, 'fixture.ts');
+
+		assert.equal(output, expected);
+		assert.ok(!output.includes('\t'), 'space-indented Drizzle formatting must not introduce tabs');
+	});
+
 	it('does not process declaration files', () => {
 		const input = [
 			"import { and, eq } from 'drizzle-orm';",

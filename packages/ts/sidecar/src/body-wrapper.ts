@@ -16,7 +16,7 @@ const STATEMENT_BODY_KEYS: Record<string, string[]> = {
 
 /** Wraps unbraced statement bodies without changing unparsable source. */
 export class BodyWrapper {
-	static #wrapStatementBody(source: string, owner: Node, body: Node): Edit | null {
+	static #wrapStatementBody(source: string, owner: Node, body: Node, indentUnit: string): Edit | null {
 		if (body.type === 'BlockStatement') {
 			return null;
 		}
@@ -39,7 +39,7 @@ export class BodyWrapper {
 		return {
 			start,
 			end,
-			replacement: `{\n${indent}\t${bodySource}\n${indent}}`,
+			replacement: `{\n${indent}${indentUnit}${bodySource}\n${indent}}`,
 		};
 	}
 
@@ -58,6 +58,7 @@ export class BodyWrapper {
 		}
 
 		const edits: Edit[] = [];
+		const indentUnit = SourceText.detectIndentUnit(content);
 
 		Ast.visit(parsed.value.program, (node) => {
 			const bodyKeys = STATEMENT_BODY_KEYS[node.type];
@@ -73,7 +74,7 @@ export class BodyWrapper {
 					continue;
 				}
 
-				const edit = BodyWrapper.#wrapStatementBody(content, node, body);
+				const edit = BodyWrapper.#wrapStatementBody(content, node, body, indentUnit);
 
 				if (edit) {
 					edits.push(edit);

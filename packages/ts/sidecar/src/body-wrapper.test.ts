@@ -53,6 +53,15 @@ test('wraps the loop body while keeping its comment', () => {
 	assert.match(result, /\/\/ spin/);
 });
 
+test('wraps with four spaces when the source is space-indented', () => {
+	const source = ['function run() {', '    if (ready) go();', '}', ''].join('\n');
+	const expected = ['function run() {', '    if (ready) {', '        go();', '    }', '}', ''].join('\n');
+	const result = wrapFully(source);
+
+	assert.equal(result, expected);
+	assert.ok(!result.includes('\t'), 'space-indented body wrap must not introduce tabs');
+});
+
 test('leaves already-braced bodies alone', () => {
 	const source = 'if (ready) {\n\trun();\n}\n';
 

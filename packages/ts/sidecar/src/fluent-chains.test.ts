@@ -81,6 +81,15 @@ describe('fluent chain formatter', () => {
 		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
 	});
 
+	it('splits chains with four spaces when the source is space-indented', () => {
+		const input = ['function routes() {', "    return createRouter().use('*', bindEnv).get('/', getMe);", '}', ''].join('\n');
+		const expected = ['function routes() {', '    return createRouter()', "        .use('*', bindEnv)", "        .get('/', getMe);", '}', ''].join('\n');
+		const output = FluentChains.format(input, 'fixture.ts');
+
+		assert.equal(output, expected);
+		assert.ok(!output.includes('\t'), 'space-indented chain splitting must not introduce tabs');
+	});
+
 	it('leaves short value transform chains unchanged', () => {
 		const input = ['const normalized = value.trim().toLowerCase();', ''].join('\n');
 

@@ -89,7 +89,37 @@ describe('expanded call formatter', () => {
 		// it — oxfmt used to hide this by collapsing the call straight back.
 		const input = ['function send() {', '\tconst response = fetch(url, {', '\t\t...init,', '\t\theaders,', '\t});', '}', ''].join('\n');
 		const expected = ['function send() {', '\tconst response = fetch(', '\t\turl,', '\t\t{', '\t\t\t...init,', '\t\t\theaders,', '\t\t},', '\t);', '}', ''].join('\n');
+		const once = ExpandedCalls.format(input, 'fixture.ts');
 
-		assert.equal(ExpandedCalls.format(input, 'fixture.ts'), expected);
+		assert.equal(once, expected);
+
+		// The rebase reads its origin off the argument's own line, so an argument
+		// already sitting at its target depth is left where it is.
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), expected);
+	});
+
+	it('never re-indents the interior of a multiline template literal', () => {
+		// The literal's leading whitespace is string content. Re-indenting it made
+		// every pass shift the value one unit further right (issue #59).
+		const input = ['const Harness = defineComponent({', '    template: `', '        <div>', '            <span>hello</span>', '        </div>', '    `,', '});', ''].join('\n');
+
+		const expected = ['const Harness = defineComponent(', '    {', '        template: `', '        <div>', '            <span>hello</span>', '        </div>', '    `,', '    },', ');', ''].join(
+			'\n',
+		);
+
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), expected);
+	});
+
+	it('preserves whitespace-only lines inside a template literal', () => {
+		const input = ['const query = run(build(), {', '\tsql: `', '\t\tselect 1', '   ', '\t\tfrom t', '\t`,', '});', ''].join('\n');
+		const output = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.ok(output.includes('\n   \n'), 'a blank line carrying string content must keep its bytes');
+
+		assert.equal(ExpandedCalls.format(output, 'fixture.ts'), output);
 	});
 });

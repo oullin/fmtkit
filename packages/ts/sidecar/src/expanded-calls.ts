@@ -6,6 +6,7 @@ import { isErr } from '#sidecar/result';
 import { SourceText } from '#sidecar/source-text';
 import type { CallParens } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
+import { TemplateSpans } from '#sidecar/template-spans';
 import type { Edit } from '#sidecar/types';
 
 const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression']);
@@ -114,38 +115,56 @@ export class ExpandedCalls {
 		return arg?.type !== 'SpreadElement';
 	}
 
+	static #rebaseLine(line: string, lineStart: number, from: string, to: string, spans: TemplateSpans): string {
+		// A template literal's leading whitespace is string content, not
+		// indentation: moving it would rewrite the value, and since oxfmt hugs the
+		// expanded call back onto one line before the next run re-expands it, every
+		// run would shift the literal one level further right.
+		if (spans.contains(lineStart)) {
+			return line;
+		}
+
+		if (line.trim() === '') {
+			return '';
+		}
+
+		return line.startsWith(from) ? `${to}${line.slice(from.length)}` : line;
+	}
+
 	/**
 	 * Re-indent lifted source so its continuation lines match where it now sits.
 	 *
-	 * An argument's text is copied out of the call site verbatim, so its second and
-	 * later lines are still indented relative to the statement the call started on
-	 * (`from`). Expanding the call moves the argument one or more levels deeper
-	 * (`to`), and without rebasing those lines they keep the shallower depth and the
-	 * block reads inside-out. Only the first line is left alone — the caller places
-	 * it.
+	 * A node's text is copied out of the call site verbatim, so its second and
+	 * later lines are still indented relative to the line the node was written on.
+	 * Expanding the call moves the node one or more levels deeper (`to`), and
+	 * without rebasing those lines they keep the shallower depth and the block
+	 * reads inside-out. Reading the origin off the node's own line, rather than off
+	 * the call being expanded, is what makes a second run a no-op: text already
+	 * sitting at its target depth is left alone. Only the first line is skipped
+	 * outright — the caller places it.
 	 */
-	static #rebaseIndent(text: string, from: string, to: string): string {
+	static #rebaseIndent(source: string, node: Node, to: string, spans: TemplateSpans): string {
+		const start = Ast.getStart(node);
+		const text = SourceText.sourceOf(source, node);
+		const from = SourceText.lineIndent(source, start);
+
 		if (from === to || !text.includes('\n')) {
 			return text;
 		}
 
-		return text
-			.split('\n')
-			.map((line, index) => {
-				if (index === 0) {
-					return line;
-				}
+		const rebased: string[] = [];
 
-				if (line.trim() === '') {
-					return '';
-				}
+		let lineStart = start;
 
-				return line.startsWith(from) ? `${to}${line.slice(from.length)}` : line;
-			})
-			.join('\n');
+		for (const [index, line] of text.split('\n').entries()) {
+			rebased.push(index === 0 ? line : ExpandedCalls.#rebaseLine(line, lineStart, from, to, spans));
+			lineStart += line.length + 1;
+		}
+
+		return rebased.join('\n');
 	}
 
-	static #formatCallParens(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string | null {
+	static #formatCallParens(source: string, call: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string | null {
 		const parens = ExpandedCalls.#calleeParens(source, call);
 		const args = ExpandedCalls.#callArguments(call);
 
@@ -160,7 +179,7 @@ export class ExpandedCalls {
 		const argIndent = `${indent}${indentUnit}`;
 
 		const formattedArgs = args.map((arg) => {
-			return ExpandedCalls.#formatNode(source, arg, comments, argIndent, baseIndent, indentUnit);
+			return ExpandedCalls.#formatNode(source, arg, comments, argIndent, indentUnit, spans);
 		});
 
 		const separator = `,\n${argIndent}`;
@@ -169,30 +188,30 @@ export class ExpandedCalls {
 		return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;
 	}
 
-	static #formatCall(source: string, call: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string {
+	static #formatCall(source: string, call: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string {
 		const parens = ExpandedCalls.#calleeParens(source, call);
-		const formattedParens = ExpandedCalls.#formatCallParens(source, call, comments, indent, baseIndent, indentUnit);
+		const formattedParens = ExpandedCalls.#formatCallParens(source, call, comments, indent, indentUnit, spans);
 
 		if (!parens || formattedParens === null) {
-			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, call), baseIndent, indent);
+			return ExpandedCalls.#rebaseIndent(source, call, indent, spans);
 		}
 
 		return `${source.slice(Ast.getStart(call), parens.open)}${formattedParens}`;
 	}
 
-	// indent is where node will sit once expanded; baseIndent is where its source
-	// text came from and is threaded down unchanged, because nothing has moved in
-	// the source yet however deep the recursion goes.
-	static #formatNode(source: string, node: Node, comments: readonly Node[], indent: string, baseIndent: string, indentUnit: string): string {
+	// indent is where node will sit once expanded; the depth its text came from is
+	// read back off the node's own line, because nothing has moved in the source
+	// yet however deep the recursion goes.
+	static #formatNode(source: string, node: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string {
 		if (node.type !== 'CallExpression') {
-			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, node), baseIndent, indent);
+			return ExpandedCalls.#rebaseIndent(source, node, indent, spans);
 		}
 
 		if (!ExpandedCalls.#shouldExpandCall(node)) {
-			return ExpandedCalls.#rebaseIndent(SourceText.sourceOf(source, node), baseIndent, indent);
+			return ExpandedCalls.#rebaseIndent(source, node, indent, spans);
 		}
 
-		return ExpandedCalls.#formatCall(source, node, comments, indent, baseIndent, indentUnit);
+		return ExpandedCalls.#formatCall(source, node, comments, indent, indentUnit, spans);
 	}
 	/**
 	 * Compute edits for calls whose arguments require a multiline layout.
@@ -216,6 +235,7 @@ export class ExpandedCalls {
 		const parents = new WeakMap<Node, Node>();
 		const edits: Edit[] = [];
 		const indentUnit = SourceText.detectIndentUnit(content);
+		const spans = TemplateSpans.collect(parsed.value.program);
 
 		ExpandedCalls.#collectParents(parsed.value.program, parents);
 
@@ -240,7 +260,7 @@ export class ExpandedCalls {
 
 			const indent = SourceText.lineIndent(content, Ast.getStart(node));
 
-			const replacement = ExpandedCalls.#formatCallParens(content, node, comments, indent, indent, indentUnit);
+			const replacement = ExpandedCalls.#formatCallParens(content, node, comments, indent, indentUnit, spans);
 			const current = content.slice(parens.open, parens.close + 1);
 
 			if (replacement === null || replacement === current) {

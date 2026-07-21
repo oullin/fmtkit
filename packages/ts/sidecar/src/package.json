@@ -49,6 +49,8 @@
 		"#sidecar/source-text.js": "./source-text.ts",
 		"#sidecar/sources": "./sources.ts",
 		"#sidecar/sources.js": "./sources.ts",
+		"#sidecar/template-spans": "./template-spans.ts",
+		"#sidecar/template-spans.js": "./template-spans.ts",
 		"#sidecar/types": "./types.ts",
 		"#sidecar/vue-script": "./vue-script.ts",
 		"#sidecar/vue-script.js": "./vue-script.ts",

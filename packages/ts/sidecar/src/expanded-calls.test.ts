@@ -89,7 +89,113 @@ describe('expanded call formatter', () => {
 		// it — oxfmt used to hide this by collapsing the call straight back.
 		const input = ['function send() {', '\tconst response = fetch(url, {', '\t\t...init,', '\t\theaders,', '\t});', '}', ''].join('\n');
 		const expected = ['function send() {', '\tconst response = fetch(', '\t\turl,', '\t\t{', '\t\t\t...init,', '\t\t\theaders,', '\t\t},', '\t);', '}', ''].join('\n');
+		const once = ExpandedCalls.format(input, 'fixture.ts');
 
-		assert.equal(ExpandedCalls.format(input, 'fixture.ts'), expected);
+		assert.equal(once, expected);
+
+		// The rebase reads its origin off the argument's own line, so an argument
+		// already sitting at its target depth is left where it is.
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), expected);
+	});
+
+	it('never re-indents the interior of a multiline template literal', () => {
+		// The literal's leading whitespace is string content. Re-indenting it made
+		// every pass shift the value one unit further right (issue #59).
+		const input = ['const Harness = defineComponent({', '    template: `', '        <div>', '            <span>hello</span>', '        </div>', '    `,', '});', ''].join('\n');
+
+		const expected = ['const Harness = defineComponent(', '    {', '        template: `', '        <div>', '            <span>hello</span>', '        </div>', '    `,', '    },', ');', ''].join(
+			'\n',
+		);
+
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), expected);
+	});
+
+	it('preserves whitespace-only lines inside a template literal', () => {
+		const input = ['const query = run(build(), {', '\tsql: `', '\t\tselect 1', '   ', '\t\tfrom t', '\t`,', '});', ''].join('\n');
+		const output = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.ok(output.includes('\n   \n'), 'a blank line carrying string content must keep its bytes');
+
+		assert.equal(ExpandedCalls.format(output, 'fixture.ts'), output);
+	});
+
+	/** The source between the first and last backtick — a template's literal bytes. */
+	const templateBody = (source: string): string => {
+		return source.slice(source.indexOf('`') + 1, source.lastIndexOf('`'));
+	};
+
+	it('reaches a fixed point for a tab-indented template literal', () => {
+		const input = ['const Harness = defineComponent({', '\ttemplate: `', '\t\t<div>', '\t\t\t<span>hello</span>', '\t\t</div>', '\t`,', '});', ''].join('\n');
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.notEqual(once, input, 'the call should have expanded');
+
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), once);
+
+		assert.equal(templateBody(once), templateBody(input), 'template interior bytes must be preserved');
+	});
+
+	it('reaches a fixed point for a template literal with multiline interpolations', () => {
+		const input = [
+			'const q = build({',
+			'    query: `',
+			'        SELECT *',
+			'        FROM ${',
+			'            resolveTable(schema)',
+			'        }',
+			`        WHERE id = \${id}`,
+			'    `,',
+			'});',
+			'',
+		].join('\n');
+
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.notEqual(once, input, 'the call should have expanded');
+
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), once);
+
+		assert.equal(templateBody(once), templateBody(input), 'template interior bytes must be preserved');
+	});
+
+	it('reaches a fixed point for a tagged template literal', () => {
+		const input = ['const styled = create({', '    styles: css`', '        color: red;', `        margin: \${spacing}px;`, '    `,', '});', ''].join('\n');
+		const once = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.notEqual(once, input, 'the call should have expanded');
+
+		assert.equal(ExpandedCalls.format(once, 'fixture.ts'), once);
+
+		assert.equal(templateBody(once), templateBody(input), 'template interior bytes must be preserved');
+	});
+
+	it('converges over a template literal nested two expansions deep', () => {
+		// The pass lifts one nesting level per run, so the inner call expands on a
+		// later pass than the outer one. Convergence is what matters: once every
+		// level has expanded, further passes are a no-op and the literal is intact.
+		const input = ['const app = createApp({', '    root: defineComponent({', '        template: `', '            <div>deep</div>', '        `,', '    }),', '});', ''].join('\n');
+
+		let current = input;
+
+		for (let i = 0; i < 5; i++) {
+			const next = ExpandedCalls.format(current, 'fixture.ts');
+
+			if (next === current) {
+				break;
+			}
+
+			current = next;
+		}
+
+		assert.notEqual(current, input, 'both calls should have expanded');
+		assert.match(current, /root: defineComponent\(\n/, 'the inner call must also expand');
+
+		assert.equal(ExpandedCalls.format(current, 'fixture.ts'), current, 'the fixed point must be stable');
+
+		assert.equal(templateBody(current), templateBody(input), 'template interior bytes must be preserved');
 	});
 });

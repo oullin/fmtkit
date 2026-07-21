@@ -50,6 +50,8 @@
 		"#sidecar/source-text.js": "./src/source-text.ts",
 		"#sidecar/sources": "./src/sources.ts",
 		"#sidecar/sources.js": "./src/sources.ts",
+		"#sidecar/template-spans": "./src/template-spans.ts",
+		"#sidecar/template-spans.js": "./src/template-spans.ts",
 		"#sidecar/types": "./src/types.ts",
 		"#sidecar/vue-script": "./src/vue-script.ts",
 		"#sidecar/vue-script.js": "./src/vue-script.ts",

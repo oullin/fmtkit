@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DrizzleQueryPass } from '#sidecar/passes/drizzle-query-pass';
+import { AstReader } from '#sidecar/syntax/ast-reader';
+import { DrizzleArgumentWriter } from '#sidecar/passes/drizzle/drizzle-argument-writer';
+import { DrizzleCallClassifier } from '#sidecar/passes/drizzle/drizzle-call-classifier';
+import { DrizzleImportScanner } from '#sidecar/passes/drizzle/drizzle-import-scanner';
+import { DrizzleQueryPass } from '#sidecar/passes/drizzle/drizzle-query-pass';
+import { DrizzleVocabulary } from '#sidecar/passes/drizzle/drizzle-vocabulary';
 import { EditApplier } from '#sidecar/syntax/edits';
 import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
 import { SourceDocument } from '#sidecar/syntax/source-document';
@@ -16,7 +21,18 @@ function format(input: string, virtualName: string): string {
 }
 
 const editApplier = new EditApplier();
-const drizzlePass = new DrizzleQueryPass({ parser: new SourceParser(), edits: editApplier });
+const ast = new AstReader();
+const vocabulary = DrizzleVocabulary.standard();
+const classifier = new DrizzleCallClassifier({ ast, vocabulary });
+
+const drizzlePass = new DrizzleQueryPass({
+	parser: new SourceParser(),
+	ast,
+	edits: editApplier,
+	scanner: new DrizzleImportScanner({ ast }),
+	classifier,
+	writer: new DrizzleArgumentWriter({ ast, vocabulary, classifier }),
+});
 
 function drizzleFormat(input: string, virtualName: string): string {
 	const edits = drizzlePass.computeEdits(SourceDocument.of(virtualName, input));

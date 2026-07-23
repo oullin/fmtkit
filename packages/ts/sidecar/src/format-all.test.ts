@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { SourceFileUnreadable } from '#sidecar/errors';
+import { SourceFileUnreadable } from '#sidecar/kernel/errors';
 import { CliOptionsDto } from '#sidecar/format-all';
 import { FormatPipeline } from '#sidecar/format-pipeline';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { err, isErr, ok } from '#sidecar/result';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { err, isErr, ok } from '#sidecar/kernel/result';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 const execFileAsync = promisify(execFile);
 const formatAllScript = resolve(import.meta.dirname, 'format-all.ts');

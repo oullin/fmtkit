@@ -1,8 +1,8 @@
 import { parseSync } from 'oxc-parser';
-import { SourceUnparsable } from '#sidecar/errors';
-import { ParsedSourceDto } from '#sidecar/node-schema';
-import { err, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
+import { SourceUnparsable } from '#sidecar/kernel/errors';
+import { ParsedSourceDto } from '#sidecar/syntax/node-schema';
+import { err, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
 
 /** Parses source text without exposing a broken syntax tree to formatting passes. */
 export class Sources {

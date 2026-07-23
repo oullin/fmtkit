@@ -3,11 +3,11 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { Files } from '#sidecar/files';
+import { Files } from '#sidecar/io/files';
 import { FormatPipeline } from '#sidecar/format-pipeline';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { isErr } from '#sidecar/result';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { isErr } from '#sidecar/kernel/result';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 

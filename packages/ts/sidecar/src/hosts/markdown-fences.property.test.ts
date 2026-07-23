@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fc from 'fast-check';
-import { MarkdownFences } from '#sidecar/markdown-fences';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 
 type ExpectedBlock = {
 	readonly lang: string;

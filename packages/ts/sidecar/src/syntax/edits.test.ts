@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Edits } from '#sidecar/edits';
+import { Edits } from '#sidecar/syntax/edits';
 
 test('Edits.nonOverlapping drops overlapping edits and sorts by start', () => {
 	const kept = Edits.nonOverlapping([

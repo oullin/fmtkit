@@ -1,9 +1,9 @@
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import type { OxcErrorDto } from '#sidecar/errors';
+import type { OxcErrorDto } from '#sidecar/kernel/errors';
 import { FormatPipeline } from '#sidecar/format-pipeline';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 /** Immutable command-line options for standalone syntax validation. */
 export class SyntaxCliDto {

@@ -1,5 +1,5 @@
-import { Ast } from '#sidecar/ast';
-import type { Node } from '#sidecar/types';
+import { Ast } from '#sidecar/syntax/ast';
+import type { Node } from '#sidecar/syntax/node-schema';
 
 /** The opening and closing argument-parenthesis offsets of a call. */
 export type CallParens = {

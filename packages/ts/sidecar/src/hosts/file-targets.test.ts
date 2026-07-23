@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FileTargets } from '#sidecar/file-targets';
+import { FileTargets } from '#sidecar/hosts/file-targets';
 
 test('isTargetFile accepts ts and host documents but not declarations', () => {
 	assert.equal(FileTargets.isTargetFile('app.ts'), true);

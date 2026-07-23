@@ -2,7 +2,7 @@ import { BlankLines } from '#sidecar/blank-line-inserter';
 import { BodyWrapper } from '#sidecar/body-wrapper';
 import { ClassReorder } from '#sidecar/class-reorder';
 import { DeclarationReorder } from '#sidecar/declaration-reorder';
-import { Edits } from '#sidecar/edits';
+import { Edits } from '#sidecar/syntax/edits';
 
 /** Applies the sidecar's source-segment formatting passes in order. */
 export class Segment {

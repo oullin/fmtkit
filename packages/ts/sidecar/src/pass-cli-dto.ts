@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FileTargets } from '#sidecar/file-targets';
+import { FileTargets } from '#sidecar/hosts/file-targets';
 
 /** Immutable command-line options shared by standalone formatting passes. */
 export class PassCliDto {

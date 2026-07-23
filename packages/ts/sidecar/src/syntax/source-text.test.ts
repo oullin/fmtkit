@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SourceText } from '#sidecar/source-text';
+import { SourceText } from '#sidecar/syntax/source-text';
 
 test('SourceText.lineIndent returns the leading whitespace of the position line', () => {
 	const source = 'if (x) {\n\t\tcall();\n}\n';

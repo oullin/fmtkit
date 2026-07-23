@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Ast } from '#sidecar/ast';
-import { Node } from '#sidecar/node-schema';
-import { isErr } from '#sidecar/result';
-import { Sources } from '#sidecar/sources';
+import { Ast } from '#sidecar/syntax/ast';
+import { Node } from '#sidecar/syntax/node-schema';
+import { isErr } from '#sidecar/kernel/result';
+import { Sources } from '#sidecar/syntax/sources';
 
 test('Ast traverses parsed fixtures and reads validated node fields', () => {
 	const source = [

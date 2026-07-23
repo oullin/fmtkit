@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isErr } from '#sidecar/result';
-import { Sources } from '#sidecar/sources';
-import { TemplateSpans } from '#sidecar/template-spans';
+import { isErr } from '#sidecar/kernel/result';
+import { Sources } from '#sidecar/syntax/sources';
+import { TemplateSpans } from '#sidecar/syntax/template-spans';
 
 function spansOf(source: string): TemplateSpans | null {
 	const parsed = Sources.parse('fixture.ts', source);

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { OxfmtRunFailed } from '#sidecar/errors';
-import { err, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
+import { OxfmtRunFailed } from '#sidecar/kernel/errors';
+import { err, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
 
 /** The process operation required to invoke oxfmt. */
 export type ProcessRunner = {

@@ -3,9 +3,9 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { SourceFileUnreadable } from '#sidecar/errors';
-import { isErr } from '#sidecar/result';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { SourceFileUnreadable } from '#sidecar/kernel/errors';
+import { isErr } from '#sidecar/kernel/result';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 test('SourceFileUnreadable identifies ENOENT-shaped causes only', () => {
 	assert.equal(new SourceFileUnreadable('missing.ts', { code: 'ENOENT' }).isNotFound(), true);

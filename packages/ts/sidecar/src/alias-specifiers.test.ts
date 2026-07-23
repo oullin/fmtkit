@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { test } from 'node:test';
-import { Ast } from '#sidecar/ast';
-import { isErr } from '#sidecar/result';
-import { Sources } from '#sidecar/sources';
-import type { Node } from '#sidecar/types';
+import { Ast } from '#sidecar/syntax/ast';
+import { isErr } from '#sidecar/kernel/result';
+import { Sources } from '#sidecar/syntax/sources';
+import type { Node } from '#sidecar/syntax/node-schema';
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const exemptFiles = new Set(['sidecar.ts']);

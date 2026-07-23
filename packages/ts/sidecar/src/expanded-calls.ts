@@ -1,13 +1,13 @@
-import { Ast } from '#sidecar/ast';
-import { Edits } from '#sidecar/edits';
-import { FileTargets } from '#sidecar/file-targets';
-import { Node } from '#sidecar/node-schema';
-import { isErr } from '#sidecar/result';
-import { SourceText } from '#sidecar/source-text';
-import type { CallParens } from '#sidecar/source-text';
-import { Sources } from '#sidecar/sources';
-import { TemplateSpans } from '#sidecar/template-spans';
-import type { Edit } from '#sidecar/types';
+import { Ast } from '#sidecar/syntax/ast';
+import { Edits } from '#sidecar/syntax/edits';
+import { FileTargets } from '#sidecar/hosts/file-targets';
+import { Node } from '#sidecar/syntax/node-schema';
+import { isErr } from '#sidecar/kernel/result';
+import { SourceText } from '#sidecar/syntax/source-text';
+import type { CallParens } from '#sidecar/syntax/source-text';
+import { Sources } from '#sidecar/syntax/sources';
+import { TemplateSpans } from '#sidecar/syntax/template-spans';
+import type { Edit } from '#sidecar/syntax/edits';
 
 const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression']);
 

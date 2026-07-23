@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DeclarationReorder } from '#sidecar/declaration-reorder';
-import { Edits } from '#sidecar/edits';
+import { Edits } from '#sidecar/syntax/edits';
 
 function reorder(source: string): string {
 	const edits = DeclarationReorder.computeEdits(source, 'sample.ts');

@@ -3,8 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { isErr } from '#sidecar/result';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { isErr } from '#sidecar/kernel/result';
 
 test('NodeProcessRunner reports successful and failed process exits', async () => {
 	const dir = await mkdtemp(

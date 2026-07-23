@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BodyWrapper } from '#sidecar/body-wrapper';
-import { Edits } from '#sidecar/edits';
+import { Edits } from '#sidecar/syntax/edits';
 
 function wrapOnce(source: string): string {
 	const edits = BodyWrapper.computeEdits(source, 'sample.ts');

@@ -61,7 +61,7 @@ func (s Selection) gitCommands(scope string) [][]string {
 // and Vue families plus the HTML and Markdown documents whose embedded scripts
 // get formatted.
 func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
-	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, true, func(path string) bool {
 		return isTargetFile(path, opts.IncludeDeclarations)
 	})
 }
@@ -70,7 +70,7 @@ func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
 // the TS and Vue families. It is a subset of Collect — HTML and Markdown are
 // formattable but not lintable.
 func CollectLintable(ctx context.Context, opts Options) ([]string, []string, error) {
-	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, true, func(path string) bool {
 		return isLintableFile(path, opts.IncludeDeclarations)
 	})
 }
@@ -79,15 +79,18 @@ func CollectLintable(ctx context.Context, opts Options) ([]string, []string, err
 // added — under the given scopes, whatever its extension. Callers do their own
 // filtering — the Go formatter, for one, has its own notion of which files it
 // owns.
+// ChangedPaths deliberately skips .prettierignore filtering: it feeds the Go
+// formatter, whose file set has nothing to do with Prettier's JS/TS ignore
+// list.
 func ChangedPaths(ctx context.Context, cwd string, scopes []string) ([]string, error) {
-	files, _, err := collect(ctx, cwd, scopes, SelectionChanged, func(string) bool {
+	files, _, err := collect(ctx, cwd, scopes, SelectionChanged, false, func(string) bool {
 		return true
 	})
 
 	return files, err
 }
 
-func collect(ctx context.Context, cwd string, scopes []string, selection Selection, keep func(string) bool) ([]string, []string, error) {
+func collect(ctx context.Context, cwd string, scopes []string, selection Selection, honorPrettierIgnore bool, keep func(string) bool) ([]string, []string, error) {
 	if strings.TrimSpace(cwd) == "" {
 		var err error
 
@@ -151,9 +154,54 @@ func collect(ctx context.Context, cwd string, scopes []string, selection Selecti
 		}
 	}
 
+	if honorPrettierIgnore {
+		kept, err := filterPrettierIgnored(cwd, files)
+
+		if err != nil {
+			return nil, warnings, err
+		}
+
+		files = kept
+	}
+
 	slices.Sort(files)
 
 	return files, warnings, nil
+}
+
+// filterPrettierIgnored drops any collected path the project's .prettierignore
+// excludes. Paths outside cwd are kept untouched: .prettierignore is anchored
+// to the directory that holds it and cannot speak to files above it.
+func filterPrettierIgnored(cwd string, files []string) ([]string, error) {
+	ignore, err := loadPrettierIgnore(filepath.Join(cwd, ".prettierignore"))
+
+	if err != nil {
+		return nil, err
+	}
+
+	if ignore == nil {
+		return files, nil
+	}
+
+	kept := make([]string, 0, len(files))
+
+	for _, path := range files {
+		rel, err := filepath.Rel(cwd, path)
+
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			kept = append(kept, path)
+
+			continue
+		}
+
+		if ignore.ignores(filepath.ToSlash(rel)) {
+			continue
+		}
+
+		kept = append(kept, path)
+	}
+
+	return kept, nil
 }
 
 func gitFiles(ctx context.Context, cwd, scope string, selection Selection) ([]string, error) {

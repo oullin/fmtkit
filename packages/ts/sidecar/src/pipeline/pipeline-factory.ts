@@ -4,7 +4,11 @@ import { BodyWrapPass } from '#sidecar/passes/body-wrap-pass';
 import { ClassMemberPolicy } from '#sidecar/passes/policies/class-member-policy';
 import { ClassReorderPass } from '#sidecar/passes/class-reorder-pass';
 import { DeclarationReorderPass } from '#sidecar/passes/declaration-reorder-pass';
-import { DrizzleQueryPass } from '#sidecar/passes/drizzle-query-pass';
+import { DrizzleArgumentWriter } from '#sidecar/passes/drizzle/drizzle-argument-writer';
+import { DrizzleCallClassifier } from '#sidecar/passes/drizzle/drizzle-call-classifier';
+import { DrizzleImportScanner } from '#sidecar/passes/drizzle/drizzle-import-scanner';
+import { DrizzleQueryPass } from '#sidecar/passes/drizzle/drizzle-query-pass';
+import { DrizzleVocabulary } from '#sidecar/passes/drizzle/drizzle-vocabulary';
 import { EditApplier } from '#sidecar/syntax/edits';
 import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import { ExpandedCallPass } from '#sidecar/passes/expanded-call-pass';
@@ -51,7 +55,19 @@ export class PipelineFactory {
 		this.#declarationReorder = new DeclarationReorderPass({ parser: dependencies.parser, ast: dependencies.ast });
 		this.#blankLine = new BlankLinePass({ parser: dependencies.parser, ast: dependencies.ast, spacing: dependencies.spacing });
 		this.#fluentChain = new FluentChainPass({ parser: dependencies.parser, ast: dependencies.ast });
-		this.#drizzleQuery = new DrizzleQueryPass({ parser: dependencies.parser, edits: dependencies.edits });
+
+		const vocabulary = DrizzleVocabulary.standard();
+		const classifier = new DrizzleCallClassifier({ ast: dependencies.ast, vocabulary });
+
+		this.#drizzleQuery = new DrizzleQueryPass({
+			parser: dependencies.parser,
+			ast: dependencies.ast,
+			edits: dependencies.edits,
+			scanner: new DrizzleImportScanner({ ast: dependencies.ast }),
+			classifier,
+			writer: new DrizzleArgumentWriter({ ast: dependencies.ast, vocabulary, classifier }),
+		});
+
 		this.#expandedCall = new ExpandedCallPass({ parser: dependencies.parser, ast: dependencies.ast, edits: dependencies.edits });
 	}
 

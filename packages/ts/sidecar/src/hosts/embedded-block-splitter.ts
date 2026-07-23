@@ -1,5 +1,5 @@
-import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
-import { VueScript } from '#sidecar/hosts/vue-script';
+import type { MarkdownFences } from '#sidecar/hosts/markdown-fences';
+import type { VueScript } from '#sidecar/hosts/vue-script';
 
 /** A JavaScript-capable block embedded in a host document. */
 export type EmbeddedBlock = {

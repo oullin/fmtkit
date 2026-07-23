@@ -17,9 +17,9 @@ import { VueScript } from '#sidecar/hosts/vue-script';
 
 const fluentPipeline = PipelineFactory.create().fluentPipeline();
 
-// The composed fluent → Drizzle → expanded pipeline, matching the order the old
-// FluentChains.format applied. Drizzle formatting only fires once a query's
-// chain has been split across lines, so these cases run the whole pipeline.
+// The composed fluent → Drizzle → expanded pipeline, in the order the fluent
+// pipeline runs its steps. Drizzle formatting only fires once a query's chain
+// has been split across lines, so these cases run the whole pipeline.
 function format(input: string, virtualName: string): string {
 	return fluentPipeline.apply(SourceDocument.of(virtualName, input)).text;
 }

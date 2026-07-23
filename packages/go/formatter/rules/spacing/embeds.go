@@ -11,6 +11,17 @@ import (
 	"go.ollin.sh/fmtkit/formatter/rules"
 )
 
+// embedDirectiveRepairer keeps go:embed directives immediately above the var
+// declaration they annotate, reading the shared parse state through ctx.
+type embedDirectiveRepairer struct {
+	ctx *fileContext
+}
+
+// newEmbedDirectiveRepairer returns a repairer bound to the shared parse state.
+func newEmbedDirectiveRepairer(ctx *fileContext) *embedDirectiveRepairer {
+	return &embedDirectiveRepairer{ctx: ctx}
+}
+
 func attachEmbedDirectiveDocs(file *ast.File) {
 	for decl, group := range embedDirectiveMatches(file) {
 		genDecl, ok := decl.(*ast.GenDecl)
@@ -23,12 +34,14 @@ func attachEmbedDirectiveDocs(file *ast.File) {
 	}
 }
 
-func embedAdjacencyViolations(file *ast.File, fset *token.FileSet, filename string) []rules.Violation {
+// analyze reports every go:embed directive separated from the var declaration it
+// annotates, labelling the returned violations with filename.
+func (e *embedDirectiveRepairer) analyze(filename string) []rules.Violation {
 	var violations []rules.Violation
 
-	for decl, group := range embedDirectiveMatches(file) {
-		commentEndLine := fset.Position(group.End()).Line
-		declLine := fset.Position(decl.Pos()).Line
+	for decl, group := range embedDirectiveMatches(e.ctx.file) {
+		commentEndLine := e.ctx.fset.Position(group.End()).Line
+		declLine := e.ctx.fset.Position(decl.Pos()).Line
 
 		if declLine == commentEndLine+1 {
 			continue
@@ -45,7 +58,11 @@ func embedAdjacencyViolations(file *ast.File, fset *token.FileSet, filename stri
 	return violations
 }
 
-func repairDetachedEmbedDirectives(filename string, src []byte) ([]byte, error) {
+// repair re-parses src — which may already carry the type reorder — and moves
+// every detached go:embed directive group back immediately above its var
+// declaration. It parses its own file rather than reusing ctx because it operates
+// on the transformed bytes.
+func (e *embedDirectiveRepairer) repair(filename string, src []byte) ([]byte, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
 
@@ -193,6 +210,9 @@ func containsEmbedDirective(group *ast.CommentGroup) bool {
 	return false
 }
 
+// collapseEmbedSpacing removes a single blank line left between a go:embed
+// directive and the var declaration it annotates. It works purely on bytes with
+// no parse state, so it stays a free function the repairer's collapse step calls.
 func collapseEmbedSpacing(src []byte) []byte {
 	lines := bytes.Split(src, []byte{'\n'})
 	out := make([][]byte, 0, len(lines))

@@ -21,11 +21,24 @@ type declRegion struct {
 	end   int
 }
 
-func typeOrderViolations(file *ast.File, fset *token.FileSet, filename string) []rules.Violation {
+// typeOrderRewriter enforces that type declarations precede the other top-level
+// declarations in a file, reading the shared parse state through ctx.
+type typeOrderRewriter struct {
+	ctx *fileContext
+}
+
+// newTypeOrderRewriter returns a rewriter bound to the shared parse state.
+func newTypeOrderRewriter(ctx *fileContext) *typeOrderRewriter {
+	return &typeOrderRewriter{ctx: ctx}
+}
+
+// analyze reports every type declaration that appears after a non-type
+// declaration, labelling the returned violations with filename.
+func (r *typeOrderRewriter) analyze(filename string) []rules.Violation {
 	var violations []rules.Violation
 	seenNonType := false
 
-	for _, block := range topLevelDeclBlocks(file) {
+	for _, block := range topLevelDeclBlocks(r.ctx.file) {
 		if isImportDecl(block.decl) {
 			continue
 		}
@@ -41,7 +54,7 @@ func typeOrderViolations(file *ast.File, fset *token.FileSet, filename string) [
 				violations = append(violations, rules.Violation{
 					Rule:    "spacing",
 					File:    filename,
-					Line:    fset.Position(block.decl.Pos()).Line,
+					Line:    r.ctx.fset.Position(block.decl.Pos()).Line,
 					Message: "type definitions must appear at the beginning of the file",
 				})
 			}
@@ -55,7 +68,11 @@ func typeOrderViolations(file *ast.File, fset *token.FileSet, filename string) [
 	return violations
 }
 
-func reorderTypeDecls(filename string, src []byte) ([]byte, bool, error) {
+// rewrite re-parses src — which may already carry the blank lines the inserter
+// added — and splices every type declaration to the front of the file. It parses
+// its own file rather than reusing ctx because it operates on the transformed
+// bytes, and reports whether the declaration order changed.
+func (r *typeOrderRewriter) rewrite(filename string, src []byte) ([]byte, bool, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
 

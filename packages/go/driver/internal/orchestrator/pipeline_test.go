@@ -4,23 +4,27 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type invocation struct {
+	tool string
+	args []string
+}
+
+var updateGolden = flag.Bool("update", false, "rewrite pipeline transcript golden files")
 
 // TestMain pins a color-free environment: CI task runners export FORCE_COLOR,
 // which would inject ANSI codes into the captured output these tests assert.
 
 // The stub outputs mirror infra/test-binary-smoke.sh so
 // the Go orchestrator preserves the entrypoint's summary contract.
-
-type invocation struct {
-	tool string
-	args []string
-}
 
 func TestMain(m *testing.M) {
 	_ = os.Unsetenv("FORCE_COLOR")
@@ -67,6 +71,66 @@ func stubTools(log *[]invocation, tsErr, lintErr error, goCode int) Tools {
 
 			return goCode
 		},
+	}
+}
+
+// TestRunFormatTranscriptGoldens pins the complete stderr transcript the
+// pipeline renders, byte for byte, across the success and failure paths in both
+// streaming and quiet modes. Color is forced off by TestMain, so the golden
+// files carry no ANSI escapes. These goldens characterize the current
+// rendering so later refactor stages cannot silently change it; regenerate with
+// `go test ./driver/internal/orchestrator -run TestRunFormatTranscriptGoldens -update`.
+func TestRunFormatTranscriptGoldens(t *testing.T) {
+	cases := []struct {
+		name   string
+		quiet  bool
+		tsErr  error
+		goCode int
+		golden string
+	}{
+		{"success", false, nil, 0, "transcript_success.txt"},
+		{"success_quiet", true, nil, 0, "transcript_success_quiet.txt"},
+		{"go_failure", false, nil, 3, "transcript_go_failure.txt"},
+		{"go_failure_quiet", true, nil, 3, "transcript_go_failure_quiet.txt"},
+		{"ts_failure", false, errors.New("sidecar exploded"), 0, "transcript_ts_failure.txt"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			var log []invocation
+
+			var stderr bytes.Buffer
+
+			pipeline := Pipeline{
+				Tools:  stubTools(&log, tc.tsErr, nil, tc.goCode),
+				Quiet:  tc.quiet,
+				Stderr: &stderr,
+			}
+
+			pipeline.RunFormat(context.Background(), []string{"."})
+
+			path := filepath.Join("testdata", tc.golden)
+
+			if *updateGolden {
+				if err := os.WriteFile(path, stderr.Bytes(), 0o644); err != nil {
+					t.Fatalf("update golden: %v", err)
+				}
+
+				return
+			}
+
+			want, err := os.ReadFile(path)
+
+			if err != nil {
+				t.Fatalf("read golden: %v", err)
+			}
+
+			if stderr.String() != string(want) {
+				t.Fatalf("transcript mismatch for %s\n--- got ---\n%s\n--- want ---\n%s", tc.golden, stderr.String(), want)
+			}
+		})
 	}
 }
 

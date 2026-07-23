@@ -1,0 +1,10 @@
+package sample
+
+// Config carries settings.
+type Config struct {
+	Name string
+}
+
+func helper() string {
+	return "x"
+}

@@ -1,0 +1,36 @@
+
+==> Formatting target(s)
+    paths        .
+
+==> Running TS/Vue lint
+    Found 0 warnings and 0 errors.
+    oxlint       Found 0 warnings and 0 errors.
+
+==> Running TS/Vue formatting
+    [blank-lines] processed 3 file(s) in /work, 0 changed
+    Finished in 10ms on 3 files using 8 threads.
+    [fluent-chains] processed 3 file(s) in /work, 1 changed
+    blank-lines  processed 3 file(s) in /work, 0 changed
+    oxfmt        Finished in 10ms on 3 files using 8 threads.
+    fluent       processed 3 file(s) in /work, 1 changed
+
+==> Running Go formatting
+    
+    Formatter
+    
+      Formatted 2 file(s).
+    
+      Result: pass. 0 changed, 0 violation(s), 0 error(s).
+    
+    Vet
+    
+      go vet ./... passed.
+    
+      Result: pass. 0 error(s).
+    fmtkit       Formatted 2 file(s).
+    result       pass. 0 changed, 0 violation(s), 0 error(s).
+    vet          go vet ./... passed.
+    vet result   pass. 0 error(s).
+
+==> Formatting complete
+    status       done

@@ -1,0 +1,9 @@
+usage: fmtkit <format|format-all|go|ts|lint|check|version|help> [args...]
+  format [--ts] [--go] [--quiet] [paths...]  format changed files (vs HEAD) and untracked ones
+  format-all [--ts] [--go] [--quiet]       format every file, against .
+      --ts   only TS/Vue lint + formatting; --go   only Go formatting; default: all
+  go <check|format|sources|version|help>  run the Go formatter CLI
+  ts [paths...]                            run TS/Vue formatting support and oxfmt
+  lint [paths...]                          lint TS/Vue files with oxlint
+  check [args...]                          run the Go formatter in check mode
+  version                                  print the fmtkit version

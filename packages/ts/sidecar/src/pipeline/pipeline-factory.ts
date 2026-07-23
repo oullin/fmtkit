@@ -51,7 +51,15 @@ export class PipelineFactory {
 	 * @param dependencies.members - Classifies class members for reordering.
 	 * @param dependencies.spacing - Decides statement blank-line obligations.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; splitter: EmbeddedBlockSplitter; targets: FileTargetPolicy; members: ClassMemberPolicy; spacing: StatementSpacingPolicy }) {
+	constructor(dependencies: {
+		parser: SourceParser;
+		ast: AstReader;
+		edits: EditApplier;
+		splitter: EmbeddedBlockSplitter;
+		targets: FileTargetPolicy;
+		members: ClassMemberPolicy;
+		spacing: StatementSpacingPolicy;
+	}) {
 		this.#parser = dependencies.parser;
 		this.#splitter = dependencies.splitter;
 		this.#targets = dependencies.targets;

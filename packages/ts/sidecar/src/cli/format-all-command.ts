@@ -24,7 +24,14 @@ export class FormatAllCommand implements CliCommand {
 	 * @param dependencies.syntaxReporter - Renders syntax-validation reporting lines.
 	 * @param dependencies.targets - Classifies the format and syntax target files.
 	 */
-	constructor(dependencies: { pipeline: FormatPipeline; segmentFormatter: FileFormatter; fluentFormatter: FileFormatter; reporter: PassReporter; syntaxReporter: SyntaxReporter; targets: FileTargetPolicy }) {
+	constructor(dependencies: {
+		pipeline: FormatPipeline;
+		segmentFormatter: FileFormatter;
+		fluentFormatter: FileFormatter;
+		reporter: PassReporter;
+		syntaxReporter: SyntaxReporter;
+		targets: FileTargetPolicy;
+	}) {
 		this.#pipeline = dependencies.pipeline;
 		this.#segmentFormatter = dependencies.segmentFormatter;
 		this.#fluentFormatter = dependencies.fluentFormatter;

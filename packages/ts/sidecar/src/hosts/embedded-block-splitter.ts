@@ -60,7 +60,8 @@ export class EmbeddedBlockSplitter {
 	 */
 	extract(path: string, content: string): EmbeddedBlock[] {
 		if (this.#isMarkdown(path)) {
-			return this.#markdownFences.extractBlocks(content)
+			return this.#markdownFences
+				.extractBlocks(content)
 				.filter((block) => {
 					return this.#markdownFences.isJavaScriptOrTypeScript(block.lang);
 				})
@@ -73,7 +74,8 @@ export class EmbeddedBlockSplitter {
 			return [];
 		}
 
-		return this.#vueScript.extractBlocks(content)
+		return this.#vueScript
+			.extractBlocks(content)
 			.filter((block) => {
 				return this.#vueScript.isJavaScriptOrTypeScript(block.openTag);
 			})

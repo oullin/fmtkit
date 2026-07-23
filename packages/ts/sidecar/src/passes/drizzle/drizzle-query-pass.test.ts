@@ -28,7 +28,6 @@ const editApplier = new EditApplier();
 const ast = new AstReader();
 const vocabulary = DrizzleVocabulary.standard();
 const classifier = new DrizzleCallClassifier({ ast, vocabulary });
-
 const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }) });
 
 const drizzlePass = new DrizzleQueryPass({

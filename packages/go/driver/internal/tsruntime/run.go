@@ -98,7 +98,7 @@ func (s Support) RunPipeline(ctx context.Context, opts RunOptions) error {
 		args = append(args, "--oxfmt-bin", s.Sidecar())
 	}
 
-	if config := s.oxfmtConfigFor(cwd, env); config != "" {
+	if config := s.oxfmtConfigFor(ctx, cwd, env, opts.Stderr); config != "" {
 		args = append(args, "--oxfmt-config", config)
 	}
 
@@ -199,16 +199,21 @@ func collectLintable(ctx context.Context, cwd string, scopes []string, includeDe
 	})
 }
 
-// oxfmtConfigFor mirrors the entrypoint rule: a project-local .oxfmtrc.*
-// wins via oxfmt's own auto-discovery, otherwise fall back to the bundled
-// configuration.
-func (s Support) oxfmtConfigFor(cwd string, env overrides) string {
+// oxfmtConfigFor resolves the oxfmt config by precedence: the FMTKIT_OXFMTRC
+// override, then a project-local .oxfmtrc.* (via oxfmt's own auto-discovery,
+// signalled by ""), then a config derived from the project's Prettier
+// configuration, and finally the bundled default.
+func (s Support) oxfmtConfigFor(ctx context.Context, cwd string, env overrides, stderr io.Writer) string {
 	if env.oxfmtConfig != "" {
 		return existingFile(env.oxfmtConfig)
 	}
 
 	if matches, err := filepath.Glob(filepath.Join(cwd, ".oxfmtrc.*")); err == nil && len(matches) > 0 {
 		return ""
+	}
+
+	if derived := s.prettierDerivedConfig(ctx, cwd, env, stderr); derived != "" {
+		return derived
 	}
 
 	return s.OxfmtConfig()

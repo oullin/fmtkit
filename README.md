@@ -152,7 +152,18 @@ concurrency: 0
 
 The TS/Vue layer runs [`oxfmt`](https://www.npmjs.com/package/oxfmt) over your sources, then applies project-specific syntax passes for blank lines and fluent builder chains. The binary ships a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) that is applied by default, so you get the same style out of the box without any setup.
 
-A project-local oxfmt config takes precedence: if the directory being formatted contains its own `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …), the bundled default is skipped and oxfmt uses yours. Override the bundled path explicitly with the `FMTKIT_OXFMTRC` environment variable, matching the other `FMTKIT_*` knobs.
+The config is resolved by precedence, first match wins:
+
+1. `FMTKIT_OXFMTRC` — an explicit path, matching the other `FMTKIT_*` knobs.
+2. A project-local `.oxfmtrc.*` (`.json`, `.jsonc`, `.ts`, `.js`, …) in the directory being formatted: the bundled default is skipped and oxfmt uses yours.
+3. A config derived from your Prettier setup: if the directory has a Prettier config (`.prettierrc*`, `prettier.config.*`, or a `"prettier"` key in `package.json`) but no oxfmt config, fmtkit translates it via `oxfmt --migrate=prettier` so a Prettier-configured project formats consistently with no extra setup. The translation is cached by the Prettier config's content hash, so it runs once and re-runs only when that config changes. If a config cannot be translated (a JS config importing project-local modules, say), fmtkit warns on stderr and falls back to the bundled default rather than failing the run.
+4. The bundled default.
+
+To opt out of the Prettier-derived step, drop in your own `.oxfmtrc.*`, which takes precedence over it.
+
+### Ignoring files (`.prettierignore`)
+
+`oxfmt` already honors `.prettierignore` (and `.gitignore`) in its own step. fmtkit extends that to the rest of the TS/Vue pipeline — the blank-line and fluent-chain passes and `oxlint --fix` — by filtering `.prettierignore`d paths out of the file set it collects, so an ignored file is left untouched by every lane. The matcher follows gitignore syntax (comments, negation, leading-`/` anchoring, trailing-`/` directories, and the `*`, `?`, `[…]`, and `**` wildcards). The Go formatter is unaffected: `.prettierignore` governs only the TS/Vue/HTML/Markdown lanes.
 
 ## What it formats
 

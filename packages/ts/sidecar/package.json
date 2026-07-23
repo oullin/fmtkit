@@ -6,7 +6,7 @@
 		"#sidecar/*": "./src/*.ts"
 	},
 	"scripts": {
-		"validate-syntax": "cd ../../.. && tsx packages/ts/sidecar/src/validate-syntax.ts",
+		"validate-syntax": "cd ../../.. && tsx packages/ts/sidecar/src/cli/validate-syntax.ts",
 		"lint": "cd ../../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/ts/sidecar/node_modules/.bin/oxlint --fix",
 		"lint:check": "cd ../../.. && git ls-files --cached --others --exclude-standard -z | xargs -0 packages/ts/sidecar/node_modules/.bin/oxlint",
 		"check": "pnpm lint:check",

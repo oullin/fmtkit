@@ -108,13 +108,14 @@ trap 'rm -rf "${workdir}"' EXIT
 # package.json (for the #sidecar imports map) with node_modules one level up.
 mkdir -p "${workdir}/src"
 
-for script in "${root}"/packages/ts/sidecar/src/*.ts; do
-	case "${script##*/}" in
-		*.test.ts) continue ;;
-	esac
+# Copy the sources recursively, preserving the directory structure, so nested
+# modules survive the move into subdirectories. Skip *.test.ts as before.
+src="${root}/packages/ts/sidecar/src"
 
-	cp "${script}" "${workdir}/src/"
-done
+while IFS= read -r script; do
+	mkdir -p "${workdir}/src/$(dirname "${script}")"
+	cp "${src}/${script}" "${workdir}/src/${script}"
+done < <(cd "${src}" && find . -name '*.ts' ! -name '*.test.ts')
 
 cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 

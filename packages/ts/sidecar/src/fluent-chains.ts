@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { AstReader } from '#sidecar/syntax/ast-reader';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { EditApplier } from '#sidecar/syntax/edits';
-import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
+import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
 import { PassCliDto } from '#sidecar/pass-cli-dto';
 import { isErr, ok } from '#sidecar/kernel/result';
@@ -34,6 +34,8 @@ export class FluentChains {
 	static readonly #editApplier = new EditApplier();
 
 	static readonly #parser = new SourceParser();
+
+	static readonly #splitter = new EmbeddedBlockSplitter();
 
 	static #memberCallLink(document: SourceDocument, member: Node, object: Node, parsed: ParsedSourceDto): ChainLink | null {
 		if (member.computed) {
@@ -203,8 +205,8 @@ export class FluentChains {
 
 		const original = read.value;
 
-		const updated = EmbeddedBlocks.isHost(file)
-			? EmbeddedBlocks.rewrite(file, original, (blockContent, virtualName) => {
+		const updated = FluentChains.#splitter.isHost(file)
+			? FluentChains.#splitter.rewrite(file, original, (blockContent, virtualName) => {
 					return FluentChains.format(blockContent, virtualName);
 				})
 			: FluentChains.format(original, file);

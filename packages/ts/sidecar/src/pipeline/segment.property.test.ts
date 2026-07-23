@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fc from 'fast-check';
-import { Segment } from '#sidecar/segment';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+
+const pipeline = PipelineFactory.create().segmentPipeline();
+
+function process(source: string, virtualName: string): string {
+	return pipeline.apply(SourceDocument.of(virtualName, source)).text;
+}
 
 const identifierArbitrary = fc.constantFrom('alpha', 'beta', 'gamma', 'delta', 'epsilon');
 const integerArbitrary = fc.integer({ min: -10, max: 10 });
@@ -37,11 +44,11 @@ const sourceArbitrary = fc.array(statementArbitrary, { minLength: 1, maxLength: 
 	return `${statements.join('\n')}\n`;
 });
 
-test('Segment.process is idempotent for composed TypeScript sources', () => {
+test('the segment pipeline is idempotent for composed TypeScript sources', () => {
 	fc.assert(
 		fc.property(sourceArbitrary, (source) => {
-			const once = Segment.process(source, 'property.ts');
-			const twice = Segment.process(once, 'property.ts');
+			const once = process(source, 'property.ts');
+			const twice = process(once, 'property.ts');
 
 			assert.equal(twice, once);
 		}),

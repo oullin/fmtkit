@@ -202,7 +202,7 @@ run_coverage() {
 	# honest. The threshold is a ratchet: it holds at today's coverage and goes
 	# up as the under-tested packages (driver/config, internal/app,
 	# internal/sourcefiles) gain tests; it never goes down.
-	grep -vE '^go\.ollin\.sh/fmtkit/(driver/cmd/(fmtkit|fmtkit-sources)/|driver/internal/embedded/|driver/testutil/)' \
+	grep -vE '^go\.ollin\.sh/fmtkit/(driver/cmd/fmtkit/|driver/internal/embedded/|driver/testutil/)' \
 		"${GO_WORKDIR}/coverage.out" > "${GO_WORKDIR}/coverage.gate.out"
 
 	go_coverage="$(go -C "$GO_WORKDIR" tool cover -func=coverage.gate.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')"

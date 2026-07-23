@@ -39,7 +39,15 @@ export class DrizzleQueryPass implements FormattingPass {
 	 * @param dependencies.writer - Emits the edit that expands an approved call.
 	 * @param dependencies.targets - Classifies declaration files the pass skips.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; scanner: DrizzleImportScanner; classifier: DrizzleCallClassifier; writer: DrizzleArgumentWriter; targets: FileTargetPolicy }) {
+	constructor(dependencies: {
+		parser: SourceParser;
+		ast: AstReader;
+		edits: EditApplier;
+		scanner: DrizzleImportScanner;
+		classifier: DrizzleCallClassifier;
+		writer: DrizzleArgumentWriter;
+		targets: FileTargetPolicy;
+	}) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#edits = dependencies.edits;

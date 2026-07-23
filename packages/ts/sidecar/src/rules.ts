@@ -1,4 +1,4 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { Node } from '#sidecar/syntax/node-schema';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
@@ -47,6 +47,8 @@ const VUE_PRIMITIVE_CALLS = new Set([
 
 /** Encapsulates the formatter's statement and class-member layout rules. */
 export class Rules {
+	static readonly #ast = new AstReader();
+
 	static #isExportWithDeclaration(node: Node): boolean {
 		if (node.type !== 'ExportNamedDeclaration' && node.type !== 'ExportDefaultDeclaration') {
 			return false;
@@ -64,7 +66,7 @@ export class Rules {
 			return false;
 		}
 
-		const name = Ast.nodeName(node);
+		const name = Rules.#ast.nodeName(node);
 
 		return name !== undefined && names.has(name);
 	}
@@ -74,20 +76,20 @@ export class Rules {
 			return false;
 		}
 
-		return Rules.#isIdentifierNamed(Ast.childNode(node, 'callee'), VUE_PRIMITIVE_CALLS);
+		return Rules.#isIdentifierNamed(Rules.#ast.childNode(node, 'callee'), VUE_PRIMITIVE_CALLS);
 	}
 
 	static #isVuePrimitiveStatement(node: Node): boolean {
 		if (node.type === 'ExpressionStatement') {
-			return Rules.#isVuePrimitiveCall(Ast.childNode(node, 'expression'));
+			return Rules.#isVuePrimitiveCall(Rules.#ast.childNode(node, 'expression'));
 		}
 
-		if (node.type !== 'VariableDeclaration' || Ast.declarationKind(node) !== 'const') {
+		if (node.type !== 'VariableDeclaration' || Rules.#ast.declarationKind(node) !== 'const') {
 			return false;
 		}
 
-		return Ast.childNodes(node, 'declarations').some((declaration) => {
-			return Rules.#isVuePrimitiveCall(Ast.childNode(declaration, 'init'));
+		return Rules.#ast.childNodes(node, 'declarations').some((declaration) => {
+			return Rules.#isVuePrimitiveCall(Rules.#ast.childNode(declaration, 'init'));
 		});
 	}
 
@@ -105,7 +107,7 @@ export class Rules {
 		}
 
 		if (previous.type === 'ExportNamedDeclaration') {
-			const declarationType = Ast.childNode(previous, 'declaration')?.type;
+			const declarationType = Rules.#ast.childNode(previous, 'declaration')?.type;
 
 			return declarationType ? TS_TYPE_DECLARATION_TYPES.has(declarationType) : false;
 		}
@@ -123,7 +125,7 @@ export class Rules {
 		}
 
 		if (previous.type === 'ExportNamedDeclaration' || previous.type === 'ExportDefaultDeclaration') {
-			const declarationType = Ast.childNode(previous, 'declaration')?.type;
+			const declarationType = Rules.#ast.childNode(previous, 'declaration')?.type;
 
 			return Boolean(declarationType && STRUCTURED_PREVIOUS_STATEMENTS.has(declarationType));
 		}
@@ -140,7 +142,7 @@ export class Rules {
 	}
 
 	static #isLetDeclaration(node: Node): boolean {
-		return node.type === 'VariableDeclaration' && Ast.declarationKind(node) === 'let';
+		return node.type === 'VariableDeclaration' && Rules.#ast.declarationKind(node) === 'let';
 	}
 
 	static #containsAwait(node: Node): boolean {
@@ -193,7 +195,7 @@ export class Rules {
 			return true;
 		}
 
-		if (Ast.isConstDeclaration(previous) !== Ast.isConstDeclaration(next)) {
+		if (Rules.#ast.isConstDeclaration(previous) !== Rules.#ast.isConstDeclaration(next)) {
 			return true;
 		}
 
@@ -219,7 +221,7 @@ export class Rules {
 			return 'property';
 		}
 
-		if (node.type === 'MethodDefinition' && Ast.declarationKind(node) === 'constructor') {
+		if (node.type === 'MethodDefinition' && Rules.#ast.declarationKind(node) === 'constructor') {
 			return 'constructor';
 		}
 

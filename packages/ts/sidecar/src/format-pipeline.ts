@@ -7,7 +7,7 @@ import { isErr, ok } from '#sidecar/kernel/result';
 import type { Result } from '#sidecar/kernel/result';
 import { Segment } from '#sidecar/segment';
 import type { SourceFileError, SourceFiles } from '#sidecar/io/source-files';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
 const OXFMT_CHUNK_SIZE = 100;
 
@@ -57,6 +57,8 @@ type ProcessOne = (file: string, mode: FormatMode) => Promise<Result<boolean, So
 
 /** Coordinates formatting and validation through narrow filesystem and process ports. */
 export class FormatPipeline {
+	static readonly #parser = new SourceParser();
+
 	readonly #sourceFiles: SourceFiles;
 	readonly #processRunner: ProcessRunner;
 
@@ -200,7 +202,7 @@ export class FormatPipeline {
 			}
 
 			if (!EmbeddedBlocks.isHost(file)) {
-				const parsed = Sources.parse(file, read.value);
+				const parsed = FormatPipeline.#parser.parse(file, read.value);
 
 				return isErr(parsed) ? [{ file, error: parsed.error }] : [];
 			}
@@ -209,7 +211,7 @@ export class FormatPipeline {
 
 			for (const block of EmbeddedBlocks.extract(file, read.value)) {
 				const virtualContent = FormatPipeline.#scriptPrefix(read.value, block.start) + block.content;
-				const parsed = Sources.parse(`${file}.script.${block.extension}`, virtualContent);
+				const parsed = FormatPipeline.#parser.parse(`${file}.script.${block.extension}`, virtualContent);
 
 				if (isErr(parsed) && EmbeddedBlocks.hardValidated(file)) {
 					hostFailures.push({ file, error: parsed.error });

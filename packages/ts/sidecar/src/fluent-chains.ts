@@ -1,15 +1,16 @@
 import { pathToFileURL } from 'node:url';
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
 import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
 import { PassCliDto } from '#sidecar/pass-cli-dto';
 import { isErr, ok } from '#sidecar/kernel/result';
+import type { ParsedSourceDto } from '#sidecar/syntax/node-schema';
 import type { Result } from '#sidecar/kernel/result';
 import type { SourceFileError, SourceFiles } from '#sidecar/io/source-files';
-import { SourceText } from '#sidecar/syntax/source-text';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Edit } from '#sidecar/syntax/edits';
 import type { Node } from '#sidecar/syntax/node-schema';
 
@@ -28,29 +29,35 @@ type FluentChain = {
 
 /** Formats fluent chains and the structured calls composed with them. */
 export class FluentChains {
-	static #memberCallLink(source: string, member: Node, object: Node, comments: readonly Node[]): ChainLink | null {
+	static readonly #ast = new AstReader();
+
+	static readonly #editApplier = new EditApplier();
+
+	static readonly #parser = new SourceParser();
+
+	static #memberCallLink(document: SourceDocument, member: Node, object: Node, parsed: ParsedSourceDto): ChainLink | null {
 		if (member.computed) {
 			return null;
 		}
 
-		const property = Ast.childNode(member, 'property');
+		const property = FluentChains.#ast.childNode(member, 'property');
 
 		if (!property || (property.type !== 'Identifier' && property.type !== 'PrivateIdentifier')) {
 			return null;
 		}
 
-		const objectEnd = Ast.getEnd(object);
-		const propertyStart = Ast.getStart(property);
+		const objectEnd = FluentChains.#ast.getEnd(object);
+		const propertyStart = FluentChains.#ast.getStart(property);
 
 		if (objectEnd < 0 || propertyStart < 0 || propertyStart <= objectEnd) {
 			return null;
 		}
 
-		if (SourceText.hasCommentBetween(comments, objectEnd, propertyStart)) {
+		if (parsed.hasCommentBetween(objectEnd, propertyStart)) {
 			return null;
 		}
 
-		const separator = source.slice(objectEnd, propertyStart);
+		const separator = document.slice(objectEnd, propertyStart);
 
 		if (separator.includes('//') || separator.includes('/*')) {
 			return null;
@@ -69,25 +76,25 @@ export class FluentChains {
 		};
 	}
 
-	static #collectFluentChain(source: string, outer: Node, comments: readonly Node[]): FluentChain | null {
+	static #collectFluentChain(document: SourceDocument, outer: Node, parsed: ParsedSourceDto): FluentChain | null {
 		let call: Node = outer;
 
 		const links: ChainLink[] = [];
 
 		while (call.type === 'CallExpression') {
-			const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+			const callee = FluentChains.#ast.unwrapChainExpression(FluentChains.#ast.childNode(call, 'callee'));
 
 			if (callee?.type !== 'MemberExpression') {
 				break;
 			}
 
-			const object = SourceText.unwrapChainExpression(Ast.childNode(callee, 'object'));
+			const object = FluentChains.#ast.unwrapChainExpression(FluentChains.#ast.childNode(callee, 'object'));
 
 			if (object?.type !== 'CallExpression') {
 				break;
 			}
 
-			const link = FluentChains.#memberCallLink(source, callee, object, comments);
+			const link = FluentChains.#memberCallLink(document, callee, object, parsed);
 
 			if (!link) {
 				return null;
@@ -114,39 +121,39 @@ export class FluentChains {
 	 * @returns Fluent-chain edits, or none for invalid source.
 	 */
 	static computeEdits(content: string, virtualName: string): Edit[] {
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = FluentChains.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const comments = parsed.value.comments;
+		const document = SourceDocument.of(virtualName, content);
 		const edits = new Map<string, Edit>();
-		const indentStep = SourceText.detectIndentUnit(content);
+		const indentStep = document.indentUnit();
 
-		Ast.visit(parsed.value.program, (node) => {
+		FluentChains.#ast.visit(parsed.value.program, (node) => {
 			if (node.type !== 'CallExpression') {
 				return;
 			}
 
-			const chain = FluentChains.#collectFluentChain(content, node, comments);
+			const chain = FluentChains.#collectFluentChain(document, node, parsed.value);
 
 			if (!chain) {
 				return;
 			}
 
-			const baseStart = Ast.getStart(chain.base);
+			const baseStart = FluentChains.#ast.getStart(chain.base);
 
 			if (baseStart < 0) {
 				return;
 			}
 
-			const indent = `${SourceText.lineIndent(content, baseStart)}${indentStep}`;
+			const indent = `${document.lineIndent(baseStart)}${indentStep}`;
 
 			for (const link of chain.links) {
 				const replacement = `\n${indent}${link.operator}`;
 
-				if (content.slice(link.start, link.end) === replacement) {
+				if (document.slice(link.start, link.end) === replacement) {
 					continue;
 				}
 
@@ -173,7 +180,7 @@ export class FluentChains {
 	static format(content: string, virtualName: string): string {
 		const edits = FluentChains.computeEdits(content, virtualName);
 
-		const fluentFormatted = edits.length > 0 ? Edits.apply(content, edits) : content;
+		const fluentFormatted = edits.length > 0 ? FluentChains.#editApplier.apply(content, edits) : content;
 		const drizzleFormatted = DrizzleQueries.format(fluentFormatted, virtualName);
 
 		return ExpandedCalls.format(drizzleFormatted, virtualName);

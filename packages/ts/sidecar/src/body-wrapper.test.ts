@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { BodyWrapper } from '#sidecar/body-wrapper';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
+
+const editApplier = new EditApplier();
 
 function wrapOnce(source: string): string {
 	const edits = BodyWrapper.computeEdits(source, 'sample.ts');
 
-	return edits.length > 0 ? Edits.apply(source, edits) : source;
+	return edits.length > 0 ? editApplier.apply(source, edits) : source;
 }
 
 function wrapFully(source: string): string {

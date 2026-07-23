@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isErr } from '#sidecar/kernel/result';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
-test('Sources.parse returns the program and comments for valid source', () => {
-	const parsed = Sources.parse('sample.ts', 'const one = 1; // note\n');
+test('SourceParser.parse returns the program and comments for valid source', () => {
+	const parsed = new SourceParser().parse('sample.ts', 'const one = 1; // note\n');
 
 	assert.equal(isErr(parsed), false);
 
@@ -17,8 +17,8 @@ test('Sources.parse returns the program and comments for valid source', () => {
 	assert.equal(parsed.value.comments.length, 1);
 });
 
-test('Sources.parse carries parser errors for source with syntax errors', () => {
-	const parsed = Sources.parse('sample.ts', 'const broken = {;\n');
+test('SourceParser.parse carries parser errors for source with syntax errors', () => {
+	const parsed = new SourceParser().parse('sample.ts', 'const broken = {;\n');
 
 	assert.equal(isErr(parsed), true);
 

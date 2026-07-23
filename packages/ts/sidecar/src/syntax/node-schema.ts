@@ -103,16 +103,18 @@ export class ParsedSourceDto {
 	/**
 	 * Validate an Oxc program/comments envelope once into its immutable DTO.
 	 *
+	 * The failure branch carries the raw Zod error; its payload type stays
+	 * unparameterised because the DTO's own methods are not part of the schema
+	 * output and no caller reads the typed error.
+	 *
 	 * @param value - The untrusted parser payload.
 	 * @returns The validated DTO, or the Zod validation failure.
 	 */
-	static from(value: unknown): z.ZodSafeParseResult<ParsedSourceDto> {
+	static from(value: unknown): { success: true; data: ParsedSourceDto } | { success: false; error: z.ZodError } {
 		const parsed = ParsedSourceDto.#schema.safeParse(value);
 
 		if (!parsed.success) {
-			// The schema output type omits the DTO's own methods, so the Zod error
-			// is carried across on the declared parse result's failure branch.
-			return { success: false, error: parsed.error as unknown as z.ZodError<ParsedSourceDto> };
+			return { success: false, error: parsed.error };
 		}
 
 		return {

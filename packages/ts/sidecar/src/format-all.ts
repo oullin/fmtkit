@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { UnexpectedCliArgument } from '#sidecar/kernel/errors';
 import type { OxcErrorDto } from '#sidecar/kernel/errors';
 import { FileTargets } from '#sidecar/hosts/file-targets';
-import { FormatPipeline } from '#sidecar/format-pipeline';
-import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/format-pipeline';
+import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
+import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/pipeline/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';
 import { err, isErr, ok } from '#sidecar/kernel/result';
 import type { Result } from '#sidecar/kernel/result';
 import { NodeSourceFiles } from '#sidecar/io/source-files';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 
 /** Immutable command-line options for the full formatting pipeline. */
 export class CliOptionsDto {
@@ -219,9 +221,18 @@ export async function main(): Promise<void> {
 	const options = parsed.value;
 	const formatTargets = [...new Set(options.formatFiles.filter(FileTargets.isTargetFile))];
 	const syntaxTargets = [...new Set(options.syntaxFiles.filter(FileTargets.isSyntaxTarget))];
-	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+	const factory = PipelineFactory.create();
+	const sourceFiles = new NodeSourceFiles();
 
-	const blankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => pipeline.formatFile(file, mode));
+	const pipeline = new FormatPipeline({
+		editor: new SourceFileEditor({ sourceFiles }),
+		processRunner: new NodeProcessRunner(),
+		validator: factory.syntaxValidator(sourceFiles),
+	});
+
+	const segmentFormatter = factory.segmentFormatter();
+
+	const blankLines = await pipeline.runPass(segmentFormatter, formatTargets, options.mode);
 
 	if (!FormatAllReporter.reportPass('blank-lines', formatTargets, options.mode, blankLines, 'edits')) {
 		process.exitCode = 1;
@@ -238,7 +249,7 @@ export async function main(): Promise<void> {
 		return;
 	}
 
-	const fluentChains = await pipeline.runPass('fluent-chains', formatTargets, options.mode, (file, mode) => pipeline.formatFluentFile(file, mode));
+	const fluentChains = await pipeline.runPass(factory.fluentFormatter(), formatTargets, options.mode);
 
 	if (!FormatAllReporter.reportPass('fluent-chains', formatTargets, options.mode, fluentChains, 'edits')) {
 		process.exitCode = 1;
@@ -248,7 +259,7 @@ export async function main(): Promise<void> {
 
 	// Fluent and expanded calls create blank-line obligations the first pass
 	// cannot see, so the second pass makes one invocation reach a fixed point.
-	const finalBlankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => pipeline.formatFile(file, mode));
+	const finalBlankLines = await pipeline.runPass(segmentFormatter, formatTargets, options.mode);
 
 	if (!FormatAllReporter.reportPass('blank-lines', formatTargets, options.mode, finalBlankLines, 'edits')) {
 		process.exitCode = 1;

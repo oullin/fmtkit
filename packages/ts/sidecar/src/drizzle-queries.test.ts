@@ -1,7 +1,28 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { DrizzleQueries } from '#sidecar/drizzle-queries';
-import { FluentChains } from '#sidecar/fluent-chains';
+import { DrizzleQueryPass } from '#sidecar/passes/drizzle-query-pass';
+import { EditApplier } from '#sidecar/syntax/edits';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
+
+const fluentPipeline = PipelineFactory.create().fluentPipeline();
+
+// The composed fluent → Drizzle → expanded pipeline, matching the order the old
+// FluentChains.format applied. Drizzle formatting only fires once a query's
+// chain has been split across lines, so these cases run the whole pipeline.
+function format(input: string, virtualName: string): string {
+	return fluentPipeline.apply(SourceDocument.of(virtualName, input)).text;
+}
+
+const editApplier = new EditApplier();
+const drizzlePass = new DrizzleQueryPass({ parser: new SourceParser(), edits: editApplier });
+
+function drizzleFormat(input: string, virtualName: string): string {
+	const edits = drizzlePass.computeEdits(SourceDocument.of(virtualName, input));
+
+	return edits.length > 0 ? editApplier.apply(input, edits) : input;
+}
 
 describe('Drizzle query formatter', () => {
 	it('formats nested where predicates after fluent-chain splitting', () => {
@@ -25,7 +46,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('formats join predicates with Drizzle helpers', () => {
@@ -49,7 +70,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('formats mutation objects and nested conflict predicates', () => {
@@ -84,7 +105,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('formats relational query builder option objects', () => {
@@ -114,7 +135,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('formats set-operation operands', () => {
@@ -122,7 +143,7 @@ describe('Drizzle query formatter', () => {
 
 		const expected = ["import { union } from 'drizzle-orm';", 'const rows = await union(', '\tdb.select().from(users),', '\tdb.select().from(admins),', ').limit(10);', ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('supports aliased Drizzle imports', () => {
@@ -141,7 +162,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('leaves non-Drizzle helpers unchanged', () => {
@@ -149,7 +170,7 @@ describe('Drizzle query formatter', () => {
 
 		const expected = ['const rows = await db.select()', '\t.from(users)', '\t.where(and(eq(users.id, id), eq(users.active, true)));', ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('does not treat non-db select chains as Drizzle receivers', () => {
@@ -157,7 +178,7 @@ describe('Drizzle query formatter', () => {
 
 		const expected = ["import { and, eq } from 'drizzle-orm';", 'const rows = await builder.select()', '\t.from(users)', '\t.where(and(eq(users.id, id), eq(users.active, true)));', ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('skips commented Drizzle spans', () => {
@@ -171,7 +192,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('is idempotent for formatted Drizzle queries', () => {
@@ -188,7 +209,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(FluentChains.format(input, 'fixture.ts'), 'fixture.ts'), input);
+		assert.equal(format(format(input, 'fixture.ts'), 'fixture.ts'), input);
 	});
 
 	it('nests with four spaces when the source is space-indented', () => {
@@ -209,7 +230,7 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		const output = DrizzleQueries.format(input, 'fixture.ts');
+		const output = drizzleFormat(input, 'fixture.ts');
 
 		assert.equal(output, expected);
 		assert.ok(!output.includes('\t'), 'space-indented Drizzle formatting must not introduce tabs');
@@ -223,6 +244,6 @@ describe('Drizzle query formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(DrizzleQueries.format(input, 'fixture.d.ts'), input);
+		assert.equal(drizzleFormat(input, 'fixture.d.ts'), input);
 	});
 });

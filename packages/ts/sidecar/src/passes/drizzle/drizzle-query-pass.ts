@@ -3,7 +3,7 @@ import type { DrizzleArgumentWriter } from '#sidecar/passes/drizzle/drizzle-argu
 import type { DrizzleCallClassifier } from '#sidecar/passes/drizzle/drizzle-call-classifier';
 import type { DrizzleImportScanner } from '#sidecar/passes/drizzle/drizzle-import-scanner';
 import type { Edit, EditApplier } from '#sidecar/syntax/edits';
-import { FileTargets } from '#sidecar/hosts/file-targets';
+import type { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 import { isErr } from '#sidecar/kernel/result';
 import type { FormattingPass } from '#sidecar/passes/pass';
 import type { SourceDocument } from '#sidecar/syntax/source-document';
@@ -27,6 +27,7 @@ export class DrizzleQueryPass implements FormattingPass {
 	readonly #scanner: DrizzleImportScanner;
 	readonly #classifier: DrizzleCallClassifier;
 	readonly #writer: DrizzleArgumentWriter;
+	readonly #targets: FileTargetPolicy;
 
 	/**
 	 * @param dependencies - The services and collaborators consumed by the pass.
@@ -36,14 +37,16 @@ export class DrizzleQueryPass implements FormattingPass {
 	 * @param dependencies.scanner - Collects the Drizzle imports in scope.
 	 * @param dependencies.classifier - Decides which calls may be formatted.
 	 * @param dependencies.writer - Emits the edit that expands an approved call.
+	 * @param dependencies.targets - Classifies declaration files the pass skips.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; scanner: DrizzleImportScanner; classifier: DrizzleCallClassifier; writer: DrizzleArgumentWriter }) {
+	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; scanner: DrizzleImportScanner; classifier: DrizzleCallClassifier; writer: DrizzleArgumentWriter; targets: FileTargetPolicy }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#edits = dependencies.edits;
 		this.#scanner = dependencies.scanner;
 		this.#classifier = dependencies.classifier;
 		this.#writer = dependencies.writer;
+		this.#targets = dependencies.targets;
 	}
 
 	/**
@@ -53,7 +56,7 @@ export class DrizzleQueryPass implements FormattingPass {
 	 * @returns Non-overlapping query-formatting edits, or none for invalid source.
 	 */
 	computeEdits(document: SourceDocument): Edit[] {
-		if (FileTargets.isDeclarationFile(document.virtualName)) {
+		if (this.#targets.isDeclarationFile(document.virtualName)) {
 			return [];
 		}
 

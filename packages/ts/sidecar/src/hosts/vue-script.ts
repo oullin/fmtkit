@@ -20,7 +20,7 @@ export class VueScript {
 	 * @param content - The complete Vue source text.
 	 * @returns The embedded script blocks in source order.
 	 */
-	static extractBlocks(content: string): VueScriptBlock[] {
+	extractBlocks(content: string): VueScriptBlock[] {
 		const blocks: VueScriptBlock[] = [];
 
 		VUE_SCRIPT_REGEX.lastIndex = 0;
@@ -47,7 +47,7 @@ export class VueScript {
 	 * @param name - The attribute name to read.
 	 * @returns The lower-cased value, or `null` when the attribute has no value.
 	 */
-	static attribute(openTag: string, name: string): string | null {
+	attribute(openTag: string, name: string): string | null {
 		const pattern = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
 		const match = openTag.match(pattern);
 		const value = match ? (match[1] ?? match[2] ?? match[3]) : undefined;
@@ -61,14 +61,14 @@ export class VueScript {
 	 * @param openTag - The complete opening `<script>` tag.
 	 * @returns `true` for JavaScript, TypeScript, and module script tags.
 	 */
-	static isJavaScriptOrTypeScript(openTag: string): boolean {
-		const lang = VueScript.attribute(openTag, 'lang');
+	isJavaScriptOrTypeScript(openTag: string): boolean {
+		const lang = this.attribute(openTag, 'lang');
 
 		if (lang) {
 			return ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript'].includes(lang);
 		}
 
-		const type = VueScript.attribute(openTag, 'type');
+		const type = this.attribute(openTag, 'type');
 
 		if (type) {
 			return type === 'module' || type.includes('javascript') || type.includes('ecmascript');

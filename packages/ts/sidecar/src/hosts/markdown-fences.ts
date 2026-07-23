@@ -27,7 +27,7 @@ const JAVASCRIPT_LANGS = ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript', 
 
 /** Inspects fenced code blocks embedded in CommonMark documents. */
 export class MarkdownFences {
-	static #scanLines(content: string): ScannedLine[] {
+	#scanLines(content: string): ScannedLine[] {
 		const lines: ScannedLine[] = [];
 
 		let position = 0;
@@ -36,25 +36,25 @@ export class MarkdownFences {
 			const newline = content.indexOf('\n', position);
 
 			if (newline === -1) {
-				lines.push({ start: position, end: content.length, text: MarkdownFences.#stripCarriageReturn(content.slice(position)) });
+				lines.push({ start: position, end: content.length, text: this.#stripCarriageReturn(content.slice(position)) });
 
 				return lines;
 			}
 
-			lines.push({ start: position, end: newline + 1, text: MarkdownFences.#stripCarriageReturn(content.slice(position, newline)) });
+			lines.push({ start: position, end: newline + 1, text: this.#stripCarriageReturn(content.slice(position, newline)) });
 			position = newline + 1;
 		}
 	}
 
-	static #stripCarriageReturn(text: string): string {
+	#stripCarriageReturn(text: string): string {
 		return text.endsWith('\r') ? text.slice(0, -1) : text;
 	}
 
-	static #infoLanguage(info: string): string {
+	#infoLanguage(info: string): string {
 		return info.trim().split(/\s+/)[0] ?? '';
 	}
 
-	static #findClose(lines: ScannedLine[], from: number, fenceChar: string, minLength: number): number {
+	#findClose(lines: ScannedLine[], from: number, fenceChar: string, minLength: number): number {
 		const pattern = new RegExp(`^ {0,3}${fenceChar}{${minLength},}[ \\t]*$`);
 
 		for (let index = from; index < lines.length; index++) {
@@ -79,9 +79,9 @@ export class MarkdownFences {
 	 * @param content - The complete Markdown source text.
 	 * @returns The embedded fence blocks in source order.
 	 */
-	static extractBlocks(content: string): MarkdownFenceBlock[] {
+	extractBlocks(content: string): MarkdownFenceBlock[] {
 		const blocks: MarkdownFenceBlock[] = [];
-		const lines = MarkdownFences.#scanLines(content);
+		const lines = this.#scanLines(content);
 
 		let index = 0;
 
@@ -105,7 +105,7 @@ export class MarkdownFences {
 				continue;
 			}
 
-			const closeIndex = MarkdownFences.#findClose(lines, index + 1, fenceChar, fence.length);
+			const closeIndex = this.#findClose(lines, index + 1, fenceChar, fence.length);
 
 			if (closeIndex === -1) {
 				break;
@@ -115,7 +115,7 @@ export class MarkdownFences {
 			const bodyEnd = lines[closeIndex]?.start ?? content.length;
 
 			blocks.push({
-				lang: MarkdownFences.#infoLanguage(info),
+				lang: this.#infoLanguage(info),
 				content: content.slice(bodyStart, bodyEnd),
 				start: bodyStart,
 			});
@@ -132,7 +132,7 @@ export class MarkdownFences {
 	 * @param lang - The first token of the fence info string.
 	 * @returns `true` for JavaScript and TypeScript language identifiers.
 	 */
-	static isJavaScriptOrTypeScript(lang: string): boolean {
+	isJavaScriptOrTypeScript(lang: string): boolean {
 		return JAVASCRIPT_LANGS.includes(lang.toLowerCase());
 	}
 
@@ -142,7 +142,7 @@ export class MarkdownFences {
 	 * @param lang - The first token of the fence info string.
 	 * @returns `tsx` for JSX-flavoured languages, otherwise `ts`.
 	 */
-	static scriptExtension(lang: string): 'ts' | 'tsx' {
+	scriptExtension(lang: string): 'ts' | 'tsx' {
 		const normalized = lang.toLowerCase();
 
 		return normalized === 'tsx' || normalized === 'jsx' ? 'tsx' : 'ts';

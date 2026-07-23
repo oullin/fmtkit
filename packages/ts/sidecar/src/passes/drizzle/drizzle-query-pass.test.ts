@@ -7,9 +7,13 @@ import { DrizzleImportScanner } from '#sidecar/passes/drizzle/drizzle-import-sca
 import { DrizzleQueryPass } from '#sidecar/passes/drizzle/drizzle-query-pass';
 import { DrizzleVocabulary } from '#sidecar/passes/drizzle/drizzle-vocabulary';
 import { EditApplier } from '#sidecar/syntax/edits';
+import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
+import { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
 import { SourceDocument } from '#sidecar/syntax/source-document';
 import { SourceParser } from '#sidecar/syntax/source-parser';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
 const fluentPipeline = PipelineFactory.create().fluentPipeline();
 
@@ -25,6 +29,8 @@ const ast = new AstReader();
 const vocabulary = DrizzleVocabulary.standard();
 const classifier = new DrizzleCallClassifier({ ast, vocabulary });
 
+const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }) });
+
 const drizzlePass = new DrizzleQueryPass({
 	parser: new SourceParser(),
 	ast,
@@ -32,6 +38,7 @@ const drizzlePass = new DrizzleQueryPass({
 	scanner: new DrizzleImportScanner({ ast }),
 	classifier,
 	writer: new DrizzleArgumentWriter({ ast, vocabulary, classifier }),
+	targets,
 });
 
 function drizzleFormat(input: string, virtualName: string): string {

@@ -1,7 +1,7 @@
 import { CliOptionsDto } from '#sidecar/cli/format-all-cli-dto';
 import type { CliCommand } from '#sidecar/cli/command';
-import { FileTargets } from '#sidecar/hosts/file-targets';
 import type { FileFormatter } from '#sidecar/pipeline/file-formatter';
+import type { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 import type { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { isErr } from '#sidecar/kernel/result';
 import type { PassReporter, SyntaxReporter } from '#sidecar/cli/reporter';
@@ -13,6 +13,7 @@ export class FormatAllCommand implements CliCommand {
 	readonly #fluentFormatter: FileFormatter;
 	readonly #reporter: PassReporter;
 	readonly #syntaxReporter: SyntaxReporter;
+	readonly #targets: FileTargetPolicy;
 
 	/**
 	 * @param dependencies - The pipeline, formatters, and reporters the schedule runs on.
@@ -21,13 +22,15 @@ export class FormatAllCommand implements CliCommand {
 	 * @param dependencies.fluentFormatter - The fluent-chains formatter.
 	 * @param dependencies.reporter - Renders formatting-pass reporting lines.
 	 * @param dependencies.syntaxReporter - Renders syntax-validation reporting lines.
+	 * @param dependencies.targets - Classifies the format and syntax target files.
 	 */
-	constructor(dependencies: { pipeline: FormatPipeline; segmentFormatter: FileFormatter; fluentFormatter: FileFormatter; reporter: PassReporter; syntaxReporter: SyntaxReporter }) {
+	constructor(dependencies: { pipeline: FormatPipeline; segmentFormatter: FileFormatter; fluentFormatter: FileFormatter; reporter: PassReporter; syntaxReporter: SyntaxReporter; targets: FileTargetPolicy }) {
 		this.#pipeline = dependencies.pipeline;
 		this.#segmentFormatter = dependencies.segmentFormatter;
 		this.#fluentFormatter = dependencies.fluentFormatter;
 		this.#reporter = dependencies.reporter;
 		this.#syntaxReporter = dependencies.syntaxReporter;
+		this.#targets = dependencies.targets;
 	}
 
 	/**
@@ -46,8 +49,8 @@ export class FormatAllCommand implements CliCommand {
 		}
 
 		const options = parsed.value;
-		const formatTargets = [...new Set(options.formatFiles.filter(FileTargets.isTargetFile))];
-		const syntaxTargets = [...new Set(options.syntaxFiles.filter(FileTargets.isSyntaxTarget))];
+		const formatTargets = [...new Set(options.formatFiles.filter((file) => this.#targets.isTargetFile(file)))];
+		const syntaxTargets = [...new Set(options.syntaxFiles.filter((file) => this.#targets.isSyntaxTarget(file)))];
 
 		const blankLines = await this.#pipeline.runPass(this.#segmentFormatter, formatTargets, options.mode);
 

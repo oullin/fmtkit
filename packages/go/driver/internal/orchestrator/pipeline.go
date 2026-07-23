@@ -44,8 +44,9 @@ func (s Steps) normalized() Steps {
 	return s
 }
 
-// RunFormat runs TS/Vue formatting, TS/Vue lint, and Go formatting against
-// the given paths.
+// RunFormat runs TS/Vue lint (applying oxlint's safe fixes), TS/Vue formatting,
+// and Go formatting against the given paths. Lint runs first so the formatting
+// passes normalize whatever oxlint rewrites.
 func (p Pipeline) RunFormat(ctx context.Context, paths []string) int {
 	if len(paths) == 0 {
 		paths = []string{"."}
@@ -69,17 +70,17 @@ func (p Pipeline) RunFormat(ctx context.Context, paths []string) int {
 	if selected.TS {
 		steps = append(steps,
 			step{
-				label:     "Running TS/Vue formatting",
-				summarize: summarizeTSFormat,
-				run: func(ctx context.Context, output io.Writer) int {
-					return exitCode(p.Tools.TS(ctx, paths, output), output)
-				},
-			},
-			step{
 				label:     "Running TS/Vue lint",
 				summarize: summarizeTSLint,
 				run: func(ctx context.Context, output io.Writer) int {
 					return exitCode(p.Tools.Lint(ctx, paths, output), output)
+				},
+			},
+			step{
+				label:     "Running TS/Vue formatting",
+				summarize: summarizeTSFormat,
+				run: func(ctx context.Context, output io.Writer) int {
+					return exitCode(p.Tools.TS(ctx, paths, output), output)
 				},
 			},
 		)

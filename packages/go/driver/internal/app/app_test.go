@@ -164,12 +164,16 @@ func TestFormatRunsFullPipeline(t *testing.T) {
 		t.Fatalf("expected 2 sidecar invocations, got %q", invocations)
 	}
 
-	if !strings.HasPrefix(invocations[0], "pipeline ") {
-		t.Fatalf("first invocation = %q, want pipeline", invocations[0])
+	if !strings.HasPrefix(invocations[0], "oxlint ") {
+		t.Fatalf("first invocation = %q, want oxlint", invocations[0])
 	}
 
-	if !strings.HasPrefix(invocations[1], "oxlint ") {
-		t.Fatalf("second invocation = %q, want oxlint", invocations[1])
+	if !strings.Contains(invocations[0], "--fix") {
+		t.Fatalf("first invocation = %q, want oxlint --fix", invocations[0])
+	}
+
+	if !strings.HasPrefix(invocations[1], "pipeline ") {
+		t.Fatalf("second invocation = %q, want pipeline", invocations[1])
 	}
 
 	for _, needle := range []string{
@@ -359,7 +363,7 @@ func TestFormatFailsWithoutToolchain(t *testing.T) {
 		t.Fatalf("expected exit code 1, got %d\n%s", exitCode, stderr)
 	}
 
-	if !strings.Contains(stderr, "!! Running TS/Vue formatting failed") {
+	if !strings.Contains(stderr, "!! Running TS/Vue lint failed") {
 		t.Fatalf("stderr missing failure banner:\n%s", stderr)
 	}
 

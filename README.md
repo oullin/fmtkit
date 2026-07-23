@@ -52,14 +52,18 @@ For CI, download the release binary for the runner's platform and pin the tag â€
 
 ## Usage
 
-The distributed `fmtkit` binary runs the whole pipeline (TS/Vue formatting, TS/Vue lint, Go formatting) with `format` / `format-all`, and narrows it with step flags:
+The distributed `fmtkit` binary runs the whole pipeline (TS/Vue lint, TS/Vue formatting, Go formatting) with `format` / `format-all`, and narrows it with step flags:
 
 ```bash
 fmtkit format .          # every step, over the working tree's changes
-fmtkit format --ts .     # TS/Vue formatting + lint only
+fmtkit format --ts .     # TS/Vue lint + formatting only
 fmtkit format --go .     # Go formatting only
 fmtkit format-all --quiet
 ```
+
+`format` applies oxlint's safe fixes (`oxlint --fix`) first, then the formatting
+passes normalize whatever oxlint rewrote. Standalone `fmtkit lint` only reports
+violations; it never edits your files.
 
 **`format` covers what you changed; `format-all` covers everything.** `format`
 covers the files that diverge from HEAD â€” modified (staged or not) and

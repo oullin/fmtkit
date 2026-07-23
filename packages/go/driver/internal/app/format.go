@@ -66,7 +66,7 @@ func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions
 					return err
 				}
 
-				return support.RunLint(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
+				return support.RunLint(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
 			},
 			Go: func(ctx context.Context, args []string, output io.Writer) int {
 				return cli.

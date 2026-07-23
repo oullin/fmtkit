@@ -85,8 +85,8 @@ func TestRunFormatRunsStepsInOrder(t *testing.T) {
 	}
 
 	want := []invocation{
-		{"ts", []string{"."}},
 		{"lint", []string{"."}},
+		{"ts", []string{"."}},
 		{"go", []string{"format", "."}},
 	}
 
@@ -97,12 +97,12 @@ func TestRunFormatRunsStepsInOrder(t *testing.T) {
 	for _, needle := range []string{
 		"==> Formatting target(s)",
 		"paths        .",
+		"==> Running TS/Vue lint",
+		"oxlint       Found 0 warnings and 0 errors.",
 		"==> Running TS/Vue formatting",
 		"blank-lines  processed 3 file(s) in /work, 0 changed",
 		"oxfmt        Finished in 10ms on 3 files using 8 threads.",
 		"fluent       processed 3 file(s) in /work, 1 changed",
-		"==> Running TS/Vue lint",
-		"oxlint       Found 0 warnings and 0 errors.",
 		"==> Running Go formatting",
 		"fmtkit       Formatted 2 file(s).",
 		"result       pass. 0 changed, 0 violation(s), 0 error(s).",
@@ -177,8 +177,8 @@ func TestRunFormatShortCircuitsOnTSFailure(t *testing.T) {
 		t.Fatalf("RunFormat = %d, want 1", code)
 	}
 
-	if len(log) != 1 || log[0].tool != "ts" {
-		t.Fatalf("invocations = %v, want only ts", log)
+	if len(log) != 2 || log[0].tool != "lint" || log[1].tool != "ts" {
+		t.Fatalf("invocations = %v, want lint then ts (Go short-circuited)", log)
 	}
 
 	if !strings.Contains(stderr.String(), "!! Running TS/Vue formatting failed") {

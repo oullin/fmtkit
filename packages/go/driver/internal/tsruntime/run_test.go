@@ -195,6 +195,43 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 	}
 }
 
+func TestRunLintFixPassesFixFlag(t *testing.T) {
+	repo := gitScratchRepo(t, map[string]string{"app.ts": "export const a = 1;\n"})
+
+	support := supportWithStub(t)
+
+	if err := os.WriteFile(filepath.Join(support.Dir, ".oxlintrc.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatalf("write bundled config: %v", err)
+	}
+
+	t.Setenv(SourcesCwdEnv, repo)
+
+	var stdout, stderr bytes.Buffer
+
+	if err := support.RunLint(context.Background(), RunOptions{Fix: true, Stdout: &stdout, Stderr: &stderr}); err != nil {
+		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
+	}
+
+	want := []string{
+		"oxlint",
+		"--fix",
+		"--config", filepath.Join(support.Dir, ".oxlintrc.json"),
+		filepath.Join(repo, "app.ts"),
+	}
+
+	got := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+
+	if len(got) != len(want) {
+		t.Fatalf("argv = %q, want %q", got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("argv[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 	repo := gitScratchRepo(t, map[string]string{
 		"app.ts":         "export const a = 1;\n",

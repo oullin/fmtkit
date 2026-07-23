@@ -20,6 +20,10 @@ type RunOptions struct {
 	// defaults to sourcefiles.SelectionAll.
 	Selection sourcefiles.Selection
 
+	// Fix, when set, lets RunLint apply oxlint's safe fixes (--fix) rather
+	// than only reporting violations.
+	Fix bool
+
 	Stdout io.Writer
 	Stderr io.Writer
 }
@@ -106,7 +110,8 @@ func (s Support) RunPipeline(ctx context.Context, opts RunOptions) error {
 	return s.spawn(ctx, pipelineBin(env, s.Sidecar()), args, opts)
 }
 
-// RunLint lints the collected TS/Vue files with oxlint.
+// RunLint lints the collected TS/Vue files with oxlint. With opts.Fix it applies
+// oxlint's safe fixes in place; otherwise it only reports violations.
 func (s Support) RunLint(ctx context.Context, opts RunOptions) error {
 	env := readOverrides()
 
@@ -139,6 +144,10 @@ func (s Support) RunLint(ctx context.Context, opts RunOptions) error {
 	if bin == "" {
 		bin = s.Sidecar()
 		args = append(args, "oxlint")
+	}
+
+	if opts.Fix {
+		args = append(args, "--fix")
 	}
 
 	if config := s.oxlintConfigFor(cwd, env); config != "" {

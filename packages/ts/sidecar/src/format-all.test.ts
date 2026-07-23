@@ -270,6 +270,92 @@ test('format-all pipeline deduplicates repeated input paths', async () => {
 	}
 });
 
+test('format-all pipeline formats embedded blocks in html and markdown hosts', async () => {
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-format-all-hosts-',
+		),
+	);
+
+	try {
+		const html = join(dir, 'page.html');
+		const markdown = join(dir, 'notes.md');
+		const chain = "export const meRoutes = createRouter().use('*', bindEnv).use(identityMiddleware).get('/', getMe);";
+
+		await writeFile(html, `<body>\n<script>\n${chain}\n</script>\n</body>\n`);
+
+		await writeFile(markdown, `# Doc\n\n\`\`\`ts\n${chain}\n\`\`\`\n`);
+
+		await execFileAsync(
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', html, markdown, '--syntax-files', html, markdown],
+		);
+
+		const splitChain = /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)\n\t\.get\('\/', getMe\);/;
+
+		assert.match(await readFile(html, 'utf8'), splitChain);
+
+		assert.match(await readFile(markdown, 'utf8'), splitChain);
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
+});
+
+test('format-all pipeline tolerates syntactically broken markdown fences', async () => {
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-format-all-md-broken-',
+		),
+	);
+
+	try {
+		const markdown = join(dir, 'broken.md');
+
+		await writeFile(markdown, '# Doc\n\n```ts\nconst broken = {;\n```\n');
+
+		const { stdout } = await execFileAsync(
+			process.execPath,
+			['--import', 'tsx', formatAllScript, '--format-files', markdown, '--syntax-files', markdown],
+		);
+
+		assert.match(stdout, /\[validate-syntax\] checked 1 file\(s\)/);
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
+});
+
+test('format-all pipeline exits 1 for syntactically broken html script blocks', async () => {
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-format-all-html-broken-',
+		),
+	);
+
+	try {
+		const html = join(dir, 'broken.html');
+
+		await writeFile(html, '<body>\n<script>\nconst broken = {;\n</script>\n</body>\n');
+
+		await assert.rejects(execFileAsync(process.execPath, ['--import', 'tsx', formatAllScript, '--format-files', html, '--syntax-files', html]), (err: { code?: number }) => {
+			return err.code === 1;
+		});
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
+});
+
 test('format-all pipeline exits 1 when validation finds syntax errors', async () => {
 	const dir = await mkdtemp(
 		join(

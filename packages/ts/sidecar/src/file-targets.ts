@@ -1,3 +1,5 @@
+import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
+
 /** Classifies paths accepted by sidecar formatting passes. */
 export class FileTargets {
 	/**
@@ -14,9 +16,19 @@ export class FileTargets {
 	 * Report whether a path denotes a supported non-declaration source file.
 	 *
 	 * @param path - The source path to classify.
-	 * @returns `true` for Vue files and non-declaration TypeScript files.
+	 * @returns `true` for host documents and non-declaration TypeScript files.
 	 */
 	static isTargetFile(path: string): boolean {
-		return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || path.endsWith('.vue');
+		return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || EmbeddedBlocks.isHost(path);
+	}
+
+	/**
+	 * Report whether a path is eligible for final syntax validation.
+	 *
+	 * @param path - The source path to classify.
+	 * @returns `true` for host documents and every TypeScript file.
+	 */
+	static isSyntaxTarget(path: string): boolean {
+		return path.endsWith('.ts') || EmbeddedBlocks.isHost(path);
 	}
 }

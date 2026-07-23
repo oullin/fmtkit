@@ -15,6 +15,7 @@ func TestCollectFiltersSourceFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
 	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
 	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
+	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
 	gitAdd(t, dir, ".")
 
 	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
@@ -30,6 +31,8 @@ func TestCollectFiltersSourceFiles(t *testing.T) {
 	want := []string{
 		filepath.Join(dir, "src", "app.ts"),
 		filepath.Join(dir, "src", "component.vue"),
+		filepath.Join(dir, "src", "index.html"),
+		filepath.Join(dir, "src", "notes.md"),
 	}
 
 	if !reflect.DeepEqual(files, want) {
@@ -60,6 +63,77 @@ func TestCollectCanIncludeDeclarationFiles(t *testing.T) {
 
 	if !reflect.DeepEqual(files, want) {
 		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
+func TestCollectLintableExcludesNonScriptDocuments(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	writeFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
+	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
+	writeFile(t, filepath.Join(dir, "src", "readme.markdown"), "# Readme\n")
+	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
+	gitAdd(t, dir, ".")
+
+	// Formatting owns the HTML and Markdown documents alongside the TS/Vue files.
+	formatFiles, _, err := Collect(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
+
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	wantFormat := []string{
+		filepath.Join(dir, "src", "app.ts"),
+		filepath.Join(dir, "src", "component.vue"),
+		filepath.Join(dir, "src", "index.html"),
+		filepath.Join(dir, "src", "notes.md"),
+		filepath.Join(dir, "src", "readme.markdown"),
+	}
+
+	if !reflect.DeepEqual(formatFiles, wantFormat) {
+		t.Fatalf("format files mismatch\nwant: %#v\n got: %#v", wantFormat, formatFiles)
+	}
+
+	// Linting sees only the TS/Vue files: no HTML, no Markdown, and .d.ts stays
+	// out unless declarations are requested.
+	lintFiles, _, err := CollectLintable(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
+
+	if err != nil {
+		t.Fatalf("collect lintable: %v", err)
+	}
+
+	wantLint := []string{
+		filepath.Join(dir, "src", "app.ts"),
+		filepath.Join(dir, "src", "component.vue"),
+	}
+
+	if !reflect.DeepEqual(lintFiles, wantLint) {
+		t.Fatalf("lintable files mismatch\nwant: %#v\n got: %#v", wantLint, lintFiles)
+	}
+}
+
+func TestCollectLintableCanIncludeDeclarationFiles(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
+	gitAdd(t, dir, ".")
+
+	files, _, err := CollectLintable(context.Background(), Options{Cwd: dir, IncludeDeclarations: true, Scopes: []string{"src"}})
+
+	if err != nil {
+		t.Fatalf("collect lintable: %v", err)
+	}
+
+	// Declarations come back when requested; HTML never does.
+	want := []string{
+		filepath.Join(dir, "src", "app.ts"),
+		filepath.Join(dir, "src", "types.d.ts"),
+	}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("lintable files mismatch\nwant: %#v\n got: %#v", want, files)
 	}
 }
 

@@ -275,6 +275,30 @@ func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 	}
 }
 
+func TestRunLintSkipsSpawnForFormatOnlyDocuments(t *testing.T) {
+	// HTML and Markdown are formattable but not lintable, so a scope holding only
+	// those must reach the no-files notice rather than handing oxlint files it
+	// cannot lint.
+	repo := gitScratchRepo(t, map[string]string{
+		"index.html": "<script>const value = 1;</script>\n",
+		"notes.md":   "# Notes\n",
+	})
+
+	support := Support{Dir: t.TempDir()} // no sidecar: spawning would fail
+
+	t.Setenv(SourcesCwdEnv, repo)
+
+	var stdout, stderr bytes.Buffer
+
+	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+		t.Fatalf("RunLint: %v", err)
+	}
+
+	if !strings.Contains(stdout.String(), "[lint] no TS/Vue files to lint.") {
+		t.Fatalf("stdout = %q, want no-files notice", stdout.String())
+	}
+}
+
 func TestRunLintHonorsOxlintBinOverride(t *testing.T) {
 	repo := gitScratchRepo(t, map[string]string{"app.ts": "export const a = 1;\n"})
 

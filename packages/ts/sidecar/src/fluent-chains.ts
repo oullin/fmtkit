@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { Ast } from '#sidecar/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
 import { Edits } from '#sidecar/edits';
+import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
 import { PassCliDto } from '#sidecar/pass-cli-dto';
 import { isErr, ok } from '#sidecar/result';
@@ -10,7 +11,6 @@ import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
 import { SourceText } from '#sidecar/source-text';
 import { Sources } from '#sidecar/sources';
 import type { Edit, Node } from '#sidecar/types';
-import { VueScript } from '#sidecar/vue-script';
 
 const cwd = process.cwd();
 
@@ -179,7 +179,7 @@ export class FluentChains {
 	}
 
 	/**
-	 * Format one TypeScript or Vue file through an injected filesystem port.
+	 * Format one TypeScript or host file through an injected filesystem port.
 	 *
 	 * @param file - The source file to format.
 	 * @param mode - Whether to report changes or atomically write them.
@@ -194,7 +194,12 @@ export class FluentChains {
 		}
 
 		const original = read.value;
-		const updated = file.endsWith('.vue') ? FluentChains.#processVueFile(original, file) : FluentChains.format(original, file);
+
+		const updated = EmbeddedBlocks.isHost(file)
+			? EmbeddedBlocks.rewrite(file, original, (blockContent, virtualName) => {
+					return FluentChains.format(blockContent, virtualName);
+				})
+			: FluentChains.format(original, file);
 
 		if (updated === original) {
 			return ok(false);
@@ -209,26 +214,6 @@ export class FluentChains {
 		}
 
 		return ok(true);
-	}
-
-	static #processVueFile(original: string, file: string): string {
-		let updated = original;
-
-		const segments = VueScript.extractBlocks(original).filter((segment) => {
-			return VueScript.isJavaScriptOrTypeScript(segment.openTag);
-		});
-
-		for (const segment of [...segments].reverse()) {
-			const rewritten = FluentChains.format(segment.content, `${file}.script.ts`);
-
-			if (rewritten === segment.content) {
-				continue;
-			}
-
-			updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
-		}
-
-		return updated;
 	}
 
 	/**

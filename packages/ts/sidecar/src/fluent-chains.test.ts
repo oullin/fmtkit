@@ -90,6 +90,19 @@ describe('fluent chain formatter', () => {
 		assert.ok(!output.includes('\t'), 'space-indented chain splitting must not introduce tabs');
 	});
 
+	it('indents split chains one unit past a baseline-indented block', () => {
+		// An embedded block (HTML <script>, list-nested fence) whose whole body
+		// sits below column zero: the baseline (3 tabs) is one nesting level, so
+		// continuations land at 4 tabs, not 6.
+		const input = ['\t\t\tconst result = builder().withA(1).withB(2).withC(3).build();', ''].join('\n');
+		const expected = ['\t\t\tconst result = builder()', '\t\t\t\t.withA(1)', '\t\t\t\t.withB(2)', '\t\t\t\t.withC(3)', '\t\t\t\t.build();', ''].join('\n');
+		const output = FluentChains.format(input, 'fixture.ts');
+
+		assert.equal(output, expected);
+
+		assert.ok(!output.includes('\t\t\t\t\t'), 'continuations must be base plus one unit, never doubled');
+	});
+
 	it('leaves short value transform chains unchanged', () => {
 		const input = ['const normalized = value.trim().toLowerCase();', ''].join('\n');
 
@@ -186,6 +199,83 @@ describe('fluent chain formatter', () => {
 
 				assert.ok(output.includes(['<script type="application/ld+json">', jsonLd, '</script>'].join('\n')));
 				assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.get\('\/', getMe\);/);
+			},
+		);
+	});
+
+	it('formats HTML script blocks through the CLI', async () => {
+		await withFixture(
+			{
+				'index.html': [
+					'<!doctype html>',
+					'<body>',
+					'<script>',
+					"export const meRoutes = createRouter().use('*', bindEnv).use(identityMiddleware).get('/', getMe);",
+					'</script>',
+					'</body>',
+					'',
+				].join('\n'),
+			},
+			async (dir) => {
+				run(
+					process.execPath,
+					['--import', tsx, script, 'index.html'],
+					dir,
+				);
+				run(
+					process.execPath,
+					['--import', tsx, script, 'index.html'],
+					dir,
+				);
+
+				const output = await readFile(
+					join(dir, 'index.html'),
+					'utf8',
+				);
+
+				assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)\n\t\.get\('\/', getMe\);/);
+
+				assert.ok(output.includes('<!doctype html>') && output.includes('</body>'), 'must preserve the host HTML markup');
+			},
+		);
+	});
+
+	it('formats Markdown fenced blocks through the CLI', async () => {
+		await withFixture(
+			{
+				'notes.md': [
+					'# Routes',
+					'',
+					'```ts',
+					"export const meRoutes = createRouter().use('*', bindEnv).use(identityMiddleware).get('/', getMe);",
+					'```',
+					'',
+					'```bash',
+					"echo 'left alone'",
+					'```',
+					'',
+				].join('\n'),
+			},
+			async (dir) => {
+				run(
+					process.execPath,
+					['--import', tsx, script, 'notes.md'],
+					dir,
+				);
+				run(
+					process.execPath,
+					['--import', tsx, script, 'notes.md'],
+					dir,
+				);
+
+				const output = await readFile(
+					join(dir, 'notes.md'),
+					'utf8',
+				);
+
+				assert.match(output, /createRouter\(\)\n\t\.use\('\*', bindEnv\)\n\t\.use\(identityMiddleware\)\n\t\.get\('\/', getMe\);/);
+
+				assert.ok(output.includes("echo 'left alone'"), 'must leave the non-JS fence untouched');
 			},
 		);
 	});

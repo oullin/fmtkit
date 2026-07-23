@@ -121,7 +121,7 @@ func (s Support) RunLint(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	files, warnings, err := collect(ctx, cwd, opts.Scopes, false, opts.Selection)
+	files, warnings, err := collectLintable(ctx, cwd, opts.Scopes, false, opts.Selection)
 
 	if err != nil {
 		return err
@@ -183,6 +183,15 @@ func sourcesCwd(env overrides) (string, error) {
 
 func collect(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
 	return sourcefiles.Collect(ctx, sourcefiles.Options{
+		Cwd:                 cwd,
+		IncludeDeclarations: includeDeclarations,
+		Scopes:              scopes,
+		Selection:           selection,
+	})
+}
+
+func collectLintable(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
+	return sourcefiles.CollectLintable(ctx, sourcefiles.Options{
 		Cwd:                 cwd,
 		IncludeDeclarations: includeDeclarations,
 		Scopes:              scopes,

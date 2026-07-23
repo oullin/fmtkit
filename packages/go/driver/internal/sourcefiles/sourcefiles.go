@@ -57,10 +57,21 @@ func (s Selection) gitCommands(scope string) [][]string {
 	return [][]string{{"ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope}}
 }
 
-// Collect lists the TS/Vue files under the given scopes.
+// Collect lists the files the formatter owns under the given scopes: the TS
+// and Vue families plus the HTML and Markdown documents whose embedded scripts
+// get formatted.
 func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
 	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
 		return isTargetFile(path, opts.IncludeDeclarations)
+	})
+}
+
+// CollectLintable lists only the files oxlint can lint under the given scopes:
+// the TS and Vue families. It is a subset of Collect — HTML and Markdown are
+// formattable but not lintable.
+func CollectLintable(ctx context.Context, opts Options) ([]string, []string, error) {
+	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, func(path string) bool {
+		return isLintableFile(path, opts.IncludeDeclarations)
 	})
 }
 
@@ -195,7 +206,31 @@ func runGit(ctx context.Context, cwd string, args []string) ([]string, error) {
 	return entries, nil
 }
 
+// targetSuffixes are the extensions the sidecar knows how to format. The .ts
+// entry also covers .d.ts; whether declarations are kept is decided separately.
+var targetSuffixes = []string{".ts", ".vue", ".html", ".htm", ".md", ".markdown"}
+
 func isTargetFile(path string, includeDeclarations bool) bool {
+	matched := false
+
+	for _, suffix := range targetSuffixes {
+		if strings.HasSuffix(path, suffix) {
+			matched = true
+
+			break
+		}
+	}
+
+	if !matched {
+		return false
+	}
+
+	return includeDeclarations || !strings.HasSuffix(path, ".d.ts")
+}
+
+// isLintableFile reports whether oxlint can lint path: the TS family (minus
+// declarations unless includeDeclarations) and Vue, but not HTML or Markdown.
+func isLintableFile(path string, includeDeclarations bool) bool {
 	if !strings.HasSuffix(path, ".ts") && !strings.HasSuffix(path, ".vue") {
 		return false
 	}

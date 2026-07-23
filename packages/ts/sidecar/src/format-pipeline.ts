@@ -1,4 +1,5 @@
 import { availableParallelism } from 'node:os';
+import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
 import type { OxfmtRunFailed, SourceFileUnreadable, SourceUnparsable } from '#sidecar/errors';
 import { FluentChains } from '#sidecar/fluent-chains';
 import type { ProcessRunner } from '#sidecar/process-runner';
@@ -7,7 +8,6 @@ import type { Result } from '#sidecar/result';
 import { Segment } from '#sidecar/segment';
 import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
 import { Sources } from '#sidecar/sources';
-import { VueScript } from '#sidecar/vue-script';
 
 const OXFMT_CHUNK_SIZE = 100;
 
@@ -88,12 +88,6 @@ export class FormatPipeline {
 		return results;
 	}
 
-	static #scriptExtension(openingTag: string): 'ts' | 'tsx' {
-		const lang = VueScript.attribute(openingTag, 'lang') ?? '';
-
-		return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
-	}
-
 	static #scriptPrefix(content: string, scriptStart: number): string {
 		return content.slice(0, scriptStart).replace(/[^\r\n]/g, ' ');
 	}
@@ -109,7 +103,7 @@ export class FormatPipeline {
 	}
 
 	/**
-	 * Apply the blank-line formatting pass to one TypeScript or Vue file.
+	 * Apply the blank-line formatting pass to one TypeScript or host file.
 	 *
 	 * @param path - The source file to format.
 	 * @param mode - Whether to check or atomically write changes.
@@ -124,31 +118,17 @@ export class FormatPipeline {
 
 		const original = read.value;
 
-		let updated = original;
-
-		if (path.endsWith('.vue')) {
-			const segments = VueScript.extractBlocks(original).filter((segment) => {
-				return VueScript.isJavaScriptOrTypeScript(segment.openTag);
-			});
-
-			for (const segment of [...segments].reverse()) {
-				const rewritten = Segment.process(segment.content, `${path}.script.ts`);
-
-				if (rewritten === segment.content) {
-					continue;
-				}
-
-				updated = updated.slice(0, segment.start) + rewritten + updated.slice(segment.start + segment.content.length);
-			}
-		} else {
-			updated = Segment.process(original, path);
-		}
+		const updated = EmbeddedBlocks.isHost(path)
+			? EmbeddedBlocks.rewrite(path, original, (blockContent, virtualName) => {
+					return Segment.process(blockContent, virtualName);
+				})
+			: Segment.process(original, path);
 
 		return this.#writeChanged(path, original, updated, mode);
 	}
 
 	/**
-	 * Apply fluent-chain formatting to one TypeScript or Vue file.
+	 * Apply fluent-chain formatting to one TypeScript or host file.
 	 *
 	 * @param path - The source file to format.
 	 * @param mode - Whether to check or atomically write changes.
@@ -206,7 +186,7 @@ export class FormatPipeline {
 	}
 
 	/**
-	 * Validate TypeScript files and JavaScript-compatible Vue script blocks.
+	 * Validate TypeScript files and JavaScript-compatible embedded host blocks.
 	 *
 	 * @param files - The source paths to validate.
 	 * @returns Carried read and parse failures in deterministic input order.
@@ -219,28 +199,24 @@ export class FormatPipeline {
 				return [{ file, error: read.error }];
 			}
 
-			if (!file.endsWith('.vue')) {
+			if (!EmbeddedBlocks.isHost(file)) {
 				const parsed = Sources.parse(file, read.value);
 
 				return isErr(parsed) ? [{ file, error: parsed.error }] : [];
 			}
 
-			const vueFailures: ValidationFailure[] = [];
+			const hostFailures: ValidationFailure[] = [];
 
-			for (const block of VueScript.extractBlocks(read.value)) {
-				if (!VueScript.isJavaScriptOrTypeScript(block.openTag)) {
-					continue;
-				}
-
+			for (const block of EmbeddedBlocks.extract(file, read.value)) {
 				const virtualContent = FormatPipeline.#scriptPrefix(read.value, block.start) + block.content;
-				const parsed = Sources.parse(`${file}.script.${FormatPipeline.#scriptExtension(block.openTag)}`, virtualContent);
+				const parsed = Sources.parse(`${file}.script.${block.extension}`, virtualContent);
 
-				if (isErr(parsed)) {
-					vueFailures.push({ file, error: parsed.error });
+				if (isErr(parsed) && EmbeddedBlocks.hardValidated(file)) {
+					hostFailures.push({ file, error: parsed.error });
 				}
 			}
 
-			return vueFailures;
+			return hostFailures;
 		});
 
 		return failures.flat();

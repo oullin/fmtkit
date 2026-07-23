@@ -10,6 +10,19 @@ describe('expanded call formatter', () => {
 		assert.equal(ExpandedCalls.format(input, 'fixture.ts'), expected);
 	});
 
+	it('expands a baseline-indented call one unit past its baseline', () => {
+		// An embedded block indented below column zero: the 3-tab baseline is one
+		// nesting level, so arguments land at 4 tabs and the closing paren at 3,
+		// not 6 and 3.
+		const input = ['\t\t\tconst value = resolveConfig(prefix, buildOptions(env), { strict: true });', ''].join('\n');
+		const expected = ['\t\t\tconst value = resolveConfig(', '\t\t\t\tprefix,', '\t\t\t\tbuildOptions(env),', '\t\t\t\t{ strict: true },', '\t\t\t);', ''].join('\n');
+		const output = ExpandedCalls.format(input, 'fixture.ts');
+
+		assert.equal(output, expected);
+
+		assert.ok(!output.includes('\t\t\t\t\t'), 'arguments must be base plus one unit, never doubled');
+	});
+
 	it('expands multi-argument calls when one argument is complex', () => {
 		const input = ['const value = resolveConfig(prefix, buildOptions(env), { strict: true });', ''].join('\n');
 		const expected = ['const value = resolveConfig(', '\tprefix,', '\tbuildOptions(env),', '\t{ strict: true },', ');', ''].join('\n');

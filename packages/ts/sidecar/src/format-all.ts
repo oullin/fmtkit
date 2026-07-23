@@ -218,7 +218,7 @@ export async function main(): Promise<void> {
 
 	const options = parsed.value;
 	const formatTargets = [...new Set(options.formatFiles.filter(FileTargets.isTargetFile))];
-	const syntaxTargets = [...new Set(options.syntaxFiles.filter((file) => file.endsWith('.ts') || file.endsWith('.vue')))];
+	const syntaxTargets = [...new Set(options.syntaxFiles.filter(FileTargets.isSyntaxTarget))];
 	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
 
 	const blankLines = await pipeline.runPass('blank-lines', formatTargets, options.mode, (file, mode) => pipeline.formatFile(file, mode));

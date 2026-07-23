@@ -40,18 +40,46 @@ export class SourceText {
 	/**
 	 * Infer the file's per-level indentation unit from its content.
 	 *
-	 * The unit is read from the leading whitespace of the first indented,
-	 * non-comment line so that inserted nesting matches the surrounding style
-	 * (spaces or tabs) instead of a hardcoded tab. Files with no indented line
-	 * yet fall back to a tab.
+	 * The unit is read relative to the content's baseline (minimum) indentation
+	 * so that embedded blocks whose whole body sits below column zero — an HTML
+	 * `<script>` body or a list-nested Markdown fence — report one nesting level
+	 * rather than their absolute baseline. The baseline is the smallest leading
+	 * whitespace across non-blank, non-comment-continuation lines; the unit is
+	 * the first deeper line's indentation with that baseline prefix removed. This
+	 * leaves column-zero source (baseline of none) behaving as a plain first-
+	 * indent read. Content with no line below its baseline falls back to a tab.
 	 *
 	 * @param content - The source text being formatted.
 	 * @returns The detected indent unit, or a tab when none can be inferred.
 	 */
 	static detectIndentUnit(content: string): string {
-		const match = content.match(/^[ \t]+(?!\*)(?=\S)/m);
+		const indents: string[] = [];
 
-		return match?.[0] ?? '\t';
+		for (const line of content.split('\n')) {
+			const match = line.match(/^([ \t]*)(\S)/);
+
+			if (!match || match[2] === '*') {
+				continue;
+			}
+
+			indents.push(match[1] ?? '');
+		}
+
+		if (indents.length === 0) {
+			return '\t';
+		}
+
+		const baseline = indents.reduce((shortest, indent) => {
+			return indent.length < shortest.length ? indent : shortest;
+		});
+
+		for (const indent of indents) {
+			if (indent.length > baseline.length) {
+				return indent.slice(baseline.length);
+			}
+		}
+
+		return '\t';
 	}
 
 	/**

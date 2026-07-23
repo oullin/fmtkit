@@ -35,3 +35,17 @@ test('SourceText.detectIndentUnit skips block-comment continuation lines', () =>
 
 	assert.equal(SourceText.detectIndentUnit(source), '    ');
 });
+
+test('SourceText.detectIndentUnit reads the unit relative to a baseline-indented block', () => {
+	const singleLine = '\t\t\tconst r = builder().withA(1).withB(2).withC(3).build();\n';
+
+	assert.equal(SourceText.detectIndentUnit(singleLine), '\t');
+
+	const nested = ['\t\t\tfunction run() {', '\t\t\t\treturn go();', '\t\t\t}', ''].join('\n');
+
+	assert.equal(SourceText.detectIndentUnit(nested), '\t');
+
+	const spacesBaseline = ['      const value = {', '        key: 1,', '      };', ''].join('\n');
+
+	assert.equal(SourceText.detectIndentUnit(spacesBaseline), '  ');
+});

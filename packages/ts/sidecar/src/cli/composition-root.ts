@@ -1,4 +1,4 @@
-import { FormatAllCommand } from '#sidecar/cli/format-all';
+import { FormatAllCommand } from '#sidecar/cli/format-all-command';
 import { FormatPassCommand } from '#sidecar/cli/format-pass-command';
 import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';

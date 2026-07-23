@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
-const splitter = new EmbeddedBlockSplitter();
+const splitter = new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() });
 
 test('EmbeddedBlockSplitter.isHost accepts every host extension and rejects others', () => {
 	for (const path of ['a.vue', 'b.html', 'c.htm', 'd.md', 'e.markdown']) {

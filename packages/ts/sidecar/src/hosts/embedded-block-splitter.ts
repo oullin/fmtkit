@@ -18,6 +18,19 @@ export type EmbeddedTransform = (blockContent: string, virtualName: string) => s
 
 /** Extracts and rewrites embedded JavaScript blocks across every host format. */
 export class EmbeddedBlockSplitter {
+	readonly #vueScript: VueScript;
+	readonly #markdownFences: MarkdownFences;
+
+	/**
+	 * @param scanners - The per-format scanners the splitter delegates extraction to.
+	 * @param scanners.vueScript - Reads script blocks from Vue and HTML host markup.
+	 * @param scanners.markdownFences - Reads fenced code blocks from Markdown hosts.
+	 */
+	constructor(scanners: { vueScript: VueScript; markdownFences: MarkdownFences }) {
+		this.#vueScript = scanners.vueScript;
+		this.#markdownFences = scanners.markdownFences;
+	}
+
 	/**
 	 * Report whether a path denotes a document that embeds JavaScript blocks.
 	 *
@@ -47,12 +60,12 @@ export class EmbeddedBlockSplitter {
 	 */
 	extract(path: string, content: string): EmbeddedBlock[] {
 		if (this.#isMarkdown(path)) {
-			return MarkdownFences.extractBlocks(content)
+			return this.#markdownFences.extractBlocks(content)
 				.filter((block) => {
-					return MarkdownFences.isJavaScriptOrTypeScript(block.lang);
+					return this.#markdownFences.isJavaScriptOrTypeScript(block.lang);
 				})
 				.map((block) => {
-					return { content: block.content, start: block.start, extension: MarkdownFences.scriptExtension(block.lang) };
+					return { content: block.content, start: block.start, extension: this.#markdownFences.scriptExtension(block.lang) };
 				});
 		}
 
@@ -60,9 +73,9 @@ export class EmbeddedBlockSplitter {
 			return [];
 		}
 
-		return VueScript.extractBlocks(content)
+		return this.#vueScript.extractBlocks(content)
 			.filter((block) => {
-				return VueScript.isJavaScriptOrTypeScript(block.openTag);
+				return this.#vueScript.isJavaScriptOrTypeScript(block.openTag);
 			})
 			.map((block) => {
 				return { content: block.content, start: block.start, extension: this.#markupExtension(block.openTag) };
@@ -107,7 +120,7 @@ export class EmbeddedBlockSplitter {
 	}
 
 	#markupExtension(openTag: string): 'ts' | 'tsx' {
-		const lang = VueScript.attribute(openTag, 'lang') ?? '';
+		const lang = this.#vueScript.attribute(openTag, 'lang') ?? '';
 
 		return lang === 'tsx' || lang === 'jsx' ? 'tsx' : 'ts';
 	}

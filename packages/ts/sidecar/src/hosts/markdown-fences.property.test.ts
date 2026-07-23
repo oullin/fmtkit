@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import fc from 'fast-check';
 import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 
+const markdownFences = new MarkdownFences();
+
 type ExpectedBlock = {
 	readonly lang: string;
 	readonly content: string;
@@ -39,10 +41,10 @@ const documentArbitrary = fc.array(fc.record({ fence: fenceArbitrary, lang: lang
 	return { document, expected };
 });
 
-test('MarkdownFences.extractBlocks preserves generated content offsets and language detection', () => {
+test('markdownFences.extractBlocks preserves generated content offsets and language detection', () => {
 	fc.assert(
 		fc.property(documentArbitrary, ({ document, expected }) => {
-			const extracted = MarkdownFences.extractBlocks(document);
+			const extracted = markdownFences.extractBlocks(document);
 
 			assert.equal(extracted.length, expected.length);
 

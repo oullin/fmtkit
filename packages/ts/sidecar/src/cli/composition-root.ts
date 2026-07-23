@@ -57,6 +57,7 @@ export class CompositionRoot {
 			fluentFormatter: this.#factory.fluentFormatter(),
 			reporter: new PassReporter(),
 			syntaxReporter: new SyntaxReporter(),
+			targets: this.#factory.fileTargetPolicy(),
 		});
 	}
 
@@ -70,6 +71,7 @@ export class CompositionRoot {
 			pipeline: this.#pipeline,
 			formatter: this.#factory.segmentFormatter(),
 			reporter: new PassReporter(),
+			targets: this.#factory.fileTargetPolicy(),
 			label: 'blank-lines',
 			failureNoun: 'blank-line edits',
 		});
@@ -85,6 +87,7 @@ export class CompositionRoot {
 			pipeline: this.#pipeline,
 			formatter: this.#factory.fluentFormatter(),
 			reporter: new PassReporter(),
+			targets: this.#factory.fileTargetPolicy(),
 			label: 'fluent-chains',
 			failureNoun: 'fluent-chain edits',
 		});

@@ -13,13 +13,16 @@ import { EditApplier } from '#sidecar/syntax/edits';
 import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import { ExpandedCallPass } from '#sidecar/passes/expanded-call-pass';
 import { FileFormatter } from '#sidecar/pipeline/file-formatter';
+import { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 import { FluentChainPass } from '#sidecar/passes/fluent-chain-pass';
 import { IterationBudget, PassPipeline, PipelineStep } from '#sidecar/pipeline/pass-pipeline';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 import type { SourceFiles } from '#sidecar/io/source-files';
 import { SourceParser } from '#sidecar/syntax/source-parser';
 import { StatementSpacingPolicy } from '#sidecar/passes/policies/statement-spacing-policy';
 import { SyntaxValidator } from '#sidecar/pipeline/syntax-validator';
 import { VueReactivityIdioms } from '#sidecar/passes/policies/vue-reactivity-idioms';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
 /** The maximum body-wrap iterations before the segment step settles. */
 const BODY_WRAP_ITERATIONS = 5;
@@ -28,6 +31,7 @@ const BODY_WRAP_ITERATIONS = 5;
 export class PipelineFactory {
 	readonly #parser: SourceParser;
 	readonly #splitter: EmbeddedBlockSplitter;
+	readonly #targets: FileTargetPolicy;
 	readonly #edits: EditApplier;
 	readonly #bodyWrap: BodyWrapPass;
 	readonly #classReorder: ClassReorderPass;
@@ -43,12 +47,14 @@ export class PipelineFactory {
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 * @param dependencies.edits - Splices computed edits into source text.
 	 * @param dependencies.splitter - Extracts and rewrites host embedded blocks.
+	 * @param dependencies.targets - Classifies which files each pass and command acts on.
 	 * @param dependencies.members - Classifies class members for reordering.
 	 * @param dependencies.spacing - Decides statement blank-line obligations.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; splitter: EmbeddedBlockSplitter; members: ClassMemberPolicy; spacing: StatementSpacingPolicy }) {
+	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; splitter: EmbeddedBlockSplitter; targets: FileTargetPolicy; members: ClassMemberPolicy; spacing: StatementSpacingPolicy }) {
 		this.#parser = dependencies.parser;
 		this.#splitter = dependencies.splitter;
+		this.#targets = dependencies.targets;
 		this.#edits = dependencies.edits;
 		this.#bodyWrap = new BodyWrapPass({ parser: dependencies.parser, ast: dependencies.ast });
 		this.#classReorder = new ClassReorderPass({ parser: dependencies.parser, ast: dependencies.ast, members: dependencies.members });
@@ -66,9 +72,10 @@ export class PipelineFactory {
 			scanner: new DrizzleImportScanner({ ast: dependencies.ast }),
 			classifier,
 			writer: new DrizzleArgumentWriter({ ast: dependencies.ast, vocabulary, classifier }),
+			targets: dependencies.targets,
 		});
 
-		this.#expandedCall = new ExpandedCallPass({ parser: dependencies.parser, ast: dependencies.ast, edits: dependencies.edits });
+		this.#expandedCall = new ExpandedCallPass({ parser: dependencies.parser, ast: dependencies.ast, edits: dependencies.edits, targets: dependencies.targets });
 	}
 
 	/**
@@ -80,15 +87,26 @@ export class PipelineFactory {
 		const ast = new AstReader();
 		const members = new ClassMemberPolicy({ ast });
 		const vue = new VueReactivityIdioms({ ast });
+		const splitter = new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() });
 
 		return new PipelineFactory({
 			parser: new SourceParser(),
 			ast,
 			edits: new EditApplier(),
-			splitter: new EmbeddedBlockSplitter(),
+			splitter,
+			targets: new FileTargetPolicy({ embeddedBlocks: splitter }),
 			members,
 			spacing: new StatementSpacingPolicy({ ast, members, vue }),
 		});
+	}
+
+	/**
+	 * Expose the shared file-target policy the CLI commands filter arguments with.
+	 *
+	 * @returns The policy shared with the pipeline's declaration-aware passes.
+	 */
+	fileTargetPolicy(): FileTargetPolicy {
+		return this.#targets;
 	}
 
 	/**

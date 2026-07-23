@@ -2,12 +2,17 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AstReader } from '#sidecar/syntax/ast-reader';
 import { EditApplier } from '#sidecar/syntax/edits';
+import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import { ExpandedCallPass } from '#sidecar/passes/expanded-call-pass';
+import { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 import { SourceDocument } from '#sidecar/syntax/source-document';
 import { SourceParser } from '#sidecar/syntax/source-parser';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
 const editApplier = new EditApplier();
-const pass = new ExpandedCallPass({ parser: new SourceParser(), ast: new AstReader(), edits: editApplier });
+const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }) });
+const pass = new ExpandedCallPass({ parser: new SourceParser(), ast: new AstReader(), edits: editApplier, targets });
 
 function format(input: string, virtualName: string): string {
 	const edits = pass.computeEdits(SourceDocument.of(virtualName, input));

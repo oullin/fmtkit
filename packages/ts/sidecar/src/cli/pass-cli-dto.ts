@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FileTargets } from '#sidecar/hosts/file-targets';
+import type { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 
 /** Immutable command-line options shared by standalone formatting passes. */
 export class PassCliDto {
@@ -28,15 +28,16 @@ export class PassCliDto {
 	 * Parse a standalone formatting pass command line.
 	 *
 	 * @param input - Arguments after the executable and script path.
+	 * @param targets - The policy that classifies eligible target files.
 	 * @returns Immutable formatting pass options.
 	 */
-	static parse(input: unknown): PassCliDto {
+	static parse(input: unknown, targets: FileTargetPolicy): PassCliDto {
 		const argv = PassCliDto.#argvSchema.parse(input);
 
 		const candidate = {
 			mode: argv.includes('--check') ? ('check' as const) : ('write' as const),
 			files: argv.filter((argument) => {
-				return argument !== '--check' && FileTargets.isTargetFile(argument);
+				return argument !== '--check' && targets.isTargetFile(argument);
 			}),
 		};
 

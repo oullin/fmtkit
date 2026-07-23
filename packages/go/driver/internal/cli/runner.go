@@ -74,7 +74,7 @@ func (r Runner) Run(ctx context.Context, mode Mode, args []string) int {
 
 	runPaths := opts.positional
 
-	formatterCfg := cfg.FormatterConfig()
+	formatterCfg := cfg.Formatter()
 
 	if opts.jobs != -1 {
 		formatterCfg.Concurrency = opts.jobs

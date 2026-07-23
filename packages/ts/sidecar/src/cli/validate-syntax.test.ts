@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(
-	import.meta.resolve('#sidecar/validate-syntax'),
+	import.meta.resolve('#sidecar/cli/validate-syntax'),
 );
 const tsx = fileURLToPath(
 	import.meta.resolve('tsx'),

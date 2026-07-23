@@ -5,7 +5,7 @@ import { availableParallelism, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { CliOptionsDto } from '#sidecar/format-all';
+import { CliOptionsDto } from '#sidecar/cli/format-all-cli-dto';
 import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { mapPool } from '#sidecar/kernel/concurrency';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';

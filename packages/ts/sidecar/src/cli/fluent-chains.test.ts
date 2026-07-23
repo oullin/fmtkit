@@ -16,7 +16,7 @@ function format(input: string, virtualName: string): string {
 }
 
 const script = fileURLToPath(
-	import.meta.resolve('#sidecar/fluent-chains'),
+	import.meta.resolve('#sidecar/cli/fluent-chains'),
 );
 const tsx = fileURLToPath(
 	import.meta.resolve('tsx'),

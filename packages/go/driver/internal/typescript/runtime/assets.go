@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"go.ollin.sh/fmtkit/driver/internal/embedded"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/embedded"
 	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
@@ -29,8 +29,8 @@ type Assets struct {
 	Dir string
 }
 
-// sentinelName marks a completed extraction; it is tsruntime's own bookkeeping,
-// not part of the sidecar wire protocol.
+// sentinelName marks a completed extraction; it is the runtime's own
+// bookkeeping, not part of the sidecar wire protocol.
 const sentinelName = ".fmtkit-complete"
 
 // Sidecar returns the path of the multiplexed toolchain executable.

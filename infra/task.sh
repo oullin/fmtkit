@@ -73,7 +73,7 @@ sidecar_is_stale() {
 run_fmtkit() {
 	local support_dir sidecar bin
 
-	support_dir="${REPO_ROOT}/packages/go/driver/internal/embedded/bin/$(host_target)"
+	support_dir="${REPO_ROOT}/packages/go/driver/internal/typescript/embedded/bin/$(host_target)"
 	sidecar="${support_dir}/fmtkit-ts-sidecar"
 
 	if sidecar_is_stale "$sidecar"; then
@@ -201,8 +201,8 @@ run_coverage() {
 	# shared test helpers are excluded — nothing else, so the number stays
 	# honest. The threshold is a ratchet: it holds at today's coverage and goes
 	# up as the under-tested packages (driver/config, internal/app,
-	# internal/sourcefiles) gain tests; it never goes down.
-	grep -vE '^go\.ollin\.sh/fmtkit/(driver/cmd/fmtkit/|driver/internal/embedded/|driver/testutil/)' \
+	# internal/typescript/sourcefiles) gain tests; it never goes down.
+	grep -vE '^go\.ollin\.sh/fmtkit/(driver/cmd/fmtkit/|driver/internal/typescript/embedded/|driver/testutil/)' \
 		"${GO_WORKDIR}/coverage.out" > "${GO_WORKDIR}/coverage.gate.out"
 
 	go_coverage="$(go -C "$GO_WORKDIR" tool cover -func=coverage.gate.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')"

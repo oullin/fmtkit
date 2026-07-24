@@ -3,12 +3,10 @@ package app
 import (
 	"fmt"
 	"strings"
-
-	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
 )
 
 type formatOptions struct {
-	steps orchestrator.Steps
+	steps stepSelection
 	quiet bool
 }
 

@@ -37,7 +37,7 @@ type LintSummary struct {
 // These prefixes and the oxlint result pattern are the sidecar's output
 // contract; only the lines the TS toolchain itself emits live here. Lines the
 // Go driver prints about its own bookkeeping (source-collection warnings, the
-// no-files notice, the Go formatter report) stay with the orchestrator.
+// no-files notice, the Go formatter report) stay with the pipeline steps.
 const (
 	blankLinesMatch = "[blank-lines] processed "
 	blankLinesTrim  = "[blank-lines] "

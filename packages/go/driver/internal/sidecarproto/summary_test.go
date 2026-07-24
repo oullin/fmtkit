@@ -3,7 +3,7 @@ package sidecarproto
 import "testing"
 
 // sampleTSOutput mirrors the sidecar's pipeline stdout, lifted from the
-// orchestrator's fake-tool fixtures.
+// pipeline's fake-tool fixtures.
 const sampleTSOutput = "[blank-lines] processed 3 file(s) in /work, 0 changed\n" +
 	"Finished in 10ms on 3 files using 8 threads.\n" +
 	"[fluent-chains] processed 3 file(s) in /work, 1 changed\n" +

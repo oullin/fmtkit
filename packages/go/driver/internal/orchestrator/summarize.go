@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"go.ollin.sh/fmtkit/driver/internal/console"
 	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
@@ -36,7 +37,7 @@ func lastWithPrefix(logLines []string, prefix string) string {
 	return match
 }
 
-func summarizeTSFormat(log string, l *logger) {
+func summarizeTSFormat(log string, l *console.Printer) {
 	summary := sidecarproto.ParsePipelineSummary(log)
 	missing := 0
 
@@ -47,43 +48,43 @@ func summarizeTSFormat(log string, l *logger) {
 	}
 
 	if summary.BlankLines != "" {
-		l.detail("blank-lines", summary.BlankLines)
+		l.Detail("blank-lines", summary.BlankLines)
 	}
 
 	if missing > 0 {
-		l.detail("skipped", fmt.Sprintf("%d missing tracked file(s)", missing))
+		l.Detail("skipped", fmt.Sprintf("%d missing tracked file(s)", missing))
 	}
 
 	if summary.Oxfmt != "" {
-		l.detail("oxfmt", summary.Oxfmt)
+		l.Detail("oxfmt", summary.Oxfmt)
 	}
 
 	if summary.FluentChains != "" {
-		l.detail("fluent", summary.FluentChains)
+		l.Detail("fluent", summary.FluentChains)
 	}
 
 	if summary.ValidateSyntax != "" {
-		l.detail("validated", summary.ValidateSyntax)
+		l.Detail("validated", summary.ValidateSyntax)
 	}
 }
 
-func summarizeTSLint(log string, l *logger) {
+func summarizeTSLint(log string, l *console.Printer) {
 	if lastWithPrefix(lines(log), lintNothingToLintLine) != "" {
-		l.detail("oxlint", strings.TrimPrefix(lintNothingToLintLine, "[lint] "))
+		l.Detail("oxlint", strings.TrimPrefix(lintNothingToLintLine, "[lint] "))
 
 		return
 	}
 
 	if result := sidecarproto.ParseLintSummary(log).Result; result != "" {
-		l.detail("oxlint", result)
+		l.Detail("oxlint", result)
 
 		return
 	}
 
-	l.detail("oxlint", "no issues found")
+	l.Detail("oxlint", "no issues found")
 }
 
-func summarizeGoFormat(log string, l *logger) {
+func summarizeGoFormat(log string, l *console.Printer) {
 	var fileSummary, formatterResult, vetSummary, vetResult string
 
 	for _, line := range lines(log) {
@@ -105,18 +106,18 @@ func summarizeGoFormat(log string, l *logger) {
 	}
 
 	if fileSummary != "" {
-		l.detail("fmtkit", fileSummary)
+		l.Detail("fmtkit", fileSummary)
 	}
 
 	if formatterResult != "" {
-		l.detail("result", formatterResult)
+		l.Detail("result", formatterResult)
 	}
 
 	if vetSummary != "" {
-		l.detail("vet", vetSummary)
+		l.Detail("vet", vetSummary)
 	}
 
 	if vetResult != "" && vetResult != formatterResult {
-		l.detail("vet result", vetResult)
+		l.Detail("vet result", vetResult)
 	}
 }

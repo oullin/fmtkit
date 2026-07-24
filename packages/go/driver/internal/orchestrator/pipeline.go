@@ -1,3 +1,7 @@
+// Package orchestrator drives the full fmtkit formatting pipeline (TS/Vue
+// formatting, TS/Vue lint, Go formatting) with sectioned, colorized progress
+// output: each step's tool output streams live, indented under its section
+// header, and is followed by the condensed summary lines.
 package orchestrator
 
 import (
@@ -7,6 +11,8 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+
+	"go.ollin.sh/fmtkit/driver/internal/console"
 )
 
 // Tools carries the three pipeline steps. The TS steps return an error whose
@@ -52,16 +58,16 @@ func (p Pipeline) RunFormat(ctx context.Context, paths []string) int {
 		paths = []string{"."}
 	}
 
-	log := newLogger(p.Stderr, p.Quiet)
+	log := console.NewPrinter(p.Stderr, console.DetectColor(p.Stderr))
 
-	log.section("Formatting target(s)")
-	log.detail("paths", strings.Join(paths, " "))
+	log.Section("Formatting target(s)")
+	log.Detail("paths", strings.Join(paths, " "))
 
 	selected := p.Steps.normalized()
 
 	type step struct {
 		label     string
-		summarize func(string, *logger)
+		summarize func(string, *console.Printer)
 		run       func(ctx context.Context, output io.Writer) int
 	}
 
@@ -102,16 +108,16 @@ func (p Pipeline) RunFormat(ctx context.Context, paths []string) int {
 		}
 	}
 
-	log.section("Formatting complete")
-	log.successDetail("status", "done")
+	log.Section("Formatting complete")
+	log.SuccessDetail("status", "done")
 
 	return 0
 }
 
 // runStep captures a step's combined output, streaming it live unless quiet,
 // and prints either its summary details or (on failure) the captured log.
-func (p Pipeline) runStep(ctx context.Context, log *logger, label string, summarize func(string, *logger), run func(context.Context, io.Writer) int) int {
-	log.section(label)
+func (p Pipeline) runStep(ctx context.Context, log *console.Printer, label string, summarize func(string, *console.Printer), run func(context.Context, io.Writer) int) int {
+	log.Section(label)
 
 	var captured bytes.Buffer
 
@@ -120,7 +126,7 @@ func (p Pipeline) runStep(ctx context.Context, log *logger, label string, summar
 	var live io.WriteCloser
 
 	if !p.Quiet {
-		live = log.stream()
+		live = log.Stream()
 		output = io.MultiWriter(&captured, live)
 	}
 
@@ -131,7 +137,7 @@ func (p Pipeline) runStep(ctx context.Context, log *logger, label string, summar
 	}
 
 	if code != 0 {
-		log.failure(label + " failed")
+		log.Failure(label + " failed")
 
 		if p.Quiet {
 			_, _ = io.Copy(p.Stderr, bytes.NewReader(captured.Bytes()))

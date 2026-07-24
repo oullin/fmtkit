@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/internal/console"
 )
 
 type invocation struct {
@@ -277,7 +279,7 @@ func TestRunFormatQuietDumpsLogOnFailure(t *testing.T) {
 func TestSummarizeTSLintFallbacks(t *testing.T) {
 	var out bytes.Buffer
 
-	log := newLogger(&out, true)
+	log := console.NewPrinter(&out, console.ColorNever)
 
 	summarizeTSLint("[lint] no TS/Vue files to lint.\n", log)
 
@@ -297,7 +299,7 @@ func TestSummarizeTSLintFallbacks(t *testing.T) {
 func TestSummarizeTSFormatCountsMissing(t *testing.T) {
 	var out bytes.Buffer
 
-	log := newLogger(&out, true)
+	log := console.NewPrinter(&out, console.ColorNever)
 
 	summarizeTSFormat("[sources] path not found, skipping: /work/a\n[sources] path not found, skipping: /work/b\n", log)
 

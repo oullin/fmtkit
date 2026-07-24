@@ -14,6 +14,24 @@ type PipelineCommand struct {
 	SyntaxFiles []string
 }
 
+// OxlintCommand describes an oxlint invocation. ViaSidecar is set when the
+// sidecar dispatches oxlint (and so must be told the mode); a direct OXLINT_BIN
+// override clears it. Config is the resolved config path, or "" for
+// auto-discovery.
+type OxlintCommand struct {
+	ViaSidecar bool
+	Fix        bool
+	Config     string
+	Files      []string
+}
+
+// MigrateCommand describes an `oxfmt --migrate=prettier` invocation. ViaSidecar
+// is set when the sidecar dispatches oxfmt; a direct OXFMT_BIN override clears
+// it.
+type MigrateCommand struct {
+	ViaSidecar bool
+}
+
 // Argv returns the pipeline mode's argument vector.
 func (c PipelineCommand) Argv() []string {
 	args := []string{ModePipeline}
@@ -30,17 +48,6 @@ func (c PipelineCommand) Argv() []string {
 	args = append(args, c.SyntaxFiles...)
 
 	return args
-}
-
-// OxlintCommand describes an oxlint invocation. ViaSidecar is set when the
-// sidecar dispatches oxlint (and so must be told the mode); a direct OXLINT_BIN
-// override clears it. Config is the resolved config path, or "" for
-// auto-discovery.
-type OxlintCommand struct {
-	ViaSidecar bool
-	Fix        bool
-	Config     string
-	Files      []string
 }
 
 // Argv returns oxlint's argument vector.
@@ -62,13 +69,6 @@ func (c OxlintCommand) Argv() []string {
 	args = append(args, c.Files...)
 
 	return args
-}
-
-// MigrateCommand describes an `oxfmt --migrate=prettier` invocation. ViaSidecar
-// is set when the sidecar dispatches oxfmt; a direct OXFMT_BIN override clears
-// it.
-type MigrateCommand struct {
-	ViaSidecar bool
 }
 
 // Argv returns the migration argument vector.

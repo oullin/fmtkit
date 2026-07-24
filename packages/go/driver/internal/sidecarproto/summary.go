@@ -5,28 +5,6 @@ import (
 	"strings"
 )
 
-// The sidecar prints progress lines the driver scrapes into a step summary.
-// These prefixes and the oxlint result pattern are the sidecar's output
-// contract; only the lines the TS toolchain itself emits live here. Lines the
-// Go driver prints about its own bookkeeping (source-collection warnings, the
-// no-files notice, the Go formatter report) stay with the orchestrator.
-const (
-	blankLinesMatch = "[blank-lines] processed "
-	blankLinesTrim  = "[blank-lines] "
-
-	oxfmtFinishedMatch = "Finished in "
-
-	fluentChainsMatch = "[fluent-chains] processed "
-	fluentChainsTrim  = "[fluent-chains] "
-
-	validateSyntaxMatch = "[validate-syntax] checked "
-	validateSyntaxTrim  = "[validate-syntax] "
-)
-
-// lintResultPattern matches oxlint's summary line, e.g.
-// "Found 0 warnings and 0 errors."
-var lintResultPattern = regexp.MustCompile(`Found [0-9]+ warning|[0-9]+ error`)
-
 // PipelineSummary holds the sidecar's pipeline progress, each field carrying the
 // detail text the caller shows (already stripped of its scrape prefix, except
 // Oxfmt which is oxfmt's own full line). Empty fields mean the sidecar printed
@@ -54,6 +32,28 @@ type LintSummary struct {
 	// "" when the log carries none.
 	Result string
 }
+
+// The sidecar prints progress lines the driver scrapes into a step summary.
+// These prefixes and the oxlint result pattern are the sidecar's output
+// contract; only the lines the TS toolchain itself emits live here. Lines the
+// Go driver prints about its own bookkeeping (source-collection warnings, the
+// no-files notice, the Go formatter report) stay with the orchestrator.
+const (
+	blankLinesMatch = "[blank-lines] processed "
+	blankLinesTrim  = "[blank-lines] "
+
+	oxfmtFinishedMatch = "Finished in "
+
+	fluentChainsMatch = "[fluent-chains] processed "
+	fluentChainsTrim  = "[fluent-chains] "
+
+	validateSyntaxMatch = "[validate-syntax] checked "
+	validateSyntaxTrim  = "[validate-syntax] "
+)
+
+// lintResultPattern matches oxlint's summary line, e.g.
+// "Found 0 warnings and 0 errors."
+var lintResultPattern = regexp.MustCompile(`Found [0-9]+ warning|[0-9]+ error`)
 
 // ParsePipelineSummary scrapes the sidecar's pipeline output, taking the last
 // occurrence of each progress line.

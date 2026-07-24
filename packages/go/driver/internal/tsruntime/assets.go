@@ -24,14 +24,14 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
-// sentinelName marks a completed extraction; it is tsruntime's own bookkeeping,
-// not part of the sidecar wire protocol.
-const sentinelName = ".fmtkit-complete"
-
 // Assets locates the extracted TS toolchain on disk.
 type Assets struct {
 	Dir string
 }
+
+// sentinelName marks a completed extraction; it is tsruntime's own bookkeeping,
+// not part of the sidecar wire protocol.
+const sentinelName = ".fmtkit-complete"
 
 // Sidecar returns the path of the multiplexed toolchain executable.
 func (a Assets) Sidecar() string {

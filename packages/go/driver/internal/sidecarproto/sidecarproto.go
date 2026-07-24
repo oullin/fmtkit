@@ -12,6 +12,17 @@ package sidecarproto
 
 import "os"
 
+// Overrides carries every environment override a TS toolchain invocation
+// honours, resolved once rather than ad hoc deep in the call paths.
+type Overrides struct {
+	PipelineBin  string
+	OxfmtBin     string
+	OxlintBin    string
+	OxfmtConfig  string
+	OxlintConfig string
+	SourcesCwd   string
+}
+
 // Asset filenames staged alongside the sidecar and read by both ends.
 const (
 	// SidecarName is the multiplexed toolchain executable's filename.
@@ -62,17 +73,6 @@ const (
 	// SourcesCwdEnv overrides the working directory file collection runs in.
 	SourcesCwdEnv = "FMTKIT_SOURCES_CWD"
 )
-
-// Overrides carries every environment override a TS toolchain invocation
-// honours, resolved once rather than ad hoc deep in the call paths.
-type Overrides struct {
-	PipelineBin  string
-	OxfmtBin     string
-	OxlintBin    string
-	OxfmtConfig  string
-	OxlintConfig string
-	SourcesCwd   string
-}
 
 // ReadOverrides gathers every environment override in one place. It is the sole
 // os.Getenv site for the override variables above.

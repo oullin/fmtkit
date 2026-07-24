@@ -3,13 +3,11 @@ package app
 import (
 	"context"
 	"fmt"
-	"io"
+	"strings"
 
+	"go.ollin.sh/fmtkit/driver/internal/console"
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
-	"go.ollin.sh/fmtkit/driver/internal/gotool"
 	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
-	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
-	report "go.ollin.sh/fmtkit/driver/report"
 )
 
 // runFormat formats what diverges from HEAD — modified files, staged or not,
@@ -48,37 +46,32 @@ func (d *deps) runFormatAll(ctx context.Context, args []string) int {
 	return d.runPipeline(ctx, []string{"."}, opts, gitfiles.SelectionAll)
 }
 
+// runPipeline frames the format run (target header, completion footer) around
+// the typed steps it builds for the selection, handing them to the generic
+// orchestrator. Color is resolved once here, at the composition root.
 func (d *deps) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection gitfiles.Selection) int {
-	pipeline := orchestrator.Pipeline{
-		Tools: orchestrator.Tools{
-			TS: func(ctx context.Context, scopes []string, output io.Writer) error {
-				assets, err := tsruntime.Resolve(d.version)
-
-				if err != nil {
-					return err
-				}
-
-				return tsruntime.NewInvoker(assets).RunPipeline(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
-			},
-			Lint: func(ctx context.Context, scopes []string, output io.Writer) error {
-				assets, err := tsruntime.Resolve(d.version)
-
-				if err != nil {
-					return err
-				}
-
-				return tsruntime.NewInvoker(assets).RunLint(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
-			},
-			Go: func(ctx context.Context, args []string, output io.Writer) int {
-				return gotool.
-					Runner{Stdout: output, Stderr: output, Scope: selection}.
-					Run(ctx, report.ModeFormat, args[1:])
-			},
-		},
-		Steps:  opts.steps,
-		Quiet:  opts.quiet,
-		Stderr: d.stderr,
+	if len(paths) == 0 {
+		paths = []string{"."}
 	}
 
-	return pipeline.RunFormat(ctx, paths)
+	printer := console.NewPrinter(d.stderr, console.DetectColor(d.stderr))
+
+	printer.Section("Formatting target(s)")
+	printer.Detail("paths", strings.Join(paths, " "))
+
+	pipeline := orchestrator.Pipeline{
+		Steps:   d.formatSteps(paths, opts.steps, selection),
+		Quiet:   opts.quiet,
+		Printer: printer,
+		Stderr:  d.stderr,
+	}
+
+	if code := pipeline.Run(ctx); code != 0 {
+		return code
+	}
+
+	printer.Section("Formatting complete")
+	printer.SuccessDetail("status", "done")
+
+	return 0
 }

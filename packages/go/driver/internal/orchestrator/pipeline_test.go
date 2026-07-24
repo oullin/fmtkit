@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"bytes"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,24 +14,40 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/console"
 )
 
-type invocation struct {
-	tool string
-	args []string
-}
-
 var updateGolden = flag.Bool("update", false, "rewrite pipeline transcript golden files")
 
-// TestMain pins a color-free environment: CI task runners export FORCE_COLOR,
-// which would inject ANSI codes into the captured output these tests assert.
+// fakeStep is a scripted Step: it streams a canned tool log to output, appends
+// an optional trailing message (a non-exec error the real steps surface through
+// output), and returns a fixed Result. It mirrors the tool stubs the earlier
+// func-triple fakes used, now expressed against the Step interface.
+type fakeStep struct {
+	label    string
+	output   string
+	trailing string
+	details  []Detail
+	code     int
 
-// The stub outputs mirror infra/test-binary-smoke.sh so
-// the Go orchestrator preserves the entrypoint's summary contract.
+	log *[]string
+}
 
-func TestMain(m *testing.M) {
-	_ = os.Unsetenv("FORCE_COLOR")
-	_ = os.Setenv("NO_COLOR", "1")
+func (s fakeStep) Label() string { return s.label }
 
-	os.Exit(m.Run())
+func (s fakeStep) Run(_ context.Context, output io.Writer) Result {
+	if s.log != nil {
+		*s.log = append(*s.log, s.label)
+	}
+
+	_, _ = io.WriteString(output, s.output)
+
+	if s.trailing != "" {
+		_, _ = io.WriteString(output, s.trailing)
+	}
+
+	if s.code != 0 {
+		return Result{ExitCode: s.code}
+	}
+
+	return Result{Details: s.details}
 }
 
 const (
@@ -50,68 +65,103 @@ const (
 		"  Result: pass. 0 error(s).\n"
 )
 
-func stubTools(log *[]invocation, tsErr, lintErr error, goCode int) Tools {
-	return Tools{
-		TS: func(_ context.Context, scopes []string, output io.Writer) error {
-			*log = append(*log, invocation{"ts", scopes})
+var (
+	lintDetails = []Detail{{"oxlint", "Found 0 warnings and 0 errors."}}
 
-			_, _ = io.WriteString(output, stubTSOutput)
+	tsDetails = []Detail{
+		{"blank-lines", "processed 3 file(s) in /work, 0 changed"},
+		{"oxfmt", "Finished in 10ms on 3 files using 8 threads."},
+		{"fluent", "processed 3 file(s) in /work, 1 changed"},
+	}
 
-			return tsErr
-		},
-		Lint: func(_ context.Context, scopes []string, output io.Writer) error {
-			*log = append(*log, invocation{"lint", scopes})
+	goDetails = []Detail{
+		{"fmtkit", "Formatted 2 file(s)."},
+		{"result", "pass. 0 changed, 0 violation(s), 0 error(s)."},
+		{"vet", "go vet ./... passed."},
+		{"vet result", "pass. 0 error(s)."},
+	}
+)
 
-			_, _ = io.WriteString(output, stubLintOutput)
+// runFormat frames the three scripted steps exactly as the app composition root
+// does (target header, completion footer), so the transcript the goldens pin is
+// reproduced end to end without importing the app package.
+func runFormat(t *testing.T, stderr io.Writer, quiet bool, steps []Step) int {
+	t.Helper()
 
-			return lintErr
-		},
-		Go: func(_ context.Context, args []string, output io.Writer) int {
-			*log = append(*log, invocation{"go", args})
+	printer := console.NewPrinter(stderr, console.ColorNever)
 
-			_, _ = io.WriteString(output, stubGoOutput)
+	printer.Section("Formatting target(s)")
+	printer.Detail("paths", ".")
 
-			return goCode
-		},
+	code := Pipeline{Steps: steps, Quiet: quiet, Printer: printer, Stderr: stderr}.Run(context.Background())
+
+	if code == 0 {
+		printer.Section("Formatting complete")
+		printer.SuccessDetail("status", "done")
+	}
+
+	return code
+}
+
+// successSteps are the three passing steps in pipeline order (lint, TS, Go).
+func successSteps(log *[]string) []Step {
+	return []Step{
+		fakeStep{label: "Running TS/Vue lint", output: stubLintOutput, details: lintDetails, log: log},
+		fakeStep{label: "Running TS/Vue formatting", output: stubTSOutput, details: tsDetails, log: log},
+		fakeStep{label: "Running Go formatting", output: stubGoOutput, details: goDetails, log: log},
 	}
 }
 
 // TestRunFormatTranscriptGoldens pins the complete stderr transcript the
 // pipeline renders, byte for byte, across the success and failure paths in both
-// streaming and quiet modes. Color is forced off by TestMain, so the golden
-// files carry no ANSI escapes. These goldens characterize the current
-// rendering so later refactor stages cannot silently change it; regenerate with
+// streaming and quiet modes. Color is forced off, so the golden files carry no
+// ANSI escapes. These goldens characterize the rendering so refactors cannot
+// silently change it; regenerate with
 // `go test ./driver/internal/orchestrator -run TestRunFormatTranscriptGoldens -update`.
 func TestRunFormatTranscriptGoldens(t *testing.T) {
 	cases := []struct {
 		name   string
 		quiet  bool
-		tsErr  error
-		goCode int
+		steps  []Step
 		golden string
 	}{
-		{"success", false, nil, 0, "transcript_success.txt"},
-		{"success_quiet", true, nil, 0, "transcript_success_quiet.txt"},
-		{"go_failure", false, nil, 3, "transcript_go_failure.txt"},
-		{"go_failure_quiet", true, nil, 3, "transcript_go_failure_quiet.txt"},
-		{"ts_failure", false, errors.New("sidecar exploded"), 0, "transcript_ts_failure.txt"},
+		{"success", false, successSteps(nil), "transcript_success.txt"},
+		{"success_quiet", true, successSteps(nil), "transcript_success_quiet.txt"},
+		{
+			"go_failure", false,
+			[]Step{
+				fakeStep{label: "Running TS/Vue lint", output: stubLintOutput, details: lintDetails},
+				fakeStep{label: "Running TS/Vue formatting", output: stubTSOutput, details: tsDetails},
+				fakeStep{label: "Running Go formatting", output: stubGoOutput, code: 3},
+			},
+			"transcript_go_failure.txt",
+		},
+		{
+			"go_failure_quiet", true,
+			[]Step{
+				fakeStep{label: "Running TS/Vue lint", output: stubLintOutput, details: lintDetails},
+				fakeStep{label: "Running TS/Vue formatting", output: stubTSOutput, details: tsDetails},
+				fakeStep{label: "Running Go formatting", output: stubGoOutput, code: 3},
+			},
+			"transcript_go_failure_quiet.txt",
+		},
+		{
+			"ts_failure", false,
+			[]Step{
+				fakeStep{label: "Running TS/Vue lint", output: stubLintOutput, details: lintDetails},
+				fakeStep{label: "Running TS/Vue formatting", output: stubTSOutput, trailing: "sidecar exploded\n", code: 1},
+			},
+			"transcript_ts_failure.txt",
+		},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			var log []invocation
-
 			var stderr bytes.Buffer
 
-			pipeline := Pipeline{
-				Tools:  stubTools(&log, tc.tsErr, nil, tc.goCode),
-				Quiet:  tc.quiet,
-				Stderr: &stderr,
-			}
-
-			pipeline.RunFormat(context.Background(), []string{"."})
+			runFormat(t, &stderr, tc.quiet, tc.steps)
 
 			path := filepath.Join("testdata", tc.golden)
 
@@ -136,28 +186,19 @@ func TestRunFormatTranscriptGoldens(t *testing.T) {
 	}
 }
 
-func TestRunFormatRunsStepsInOrder(t *testing.T) {
-	var log []invocation
+func TestRunRunsStepsInOrder(t *testing.T) {
+	var log []string
 
 	var stderr bytes.Buffer
 
-	pipeline := Pipeline{
-		Tools:  stubTools(&log, nil, nil, 0),
-		Stderr: &stderr,
+	if code := runFormat(t, &stderr, false, successSteps(&log)); code != 0 {
+		t.Fatalf("Run = %d, want 0\n%s", code, stderr.String())
 	}
 
-	if code := pipeline.RunFormat(context.Background(), []string{"."}); code != 0 {
-		t.Fatalf("RunFormat = %d, want 0\n%s", code, stderr.String())
-	}
-
-	want := []invocation{
-		{"lint", []string{"."}},
-		{"ts", []string{"."}},
-		{"go", []string{"format", "."}},
-	}
+	want := []string{"Running TS/Vue lint", "Running TS/Vue formatting", "Running Go formatting"}
 
 	if fmt.Sprint(log) != fmt.Sprint(want) {
-		t.Fatalf("invocations = %v, want %v", log, want)
+		t.Fatalf("step order = %v, want %v", log, want)
 	}
 
 	for _, needle := range []string{
@@ -184,40 +225,25 @@ func TestRunFormatRunsStepsInOrder(t *testing.T) {
 	}
 }
 
-func TestRunFormatStreamsToolOutputLive(t *testing.T) {
-	var log []invocation
-
+func TestRunStreamsToolOutputLive(t *testing.T) {
 	var stderr bytes.Buffer
 
-	pipeline := Pipeline{
-		Tools:  stubTools(&log, nil, nil, 0),
-		Stderr: &stderr,
-	}
-
-	if code := pipeline.RunFormat(context.Background(), nil); code != 0 {
-		t.Fatalf("RunFormat = %d, want 0", code)
+	if code := runFormat(t, &stderr, false, successSteps(nil)); code != 0 {
+		t.Fatalf("Run = %d, want 0", code)
 	}
 
 	// The raw tool line appears indented (live stream) in addition to the
-	// condensed summary line.
+	// condensed detail line.
 	if !strings.Contains(stderr.String(), "    [blank-lines] processed 3 file(s) in /work, 0 changed") {
 		t.Fatalf("stderr missing live-streamed tool output:\n%s", stderr.String())
 	}
 }
 
-func TestRunFormatQuietHidesToolOutput(t *testing.T) {
-	var log []invocation
-
+func TestRunQuietHidesToolOutput(t *testing.T) {
 	var stderr bytes.Buffer
 
-	pipeline := Pipeline{
-		Tools:  stubTools(&log, nil, nil, 0),
-		Quiet:  true,
-		Stderr: &stderr,
-	}
-
-	if code := pipeline.RunFormat(context.Background(), nil); code != 0 {
-		t.Fatalf("RunFormat = %d, want 0", code)
+	if code := runFormat(t, &stderr, true, successSteps(nil)); code != 0 {
+		t.Fatalf("Run = %d, want 0", code)
 	}
 
 	if strings.Contains(stderr.String(), "    [blank-lines]") {
@@ -225,26 +251,29 @@ func TestRunFormatQuietHidesToolOutput(t *testing.T) {
 	}
 
 	if !strings.Contains(stderr.String(), "blank-lines  processed 3 file(s) in /work, 0 changed") {
-		t.Fatalf("quiet mode lost summary:\n%s", stderr.String())
+		t.Fatalf("quiet mode lost detail:\n%s", stderr.String())
 	}
 }
 
-func TestRunFormatShortCircuitsOnTSFailure(t *testing.T) {
-	var log []invocation
+func TestRunShortCircuitsOnFailure(t *testing.T) {
+	var log []string
 
 	var stderr bytes.Buffer
 
-	pipeline := Pipeline{
-		Tools:  stubTools(&log, errors.New("sidecar exploded"), nil, 0),
-		Stderr: &stderr,
+	steps := []Step{
+		fakeStep{label: "Running TS/Vue lint", output: stubLintOutput, details: lintDetails, log: &log},
+		fakeStep{label: "Running TS/Vue formatting", output: stubTSOutput, trailing: "sidecar exploded\n", code: 1, log: &log},
+		fakeStep{label: "Running Go formatting", output: stubGoOutput, details: goDetails, log: &log},
 	}
 
-	if code := pipeline.RunFormat(context.Background(), nil); code != 1 {
-		t.Fatalf("RunFormat = %d, want 1", code)
+	if code := runFormat(t, &stderr, false, steps); code != 1 {
+		t.Fatalf("Run = %d, want 1", code)
 	}
 
-	if len(log) != 2 || log[0].tool != "lint" || log[1].tool != "ts" {
-		t.Fatalf("invocations = %v, want lint then ts (Go short-circuited)", log)
+	want := []string{"Running TS/Vue lint", "Running TS/Vue formatting"}
+
+	if fmt.Sprint(log) != fmt.Sprint(want) {
+		t.Fatalf("step order = %v, want %v (Go should have been skipped)", log, want)
 	}
 
 	if !strings.Contains(stderr.String(), "!! Running TS/Vue formatting failed") {
@@ -256,54 +285,18 @@ func TestRunFormatShortCircuitsOnTSFailure(t *testing.T) {
 	}
 }
 
-func TestRunFormatQuietDumpsLogOnFailure(t *testing.T) {
-	var log []invocation
-
+func TestRunQuietDumpsLogOnFailure(t *testing.T) {
 	var stderr bytes.Buffer
 
-	pipeline := Pipeline{
-		Tools:  stubTools(&log, nil, nil, 3),
-		Quiet:  true,
-		Stderr: &stderr,
+	steps := []Step{
+		fakeStep{label: "Running Go formatting", output: stubGoOutput, code: 3},
 	}
 
-	if code := pipeline.RunFormat(context.Background(), nil); code != 3 {
-		t.Fatalf("RunFormat = %d, want 3", code)
+	if code := runFormat(t, &stderr, true, steps); code != 3 {
+		t.Fatalf("Run = %d, want 3", code)
 	}
 
 	if !strings.Contains(stderr.String(), "Formatted 2 file(s).") {
 		t.Fatalf("quiet failure did not dump captured log:\n%s", stderr.String())
-	}
-}
-
-func TestSummarizeTSLintFallbacks(t *testing.T) {
-	var out bytes.Buffer
-
-	log := console.NewPrinter(&out, console.ColorNever)
-
-	summarizeTSLint("[lint] no TS/Vue files to lint.\n", log)
-
-	if !strings.Contains(out.String(), "oxlint       no TS/Vue files to lint.") {
-		t.Fatalf("missing skip summary: %q", out.String())
-	}
-
-	out.Reset()
-
-	summarizeTSLint("nothing interesting\n", log)
-
-	if !strings.Contains(out.String(), "oxlint       no issues found") {
-		t.Fatalf("missing fallback summary: %q", out.String())
-	}
-}
-
-func TestSummarizeTSFormatCountsMissing(t *testing.T) {
-	var out bytes.Buffer
-
-	log := console.NewPrinter(&out, console.ColorNever)
-
-	summarizeTSFormat("[sources] path not found, skipping: /work/a\n[sources] path not found, skipping: /work/b\n", log)
-
-	if !strings.Contains(out.String(), "skipped      2 missing tracked file(s)") {
-		t.Fatalf("missing skipped summary: %q", out.String())
 	}
 }

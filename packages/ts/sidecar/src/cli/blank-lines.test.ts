@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const script = fileURLToPath(
-	import.meta.resolve('#sidecar/blank-lines'),
+	import.meta.resolve('#sidecar/cli/blank-lines'),
 );
 const tsx = fileURLToPath(
 	import.meta.resolve('tsx'),

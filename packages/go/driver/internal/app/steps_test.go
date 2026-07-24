@@ -216,16 +216,19 @@ func TestFormatStepsSelection(t *testing.T) {
 	}
 
 	all := labels(d.formatSteps([]string{"."}, stepSelection{}, 0))
+
 	if fmt.Sprint(all) != fmt.Sprint([]string{"Running TS/Vue lint", "Running TS/Vue formatting", "Running Go formatting"}) {
 		t.Fatalf("default steps = %v", all)
 	}
 
 	tsOnly := labels(d.formatSteps([]string{"."}, stepSelection{TS: true}, 0))
+
 	if fmt.Sprint(tsOnly) != fmt.Sprint([]string{"Running TS/Vue lint", "Running TS/Vue formatting"}) {
 		t.Fatalf("--ts steps = %v", tsOnly)
 	}
 
 	goOnly := labels(d.formatSteps([]string{"."}, stepSelection{Go: true}, 0))
+
 	if fmt.Sprint(goOnly) != fmt.Sprint([]string{"Running Go formatting"}) {
 		t.Fatalf("--go steps = %v", goOnly)
 	}

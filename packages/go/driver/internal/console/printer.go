@@ -17,6 +17,24 @@ import (
 // ColorMode is whether a Printer emits ANSI escape sequences.
 type ColorMode int
 
+// Printer renders progress output to a writer. The palette fields are empty
+// strings when color is off, so the same format strings render plain text.
+type Printer struct {
+	w io.Writer
+
+	bold  string
+	dim   string
+	cyan  string
+	green string
+	red   string
+	reset string
+}
+
+type indentWriter struct {
+	printer *Printer
+	partial strings.Builder
+}
+
 const (
 	// ColorAuto defers the decision to DetectColor. NewPrinter treats it as
 	// no-color, so callers resolve it through DetectColor before constructing a
@@ -48,19 +66,6 @@ func DetectColor(w io.Writer) ColorMode {
 	}
 
 	return ColorNever
-}
-
-// Printer renders progress output to a writer. The palette fields are empty
-// strings when color is off, so the same format strings render plain text.
-type Printer struct {
-	w io.Writer
-
-	bold  string
-	dim   string
-	cyan  string
-	green string
-	red   string
-	reset string
 }
 
 // NewPrinter builds a Printer writing to w. ANSI color is enabled only for
@@ -106,11 +111,6 @@ func (p *Printer) Failure(msg string) {
 // partial line.
 func (p *Printer) Stream() io.WriteCloser {
 	return &indentWriter{printer: p}
-}
-
-type indentWriter struct {
-	printer *Printer
-	partial strings.Builder
 }
 
 func (w *indentWriter) Write(p []byte) (int, error) {

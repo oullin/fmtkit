@@ -14,8 +14,6 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/console"
 )
 
-var updateGolden = flag.Bool("update", false, "rewrite pipeline transcript golden files")
-
 // fakeStep is a scripted Step: it streams a canned tool log to output, appends
 // an optional trailing message (a non-exec error the real steps surface through
 // output), and returns a fixed Result. It mirrors the tool stubs the earlier
@@ -29,6 +27,8 @@ type fakeStep struct {
 
 	log *[]string
 }
+
+var updateGolden = flag.Bool("update", false, "rewrite pipeline transcript golden files")
 
 func (s fakeStep) Label() string { return s.label }
 

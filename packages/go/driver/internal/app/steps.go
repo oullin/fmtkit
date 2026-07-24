@@ -26,6 +26,28 @@ type stepSelection struct {
 	Go bool
 }
 
+// tsLintStep lints TS/Vue files, applying oxlint's safe fixes (--fix).
+type tsLintStep struct {
+	version   string
+	paths     []string
+	selection gitfiles.Selection
+}
+
+// tsFormatStep runs the full TS/Vue formatting pipeline (oxfmt plus the project
+// passes).
+type tsFormatStep struct {
+	version   string
+	paths     []string
+	selection gitfiles.Selection
+}
+
+// goFormatStep formats Go files and runs go vet, deriving its details from the
+// typed outcome rather than the rendered report text.
+type goFormatStep struct {
+	paths     []string
+	selection gitfiles.Selection
+}
+
 func (s stepSelection) normalized() stepSelection {
 	if !s.TS && !s.Go {
 		return stepSelection{TS: true, Go: true}
@@ -63,13 +85,6 @@ const (
 	lintNothingToLintLine = "[lint] no TS/Vue files to lint."
 )
 
-// tsLintStep lints TS/Vue files, applying oxlint's safe fixes (--fix).
-type tsLintStep struct {
-	version   string
-	paths     []string
-	selection gitfiles.Selection
-}
-
 func (s tsLintStep) Label() string { return "Running TS/Vue lint" }
 
 func (s tsLintStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
@@ -86,14 +101,6 @@ func (s tsLintStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
 	return pipeline.Result{Details: tsLintDetails(captured.String())}
 }
 
-// tsFormatStep runs the full TS/Vue formatting pipeline (oxfmt plus the project
-// passes).
-type tsFormatStep struct {
-	version   string
-	paths     []string
-	selection gitfiles.Selection
-}
-
 func (s tsFormatStep) Label() string { return "Running TS/Vue formatting" }
 
 func (s tsFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
@@ -108,13 +115,6 @@ func (s tsFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result
 	}
 
 	return pipeline.Result{Details: tsFormatDetails(captured.String())}
-}
-
-// goFormatStep formats Go files and runs go vet, deriving its details from the
-// typed outcome rather than the rendered report text.
-type goFormatStep struct {
-	paths     []string
-	selection gitfiles.Selection
 }
 
 func (s goFormatStep) Label() string { return "Running Go formatting" }

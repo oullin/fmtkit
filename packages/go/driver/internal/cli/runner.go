@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	driverconfig "go.ollin.sh/fmtkit/driver/config"
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 	driverreport "go.ollin.sh/fmtkit/driver/report"
 	"go.ollin.sh/fmtkit/formatter"
@@ -131,14 +132,9 @@ func (r Runner) runFormatter(ctx context.Context, mode Mode, paths []string, cfg
 }
 
 // changedGoFiles narrows the files the formatter owns down to the ones the
-// working tree has touched.
-//
-// It intersects rather than asking git for `*.go` directly: the engine's walk is
-// what applies cfg's exclusions (vendor, not_path/not_name, generated files),
-// and git knows nothing about those. Taking the engine's list and keeping only
-// what git reports as changed preserves both. Outside a git work tree there is
-// no such thing as "changed", so the error surfaces rather than silently
-// formatting everything.
+// working tree has touched. The engine reports what it owns; gitfiles keeps only
+// the subset git reports as changed (see Tree.IntersectChanged for why this is
+// an intersection rather than a direct `git ls-files *.go`).
 func changedGoFiles(ctx context.Context, paths []string, cfg formatterconfig.Config) ([]string, error) {
 	owned, err := formatterengine.CollectGoFiles(paths, cfg)
 
@@ -156,27 +152,13 @@ func changedGoFiles(ctx context.Context, paths []string, cfg formatterconfig.Con
 		return nil, fmt.Errorf("resolve cwd: %w", err)
 	}
 
-	touched, err := sourcefiles.ChangedPaths(ctx, cwd, paths)
+	tree, err := gitfiles.NewTree(cwd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	changed := make(map[string]struct{}, len(touched))
-
-	for _, path := range touched {
-		changed[path] = struct{}{}
-	}
-
-	files := make([]string, 0, len(owned))
-
-	for _, path := range owned {
-		if _, ok := changed[path]; ok {
-			files = append(files, path)
-		}
-	}
-
-	return files, nil
+	return tree.IntersectChanged(ctx, paths, owned)
 }
 
 func exitCode(mode Mode, result driverreport.Combined) int {

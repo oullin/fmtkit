@@ -1,18 +1,22 @@
-package sourcefiles
+// Package prettierignore matches repo-relative paths against a project's
+// .prettierignore file using gitignore semantics, and filters absolute file
+// lists by it.
+package prettierignore
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-// prettierIgnore matches repo-relative paths against a parsed .prettierignore
-// file using gitignore semantics. Supported constructs: comments (#), blank
-// lines, negation (!, last match wins), leading-/ anchoring, trailing-/
-// directory patterns, and the * ? [...] and ** wildcards. Exotic constructs —
-// escaped leading #/! (\# and \!) and trailing-space escapes — are not
-// supported: a leading # or ! is always read as a comment or a negation.
-type prettierIgnore struct {
+// Matcher matches repo-relative paths against a parsed .prettierignore file
+// using gitignore semantics. Supported constructs: comments (#), blank lines,
+// negation (!, last match wins), leading-/ anchoring, trailing-/ directory
+// patterns, and the * ? [...] and ** wildcards. Exotic constructs — escaped
+// leading #/! (\# and \!) and trailing-space escapes — are not supported: a
+// leading # or ! is always read as a comment or a negation.
+type Matcher struct {
 	patterns []ignorePattern
 }
 
@@ -23,10 +27,10 @@ type ignorePattern struct {
 	dirOnly bool
 }
 
-// loadPrettierIgnore reads the .prettierignore at path and compiles it. It
-// returns nil (and no error) when the file is absent, so callers can treat "no
-// file" as "nothing filtered".
-func loadPrettierIgnore(path string) (*prettierIgnore, error) {
+// Load reads the .prettierignore at path and compiles it. It returns nil (and
+// no error) when the file is absent, so callers can treat "no file" as "nothing
+// filtered".
+func Load(path string) (*Matcher, error) {
 	data, err := os.ReadFile(path)
 
 	if err != nil {
@@ -37,21 +41,47 @@ func loadPrettierIgnore(path string) (*prettierIgnore, error) {
 		return nil, err
 	}
 
-	return compilePrettierIgnore(data), nil
+	return Compile(data), nil
 }
 
-// compilePrettierIgnore parses raw .prettierignore bytes into matchable
-// patterns, skipping blank lines, comments, and lines that fail to compile.
-func compilePrettierIgnore(data []byte) *prettierIgnore {
-	ignore := &prettierIgnore{}
+// Compile parses raw .prettierignore bytes into matchable patterns, skipping
+// blank lines, comments, and lines that fail to compile.
+func Compile(data []byte) *Matcher {
+	matcher := &Matcher{}
 
 	for _, line := range strings.Split(string(data), "\n") {
 		if pattern, ok := compilePattern(line); ok {
-			ignore.patterns = append(ignore.patterns, pattern)
+			matcher.patterns = append(matcher.patterns, pattern)
 		}
 	}
 
-	return ignore
+	return matcher
+}
+
+// FilterAbs drops any path in files that the matcher excludes, treating each
+// path as relative to root. Paths outside root are kept untouched:
+// .prettierignore is anchored to the directory that holds it and cannot speak
+// to files above it.
+func (m *Matcher) FilterAbs(root string, files []string) ([]string, error) {
+	kept := make([]string, 0, len(files))
+
+	for _, path := range files {
+		rel, err := filepath.Rel(root, path)
+
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			kept = append(kept, path)
+
+			continue
+		}
+
+		if m.Ignores(filepath.ToSlash(rel)) {
+			continue
+		}
+
+		kept = append(kept, path)
+	}
+
+	return kept, nil
 }
 
 // compilePattern turns one raw line into an ignorePattern, reporting false for
@@ -108,13 +138,13 @@ func compilePattern(line string) (ignorePattern, bool) {
 	}, true
 }
 
-// ignores reports whether rel — a slash-separated path relative to the ignore
+// Ignores reports whether rel — a slash-separated path relative to the ignore
 // file's directory — is excluded. Later matches win, so a negation can
 // re-include a path an earlier pattern excluded.
-func (p *prettierIgnore) ignores(rel string) bool {
+func (m *Matcher) Ignores(rel string) bool {
 	ignored := false
 
-	for _, pattern := range p.patterns {
+	for _, pattern := range m.patterns {
 		if pattern.matches(rel) {
 			ignored = !pattern.negated
 		}

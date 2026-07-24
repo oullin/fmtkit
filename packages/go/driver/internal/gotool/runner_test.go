@@ -1,4 +1,4 @@
-package cli
+package gotool
 
 import (
 	"bytes"
@@ -9,62 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
-	driverreport "go.ollin.sh/fmtkit/driver/report"
-	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
-	"go.ollin.sh/fmtkit/vet"
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	report "go.ollin.sh/fmtkit/driver/report"
 )
-
-func TestExitCode(t *testing.T) {
-	cases := []struct {
-		name   string
-		mode   Mode
-		result driverreport.Combined
-		want   int
-	}{
-		{
-			name:   "vet errors fail either mode",
-			mode:   FormatMode,
-			result: driverreport.Combined{Vet: vet.Report{Errors: []vet.ErrorResult{{Message: "boom"}}}},
-			want:   1,
-		},
-		{
-			name:   "check passes on pass result",
-			mode:   CheckMode,
-			result: driverreport.Combined{Formatter: formatterengine.Report{Result: "pass"}},
-			want:   0,
-		},
-		{
-			name:   "check fails on non-pass result",
-			mode:   CheckMode,
-			result: driverreport.Combined{Formatter: formatterengine.Report{Result: "fail"}},
-			want:   1,
-		},
-		{
-			name: "format fails on formatter errors",
-			mode: FormatMode,
-			result: driverreport.Combined{Formatter: formatterengine.Report{
-				Result: "fail",
-				Errors: []formatterengine.ErrorResult{{Message: "walk failed"}},
-			}},
-			want: 1,
-		},
-		{
-			name:   "format succeeds after applying fixes",
-			mode:   FormatMode,
-			result: driverreport.Combined{Formatter: formatterengine.Report{Result: "fixed"}},
-			want:   0,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := exitCode(tc.mode, tc.result); got != tc.want {
-				t.Fatalf("exitCode(%s) = %d, want %d", tc.mode, got, tc.want)
-			}
-		})
-	}
-}
 
 const cleanSource = `package sample
 
@@ -85,7 +32,7 @@ func run() {
 
 // runInTempModulelessDir writes source to a Go file in a fresh temp dir,
 // chdirs there (so vet finds no module and skips), and runs the CLI.
-func runInTempModulelessDir(t *testing.T, source string, mode Mode, extraArgs ...string) (code int, stdout, stderr string, file string) {
+func runInTempModulelessDir(t *testing.T, source string, mode report.Mode, extraArgs ...string) (code int, stdout, stderr string, file string) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -99,13 +46,13 @@ func runInTempModulelessDir(t *testing.T, source string, mode Mode, extraArgs ..
 
 	var out, errOut bytes.Buffer
 
-	code = NewRunner(&out, &errOut).Run(context.Background(), mode, append(extraArgs, file))
+	code = Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), mode, append(extraArgs, file))
 
 	return code, out.String(), errOut.String(), file
 }
 
 func TestRunnerRunCleanFileJSON(t *testing.T) {
-	code, stdout, stderr, _ := runInTempModulelessDir(t, cleanSource, CheckMode, "--format", "json")
+	code, stdout, stderr, _ := runInTempModulelessDir(t, cleanSource, report.ModeCheck, "--format", "json")
 
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr: %s", code, stderr)
@@ -121,7 +68,7 @@ func TestRunnerRunCleanFileJSON(t *testing.T) {
 }
 
 func TestRunnerRunCheckModeReportsViolation(t *testing.T) {
-	code, stdout, _, file := runInTempModulelessDir(t, spacingViolationSource, CheckMode)
+	code, stdout, _, file := runInTempModulelessDir(t, spacingViolationSource, report.ModeCheck)
 
 	if code != 1 {
 		t.Fatalf("exit = %d, stdout: %s", code, stdout)
@@ -139,7 +86,7 @@ func TestRunnerRunCheckModeReportsViolation(t *testing.T) {
 }
 
 func TestRunnerRunFormatModeRewritesFile(t *testing.T) {
-	code, stdout, stderr, file := runInTempModulelessDir(t, spacingViolationSource, FormatMode)
+	code, stdout, stderr, file := runInTempModulelessDir(t, spacingViolationSource, report.ModeFormat)
 
 	if code != 0 {
 		t.Fatalf("exit = %d, stdout: %s, stderr: %s", code, stdout, stderr)
@@ -161,7 +108,7 @@ func TestRunnerRunFormatModeRewritesFile(t *testing.T) {
 }
 
 func TestRunnerRunRejectsUnsupportedFormat(t *testing.T) {
-	code, _, stderr, _ := runInTempModulelessDir(t, cleanSource, CheckMode, "--format", "yaml")
+	code, _, stderr, _ := runInTempModulelessDir(t, cleanSource, report.ModeCheck, "--format", "yaml")
 
 	if code != 1 {
 		t.Fatalf("exit = %d", code)
@@ -179,8 +126,59 @@ func TestRunnerRunRejectsUnknownFlag(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	if code := NewRunner(&out, &errOut).Run(context.Background(), CheckMode, []string{"--bogus"}); code != 1 {
+	if code := (Runner{Stdout: &out, Stderr: &errOut}).Run(context.Background(), report.ModeCheck, []string{"--bogus"}); code != 1 {
 		t.Fatalf("exit = %d", code)
+	}
+}
+
+func TestRunnerReportsConfigLoadError(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(cleanSource), 0o644); err != nil {
+		t.Fatalf("write sample: %v", err)
+	}
+
+	t.Chdir(dir)
+
+	var out, errOut bytes.Buffer
+
+	// An explicit --config path that does not exist makes config.Load fail, so
+	// the runner reports it on stderr and exits 1 before running the formatter.
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeCheck,
+		[]string{"--config", filepath.Join(dir, "missing.yml"), "sample.go"})
+
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+
+	if !strings.Contains(errOut.String(), "load config") {
+		t.Fatalf("expected a config-load error on stderr, got: %q", errOut.String())
+	}
+}
+
+func TestRunnerHonorsReportRootFlag(t *testing.T) {
+	work := t.TempDir()
+	reportRoot := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(work, "sample.go"), []byte(cleanSource), 0o644); err != nil {
+		t.Fatalf("write sample: %v", err)
+	}
+
+	t.Chdir(work)
+
+	var out, errOut bytes.Buffer
+
+	// --cwd points config discovery and report-relative paths at reportRoot while
+	// the process stays in work; a clean file still passes.
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeCheck,
+		[]string{"--cwd", reportRoot, "--format", "json", "sample.go"})
+
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr: %s", code, errOut.String())
+	}
+
+	if !strings.Contains(out.String(), `"result":"pass"`) {
+		t.Fatalf("unexpected output: %s", out.String())
 	}
 }
 
@@ -281,7 +279,7 @@ func TestScopedRunnerFormatsOnlyTheWorkingTreesChanges(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(context.Background(), FormatMode, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(context.Background(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -305,7 +303,7 @@ func TestUnscopedRunnerFormatsEveryOwnedFile(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewRunner(&out, &errOut).Run(context.Background(), FormatMode, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -342,7 +340,7 @@ func TestScopedRunnerOnACleanTreeFormatsNothing(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := NewScopedRunner(&out, &errOut, sourcefiles.SelectionChanged).Run(context.Background(), FormatMode, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(context.Background(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())

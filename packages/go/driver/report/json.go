@@ -37,9 +37,9 @@ type jsonViolation struct {
 	Message string `json:"message"`
 }
 
-// RenderJSON writes the JSON report representation.
-func RenderJSON(w io.Writer, cwd string, report Combined) error {
-	return json.NewEncoder(w).Encode(toJSONReport(projectReport(cwd, report)))
+// renderJSON writes the JSON report representation.
+func (r Renderer) renderJSON(w io.Writer, report Combined) error {
+	return json.NewEncoder(w).Encode(toJSONReport(projectReport(r.Root, report)))
 }
 
 func toJSONReport(report projectedReport) jsonReport {

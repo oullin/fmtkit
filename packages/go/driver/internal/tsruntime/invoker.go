@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 )
@@ -18,8 +19,8 @@ type Request struct {
 	Scopes []string
 
 	// Selection is how much of the working tree to cover within Scopes. It
-	// defaults to sourcefiles.SelectionAll.
-	Selection sourcefiles.Selection
+	// defaults to gitfiles.SelectionAll.
+	Selection gitfiles.Selection
 
 	// Fix, when set, lets RunLint apply oxlint's safe fixes (--fix) rather
 	// than only reporting violations.
@@ -152,22 +153,24 @@ func (i Invoker) sourcesCwd() (string, error) {
 	return cwd, nil
 }
 
-func collect(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
-	return sourcefiles.Collect(ctx, sourcefiles.Options{
-		Cwd:                 cwd,
-		IncludeDeclarations: includeDeclarations,
-		Scopes:              scopes,
-		Selection:           selection,
-	})
+func collect(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection gitfiles.Selection) ([]string, []string, error) {
+	collector, err := sourcefiles.New(cwd, selection, includeDeclarations)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return collector.Formattable(ctx, scopes)
 }
 
-func collectLintable(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection sourcefiles.Selection) ([]string, []string, error) {
-	return sourcefiles.CollectLintable(ctx, sourcefiles.Options{
-		Cwd:                 cwd,
-		IncludeDeclarations: includeDeclarations,
-		Scopes:              scopes,
-		Selection:           selection,
-	})
+func collectLintable(ctx context.Context, cwd string, scopes []string, includeDeclarations bool, selection gitfiles.Selection) ([]string, []string, error) {
+	collector, err := sourcefiles.New(cwd, selection, includeDeclarations)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return collector.Lintable(ctx, scopes)
 }
 
 // oxfmtConfigFor resolves the oxfmt config by precedence: the FMTKIT_OXFMTRC

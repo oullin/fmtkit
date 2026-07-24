@@ -5,53 +5,54 @@ import (
 	"fmt"
 	"io"
 
-	"go.ollin.sh/fmtkit/driver/internal/cli"
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	"go.ollin.sh/fmtkit/driver/internal/gotool"
 	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
+	report "go.ollin.sh/fmtkit/driver/report"
 )
 
 // runFormat formats what diverges from HEAD — modified files, staged or not,
 // plus untracked ones — so an everyday format stays proportional to the diff.
 // Use format-all to cover every file.
-func (a App) runFormat(ctx context.Context, args []string) int {
+func (d *deps) runFormat(ctx context.Context, args []string) int {
 	opts, paths, err := parseFormatArgs(args)
 
 	if err != nil {
-		_, _ = fmt.Fprintf(a.stderr, "%v\n\n", err)
+		_, _ = fmt.Fprintf(d.stderr, "%v\n\n", err)
 
-		printUsage(a.stderr)
+		d.usage(d.stderr)
 
 		return 2
 	}
 
-	return a.runPipeline(ctx, paths, opts, sourcefiles.SelectionChanged)
+	return d.runPipeline(ctx, paths, opts, gitfiles.SelectionChanged)
 }
 
 // runFormatAll covers every non-ignored file rather than just the working
 // tree's changes, pinned to the current directory, so it takes flags but
 // rejects paths.
-func (a App) runFormatAll(ctx context.Context, args []string) int {
+func (d *deps) runFormatAll(ctx context.Context, args []string) int {
 	opts, extra, err := parseFormatArgs(args)
 
 	if err != nil || len(extra) != 0 {
 		if err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "%v\n\n", err)
+			_, _ = fmt.Fprintf(d.stderr, "%v\n\n", err)
 		}
 
-		printUsage(a.stderr)
+		d.usage(d.stderr)
 
 		return 2
 	}
 
-	return a.runPipeline(ctx, []string{"."}, opts, sourcefiles.SelectionAll)
+	return d.runPipeline(ctx, []string{"."}, opts, gitfiles.SelectionAll)
 }
 
-func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection sourcefiles.Selection) int {
+func (d *deps) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection gitfiles.Selection) int {
 	pipeline := orchestrator.Pipeline{
 		Tools: orchestrator.Tools{
 			TS: func(ctx context.Context, scopes []string, output io.Writer) error {
-				assets, err := tsruntime.Resolve(a.version)
+				assets, err := tsruntime.Resolve(d.version)
 
 				if err != nil {
 					return err
@@ -60,7 +61,7 @@ func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions
 				return tsruntime.NewInvoker(assets).RunPipeline(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
 			},
 			Lint: func(ctx context.Context, scopes []string, output io.Writer) error {
-				assets, err := tsruntime.Resolve(a.version)
+				assets, err := tsruntime.Resolve(d.version)
 
 				if err != nil {
 					return err
@@ -69,14 +70,14 @@ func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions
 				return tsruntime.NewInvoker(assets).RunLint(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
 			},
 			Go: func(ctx context.Context, args []string, output io.Writer) int {
-				return cli.
-					NewScopedRunner(output, output, selection).
-					Run(ctx, cli.FormatMode, args[1:])
+				return gotool.
+					Runner{Stdout: output, Stderr: output, Scope: selection}.
+					Run(ctx, report.ModeFormat, args[1:])
 			},
 		},
 		Steps:  opts.steps,
 		Quiet:  opts.quiet,
-		Stderr: a.stderr,
+		Stderr: d.stderr,
 	}
 
 	return pipeline.RunFormat(ctx, paths)

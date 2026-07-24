@@ -1,11 +1,12 @@
 package sourcefiles
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 )
 
 func TestCollectSurfacesUnreadablePrettierIgnore(t *testing.T) {
@@ -19,7 +20,7 @@ func TestCollectSurfacesUnreadablePrettierIgnore(t *testing.T) {
 		t.Fatalf("mkdir .prettierignore: %v", err)
 	}
 
-	if _, _, err := Collect(context.Background(), Options{Cwd: dir}); err == nil {
+	if _, _, err := collectFormattable(t, dir, false, gitfiles.SelectionAll); err == nil {
 		t.Fatal("expected an error from an unreadable .prettierignore")
 	}
 }
@@ -32,7 +33,7 @@ func TestCollectHonorsPrettierIgnore(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "dist", "bundle.ts"), "const bundle = 1;\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll)
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -56,7 +57,7 @@ func TestCollectLintableHonorsPrettierIgnore(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "vendor", "lib.ts"), "const lib = 1;\n")
 	gitAdd(t, dir, ".")
 
-	files, _, err := CollectLintable(context.Background(), Options{Cwd: dir})
+	files, _, err := collectLintable(t, dir, false, gitfiles.SelectionAll)
 
 	if err != nil {
 		t.Fatalf("collect lintable: %v", err)

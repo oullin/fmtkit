@@ -9,13 +9,13 @@ import (
 	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
 )
 
-// RenderText writes the human-readable text report representation.
-func RenderText(w io.Writer, cwd, mode string, report Combined) error {
+// renderText writes the human-readable text report representation.
+func (r Renderer) renderText(w io.Writer, report Combined) error {
 	if _, err := color.New(color.Bold).Fprintf(w, "\nFormatter\n\n"); err != nil {
 		return err
 	}
 
-	if err := renderFormatterText(w, cwd, mode, report.Formatter); err != nil {
+	if err := renderFormatterText(w, r.Root, r.Mode, report.Formatter); err != nil {
 		return err
 	}
 
@@ -23,10 +23,10 @@ func RenderText(w io.Writer, cwd, mode string, report Combined) error {
 		return err
 	}
 
-	return renderVetText(w, cwd, report)
+	return renderVetText(w, r.Root, report)
 }
 
-func renderFormatterText(w io.Writer, cwd, mode string, report formatterengine.Report) error {
+func renderFormatterText(w io.Writer, cwd string, mode Mode, report formatterengine.Report) error {
 	if report.Files == 0 && len(report.Errors) == 0 {
 		if _, err := color.New(color.FgYellow).Fprintf(w, "  No Go files found.\n\n"); err != nil {
 			return err
@@ -42,7 +42,7 @@ func renderFormatterText(w io.Writer, cwd, mode string, report formatterengine.R
 	} else {
 		action := "Checked"
 
-		if mode == "format" {
+		if mode == ModeFormat {
 			action = "Formatted"
 		}
 
@@ -87,7 +87,7 @@ func renderFormatterText(w io.Writer, cwd, mode string, report formatterengine.R
 		if result.Changed {
 			verb := "would apply"
 
-			if mode == "format" {
+			if mode == ModeFormat {
 				verb = "applied"
 			}
 

@@ -7,7 +7,36 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 )
+
+// collectFormattable and collectLintable build a Collector rooted at cwd and
+// run the corresponding discovery, so each test names only the axes it cares
+// about (declarations, selection, scopes).
+func collectFormattable(t *testing.T, cwd string, includeDeclarations bool, selection gitfiles.Selection, scopes ...string) ([]string, []string, error) {
+	t.Helper()
+
+	collector, err := New(cwd, selection, includeDeclarations)
+
+	if err != nil {
+		t.Fatalf("new collector: %v", err)
+	}
+
+	return collector.Formattable(context.Background(), scopes)
+}
+
+func collectLintable(t *testing.T, cwd string, includeDeclarations bool, selection gitfiles.Selection, scopes ...string) ([]string, []string, error) {
+	t.Helper()
+
+	collector, err := New(cwd, selection, includeDeclarations)
+
+	if err != nil {
+		t.Fatalf("new collector: %v", err)
+	}
+
+	return collector.Lintable(context.Background(), scopes)
+}
 
 func TestCollectFiltersSourceFiles(t *testing.T) {
 	dir := initRepo(t)
@@ -18,7 +47,7 @@ func TestCollectFiltersSourceFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll, "src")
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -46,7 +75,7 @@ func TestCollectCanIncludeDeclarationFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, IncludeDeclarations: true, Scopes: []string{"src"}})
+	files, warnings, err := collectFormattable(t, dir, true, gitfiles.SelectionAll, "src")
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -77,7 +106,7 @@ func TestCollectLintableExcludesNonScriptDocuments(t *testing.T) {
 	gitAdd(t, dir, ".")
 
 	// Formatting owns the HTML and Markdown documents alongside the TS/Vue files.
-	formatFiles, _, err := Collect(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
+	formatFiles, _, err := collectFormattable(t, dir, false, gitfiles.SelectionAll, "src")
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -97,7 +126,7 @@ func TestCollectLintableExcludesNonScriptDocuments(t *testing.T) {
 
 	// Linting sees only the TS/Vue files: no HTML, no Markdown, and .d.ts stays
 	// out unless declarations are requested.
-	lintFiles, _, err := CollectLintable(context.Background(), Options{Cwd: dir, Scopes: []string{"src"}})
+	lintFiles, _, err := collectLintable(t, dir, false, gitfiles.SelectionAll, "src")
 
 	if err != nil {
 		t.Fatalf("collect lintable: %v", err)
@@ -120,7 +149,7 @@ func TestCollectLintableCanIncludeDeclarationFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
 	gitAdd(t, dir, ".")
 
-	files, _, err := CollectLintable(context.Background(), Options{Cwd: dir, IncludeDeclarations: true, Scopes: []string{"src"}})
+	files, _, err := collectLintable(t, dir, true, gitfiles.SelectionAll, "src")
 
 	if err != nil {
 		t.Fatalf("collect lintable: %v", err)
@@ -145,7 +174,7 @@ func TestCollectIncludesUntrackedAndIgnoresIgnored(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
 	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll)
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -171,10 +200,8 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "other", "app.ts"), "const value = 2;\n")
 	gitAdd(t, dir, ".")
 
-	files, warnings, err := Collect(context.Background(), Options{
-		Cwd:    dir,
-		Scopes: []string{"src", filepath.Join(dir, "src", "app.ts"), "missing"},
-	})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll,
+		"src", filepath.Join(dir, "src", "app.ts"), "missing")
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -185,29 +212,6 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	}
 
 	want := []string{filepath.Join(dir, "src", "app.ts")}
-
-	if !reflect.DeepEqual(files, want) {
-		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
-	}
-}
-
-func TestChangedPathsShimDelegatesToGitfiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".prettierignore"), "main.go\n")
-	writeFile(t, filepath.Join(dir, "main.go"), "package main\n")
-	gitAdd(t, dir, ".")
-
-	files, err := ChangedPaths(context.Background(), dir, nil)
-
-	if err != nil {
-		t.Fatalf("changed paths: %v", err)
-	}
-
-	// The shim forwards to gitfiles, which does not consult .prettierignore.
-	want := []string{
-		filepath.Join(dir, ".prettierignore"),
-		filepath.Join(dir, "main.go"),
-	}
 
 	if !reflect.DeepEqual(files, want) {
 		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
@@ -269,7 +273,7 @@ func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
 	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -305,7 +309,7 @@ func TestCollectChangedIncludesStagedFiles(t *testing.T) {
 	// A staged deletion leaves no file to format and must stay out.
 	run(t, dir, "git", "rm", "-q", "removed.ts")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -327,7 +331,7 @@ func TestCollectChangedWorksBeforeTheFirstCommit(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
 	gitAdd(t, dir, "staged.ts")
 
-	files, warnings, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
+	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)
@@ -350,7 +354,7 @@ func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 	gitAdd(t, dir, "untouched.ts")
 	gitCommit(t, dir)
 
-	changed, _, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionChanged})
+	changed, _, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
 	if err != nil {
 		t.Fatalf("collect changed: %v", err)
@@ -360,7 +364,7 @@ func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 		t.Fatalf("a clean working tree has no changes, got: %#v", changed)
 	}
 
-	all, _, err := Collect(context.Background(), Options{Cwd: dir, Selection: SelectionAll})
+	all, _, err := collectFormattable(t, dir, false, gitfiles.SelectionAll)
 
 	if err != nil {
 		t.Fatalf("collect all: %v", err)
@@ -379,7 +383,9 @@ func TestCollectDefaultsToAll(t *testing.T) {
 	gitAdd(t, dir, "untouched.ts")
 	gitCommit(t, dir)
 
-	files, _, err := Collect(context.Background(), Options{Cwd: dir})
+	// The zero gitfiles.Selection is SelectionAll, so a Collector built with it
+	// must cover committed files a changed run would skip.
+	files, _, err := collectFormattable(t, dir, false, gitfiles.Selection(0))
 
 	if err != nil {
 		t.Fatalf("collect: %v", err)

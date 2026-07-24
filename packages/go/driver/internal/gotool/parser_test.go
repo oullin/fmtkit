@@ -1,33 +1,35 @@
-package cli
+package gotool
 
 import (
 	"io"
 	"os"
 	"reflect"
 	"testing"
+
+	report "go.ollin.sh/fmtkit/driver/report"
 )
 
-func TestParseDefaults(t *testing.T) {
+func TestParseInvocationDefaults(t *testing.T) {
 	unsetJobsEnv(t)
 
-	opts, err := newParser(io.Discard).Parse(CheckMode, nil)
+	inv, err := ParseInvocation(report.ModeCheck, nil, io.Discard)
 
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 
-	want := options{
-		mode:         CheckMode,
-		outputFormat: "text",
-		jobs:         -1,
+	want := Invocation{
+		Mode:   report.ModeCheck,
+		Output: report.FormatText,
+		Jobs:   -1,
 	}
 
-	if !reflect.DeepEqual(opts, want) {
-		t.Fatalf("unexpected defaults: %#v", opts)
+	if !reflect.DeepEqual(inv, want) {
+		t.Fatalf("unexpected defaults: %#v", inv)
 	}
 }
 
-func TestParseAllFlags(t *testing.T) {
+func TestParseInvocationAllFlags(t *testing.T) {
 	unsetJobsEnv(t)
 
 	args := []string{
@@ -38,35 +40,41 @@ func TestParseAllFlags(t *testing.T) {
 		"main.go", "pkg",
 	}
 
-	opts, err := newParser(io.Discard).Parse(FormatMode, args)
+	inv, err := ParseInvocation(report.ModeFormat, args, io.Discard)
 
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 
-	want := options{
-		mode:         FormatMode,
-		configPath:   "custom.yml",
-		reportRoot:   "/repo",
-		outputFormat: "json",
-		positional:   []string{"main.go", "pkg"},
-		jobs:         4,
+	want := Invocation{
+		Mode:       report.ModeFormat,
+		ConfigPath: "custom.yml",
+		ReportRoot: "/repo",
+		Output:     report.FormatJSON,
+		Paths:      []string{"main.go", "pkg"},
+		Jobs:       4,
 	}
 
-	if !reflect.DeepEqual(opts, want) {
-		t.Fatalf("unexpected options: %#v", opts)
+	if !reflect.DeepEqual(inv, want) {
+		t.Fatalf("unexpected invocation: %#v", inv)
 	}
 }
 
-func TestParseRejectsUnknownFlag(t *testing.T) {
-	if _, err := newParser(io.Discard).Parse(CheckMode, []string{"--bogus"}); err == nil {
+func TestParseInvocationRejectsUnknownFlag(t *testing.T) {
+	if _, err := ParseInvocation(report.ModeCheck, []string{"--bogus"}, io.Discard); err == nil {
 		t.Fatal("expected unknown flag error")
 	}
 }
 
-func TestParseRejectsNonNumericJobs(t *testing.T) {
-	if _, err := newParser(io.Discard).Parse(CheckMode, []string{"--jobs", "abc"}); err == nil {
+func TestParseInvocationRejectsNonNumericJobs(t *testing.T) {
+	if _, err := ParseInvocation(report.ModeCheck, []string{"--jobs", "abc"}, io.Discard); err == nil {
 		t.Fatal("expected invalid --jobs error")
+	}
+}
+
+func TestParseInvocationRejectsUnknownFormat(t *testing.T) {
+	if _, err := ParseInvocation(report.ModeCheck, []string{"--format", "yaml"}, io.Discard); err == nil {
+		t.Fatal("expected unsupported format error")
 	}
 }
 

@@ -1,8 +1,9 @@
-import { Ast } from '#sidecar/ast';
-import { isErr } from '#sidecar/result';
+import { Ast } from '#sidecar/syntax/ast';
+import { isErr } from '#sidecar/kernel/result';
 import { Rules } from '#sidecar/rules';
-import { Sources } from '#sidecar/sources';
-import type { Edit, Node } from '#sidecar/types';
+import { Sources } from '#sidecar/syntax/sources';
+import type { Edit } from '#sidecar/syntax/edits';
+import type { Node } from '#sidecar/syntax/node-schema';
 
 /** Reorders class members into the formatter's stable class shape. */
 export class ClassReorder {

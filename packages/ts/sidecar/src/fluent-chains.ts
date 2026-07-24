@@ -1,16 +1,17 @@
 import { pathToFileURL } from 'node:url';
-import { Ast } from '#sidecar/ast';
+import { Ast } from '#sidecar/syntax/ast';
 import { DrizzleQueries } from '#sidecar/drizzle-queries';
-import { Edits } from '#sidecar/edits';
-import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
+import { Edits } from '#sidecar/syntax/edits';
+import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
 import { ExpandedCalls } from '#sidecar/expanded-calls';
 import { PassCliDto } from '#sidecar/pass-cli-dto';
-import { isErr, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
-import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
-import { SourceText } from '#sidecar/source-text';
-import { Sources } from '#sidecar/sources';
-import type { Edit, Node } from '#sidecar/types';
+import { isErr, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
+import type { SourceFileError, SourceFiles } from '#sidecar/io/source-files';
+import { SourceText } from '#sidecar/syntax/source-text';
+import { Sources } from '#sidecar/syntax/sources';
+import type { Edit } from '#sidecar/syntax/edits';
+import type { Node } from '#sidecar/syntax/node-schema';
 
 const cwd = process.cwd();
 
@@ -226,9 +227,9 @@ export class FluentChains {
 		const files = [...options.files];
 		const { mode } = options;
 
-		const { NodeProcessRunner } = await import('#sidecar/process-runner');
+		const { NodeProcessRunner } = await import('#sidecar/io/process-runner');
 
-		const { NodeSourceFiles } = await import('#sidecar/source-files');
+		const { NodeSourceFiles } = await import('#sidecar/io/source-files');
 
 		const { FormatPipeline } = await import('#sidecar/format-pipeline');
 

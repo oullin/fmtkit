@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ClassReorder } from '#sidecar/class-reorder';
-import { Edits } from '#sidecar/edits';
+import { Edits } from '#sidecar/syntax/edits';
 
 test('class members are reordered as properties, constructors, then methods', () => {
 	const input = ['class Example {', '\trun() {}', '\tvalue = 1;', '\tconstructor() {}', '}', ''].join('\n');

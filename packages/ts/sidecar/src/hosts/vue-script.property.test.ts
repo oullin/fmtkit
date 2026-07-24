@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fc from 'fast-check';
-import { VueScript } from '#sidecar/vue-script';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
 type GeneratedBlock = {
 	readonly markup: string;

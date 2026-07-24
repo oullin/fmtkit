@@ -1,5 +1,5 @@
-import { Ast } from '#sidecar/ast';
-import { Node } from '#sidecar/node-schema';
+import { Ast } from '#sidecar/syntax/ast';
+import { Node } from '#sidecar/syntax/node-schema';
 
 const BLOCK_HAVING_STATEMENTS = new Set(['IfStatement', 'ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement', 'SwitchStatement', 'TryStatement']);
 const LOOP_STATEMENTS = new Set(['ForStatement', 'ForInStatement', 'ForOfStatement', 'WhileStatement', 'DoWhileStatement']);

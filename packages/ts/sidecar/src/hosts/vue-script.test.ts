@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { VueScript } from '#sidecar/vue-script';
+import { VueScript } from '#sidecar/hosts/vue-script';
 
 test('VueScript.extractBlocks returns every script block with its offset', () => {
 	const content = '<script lang="yaml">\nfoo: 1\n</script>\n<script setup lang="ts">\nconst n = 1;\n</script>\n';

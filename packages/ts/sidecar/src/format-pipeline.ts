@@ -1,13 +1,13 @@
 import { availableParallelism } from 'node:os';
-import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
-import type { OxfmtRunFailed, SourceFileUnreadable, SourceUnparsable } from '#sidecar/errors';
+import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
+import type { OxfmtRunFailed, SourceFileUnreadable, SourceUnparsable } from '#sidecar/kernel/errors';
 import { FluentChains } from '#sidecar/fluent-chains';
-import type { ProcessRunner } from '#sidecar/process-runner';
-import { isErr, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
+import type { ProcessRunner } from '#sidecar/io/process-runner';
+import { isErr, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
 import { Segment } from '#sidecar/segment';
-import type { SourceFileError, SourceFiles } from '#sidecar/source-files';
-import { Sources } from '#sidecar/sources';
+import type { SourceFileError, SourceFiles } from '#sidecar/io/source-files';
+import { Sources } from '#sidecar/syntax/sources';
 
 const OXFMT_CHUNK_SIZE = 100;
 

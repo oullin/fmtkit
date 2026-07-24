@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Node } from '#sidecar/node-schema';
-import type { AstValue } from '#sidecar/node-schema';
+import { Node } from '#sidecar/syntax/node-schema';
+import type { AstValue } from '#sidecar/syntax/node-schema';
 
 const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
 	Program: 'body',

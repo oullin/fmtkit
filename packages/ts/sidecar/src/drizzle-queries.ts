@@ -1,11 +1,11 @@
-import { Ast } from '#sidecar/ast';
-import { Edits } from '#sidecar/edits';
-import { FileTargets } from '#sidecar/file-targets';
-import { Node } from '#sidecar/node-schema';
-import { isErr } from '#sidecar/result';
-import { SourceText } from '#sidecar/source-text';
-import { Sources } from '#sidecar/sources';
-import type { Edit } from '#sidecar/types';
+import { Ast } from '#sidecar/syntax/ast';
+import { Edits } from '#sidecar/syntax/edits';
+import { FileTargets } from '#sidecar/hosts/file-targets';
+import { Node } from '#sidecar/syntax/node-schema';
+import { isErr } from '#sidecar/kernel/result';
+import { SourceText } from '#sidecar/syntax/source-text';
+import { Sources } from '#sidecar/syntax/sources';
+import type { Edit } from '#sidecar/syntax/edits';
 
 type DrizzleImports = {
 	locals: Map<string, string>;

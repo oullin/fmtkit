@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { SourceFileUnreadable, SourceFileUnwritable } from '#sidecar/errors';
-import { err, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
+import { SourceFileUnreadable, SourceFileUnwritable } from '#sidecar/kernel/errors';
+import { err, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
 
 /** Every expected filesystem failure reported by the source-file port. */
 export type SourceFileError = SourceFileUnreadable | SourceFileUnwritable;

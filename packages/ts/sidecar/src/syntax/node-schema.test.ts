@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SourceUnparsable } from '#sidecar/errors';
-import { Node, ParsedSourceDto } from '#sidecar/node-schema';
-import { isErr } from '#sidecar/result';
-import { Sources } from '#sidecar/sources';
+import { SourceUnparsable } from '#sidecar/kernel/errors';
+import { Node, ParsedSourceDto } from '#sidecar/syntax/node-schema';
+import { isErr } from '#sidecar/kernel/result';
+import { Sources } from '#sidecar/syntax/sources';
 
 test('ParsedSourceDto accepts and freezes a valid parser envelope', () => {
 	const parsed = ParsedSourceDto.from({

@@ -1,4 +1,4 @@
-import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
+import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
 
 /** Classifies paths accepted by sidecar formatting passes. */
 export class FileTargets {

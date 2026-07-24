@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { EmbeddedBlocks } from '#sidecar/embedded-blocks';
+import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
 
 test('EmbeddedBlocks.isHost accepts every host extension and rejects others', () => {
 	for (const path of ['a.vue', 'b.html', 'c.htm', 'd.md', 'e.markdown']) {

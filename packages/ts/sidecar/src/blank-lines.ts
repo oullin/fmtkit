@@ -1,8 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import { PassCliDto } from '#sidecar/pass-cli-dto';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 async function main(): Promise<void> {
 	const cwd = process.cwd();

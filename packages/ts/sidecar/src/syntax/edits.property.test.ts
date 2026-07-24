@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fc from 'fast-check';
-import { Edits } from '#sidecar/edits';
-import type { Edit } from '#sidecar/types';
+import { Edits } from '#sidecar/syntax/edits';
+import type { Edit } from '#sidecar/syntax/edits';
 
 const editCaseArbitrary = fc.string({ minLength: 1, maxLength: 60 }).chain((source) => {
 	return fc

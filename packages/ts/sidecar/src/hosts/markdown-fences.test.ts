@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MarkdownFences } from '#sidecar/markdown-fences';
+import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 
 test('MarkdownFences.extractBlocks returns each fenced block with its offset', () => {
 	const content = ['# Title', '', '```ts', 'const n = 1;', '```', '', 'prose', '', '~~~js', 'const m = 2;', '~~~', ''].join('\n');

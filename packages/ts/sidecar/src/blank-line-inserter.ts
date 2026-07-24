@@ -1,7 +1,7 @@
-import { Ast } from '#sidecar/ast';
-import { isErr } from '#sidecar/result';
+import { Ast } from '#sidecar/syntax/ast';
+import { isErr } from '#sidecar/kernel/result';
 import { Rules } from '#sidecar/rules';
-import { Sources } from '#sidecar/sources';
+import { Sources } from '#sidecar/syntax/sources';
 
 /** Computes and applies the blank lines required by formatter rules. */
 export class BlankLines {

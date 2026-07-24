@@ -1,14 +1,14 @@
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
-import { UnexpectedCliArgument } from '#sidecar/errors';
-import type { OxcErrorDto } from '#sidecar/errors';
-import { FileTargets } from '#sidecar/file-targets';
+import { UnexpectedCliArgument } from '#sidecar/kernel/errors';
+import type { OxcErrorDto } from '#sidecar/kernel/errors';
+import { FileTargets } from '#sidecar/hosts/file-targets';
 import { FormatPipeline } from '#sidecar/format-pipeline';
 import type { FormatMode, PassOutcome, ValidationFailure } from '#sidecar/format-pipeline';
-import { NodeProcessRunner } from '#sidecar/process-runner';
-import { err, isErr, ok } from '#sidecar/result';
-import type { Result } from '#sidecar/result';
-import { NodeSourceFiles } from '#sidecar/source-files';
+import { NodeProcessRunner } from '#sidecar/io/process-runner';
+import { err, isErr, ok } from '#sidecar/kernel/result';
+import type { Result } from '#sidecar/kernel/result';
+import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 /** Immutable command-line options for the full formatting pipeline. */
 export class CliOptionsDto {

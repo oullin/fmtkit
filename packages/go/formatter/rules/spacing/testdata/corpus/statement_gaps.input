@@ -1,0 +1,13 @@
+package sample
+
+func run() {
+	if true {
+		println("ok")
+	}
+	println("next")
+}
+
+func teardown() {
+	defer println("done")
+	return
+}

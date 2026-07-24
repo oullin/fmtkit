@@ -1,0 +1,9 @@
+package sample
+
+import "math/rand"
+
+func run() {
+	seed := pick()
+	rand := newRand(seed)
+	rand.Intn(10)
+}

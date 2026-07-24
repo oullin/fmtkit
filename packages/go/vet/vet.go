@@ -41,11 +41,6 @@ type toolchain interface {
 // execToolchain is the exec-backed toolchain used outside tests.
 type execToolchain struct{}
 
-// Default returns the default vet configuration.
-func Default() Config {
-	return Config{Enabled: true}
-}
-
 // LookGo resolves the go executable on PATH.
 func (execToolchain) LookGo() (string, error) {
 	return exec.LookPath("go")

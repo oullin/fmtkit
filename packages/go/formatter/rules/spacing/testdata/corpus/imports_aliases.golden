@@ -1,0 +1,12 @@
+package sample
+
+import xrand "math/rand"
+
+func run() {
+	value := compute()
+
+	xrand.Seed(1)
+
+	next := value
+	_ = next
+}

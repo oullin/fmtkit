@@ -10,69 +10,43 @@ type Toggle struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
-// Rules configures rule toggles exposed by the CLI.
-type Rules struct {
-	Spacing Toggle `mapstructure:"spacing"`
-}
-
-// Formatters configures formatter passes exposed by the CLI.
-type Formatters struct {
-	Gofmt     bool `mapstructure:"gofmt"`
-	Goimports bool `mapstructure:"goimports"`
-}
-
-// Config controls CLI formatting and vet behavior.
+// Config controls CLI formatting and vet behavior. It embeds the formatter
+// config as the single source of truth for formatting options and adds the vet
+// toggle the CLI owns. The squash tag flattens the embedded formatter keys to
+// the top level so the on-disk schema stays a flat set of keys.
 type Config struct {
-	Rules      Rules      `mapstructure:"rules"`
-	Vet        Toggle     `mapstructure:"vet"`
-	Formatters Formatters `mapstructure:"formatters"`
-	Exclude    []string   `mapstructure:"exclude"`
-	NotPath    []string   `mapstructure:"not_path"`
-	NotName    []string   `mapstructure:"not_name"`
-	// Concurrency caps the number of files processed in parallel.
-	// Zero means use runtime.NumCPU().
-	Concurrency int `mapstructure:"concurrency"`
+	formatterconfig.Config `mapstructure:",squash"`
+
+	Vet Toggle `mapstructure:"vet"`
 }
 
-// Default returns the default CLI configuration.
+// Default returns the default CLI configuration: the formatter defaults with
+// vet enabled.
 func Default() Config {
 	return Config{
-		Rules: Rules{
-			Spacing: Toggle{Enabled: true},
-		},
-		Vet: Toggle{Enabled: true},
-		Formatters: Formatters{
-			Gofmt:     true,
-			Goimports: true,
-		},
-		Exclude: []string{
-			".git",
-			"node_modules",
-			"vendor",
-		},
-		NotPath: []string{},
-		NotName: []string{},
+		Config: formatterconfig.Default(),
+		Vet:    Toggle{Enabled: true},
 	}
 }
 
-// FormatterConfig projects CLI config into the public formatter config type.
-func (c Config) FormatterConfig() formatterconfig.Config {
-	return formatterconfig.Config{
-		Rules: formatterconfig.Rules{
-			Spacing: formatterconfig.RuleToggle{Enabled: c.Rules.Spacing.Enabled},
-		},
-		Formatters: formatterconfig.Formatters{
-			Gofmt:     c.Formatters.Gofmt,
-			Goimports: c.Formatters.Goimports,
-		},
-		Exclude:     c.Exclude,
-		NotPath:     c.NotPath,
-		NotName:     c.NotName,
-		Concurrency: c.Concurrency,
-	}
+// Formatter returns the embedded formatter configuration.
+func (c Config) Formatter() formatterconfig.Config {
+	return c.Config
 }
 
 // VetConfig projects CLI config into the public vet config type.
 func (c Config) VetConfig() vet.Config {
 	return vet.Config{Enabled: c.Vet.Enabled}
+}
+
+// WithJobs applies a --jobs override to the formatter concurrency. A jobs value
+// of -1 means "unset" and returns the config unchanged; any other value pins
+// Concurrency (0 selects runtime.NumCPU()), matching the CLI's jobs-override
+// semantics.
+func (c Config) WithJobs(jobs int) Config {
+	if jobs != -1 {
+		c.Concurrency = jobs
+	}
+
+	return c
 }

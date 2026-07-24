@@ -10,7 +10,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
+
+// PrettierMigration derives an oxfmt config from a project's Prettier setup by
+// running oxfmt's own --migrate=prettier translator. It shares the invoker's
+// assets (for the sidecar path and the cache directory) and environment (for an
+// OXFMT_BIN override).
+type PrettierMigration struct {
+	Assets Assets
+	Env    sidecarproto.Overrides
+}
 
 // prettierConfigNames are the standalone Prettier configuration filenames, in
 // the order Prettier itself resolves them. package.json's "prettier" key is
@@ -70,12 +81,12 @@ func packageJSONHasPrettierKey(path string) bool {
 	return ok && string(value) != "null"
 }
 
-// prettierDerivedConfig returns the path of an oxfmt config derived from cwd's
-// Prettier configuration, or "" when there is no Prettier config or the
-// migration fails. Failures print a one-line warning to stderr and leave the
-// caller to fall back to the bundled config; a translated config is cached by
-// the source config's content hash so migration runs at most once per config.
-func (s Support) prettierDerivedConfig(ctx context.Context, cwd string, env overrides, stderr io.Writer) string {
+// DerivedConfig returns the path of an oxfmt config derived from cwd's Prettier
+// configuration, or "" when there is no Prettier config or the migration fails.
+// Failures print a one-line warning to stderr and leave the caller to fall back
+// to the bundled config; a translated config is cached by the source config's
+// content hash so migration runs at most once per config.
+func (m PrettierMigration) DerivedConfig(ctx context.Context, cwd string, stderr io.Writer) string {
 	source := detectPrettierConfig(cwd)
 
 	if source == "" {
@@ -91,13 +102,13 @@ func (s Support) prettierDerivedConfig(ctx context.Context, cwd string, env over
 	}
 
 	sum := sha256.Sum256(data)
-	cachePath := filepath.Join(s.Dir, "prettier-derived", hex.EncodeToString(sum[:])+".json")
+	cachePath := filepath.Join(m.Assets.Dir, "prettier-derived", hex.EncodeToString(sum[:])+".json")
 
 	if existingFile(cachePath) != "" {
 		return cachePath
 	}
 
-	derived, err := s.migratePrettierConfig(ctx, source, env)
+	derived, err := m.migrate(ctx, source)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "[oxfmt] could not derive oxfmt config from %s: %v; using bundled config\n", source, err)
@@ -114,11 +125,11 @@ func (s Support) prettierDerivedConfig(ctx context.Context, cwd string, env over
 	return cachePath
 }
 
-// migratePrettierConfig copies the Prettier config into a private temp dir,
-// runs oxfmt --migrate=prettier there, and returns the resulting .oxfmtrc.json
-// bytes. The temp dir starts empty so the migrator never trips over a
-// pre-existing oxfmt config.
-func (s Support) migratePrettierConfig(ctx context.Context, source string, env overrides) ([]byte, error) {
+// migrate copies the Prettier config into a private temp dir, runs oxfmt
+// --migrate=prettier there, and returns the resulting .oxfmtrc.json bytes. The
+// temp dir starts empty so the migrator never trips over a pre-existing oxfmt
+// config.
+func (m PrettierMigration) migrate(ctx context.Context, source string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "fmtkit-prettier-migrate-")
 
 	if err != nil {
@@ -133,8 +144,8 @@ func (s Support) migratePrettierConfig(ctx context.Context, source string, env o
 		return nil, err
 	}
 
-	bin, args := s.migrateCommand(env)
-	args = append(args, "--migrate=prettier")
+	bin, viaSidecar := m.oxfmtExecutable()
+	args := sidecarproto.MigrateCommand{ViaSidecar: viaSidecar}.Argv()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
@@ -145,7 +156,7 @@ func (s Support) migratePrettierConfig(ctx context.Context, source string, env o
 		return nil, fmt.Errorf("oxfmt --migrate=prettier: %w", err)
 	}
 
-	derived, err := os.ReadFile(filepath.Join(dir, ".oxfmtrc.json"))
+	derived, err := os.ReadFile(filepath.Join(dir, sidecarproto.OxfmtRCName))
 
 	if err != nil {
 		return nil, fmt.Errorf("read migrated config: %w", err)
@@ -154,15 +165,15 @@ func (s Support) migratePrettierConfig(ctx context.Context, source string, env o
 	return derived, nil
 }
 
-// migrateCommand resolves the oxfmt invocation for a migration, mirroring
-// RunPipeline: an OXFMT_BIN override runs directly, otherwise the sidecar runs
-// in its oxfmt pass-through mode.
-func (s Support) migrateCommand(env overrides) (string, []string) {
-	if env.oxfmtBin != "" {
-		return env.oxfmtBin, nil
+// oxfmtExecutable resolves the oxfmt invocation for a migration, mirroring
+// Invoker.RunPipeline: an OXFMT_BIN override runs directly, otherwise the
+// sidecar runs in its oxfmt pass-through mode.
+func (m PrettierMigration) oxfmtExecutable() (bin string, viaSidecar bool) {
+	if m.Env.OxfmtBin != "" {
+		return m.Env.OxfmtBin, false
 	}
 
-	return s.Sidecar(), []string{"oxfmt"}
+	return m.Assets.Sidecar(), true
 }
 
 func copyFileContents(source, dst string) error {

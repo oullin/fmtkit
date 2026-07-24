@@ -2,6 +2,11 @@
 // release binaries: a bun-compiled sidecar plus the oxc-parser, oxfmt, and
 // oxlint napi bindings. On first use the embedded assets are extracted to a
 // per-version cache directory and spawned as child processes from there.
+//
+// The type split mirrors the three responsibilities: Assets owns the extracted
+// directory (extraction, caching, lookup); Invoker spawns the toolchain; and
+// PrettierMigration derives an oxfmt config from a project's Prettier setup. All
+// argv and environment construction goes through the sidecarproto package.
 package tsruntime
 
 import (
@@ -16,38 +21,33 @@ import (
 	"sort"
 
 	"go.ollin.sh/fmtkit/driver/internal/embedded"
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
-// SupportDirEnv points at a pre-extracted toolchain directory and skips
-// both the embedded assets and the cache.
+// sentinelName marks a completed extraction; it is tsruntime's own bookkeeping,
+// not part of the sidecar wire protocol.
+const sentinelName = ".fmtkit-complete"
 
-// Support locates the extracted TS toolchain on disk.
-type Support struct {
+// Assets locates the extracted TS toolchain on disk.
+type Assets struct {
 	Dir string
 }
 
-const (
-	SupportDirEnv = "FMTKIT_SUPPORT_DIR"
-
-	sidecarName  = "fmtkit-ts-sidecar"
-	sentinelName = ".fmtkit-complete"
-)
-
 // Sidecar returns the path of the multiplexed toolchain executable.
-func (s Support) Sidecar() string {
-	return filepath.Join(s.Dir, sidecarName)
+func (a Assets) Sidecar() string {
+	return filepath.Join(a.Dir, sidecarproto.SidecarName)
 }
 
 // OxfmtConfig returns the bundled oxfmt configuration path, or "" when the
 // support directory carries none.
-func (s Support) OxfmtConfig() string {
-	return existingFile(filepath.Join(s.Dir, ".oxfmtrc.json"))
+func (a Assets) OxfmtConfig() string {
+	return existingFile(filepath.Join(a.Dir, sidecarproto.OxfmtRCName))
 }
 
 // OxlintConfig returns the bundled oxlint configuration path, or "" when the
 // support directory carries none.
-func (s Support) OxlintConfig() string {
-	return existingFile(filepath.Join(s.Dir, ".oxlintrc.json"))
+func (a Assets) OxlintConfig() string {
+	return existingFile(filepath.Join(a.Dir, sidecarproto.OxlintRCName))
 }
 
 func existingFile(path string) string {
@@ -61,32 +61,32 @@ func existingFile(path string) string {
 // Resolve locates the TS toolchain, extracting the embedded assets into the
 // user cache on first use. version tells extractions of different releases
 // apart; dev builds derive a digest from the assets instead.
-func Resolve(version string) (Support, error) {
-	if dir := os.Getenv(SupportDirEnv); dir != "" {
-		support := Support{Dir: dir}
+func Resolve(version string) (Assets, error) {
+	if dir := os.Getenv(sidecarproto.SupportDirEnv); dir != "" {
+		assets := Assets{Dir: dir}
 
-		if existingFile(support.Sidecar()) == "" {
-			return Support{}, fmt.Errorf("%s (%s) does not contain %s", SupportDirEnv, dir, sidecarName)
+		if existingFile(assets.Sidecar()) == "" {
+			return Assets{}, fmt.Errorf("%s (%s) does not contain %s", sidecarproto.SupportDirEnv, dir, sidecarproto.SidecarName)
 		}
 
-		return support, nil
+		return assets, nil
 	}
 
-	assets, ok := embedded.SidecarAssets()
+	embeddedAssets, ok := embedded.SidecarAssets()
 
 	if !ok {
-		return Support{}, errors.New(
+		return Assets{}, errors.New(
 			"this fmtkit build carries no TS toolchain (built without the fmtkit_sidecar tag); " +
-				"point " + SupportDirEnv + " at a staged toolchain directory " +
+				"point " + sidecarproto.SupportDirEnv + " at a staged toolchain directory " +
 				"(see packages/ts/infra/stage-ts-assets.sh), or use a release binary",
 		)
 	}
 
 	if version == "" || version == "dev" {
-		digest, err := assetsDigest(assets)
+		digest, err := assetsDigest(embeddedAssets)
 
 		if err != nil {
-			return Support{}, err
+			return Assets{}, err
 		}
 
 		version = "dev-" + digest
@@ -95,16 +95,16 @@ func Resolve(version string) (Support, error) {
 	cacheRoot, err := os.UserCacheDir()
 
 	if err != nil {
-		return Support{}, fmt.Errorf("resolve user cache dir: %w", err)
+		return Assets{}, fmt.Errorf("resolve user cache dir: %w", err)
 	}
 
 	dir := filepath.Join(cacheRoot, "fmtkit", version)
 
-	if err := extractOnce(dir, assets); err != nil {
-		return Support{}, err
+	if err := extractOnce(dir, embeddedAssets); err != nil {
+		return Assets{}, err
 	}
 
-	return Support{Dir: dir}, nil
+	return Assets{Dir: dir}, nil
 }
 
 // extractOnce materializes the toolchain into dir unless a completed
@@ -160,7 +160,7 @@ func extract(dst string, assets fs.FS) error {
 
 		mode := os.FileMode(0o644)
 
-		if entry.Name() == sidecarName {
+		if entry.Name() == sidecarproto.SidecarName {
 			mode = 0o755
 		}
 

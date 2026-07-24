@@ -85,7 +85,7 @@ func (s Support) prettierDerivedConfig(ctx context.Context, cwd string, env over
 	data, err := os.ReadFile(source)
 
 	if err != nil {
-		fmt.Fprintf(stderr, "[oxfmt] could not read Prettier config %s: %v; using bundled config\n", source, err)
+		_, _ = fmt.Fprintf(stderr, "[oxfmt] could not read Prettier config %s: %v; using bundled config\n", source, err)
 
 		return ""
 	}
@@ -100,13 +100,13 @@ func (s Support) prettierDerivedConfig(ctx context.Context, cwd string, env over
 	derived, err := s.migratePrettierConfig(ctx, source, env)
 
 	if err != nil {
-		fmt.Fprintf(stderr, "[oxfmt] could not derive oxfmt config from %s: %v; using bundled config\n", source, err)
+		_, _ = fmt.Fprintf(stderr, "[oxfmt] could not derive oxfmt config from %s: %v; using bundled config\n", source, err)
 
 		return ""
 	}
 
 	if err := writeCacheFile(cachePath, derived); err != nil {
-		fmt.Fprintf(stderr, "[oxfmt] could not cache derived oxfmt config: %v; using bundled config\n", err)
+		_, _ = fmt.Fprintf(stderr, "[oxfmt] could not cache derived oxfmt config: %v; using bundled config\n", err)
 
 		return ""
 	}

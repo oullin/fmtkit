@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fc from 'fast-check';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
 import type { Edit } from '#sidecar/syntax/edits';
+
+const editApplier = new EditApplier();
 
 const editCaseArbitrary = fc.string({ minLength: 1, maxLength: 60 }).chain((source) => {
 	return fc
@@ -27,10 +29,10 @@ const editCaseArbitrary = fc.string({ minLength: 1, maxLength: 60 }).chain((sour
 		});
 });
 
-test('Edits.nonOverlapping returns a sorted non-overlapping input subset', () => {
+test('EditApplier.nonOverlapping returns a sorted non-overlapping input subset', () => {
 	fc.assert(
 		fc.property(editCaseArbitrary, ({ edits }) => {
-			const accepted = Edits.nonOverlapping(edits);
+			const accepted = editApplier.nonOverlapping(edits);
 
 			for (let index = 0; index < accepted.length; index++) {
 				const edit = accepted[index];
@@ -44,7 +46,7 @@ test('Edits.nonOverlapping returns a sorted non-overlapping input subset', () =>
 				for (let following = index + 1; following < accepted.length; following++) {
 					const next = accepted[following];
 
-					assert.equal(Boolean(edit && next && Edits.rangesOverlap(edit, next)), false);
+					assert.equal(Boolean(edit && next && editApplier.rangesOverlap(edit, next)), false);
 				}
 			}
 		}),
@@ -52,10 +54,10 @@ test('Edits.nonOverlapping returns a sorted non-overlapping input subset', () =>
 	);
 });
 
-test('Edits.apply matches applying accepted edits individually right-to-left', () => {
+test('EditApplier.apply matches applying accepted edits individually right-to-left', () => {
 	fc.assert(
 		fc.property(editCaseArbitrary, ({ source, edits }) => {
-			const accepted = Edits.nonOverlapping(edits);
+			const accepted = editApplier.nonOverlapping(edits);
 
 			let individually = source;
 
@@ -63,7 +65,7 @@ test('Edits.apply matches applying accepted edits individually right-to-left', (
 				individually = individually.slice(0, edit.start) + edit.replacement + individually.slice(edit.end);
 			}
 
-			assert.equal(Edits.apply(source, accepted), individually);
+			assert.equal(editApplier.apply(source, accepted), individually);
 		}),
 		{ numRuns: 100 },
 	);

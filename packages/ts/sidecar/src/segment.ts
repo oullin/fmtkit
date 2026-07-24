@@ -2,10 +2,12 @@ import { BlankLines } from '#sidecar/blank-line-inserter';
 import { BodyWrapper } from '#sidecar/body-wrapper';
 import { ClassReorder } from '#sidecar/class-reorder';
 import { DeclarationReorder } from '#sidecar/declaration-reorder';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
 
 /** Applies the sidecar's source-segment formatting passes in order. */
 export class Segment {
+	static readonly #editApplier = new EditApplier();
+
 	static #applyBodyWraps(content: string, virtualName: string): string {
 		let current = content;
 
@@ -16,7 +18,7 @@ export class Segment {
 				return current;
 			}
 
-			current = Edits.apply(current, edits);
+			current = Segment.#editApplier.apply(current, edits);
 		}
 
 		return current;
@@ -32,9 +34,9 @@ export class Segment {
 	static process(content: string, virtualName: string): string {
 		const bodyWrapped = Segment.#applyBodyWraps(content, virtualName);
 		const classReorderEdits = ClassReorder.computeEdits(bodyWrapped, virtualName);
-		const classReordered = classReorderEdits.length > 0 ? Edits.apply(bodyWrapped, classReorderEdits) : bodyWrapped;
+		const classReordered = classReorderEdits.length > 0 ? Segment.#editApplier.apply(bodyWrapped, classReorderEdits) : bodyWrapped;
 		const declarationReorderEdits = DeclarationReorder.computeEdits(classReordered, virtualName);
-		const reordered = declarationReorderEdits.length > 0 ? Edits.apply(classReordered, declarationReorderEdits) : classReordered;
+		const reordered = declarationReorderEdits.length > 0 ? Segment.#editApplier.apply(classReordered, declarationReorderEdits) : classReordered;
 		const positions = BlankLines.computeInsertPositions(reordered, virtualName);
 
 		return BlankLines.insert(reordered, positions);

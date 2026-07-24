@@ -1,12 +1,16 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { isErr } from '#sidecar/kernel/result';
 import { Rules } from '#sidecar/rules';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Edit } from '#sidecar/syntax/edits';
 import type { Node } from '#sidecar/syntax/node-schema';
 
 /** Reorders class members into the formatter's stable class shape. */
 export class ClassReorder {
+	static readonly #ast = new AstReader();
+
+	static readonly #parser = new SourceParser();
+
 	static #containsComment(source: string): boolean {
 		return /\/\/|\/\*/.test(source);
 	}
@@ -19,10 +23,10 @@ export class ClassReorder {
 			return false;
 		}
 
-		const bodyStart = Ast.getStart(body);
-		const bodyEnd = Ast.getEnd(body);
-		const firstStart = Ast.getStart(first);
-		const lastEnd = Ast.getEnd(last);
+		const bodyStart = ClassReorder.#ast.getStart(body);
+		const bodyEnd = ClassReorder.#ast.getEnd(body);
+		const firstStart = ClassReorder.#ast.getStart(first);
+		const lastEnd = ClassReorder.#ast.getEnd(last);
 
 		if (ClassReorder.#containsComment(source.slice(bodyStart + 1, firstStart))) {
 			return true;
@@ -32,7 +36,7 @@ export class ClassReorder {
 			const current = members[i];
 			const following = members[i + 1];
 
-			if (current && following && ClassReorder.#containsComment(source.slice(Ast.getEnd(current), Ast.getStart(following)))) {
+			if (current && following && ClassReorder.#containsComment(source.slice(ClassReorder.#ast.getEnd(current), ClassReorder.#ast.getStart(following)))) {
 				return true;
 			}
 		}
@@ -41,7 +45,7 @@ export class ClassReorder {
 	}
 
 	static #computeClassReorderEdit(source: string, body: Node): Edit | null {
-		const members = Ast.childNodes(body, 'body');
+		const members = ClassReorder.#ast.childNodes(body, 'body');
 
 		if (members.length < 2) {
 			return null;
@@ -73,8 +77,8 @@ export class ClassReorder {
 			return null;
 		}
 
-		const bodyStart = Ast.getStart(body);
-		const bodyEnd = Ast.getEnd(body);
+		const bodyStart = ClassReorder.#ast.getStart(body);
+		const bodyEnd = ClassReorder.#ast.getEnd(body);
 
 		if (bodyStart < 0 || bodyEnd < 0 || ClassReorder.#hasCommentsAroundMembers(source, body, members)) {
 			return null;
@@ -87,7 +91,7 @@ export class ClassReorder {
 			return null;
 		}
 
-		const prefix = source.slice(bodyStart + 1, Ast.getStart(firstMember));
+		const prefix = source.slice(bodyStart + 1, ClassReorder.#ast.getStart(firstMember));
 		const indent = prefix.match(/\n([ \t]*)$/)?.[1];
 
 		if (indent === undefined) {
@@ -95,10 +99,10 @@ export class ClassReorder {
 		}
 
 		const memberSlices = desired.map((member) => {
-			return source.slice(Ast.getStart(member), Ast.getEnd(member));
+			return source.slice(ClassReorder.#ast.getStart(member), ClassReorder.#ast.getEnd(member));
 		});
 
-		const closing = source.slice(Ast.getEnd(lastOriginal), bodyEnd - 1);
+		const closing = source.slice(ClassReorder.#ast.getEnd(lastOriginal), bodyEnd - 1);
 
 		return {
 			start: bodyStart + 1,
@@ -115,7 +119,7 @@ export class ClassReorder {
 	 * @returns Class-member ordering edits, or none for invalid source.
 	 */
 	static computeEdits(content: string, virtualName: string): Edit[] {
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = ClassReorder.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
@@ -123,7 +127,7 @@ export class ClassReorder {
 
 		const edits: Edit[] = [];
 
-		for (const body of Ast.collectClassBodies(parsed.value.program)) {
+		for (const body of ClassReorder.#ast.collectClassBodies(parsed.value.program)) {
 			const edit = ClassReorder.#computeClassReorderEdit(content, body);
 
 			if (edit) {

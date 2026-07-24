@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { SourceUnparsable } from '#sidecar/kernel/errors';
 import { Node, ParsedSourceDto } from '#sidecar/syntax/node-schema';
 import { isErr } from '#sidecar/kernel/result';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
 test('ParsedSourceDto accepts and freezes a valid parser envelope', () => {
 	const parsed = ParsedSourceDto.from({
@@ -34,7 +34,26 @@ test('ParsedSourceDto rejects malformed parser envelopes', () => {
 	}
 });
 
-test('Sources.parse maps a rejected parser envelope to SourceUnparsable', () => {
+test('ParsedSourceDto.hasCommentBetween reports comments contained by a range', () => {
+	const parsed = ParsedSourceDto.from({
+		program: { type: 'Program', start: 0, end: 30, body: [] },
+		comments: [{ type: 'Line', start: 10, end: 20, value: ' note' }],
+	});
+
+	assert.equal(parsed.success, true);
+
+	if (!parsed.success) {
+		return;
+	}
+
+	assert.equal(parsed.data.hasCommentBetween(5, 25), true);
+
+	assert.equal(parsed.data.hasCommentBetween(12, 25), false);
+
+	assert.equal(parsed.data.hasCommentBetween(5, 15), false);
+});
+
+test('SourceParser.parse maps a rejected parser envelope to SourceUnparsable', () => {
 	const originalFrom = ParsedSourceDto.from;
 
 	ParsedSourceDto.from = (() => {
@@ -42,7 +61,7 @@ test('Sources.parse maps a rejected parser envelope to SourceUnparsable', () => 
 	}) as never;
 
 	try {
-		const parsed = Sources.parse('fixture.ts', 'const value = 1;\n');
+		const parsed = new SourceParser().parse('fixture.ts', 'const value = 1;\n');
 
 		assert.ok(isErr(parsed));
 

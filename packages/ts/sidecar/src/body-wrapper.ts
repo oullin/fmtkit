@@ -1,7 +1,7 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { isErr } from '#sidecar/kernel/result';
-import { SourceText } from '#sidecar/syntax/source-text';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Edit } from '#sidecar/syntax/edits';
 import type { Node } from '#sidecar/syntax/node-schema';
 
@@ -17,7 +17,11 @@ const STATEMENT_BODY_KEYS: Record<string, string[]> = {
 
 /** Wraps unbraced statement bodies without changing unparsable source. */
 export class BodyWrapper {
-	static #wrapStatementBody(source: string, owner: Node, body: Node, indentUnit: string): Edit | null {
+	static readonly #ast = new AstReader();
+
+	static readonly #parser = new SourceParser();
+
+	static #wrapStatementBody(document: SourceDocument, owner: Node, body: Node, indentUnit: string): Edit | null {
 		if (body.type === 'BlockStatement') {
 			return null;
 		}
@@ -26,16 +30,16 @@ export class BodyWrapper {
 			return null;
 		}
 
-		const start = Ast.getStart(body);
-		const end = Ast.getEnd(body);
-		const ownerStart = Ast.getStart(owner);
+		const start = BodyWrapper.#ast.getStart(body);
+		const end = BodyWrapper.#ast.getEnd(body);
+		const ownerStart = BodyWrapper.#ast.getStart(owner);
 
 		if (start < 0 || end < 0 || ownerStart < 0) {
 			return null;
 		}
 
-		const indent = SourceText.lineIndent(source, ownerStart);
-		const bodySource = source.slice(start, end);
+		const indent = document.lineIndent(ownerStart);
+		const bodySource = document.slice(start, end);
 
 		return {
 			start,
@@ -52,16 +56,17 @@ export class BodyWrapper {
 	 * @returns Non-overlapping body-wrap edits, or none for invalid source.
 	 */
 	static computeEdits(content: string, virtualName: string): Edit[] {
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = BodyWrapper.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
+		const document = SourceDocument.of(virtualName, content);
 		const edits: Edit[] = [];
-		const indentUnit = SourceText.detectIndentUnit(content);
+		const indentUnit = document.indentUnit();
 
-		Ast.visit(parsed.value.program, (node) => {
+		BodyWrapper.#ast.visit(parsed.value.program, (node) => {
 			const bodyKeys = STATEMENT_BODY_KEYS[node.type];
 
 			if (!bodyKeys) {
@@ -69,13 +74,13 @@ export class BodyWrapper {
 			}
 
 			for (const key of bodyKeys) {
-				const body = Ast.childNode(node, key);
+				const body = BodyWrapper.#ast.childNode(node, key);
 
 				if (!body) {
 					continue;
 				}
 
-				const edit = BodyWrapper.#wrapStatementBody(content, node, body, indentUnit);
+				const edit = BodyWrapper.#wrapStatementBody(document, node, body, indentUnit);
 
 				if (edit) {
 					edits.push(edit);

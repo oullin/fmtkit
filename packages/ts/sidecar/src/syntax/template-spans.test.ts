@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isErr } from '#sidecar/kernel/result';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import { TemplateSpans } from '#sidecar/syntax/template-spans';
 
 function spansOf(source: string): TemplateSpans | null {
-	const parsed = Sources.parse('fixture.ts', source);
+	const parsed = new SourceParser().parse('fixture.ts', source);
 
 	return isErr(parsed) ? null : TemplateSpans.collect(parsed.value.program);
 }

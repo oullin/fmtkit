@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ClassReorder } from '#sidecar/class-reorder';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
 
 test('class members are reordered as properties, constructors, then methods', () => {
 	const input = ['class Example {', '\trun() {}', '\tvalue = 1;', '\tconstructor() {}', '}', ''].join('\n');
 
 	const edits = ClassReorder.computeEdits(input, 'fixture.ts');
-	const output = Edits.apply(input, edits);
+	const output = new EditApplier().apply(input, edits);
 
 	assert.equal(edits.length, 1);
 	assert.equal(output, ['class Example {', '\tvalue = 1;', '\tconstructor() {}', '\trun() {}', '}', ''].join('\n'));

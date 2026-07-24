@@ -1,24 +1,28 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { Node } from '#sidecar/syntax/node-schema';
 import { isErr } from '#sidecar/kernel/result';
-import { SourceText } from '#sidecar/syntax/source-text';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Edit } from '#sidecar/syntax/edits';
 
 /** Reorders declarations only where the transformation is side-effect safe. */
 export class DeclarationReorder {
-	static #isMultiline(source: string, node: Node): boolean {
-		const start = Ast.getStart(node);
-		const end = Ast.getEnd(node);
+	static readonly #ast = new AstReader();
 
-		return start >= 0 && end >= 0 && source.slice(start, end).includes('\n');
+	static readonly #parser = new SourceParser();
+
+	static #isMultiline(document: SourceDocument, node: Node): boolean {
+		const start = DeclarationReorder.#ast.getStart(node);
+		const end = DeclarationReorder.#ast.getEnd(node);
+
+		return start >= 0 && end >= 0 && document.slice(start, end).includes('\n');
 	}
 
-	static #nodeSource(source: string, node: Node): string {
-		const start = Ast.getStart(node);
-		const end = Ast.getEnd(node);
+	static #nodeSource(document: SourceDocument, node: Node): string {
+		const start = DeclarationReorder.#ast.getStart(node);
+		const end = DeclarationReorder.#ast.getEnd(node);
 
-		return `${SourceText.lineIndent(source, start)}${source.slice(start, end)}`;
+		return `${document.lineIndent(start)}${document.slice(start, end)}`;
 	}
 
 	static #isSideEffectSafeExpression(node: Node | undefined): boolean {
@@ -62,7 +66,7 @@ export class DeclarationReorder {
 						}
 
 						if (property.type === 'SpreadElement') {
-							return DeclarationReorder.#isSideEffectSafeExpression(Ast.childNode(property, 'argument'));
+							return DeclarationReorder.#isSideEffectSafeExpression(DeclarationReorder.#ast.childNode(property, 'argument'));
 						}
 
 						if (property.type !== 'ObjectProperty' && property.type !== 'Property') {
@@ -70,8 +74,8 @@ export class DeclarationReorder {
 						}
 
 						const computed = Boolean(property.computed);
-						const key = Ast.childNode(property, 'key');
-						const value = Ast.childNode(property, 'value');
+						const key = DeclarationReorder.#ast.childNode(property, 'key');
+						const value = DeclarationReorder.#ast.childNode(property, 'value');
 
 						return (!computed || DeclarationReorder.#isSideEffectSafeExpression(key)) && DeclarationReorder.#isSideEffectSafeExpression(value);
 					})
@@ -95,16 +99,16 @@ export class DeclarationReorder {
 	}
 
 	static #isSafeConstDeclaration(node: Node): boolean {
-		if (!Ast.isConstDeclaration(node)) {
+		if (!DeclarationReorder.#ast.isConstDeclaration(node)) {
 			return false;
 		}
 
 		return (
 			Array.isArray(node.declarations) &&
-			Ast.childNodes(node, 'declarations').every((declaration) => {
-				const id = Ast.childNode(declaration, 'id');
+			DeclarationReorder.#ast.childNodes(node, 'declarations').every((declaration) => {
+				const id = DeclarationReorder.#ast.childNode(declaration, 'id');
 
-				return id?.type === 'Identifier' && DeclarationReorder.#isSideEffectSafeExpression(Ast.childNode(declaration, 'init'));
+				return id?.type === 'Identifier' && DeclarationReorder.#isSideEffectSafeExpression(DeclarationReorder.#ast.childNode(declaration, 'init'));
 			})
 		);
 	}
@@ -113,9 +117,9 @@ export class DeclarationReorder {
 		const names = new Set<string>();
 
 		for (const node of nodes) {
-			for (const declaration of Ast.childNodes(node, 'declarations')) {
-				const id = Ast.childNode(declaration, 'id');
-				const name = id ? Ast.nodeName(id) : undefined;
+			for (const declaration of DeclarationReorder.#ast.childNodes(node, 'declarations')) {
+				const id = DeclarationReorder.#ast.childNode(declaration, 'id');
+				const name = id ? DeclarationReorder.#ast.nodeName(id) : undefined;
 
 				if (id?.type === 'Identifier' && name !== undefined) {
 					names.add(name);
@@ -129,12 +133,12 @@ export class DeclarationReorder {
 	static #usesAnyIdentifier(node: Node, names: Set<string>): boolean {
 		let found = false;
 
-		Ast.visit(node, (child) => {
+		DeclarationReorder.#ast.visit(node, (child) => {
 			if (found || child.type !== 'Identifier') {
 				return;
 			}
 
-			const name = Ast.nodeName(child);
+			const name = DeclarationReorder.#ast.nodeName(child);
 
 			if (name !== undefined && names.has(name)) {
 				found = true;
@@ -144,7 +148,7 @@ export class DeclarationReorder {
 		return found;
 	}
 
-	static #canReorderConstGroup(source: string, group: Node[]): boolean {
+	static #canReorderConstGroup(document: SourceDocument, group: Node[]): boolean {
 		if (
 			!group.every((node) => {
 				return DeclarationReorder.#isSafeConstDeclaration(node);
@@ -156,7 +160,7 @@ export class DeclarationReorder {
 		for (let i = 0; i < group.length; i++) {
 			const node = group[i];
 
-			if (!node || !DeclarationReorder.#isMultiline(source, node)) {
+			if (!node || !DeclarationReorder.#isMultiline(document, node)) {
 				continue;
 			}
 
@@ -164,7 +168,7 @@ export class DeclarationReorder {
 
 			if (
 				group.slice(i + 1).some((node) => {
-					return !DeclarationReorder.#isMultiline(source, node) && DeclarationReorder.#usesAnyIdentifier(node, names);
+					return !DeclarationReorder.#isMultiline(document, node) && DeclarationReorder.#usesAnyIdentifier(node, names);
 				})
 			) {
 				return false;
@@ -199,12 +203,12 @@ export class DeclarationReorder {
 		return groups;
 	}
 
-	static #groupEdit(source: string, group: Node[], canReorder: boolean): Edit | null {
+	static #groupEdit(document: SourceDocument, group: Node[], canReorder: boolean): Edit | null {
 		const singleLine = group.filter((node) => {
-			return !DeclarationReorder.#isMultiline(source, node);
+			return !DeclarationReorder.#isMultiline(document, node);
 		});
 		const multiline = group.filter((node) => {
-			return DeclarationReorder.#isMultiline(source, node);
+			return DeclarationReorder.#isMultiline(document, node);
 		});
 
 		if (singleLine.length === 0 || multiline.length === 0) {
@@ -216,9 +220,9 @@ export class DeclarationReorder {
 		const replacement = desired
 			.map((node, index) => {
 				const previous = desired[index - 1];
-				const separator = previous && (DeclarationReorder.#isMultiline(source, previous) || DeclarationReorder.#isMultiline(source, node)) ? '\n\n' : index > 0 ? '\n' : '';
+				const separator = previous && (DeclarationReorder.#isMultiline(document, previous) || DeclarationReorder.#isMultiline(document, node)) ? '\n\n' : index > 0 ? '\n' : '';
 
-				return `${separator}${DeclarationReorder.#nodeSource(source, node)}`;
+				return `${separator}${DeclarationReorder.#nodeSource(document, node)}`;
 			})
 			.join('');
 
@@ -229,15 +233,15 @@ export class DeclarationReorder {
 			return null;
 		}
 
-		const firstStart = Ast.getStart(first);
-		const lastEnd = Ast.getEnd(last);
+		const firstStart = DeclarationReorder.#ast.getStart(first);
+		const lastEnd = DeclarationReorder.#ast.getEnd(last);
 
 		if (firstStart < 0 || lastEnd < 0) {
 			return null;
 		}
 
-		const start = SourceText.lineStart(source, firstStart);
-		const current = source.slice(start, lastEnd);
+		const start = document.lineStart(firstStart);
+		const current = document.slice(start, lastEnd);
 
 		if (current === replacement) {
 			return null;
@@ -265,13 +269,14 @@ export class DeclarationReorder {
 	 * @returns Safe declaration-ordering edits, or none for invalid source.
 	 */
 	static computeEdits(content: string, virtualName: string): Edit[] {
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = DeclarationReorder.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const lists = Ast.collectStatementLists(parsed.value.program);
+		const document = SourceDocument.of(virtualName, content);
+		const lists = DeclarationReorder.#ast.collectStatementLists(parsed.value.program);
 		const edits: Edit[] = [];
 
 		for (const list of lists) {
@@ -279,10 +284,12 @@ export class DeclarationReorder {
 				return node.type === 'ImportDeclaration';
 			});
 
-			const constGroups = DeclarationReorder.#splitGroups(list, Ast.isConstDeclaration);
+			const constGroups = DeclarationReorder.#splitGroups(list, (node) => {
+				return DeclarationReorder.#ast.isConstDeclaration(node);
+			});
 
 			for (const group of importGroups) {
-				const edit = DeclarationReorder.#groupEdit(content, group, true);
+				const edit = DeclarationReorder.#groupEdit(document, group, true);
 
 				if (edit) {
 					edits.push(edit);
@@ -290,7 +297,7 @@ export class DeclarationReorder {
 			}
 
 			for (const group of constGroups) {
-				const edit = DeclarationReorder.#groupEdit(content, group, DeclarationReorder.#canReorderConstGroup(content, group));
+				const edit = DeclarationReorder.#groupEdit(document, group, DeclarationReorder.#canReorderConstGroup(document, group));
 
 				if (edit) {
 					edits.push(edit);

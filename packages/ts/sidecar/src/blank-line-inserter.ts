@@ -1,10 +1,14 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { isErr } from '#sidecar/kernel/result';
 import { Rules } from '#sidecar/rules';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
 /** Computes and applies the blank lines required by formatter rules. */
 export class BlankLines {
+	static readonly #ast = new AstReader();
+
+	static readonly #parser = new SourceParser();
+
 	static #countNewlines(source: string, from: number, to: number): number {
 		let count = 0;
 
@@ -25,13 +29,13 @@ export class BlankLines {
 	 * @returns Source offsets where one newline should be inserted.
 	 */
 	static computeInsertPositions(content: string, virtualName: string): number[] {
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = BlankLines.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const lists = Ast.collectStatementLists(parsed.value.program);
+		const lists = BlankLines.#ast.collectStatementLists(parsed.value.program);
 		const positions: number[] = [];
 
 		for (const list of lists) {
@@ -47,8 +51,8 @@ export class BlankLines {
 					continue;
 				}
 
-				const prevEnd = Ast.getEnd(prev);
-				const nextStart = Ast.getStart(next);
+				const prevEnd = BlankLines.#ast.getEnd(prev);
+				const nextStart = BlankLines.#ast.getStart(next);
 
 				if (prevEnd < 0 || nextStart < 0 || nextStart <= prevEnd) {
 					continue;

@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { test } from 'node:test';
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import { isErr } from '#sidecar/kernel/result';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Node } from '#sidecar/syntax/node-schema';
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const exemptFiles = new Set(['sidecar.ts']);
+
+const ast = new AstReader();
+const parser = new SourceParser();
 
 // Root the scan at this test's own directory so it keeps covering every source
 // file regardless of how the tree is nested, rather than at a single module's
@@ -20,7 +23,7 @@ function isRelativeSpecifier(value: string): boolean {
 }
 
 function sourceValue(source: Node | undefined): string | null {
-	return source ? (Ast.stringValue(source) ?? null) : null;
+	return source ? (ast.stringValue(source) ?? null) : null;
 }
 
 function isSourceFile(name: string): boolean {
@@ -53,17 +56,17 @@ async function listSourceFiles(dir: string): Promise<string[]> {
 }
 
 function collectModuleSpecifiers(file: string, source: string): string[] {
-	const parsed = Sources.parse(file, source);
+	const parsed = parser.parse(file, source);
 	const specifiers: string[] = [];
 
 	if (isErr(parsed)) {
 		return specifiers;
 	}
 
-	Ast.visit(parsed.value.program, (node) => {
+	ast.visit(parsed.value.program, (node) => {
 		if (node.type === 'ImportDeclaration' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') {
 			const specifier = sourceValue(
-				Ast.childNode(node, 'source'),
+				ast.childNode(node, 'source'),
 			);
 
 			if (specifier) {
@@ -73,7 +76,7 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 
 		if (node.type === 'ImportExpression') {
 			const specifier = sourceValue(
-				Ast.childNode(node, 'source'),
+				ast.childNode(node, 'source'),
 			);
 
 			if (specifier) {
@@ -81,10 +84,10 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 			}
 		}
 
-		const callee = Ast.childNode(node, 'callee');
+		const callee = ast.childNode(node, 'callee');
 
 		if (node.type === 'CallExpression' && callee?.type === 'Identifier' && callee.name === 'require') {
-			const specifier = sourceValue(Ast.childNodes(node, 'arguments')[0]);
+			const specifier = sourceValue(ast.childNodes(node, 'arguments')[0]);
 
 			if (specifier) {
 				specifiers.push(specifier);

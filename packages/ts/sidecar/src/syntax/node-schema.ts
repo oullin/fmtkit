@@ -30,8 +30,8 @@ const NodeHeadSchema = z
  * positional head, while retaining other properties. Program descendants,
  * including their discriminators, positions, and nested structure, are trusted
  * Oxc output after that envelope succeeds and are recognised structurally.
- * `Ast` lazily Zod-validates the descendant `name`, `kind`, and string `value`
- * fields that passes consume, avoiding a recursive walk and reconstruction.
+ * `AstReader` lazily Zod-validates the descendant `name`, `kind`, and string
+ * `value` fields that passes consume, avoiding a recursive walk and reconstruction.
  */
 export class Node {
 	readonly [key: string]: AstValue;
@@ -77,8 +77,8 @@ export class Node {
  *
  * The DTO schema eagerly validates the payload envelope, the program node
  * head, the comments array, and every comment node head. Program descendant
- * structure and positions remain trusted Oxc data; narrow `Ast` readers lazily
- * validate consumed `name`, `kind`, and string `value` fields. No pass receives
+ * structure and positions remain trusted Oxc data; narrow `AstReader` readers
+ * lazily validate consumed `name`, `kind`, and string `value` fields. No pass receives
  * the raw parser payload.
  */
 export class ParsedSourceDto {
@@ -110,12 +110,30 @@ export class ParsedSourceDto {
 		const parsed = ParsedSourceDto.#schema.safeParse(value);
 
 		if (!parsed.success) {
-			return parsed;
+			// The schema output type omits the DTO's own methods, so the Zod error
+			// is carried across on the declared parse result's failure branch.
+			return { success: false, error: parsed.error as unknown as z.ZodError<ParsedSourceDto> };
 		}
 
 		return {
 			success: true,
 			data: new ParsedSourceDto(parsed.data.program, parsed.data.comments),
 		};
+	}
+
+	/**
+	 * Report whether a complete comment lies between two offsets.
+	 *
+	 * @param from - The inclusive lower offset.
+	 * @param to - The inclusive upper offset.
+	 * @returns `true` when a comment is contained by the range.
+	 */
+	hasCommentBetween(from: number, to: number): boolean {
+		return this.comments.some((comment) => {
+			const start = comment.start ?? comment.range?.[0] ?? -1;
+			const end = comment.end ?? comment.range?.[1] ?? -1;
+
+			return start >= from && end <= to;
+		});
 	}
 }

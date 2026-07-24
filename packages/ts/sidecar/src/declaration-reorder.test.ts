@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DeclarationReorder } from '#sidecar/declaration-reorder';
-import { Edits } from '#sidecar/syntax/edits';
+import { EditApplier } from '#sidecar/syntax/edits';
+
+const editApplier = new EditApplier();
 
 function reorder(source: string): string {
 	const edits = DeclarationReorder.computeEdits(source, 'sample.ts');
 
-	return edits.length > 0 ? Edits.apply(source, edits) : source;
+	return edits.length > 0 ? editApplier.apply(source, edits) : source;
 }
 
 test('moves single-line consts ahead of a multiline const when initializers are side-effect free', () => {

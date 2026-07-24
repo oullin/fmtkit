@@ -1,10 +1,11 @@
-import { Ast } from '#sidecar/syntax/ast';
-import { Edits } from '#sidecar/syntax/edits';
+import { AstReader } from '#sidecar/syntax/ast-reader';
+import { EditApplier } from '#sidecar/syntax/edits';
 import { FileTargets } from '#sidecar/hosts/file-targets';
 import { Node } from '#sidecar/syntax/node-schema';
+import type { ParsedSourceDto } from '#sidecar/syntax/node-schema';
 import { isErr } from '#sidecar/kernel/result';
-import { SourceText } from '#sidecar/syntax/source-text';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Edit } from '#sidecar/syntax/edits';
 
 type DrizzleImports = {
@@ -112,8 +113,14 @@ const DRIZZLE_OBJECT_KEYS = new Set(['columns', 'extras', 'limit', 'offset', 'on
 
 /** Formats recognised Drizzle query structures without touching unrelated calls. */
 export class DrizzleQueries {
+	static readonly #ast = new AstReader();
+
+	static readonly #editApplier = new EditApplier();
+
+	static readonly #parser = new SourceParser();
+
 	static #localName(node: Node | undefined): string | null {
-		return node?.type === 'Identifier' ? (Ast.nodeName(node) ?? null) : null;
+		return node?.type === 'Identifier' ? (DrizzleQueries.#ast.nodeName(node) ?? null) : null;
 	}
 
 	static #literalValue(node: Node | undefined): string | null {
@@ -121,7 +128,7 @@ export class DrizzleQueries {
 			return null;
 		}
 
-		return Ast.stringValue(node) ?? null;
+		return DrizzleQueries.#ast.stringValue(node) ?? null;
 	}
 
 	static #propertyName(member: Node | undefined): string | null {
@@ -129,7 +136,7 @@ export class DrizzleQueries {
 			return null;
 		}
 
-		return DrizzleQueries.#localName(Ast.childNode(member, 'property'));
+		return DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(member, 'property'));
 	}
 
 	static #calleeName(callee: Node | undefined, imports: DrizzleImports): string | null {
@@ -144,9 +151,9 @@ export class DrizzleQueries {
 		}
 
 		if (callee.type === 'MemberExpression' && !callee.computed) {
-			const object = Ast.childNode(callee, 'object');
+			const object = DrizzleQueries.#ast.childNode(callee, 'object');
 
-			const property = DrizzleQueries.#localName(Ast.childNode(callee, 'property'));
+			const property = DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(callee, 'property'));
 
 			const objectName = DrizzleQueries.#localName(object);
 
@@ -160,23 +167,23 @@ export class DrizzleQueries {
 
 	static #collectDrizzleImports(program: Node): DrizzleImports {
 		const imports: DrizzleImports = { locals: new Map(), namespaces: new Set() };
-		const body = Ast.childNodes(program, 'body');
+		const body = DrizzleQueries.#ast.childNodes(program, 'body');
 
 		for (const statement of body) {
 			if (statement.type !== 'ImportDeclaration') {
 				continue;
 			}
 
-			const source = DrizzleQueries.#literalValue(Ast.childNode(statement, 'source'));
+			const source = DrizzleQueries.#literalValue(DrizzleQueries.#ast.childNode(statement, 'source'));
 
 			if (!source?.startsWith(DRIZZLE_MODULE)) {
 				continue;
 			}
 
-			for (const specifier of Ast.childNodes(statement, 'specifiers')) {
+			for (const specifier of DrizzleQueries.#ast.childNodes(statement, 'specifiers')) {
 				if (specifier.type === 'ImportSpecifier') {
-					const imported = DrizzleQueries.#localName(Ast.childNode(specifier, 'imported'));
-					const local = DrizzleQueries.#localName(Ast.childNode(specifier, 'local'));
+					const imported = DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(specifier, 'imported'));
+					const local = DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(specifier, 'local'));
 
 					if (imported && local) {
 						imports.locals.set(local, imported);
@@ -184,7 +191,7 @@ export class DrizzleQueries {
 				}
 
 				if (specifier.type === 'ImportNamespaceSpecifier') {
-					const local = DrizzleQueries.#localName(Ast.childNode(specifier, 'local'));
+					const local = DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(specifier, 'local'));
 
 					if (local) {
 						imports.namespaces.add(local);
@@ -197,7 +204,7 @@ export class DrizzleQueries {
 	}
 
 	static #chainHasQueryMember(node: Node | undefined): boolean {
-		const current = SourceText.unwrapChainExpression(node);
+		const current = DrizzleQueries.#ast.unwrapChainExpression(node);
 
 		if (!current) {
 			return false;
@@ -208,18 +215,18 @@ export class DrizzleQueries {
 				return true;
 			}
 
-			return DrizzleQueries.#chainHasQueryMember(Ast.childNode(current, 'object'));
+			return DrizzleQueries.#chainHasQueryMember(DrizzleQueries.#ast.childNode(current, 'object'));
 		}
 
 		if (current.type === 'CallExpression') {
-			return DrizzleQueries.#chainHasQueryMember(Ast.childNode(current, 'callee'));
+			return DrizzleQueries.#chainHasQueryMember(DrizzleQueries.#ast.childNode(current, 'callee'));
 		}
 
 		return false;
 	}
 
 	static #isDrizzleReceiver(node: Node | undefined, imports: DrizzleImports): boolean {
-		const current = SourceText.unwrapChainExpression(node);
+		const current = DrizzleQueries.#ast.unwrapChainExpression(node);
 
 		if (!current) {
 			return false;
@@ -232,7 +239,7 @@ export class DrizzleQueries {
 		}
 
 		if (current.type === 'MemberExpression') {
-			const object = Ast.childNode(current, 'object');
+			const object = DrizzleQueries.#ast.childNode(current, 'object');
 			const property = DrizzleQueries.#propertyName(current);
 
 			if (property === 'query') {
@@ -243,7 +250,7 @@ export class DrizzleQueries {
 		}
 
 		if (current.type === 'CallExpression') {
-			const callee = SourceText.unwrapChainExpression(Ast.childNode(current, 'callee'));
+			const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(current, 'callee'));
 
 			if (callee?.type === 'Identifier') {
 				const imported = DrizzleQueries.#calleeName(callee, imports);
@@ -255,10 +262,10 @@ export class DrizzleQueries {
 				const method = DrizzleQueries.#propertyName(callee);
 
 				if (method && DRIZZLE_CHAIN_METHODS.has(method)) {
-					return DrizzleQueries.#isDrizzleReceiver(Ast.childNode(callee, 'object'), imports);
+					return DrizzleQueries.#isDrizzleReceiver(DrizzleQueries.#ast.childNode(callee, 'object'), imports);
 				}
 
-				return DrizzleQueries.#isDrizzleReceiver(Ast.childNode(callee, 'object'), imports);
+				return DrizzleQueries.#isDrizzleReceiver(DrizzleQueries.#ast.childNode(callee, 'object'), imports);
 			}
 		}
 
@@ -266,13 +273,13 @@ export class DrizzleQueries {
 	}
 
 	static #methodName(call: Node): string | null {
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		return callee?.type === 'MemberExpression' ? DrizzleQueries.#propertyName(callee) : null;
 	}
 
 	static #isDrizzleMethodCall(call: Node, imports: DrizzleImports): boolean {
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		if (callee?.type !== 'MemberExpression') {
 			return false;
@@ -284,25 +291,25 @@ export class DrizzleQueries {
 			return false;
 		}
 
-		return DrizzleQueries.#isDrizzleReceiver(Ast.childNode(callee, 'object'), imports);
+		return DrizzleQueries.#isDrizzleReceiver(DrizzleQueries.#ast.childNode(callee, 'object'), imports);
 	}
 
 	static #isRelationalQueryCall(call: Node, imports: DrizzleImports): boolean {
 		const name = DrizzleQueries.#methodName(call);
 
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		if ((name !== 'findMany' && name !== 'findFirst') || callee?.type !== 'MemberExpression') {
 			return false;
 		}
 
-		const object = Ast.childNode(callee, 'object');
+		const object = DrizzleQueries.#ast.childNode(callee, 'object');
 
 		return DrizzleQueries.#chainHasQueryMember(object) && DrizzleQueries.#isDrizzleReceiver(object, imports);
 	}
 
 	static #isImportedHelperCall(call: Node, imports: DrizzleImports): boolean {
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		const name = DrizzleQueries.#calleeName(callee, imports);
 
@@ -310,7 +317,7 @@ export class DrizzleQueries {
 	}
 
 	static #isSetOperationCall(call: Node, imports: DrizzleImports): boolean {
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		const name = DrizzleQueries.#calleeName(callee, imports);
 
@@ -318,29 +325,29 @@ export class DrizzleQueries {
 	}
 
 	static #callDisplayName(source: string, call: Node, imports: DrizzleImports): string {
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
 		if (callee?.type === 'Identifier') {
-			return SourceText.sourceOf(source, callee);
+			return DrizzleQueries.#ast.sourceOf(source, callee);
 		}
 
 		if (callee?.type === 'MemberExpression') {
 			const name = DrizzleQueries.#calleeName(callee, imports);
 
 			if (name) {
-				return SourceText.sourceOf(source, callee);
+				return DrizzleQueries.#ast.sourceOf(source, callee);
 			}
 		}
 
-		return callee ? SourceText.sourceOf(source, callee) : '';
+		return callee ? DrizzleQueries.#ast.sourceOf(source, callee) : '';
 	}
 
 	static #callParens(source: string, call: Node): { open: number; close: number } | null {
-		return SourceText.callParens(source, call, SourceText.unwrapChainExpression(Ast.childNode(call, 'callee')));
+		return DrizzleQueries.#ast.callParens(source, call, DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee')));
 	}
 
 	static #shouldFormatObjectExpression(node: Node): boolean {
-		const properties = Ast.childNodes(node, 'properties');
+		const properties = DrizzleQueries.#ast.childNodes(node, 'properties');
 
 		if (properties.length > 1) {
 			return true;
@@ -351,9 +358,9 @@ export class DrizzleQueries {
 				return true;
 			}
 
-			const key = DrizzleQueries.#localName(Ast.childNode(property, 'key'));
+			const key = DrizzleQueries.#localName(DrizzleQueries.#ast.childNode(property, 'key'));
 
-			const value = Ast.childNode(property, 'value');
+			const value = DrizzleQueries.#ast.childNode(property, 'value');
 
 			if (!value) {
 				return false;
@@ -398,7 +405,7 @@ export class DrizzleQueries {
 	}
 
 	static #shouldFormatMethodArguments(call: Node, imports: DrizzleImports): boolean {
-		const args = Ast.childNodes(call, 'arguments');
+		const args = DrizzleQueries.#ast.childNodes(call, 'arguments');
 
 		if (args.length === 0) {
 			return false;
@@ -435,9 +442,9 @@ export class DrizzleQueries {
 
 	// Emission: render recognised structures and produce non-overlapping edits.
 
-	static #formatArrayExpression(source: string, node: Node, imports: DrizzleImports, comments: readonly Node[], indent: string, indentUnit: string): string {
-		if (SourceText.hasCommentBetween(comments, Ast.getStart(node), Ast.getEnd(node))) {
-			return SourceText.sourceOf(source, node);
+	static #formatArrayExpression(source: string, node: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indent: string, indentUnit: string): string {
+		if (parsed.hasCommentBetween(DrizzleQueries.#ast.getStart(node), DrizzleQueries.#ast.getEnd(node))) {
+			return DrizzleQueries.#ast.sourceOf(source, node);
 		}
 
 		const elements = Array.isArray(node.elements) ? node.elements : [];
@@ -449,18 +456,18 @@ export class DrizzleQueries {
 		const nextIndent = `${indent}${indentUnit}`;
 
 		const formatted = elements.map((element) => {
-			return element instanceof Node ? DrizzleQueries.#formatNode(source, element, imports, comments, nextIndent, indentUnit) : '';
+			return element instanceof Node ? DrizzleQueries.#formatNode(source, element, imports, parsed, nextIndent, indentUnit) : '';
 		});
 
 		return `[\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent}]`;
 	}
 
-	static #formatObjectExpression(source: string, node: Node, imports: DrizzleImports, comments: readonly Node[], indent: string, indentUnit: string): string {
-		if (SourceText.hasCommentBetween(comments, Ast.getStart(node), Ast.getEnd(node))) {
-			return SourceText.sourceOf(source, node);
+	static #formatObjectExpression(source: string, node: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indent: string, indentUnit: string): string {
+		if (parsed.hasCommentBetween(DrizzleQueries.#ast.getStart(node), DrizzleQueries.#ast.getEnd(node))) {
+			return DrizzleQueries.#ast.sourceOf(source, node);
 		}
 
-		const properties = Ast.childNodes(node, 'properties');
+		const properties = DrizzleQueries.#ast.childNodes(node, 'properties');
 
 		if (properties.length === 0) {
 			return '{}';
@@ -470,106 +477,106 @@ export class DrizzleQueries {
 
 		const formatted = properties.map((property) => {
 			if (property.type !== 'Property') {
-				return SourceText.sourceOf(source, property);
+				return DrizzleQueries.#ast.sourceOf(source, property);
 			}
 
-			const key = Ast.childNode(property, 'key');
-			const value = Ast.childNode(property, 'value');
+			const key = DrizzleQueries.#ast.childNode(property, 'key');
+			const value = DrizzleQueries.#ast.childNode(property, 'value');
 
 			if (!key || !value || property.computed || property.method) {
-				return SourceText.sourceOf(source, property);
+				return DrizzleQueries.#ast.sourceOf(source, property);
 			}
 
 			if (property.shorthand) {
-				return SourceText.sourceOf(source, property);
+				return DrizzleQueries.#ast.sourceOf(source, property);
 			}
 
-			return `${SourceText.sourceOf(source, key)}: ${DrizzleQueries.#formatNode(source, value, imports, comments, nextIndent, indentUnit)}`;
+			return `${DrizzleQueries.#ast.sourceOf(source, key)}: ${DrizzleQueries.#formatNode(source, value, imports, parsed, nextIndent, indentUnit)}`;
 		});
 
 		return `{\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent}}`;
 	}
 
-	static #formatHelperCall(source: string, call: Node, imports: DrizzleImports, comments: readonly Node[], indent: string, indentUnit: string): string {
-		if (SourceText.hasCommentBetween(comments, Ast.getStart(call), Ast.getEnd(call))) {
-			return SourceText.sourceOf(source, call);
+	static #formatHelperCall(source: string, call: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indent: string, indentUnit: string): string {
+		if (parsed.hasCommentBetween(DrizzleQueries.#ast.getStart(call), DrizzleQueries.#ast.getEnd(call))) {
+			return DrizzleQueries.#ast.sourceOf(source, call);
 		}
 
-		const importedName = DrizzleQueries.#calleeName(SourceText.unwrapChainExpression(Ast.childNode(call, 'callee')), imports);
+		const importedName = DrizzleQueries.#calleeName(DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee')), imports);
 
-		const args = Ast.childNodes(call, 'arguments');
+		const args = DrizzleQueries.#ast.childNodes(call, 'arguments');
 
 		if (!importedName || !MULTILINE_HELPERS.has(importedName) || args.length === 0) {
-			return SourceText.sourceOf(source, call);
+			return DrizzleQueries.#ast.sourceOf(source, call);
 		}
 
 		const nextIndent = `${indent}${indentUnit}`;
-		const formatted = args.map((arg) => DrizzleQueries.#formatNode(source, arg, imports, comments, nextIndent, indentUnit));
+		const formatted = args.map((arg) => DrizzleQueries.#formatNode(source, arg, imports, parsed, nextIndent, indentUnit));
 
 		return `${DrizzleQueries.#callDisplayName(source, call, imports)}(\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent})`;
 	}
 
-	static #formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, comments: readonly Node[], indent: string, indentUnit: string): string {
-		if (SourceText.hasCommentBetween(comments, Ast.getStart(call), Ast.getEnd(call))) {
-			return SourceText.sourceOf(source, call);
+	static #formatSetOperationCall(source: string, call: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indent: string, indentUnit: string): string {
+		if (parsed.hasCommentBetween(DrizzleQueries.#ast.getStart(call), DrizzleQueries.#ast.getEnd(call))) {
+			return DrizzleQueries.#ast.sourceOf(source, call);
 		}
 
-		const args = Ast.childNodes(call, 'arguments');
+		const args = DrizzleQueries.#ast.childNodes(call, 'arguments');
 
 		if (args.length < 2) {
-			return SourceText.sourceOf(source, call);
+			return DrizzleQueries.#ast.sourceOf(source, call);
 		}
 
 		const nextIndent = `${indent}${indentUnit}`;
-		const formatted = args.map((arg) => DrizzleQueries.#formatNode(source, arg, imports, comments, nextIndent, indentUnit));
+		const formatted = args.map((arg) => DrizzleQueries.#formatNode(source, arg, imports, parsed, nextIndent, indentUnit));
 
 		return `${DrizzleQueries.#callDisplayName(source, call, imports)}(\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent})`;
 	}
 
-	static #formatNode(source: string, node: Node, imports: DrizzleImports, comments: readonly Node[], indent: string, indentUnit: string): string {
+	static #formatNode(source: string, node: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indent: string, indentUnit: string): string {
 		if (node.type === 'ObjectExpression' && DrizzleQueries.#shouldFormatObjectExpression(node)) {
-			return DrizzleQueries.#formatObjectExpression(source, node, imports, comments, indent, indentUnit);
+			return DrizzleQueries.#formatObjectExpression(source, node, imports, parsed, indent, indentUnit);
 		}
 
 		if (node.type === 'ArrayExpression' && DrizzleQueries.#shouldFormatArrayExpression(node)) {
-			return DrizzleQueries.#formatArrayExpression(source, node, imports, comments, indent, indentUnit);
+			return DrizzleQueries.#formatArrayExpression(source, node, imports, parsed, indent, indentUnit);
 		}
 
 		if (node.type === 'CallExpression') {
 			if (DrizzleQueries.#isSetOperationCall(node, imports)) {
-				return DrizzleQueries.#formatSetOperationCall(source, node, imports, comments, indent, indentUnit);
+				return DrizzleQueries.#formatSetOperationCall(source, node, imports, parsed, indent, indentUnit);
 			}
 
 			if (DrizzleQueries.#isImportedHelperCall(node, imports)) {
-				return DrizzleQueries.#formatHelperCall(source, node, imports, comments, indent, indentUnit);
+				return DrizzleQueries.#formatHelperCall(source, node, imports, parsed, indent, indentUnit);
 			}
 		}
 
-		return SourceText.sourceOf(source, node);
+		return DrizzleQueries.#ast.sourceOf(source, node);
 	}
 
-	static #formatCallArguments(source: string, call: Node, imports: DrizzleImports, comments: readonly Node[], indentUnit: string): Edit | null {
-		const parens = DrizzleQueries.#callParens(source, call);
-		const args = Ast.childNodes(call, 'arguments');
+	static #formatCallArguments(document: SourceDocument, call: Node, imports: DrizzleImports, parsed: ParsedSourceDto, indentUnit: string): Edit | null {
+		const parens = DrizzleQueries.#callParens(document.text, call);
+		const args = DrizzleQueries.#ast.childNodes(call, 'arguments');
 
 		if (!parens || args.length === 0) {
 			return null;
 		}
 
-		if (SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
+		if (parsed.hasCommentBetween(parens.open, parens.close)) {
 			return null;
 		}
 
-		const callee = SourceText.unwrapChainExpression(Ast.childNode(call, 'callee'));
+		const callee = DrizzleQueries.#ast.unwrapChainExpression(DrizzleQueries.#ast.childNode(call, 'callee'));
 
-		const property = callee ? Ast.childNode(callee, 'property') : undefined;
-		const indentPos = callee?.type === 'MemberExpression' && property ? Ast.getStart(property) : Ast.getStart(call);
-		const indent = SourceText.lineIndent(source, indentPos);
+		const property = callee ? DrizzleQueries.#ast.childNode(callee, 'property') : undefined;
+		const indentPos = callee?.type === 'MemberExpression' && property ? DrizzleQueries.#ast.getStart(property) : DrizzleQueries.#ast.getStart(call);
+		const indent = document.lineIndent(indentPos);
 		const argIndent = `${indent}${indentUnit}`;
-		const formatted = args.map((arg) => DrizzleQueries.#formatNode(source, arg, imports, comments, argIndent, indentUnit));
+		const formatted = args.map((arg) => DrizzleQueries.#formatNode(document.text, arg, imports, parsed, argIndent, indentUnit));
 		const replacement = `(\n${argIndent}${formatted.join(`,\n${argIndent}`)},\n${indent})`;
 
-		if (source.slice(parens.open, parens.close + 1) === replacement) {
+		if (document.slice(parens.open, parens.close + 1) === replacement) {
 			return null;
 		}
 
@@ -592,13 +599,13 @@ export class DrizzleQueries {
 			return [];
 		}
 
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = DrizzleQueries.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const comments = parsed.value.comments;
+		const document = SourceDocument.of(virtualName, content);
 		const imports = DrizzleQueries.#collectDrizzleImports(parsed.value.program);
 
 		if (imports.locals.size === 0 && imports.namespaces.size === 0) {
@@ -606,15 +613,15 @@ export class DrizzleQueries {
 		}
 
 		const edits: Edit[] = [];
-		const indentUnit = SourceText.detectIndentUnit(content);
+		const indentUnit = document.indentUnit();
 
-		Ast.visit(parsed.value.program, (node) => {
+		DrizzleQueries.#ast.visit(parsed.value.program, (node) => {
 			if (node.type !== 'CallExpression') {
 				return;
 			}
 
 			if (DrizzleQueries.#isDrizzleMethodCall(node, imports) || DrizzleQueries.#isRelationalQueryCall(node, imports) || DrizzleQueries.#isSetOperationCall(node, imports)) {
-				const args = Ast.childNodes(node, 'arguments');
+				const args = DrizzleQueries.#ast.childNodes(node, 'arguments');
 
 				if (DrizzleQueries.#isSetOperationCall(node, imports) && args.length > 0 && args.length < 2) {
 					return;
@@ -624,7 +631,7 @@ export class DrizzleQueries {
 					return;
 				}
 
-				const edit = DrizzleQueries.#formatCallArguments(content, node, imports, comments, indentUnit);
+				const edit = DrizzleQueries.#formatCallArguments(document, node, imports, parsed.value, indentUnit);
 
 				if (edit) {
 					edits.push(edit);
@@ -632,7 +639,7 @@ export class DrizzleQueries {
 			}
 		});
 
-		return Edits.nonOverlapping(edits);
+		return DrizzleQueries.#editApplier.nonOverlapping(edits);
 	}
 
 	/**
@@ -645,6 +652,6 @@ export class DrizzleQueries {
 	static format(content: string, virtualName: string): string {
 		const edits = DrizzleQueries.computeEdits(content, virtualName);
 
-		return edits.length > 0 ? Edits.apply(content, edits) : content;
+		return edits.length > 0 ? DrizzleQueries.#editApplier.apply(content, edits) : content;
 	}
 }

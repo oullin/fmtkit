@@ -1,11 +1,12 @@
-import { Ast } from '#sidecar/syntax/ast';
-import { Edits } from '#sidecar/syntax/edits';
+import { AstReader } from '#sidecar/syntax/ast-reader';
+import type { CallParens } from '#sidecar/syntax/ast-reader';
+import { EditApplier } from '#sidecar/syntax/edits';
 import { FileTargets } from '#sidecar/hosts/file-targets';
 import { Node } from '#sidecar/syntax/node-schema';
+import type { ParsedSourceDto } from '#sidecar/syntax/node-schema';
 import { isErr } from '#sidecar/kernel/result';
-import { SourceText } from '#sidecar/syntax/source-text';
-import type { CallParens } from '#sidecar/syntax/source-text';
-import { Sources } from '#sidecar/syntax/sources';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 import { TemplateSpans } from '#sidecar/syntax/template-spans';
 import type { Edit } from '#sidecar/syntax/edits';
 
@@ -13,6 +14,12 @@ const FUNCTION_TYPES = new Set(['ArrowFunctionExpression', 'FunctionDeclaration'
 
 /** Expands structurally complex call arguments into stable multiline layouts. */
 export class ExpandedCalls {
+	static readonly #ast = new AstReader();
+
+	static readonly #editApplier = new EditApplier();
+
+	static readonly #parser = new SourceParser();
+
 	static #unwrapExpression(node: Node | undefined): Node | undefined {
 		let current = node;
 
@@ -25,22 +32,22 @@ export class ExpandedCalls {
 				current.type === 'TSNonNullExpression' ||
 				current.type === 'TSTypeAssertion')
 		) {
-			current = Ast.childNode(current, 'expression');
+			current = ExpandedCalls.#ast.childNode(current, 'expression');
 		}
 
 		return current;
 	}
 
-	static #calleeParens(source: string, call: Node): CallParens | null {
-		return SourceText.callParens(source, call, ExpandedCalls.#unwrapExpression(Ast.childNode(call, 'callee')));
+	static #calleeParens(document: SourceDocument, call: Node): CallParens | null {
+		return ExpandedCalls.#ast.callParens(document.text, call, ExpandedCalls.#unwrapExpression(ExpandedCalls.#ast.childNode(call, 'callee')));
 	}
 
 	static #callArguments(call: Node): Node[] {
-		return Ast.childNodes(call, 'arguments');
+		return ExpandedCalls.#ast.childNodes(call, 'arguments');
 	}
 
 	static #isMethodCall(call: Node): boolean {
-		const callee = ExpandedCalls.#unwrapExpression(Ast.childNode(call, 'callee'));
+		const callee = ExpandedCalls.#unwrapExpression(ExpandedCalls.#ast.childNode(call, 'callee'));
 
 		return callee?.type === 'MemberExpression';
 	}
@@ -74,12 +81,12 @@ export class ExpandedCalls {
 	}
 
 	static #isInsideCallArgument(node: Node, call: Node): boolean {
-		const start = Ast.getStart(node);
-		const end = Ast.getEnd(node);
+		const start = ExpandedCalls.#ast.getStart(node);
+		const end = ExpandedCalls.#ast.getEnd(node);
 		const args = ExpandedCalls.#callArguments(call);
 
 		return args.some((arg) => {
-			return Ast.getStart(arg) <= start && end <= Ast.getEnd(arg);
+			return ExpandedCalls.#ast.getStart(arg) <= start && end <= ExpandedCalls.#ast.getEnd(arg);
 		});
 	}
 
@@ -143,10 +150,10 @@ export class ExpandedCalls {
 	 * sitting at its target depth is left alone. Only the first line is skipped
 	 * outright — the caller places it.
 	 */
-	static #rebaseIndent(source: string, node: Node, to: string, spans: TemplateSpans): string {
-		const start = Ast.getStart(node);
-		const text = SourceText.sourceOf(source, node);
-		const from = SourceText.lineIndent(source, start);
+	static #rebaseIndent(document: SourceDocument, node: Node, to: string, spans: TemplateSpans): string {
+		const start = ExpandedCalls.#ast.getStart(node);
+		const text = ExpandedCalls.#ast.sourceOf(document.text, node);
+		const from = document.lineIndent(start);
 
 		if (from === to || !text.includes('\n')) {
 			return text;
@@ -164,11 +171,11 @@ export class ExpandedCalls {
 		return rebased.join('\n');
 	}
 
-	static #formatCallParens(source: string, call: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string | null {
-		const parens = ExpandedCalls.#calleeParens(source, call);
+	static #formatCallParens(document: SourceDocument, call: Node, parsed: ParsedSourceDto, indent: string, indentUnit: string, spans: TemplateSpans): string | null {
+		const parens = ExpandedCalls.#calleeParens(document, call);
 		const args = ExpandedCalls.#callArguments(call);
 
-		if (!parens || args.length === 0 || SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
+		if (!parens || args.length === 0 || parsed.hasCommentBetween(parens.open, parens.close)) {
 			return null;
 		}
 
@@ -179,7 +186,7 @@ export class ExpandedCalls {
 		const argIndent = `${indent}${indentUnit}`;
 
 		const formattedArgs = args.map((arg) => {
-			return ExpandedCalls.#formatNode(source, arg, comments, argIndent, indentUnit, spans);
+			return ExpandedCalls.#formatNode(document, arg, parsed, argIndent, indentUnit, spans);
 		});
 
 		const separator = `,\n${argIndent}`;
@@ -188,30 +195,30 @@ export class ExpandedCalls {
 		return `(\n${argIndent}${formattedArgs.join(separator)}${trailingComma}\n${indent})`;
 	}
 
-	static #formatCall(source: string, call: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string {
-		const parens = ExpandedCalls.#calleeParens(source, call);
-		const formattedParens = ExpandedCalls.#formatCallParens(source, call, comments, indent, indentUnit, spans);
+	static #formatCall(document: SourceDocument, call: Node, parsed: ParsedSourceDto, indent: string, indentUnit: string, spans: TemplateSpans): string {
+		const parens = ExpandedCalls.#calleeParens(document, call);
+		const formattedParens = ExpandedCalls.#formatCallParens(document, call, parsed, indent, indentUnit, spans);
 
 		if (!parens || formattedParens === null) {
-			return ExpandedCalls.#rebaseIndent(source, call, indent, spans);
+			return ExpandedCalls.#rebaseIndent(document, call, indent, spans);
 		}
 
-		return `${source.slice(Ast.getStart(call), parens.open)}${formattedParens}`;
+		return `${document.slice(ExpandedCalls.#ast.getStart(call), parens.open)}${formattedParens}`;
 	}
 
 	// indent is where node will sit once expanded; the depth its text came from is
 	// read back off the node's own line, because nothing has moved in the source
 	// yet however deep the recursion goes.
-	static #formatNode(source: string, node: Node, comments: readonly Node[], indent: string, indentUnit: string, spans: TemplateSpans): string {
+	static #formatNode(document: SourceDocument, node: Node, parsed: ParsedSourceDto, indent: string, indentUnit: string, spans: TemplateSpans): string {
 		if (node.type !== 'CallExpression') {
-			return ExpandedCalls.#rebaseIndent(source, node, indent, spans);
+			return ExpandedCalls.#rebaseIndent(document, node, indent, spans);
 		}
 
 		if (!ExpandedCalls.#shouldExpandCall(node)) {
-			return ExpandedCalls.#rebaseIndent(source, node, indent, spans);
+			return ExpandedCalls.#rebaseIndent(document, node, indent, spans);
 		}
 
-		return ExpandedCalls.#formatCall(source, node, comments, indent, indentUnit, spans);
+		return ExpandedCalls.#formatCall(document, node, parsed, indent, indentUnit, spans);
 	}
 	/**
 	 * Compute edits for calls whose arguments require a multiline layout.
@@ -225,21 +232,21 @@ export class ExpandedCalls {
 			return [];
 		}
 
-		const parsed = Sources.parse(virtualName, content);
+		const parsed = ExpandedCalls.#parser.parse(virtualName, content);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const comments = parsed.value.comments;
+		const document = SourceDocument.of(virtualName, content);
 		const parents = new WeakMap<Node, Node>();
 		const edits: Edit[] = [];
-		const indentUnit = SourceText.detectIndentUnit(content);
+		const indentUnit = document.indentUnit();
 		const spans = TemplateSpans.collect(parsed.value.program);
 
 		ExpandedCalls.#collectParents(parsed.value.program, parents);
 
-		Ast.visit(parsed.value.program, (node) => {
+		ExpandedCalls.#ast.visit(parsed.value.program, (node) => {
 			if (node.type !== 'CallExpression') {
 				return;
 			}
@@ -252,16 +259,16 @@ export class ExpandedCalls {
 				return;
 			}
 
-			const parens = ExpandedCalls.#calleeParens(content, node);
+			const parens = ExpandedCalls.#calleeParens(document, node);
 
-			if (!parens || SourceText.hasCommentBetween(comments, parens.open, parens.close)) {
+			if (!parens || parsed.value.hasCommentBetween(parens.open, parens.close)) {
 				return;
 			}
 
-			const indent = SourceText.lineIndent(content, Ast.getStart(node));
+			const indent = document.lineIndent(ExpandedCalls.#ast.getStart(node));
 
-			const replacement = ExpandedCalls.#formatCallParens(content, node, comments, indent, indentUnit, spans);
-			const current = content.slice(parens.open, parens.close + 1);
+			const replacement = ExpandedCalls.#formatCallParens(document, node, parsed.value, indent, indentUnit, spans);
+			const current = document.slice(parens.open, parens.close + 1);
 
 			if (replacement === null || replacement === current) {
 				return;
@@ -274,7 +281,7 @@ export class ExpandedCalls {
 			});
 		});
 
-		return Edits.nonOverlapping(edits);
+		return ExpandedCalls.#editApplier.nonOverlapping(edits);
 	}
 
 	/**
@@ -287,6 +294,6 @@ export class ExpandedCalls {
 	static format(content: string, virtualName: string): string {
 		const edits = ExpandedCalls.computeEdits(content, virtualName);
 
-		return edits.length > 0 ? Edits.apply(content, edits) : content;
+		return edits.length > 0 ? ExpandedCalls.#editApplier.apply(content, edits) : content;
 	}
 }

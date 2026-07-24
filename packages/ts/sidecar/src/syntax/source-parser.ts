@@ -5,7 +5,7 @@ import { err, ok } from '#sidecar/kernel/result';
 import type { Result } from '#sidecar/kernel/result';
 
 /** Parses source text without exposing a broken syntax tree to formatting passes. */
-export class Sources {
+export class SourceParser {
 	/**
 	 * Parse source text into the structures used by formatting passes.
 	 *
@@ -19,7 +19,7 @@ export class Sources {
 	 * @param content - The source text to parse.
 	 * @returns The trustworthy syntax tree, or the parser diagnostics as a value.
 	 */
-	static parse(virtualName: string, content: string): Result<ParsedSourceDto, SourceUnparsable> {
+	parse(virtualName: string, content: string): Result<ParsedSourceDto, SourceUnparsable> {
 		const parsed = parseSync(virtualName, content);
 
 		if (parsed.errors.length > 0) {

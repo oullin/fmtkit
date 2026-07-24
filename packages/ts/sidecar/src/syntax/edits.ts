@@ -11,7 +11,7 @@ export type Edit = {
 };
 
 /** Applies source edits in offset-safe order. */
-export class Edits {
+export class EditApplier {
 	/**
 	 * Report whether two edit ranges overlap.
 	 *
@@ -19,7 +19,7 @@ export class Edits {
 	 * @param b - The second edit range.
 	 * @returns `true` when the edit ranges intersect.
 	 */
-	static rangesOverlap(a: Edit, b: Edit): boolean {
+	rangesOverlap(a: Edit, b: Edit): boolean {
 		return a.start < b.end && b.start < a.end;
 	}
 
@@ -29,7 +29,7 @@ export class Edits {
 	 * @param edits - Candidate edits expressed against the same source text.
 	 * @returns Accepted edits sorted from the lowest offset to the highest.
 	 */
-	static nonOverlapping(edits: Edit[]): Edit[] {
+	nonOverlapping(edits: Edit[]): Edit[] {
 		const accepted: Edit[] = [];
 
 		const sorted = [...edits].sort((a, b) => {
@@ -37,7 +37,7 @@ export class Edits {
 		});
 
 		for (const edit of sorted) {
-			if (accepted.some((existing) => Edits.rangesOverlap(existing, edit))) {
+			if (accepted.some((existing) => this.rangesOverlap(existing, edit))) {
 				continue;
 			}
 
@@ -56,7 +56,7 @@ export class Edits {
 	 * @param edits - The edits expressed against the original offsets.
 	 * @returns The edited source text.
 	 */
-	static apply(source: string, edits: Edit[]): string {
+	apply(source: string, edits: Edit[]): string {
 		const sorted = [...edits].sort((a, b) => {
 			return b.start - a.start;
 		});

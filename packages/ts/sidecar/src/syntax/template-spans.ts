@@ -1,10 +1,12 @@
-import { Ast } from '#sidecar/syntax/ast';
+import { AstReader } from '#sidecar/syntax/ast-reader';
 import type { Node } from '#sidecar/syntax/node-schema';
 
 type Span = readonly [number, number];
 
 /** Locates the template-literal source that formatting passes must not re-indent. */
 export class TemplateSpans {
+	static readonly #ast = new AstReader();
+
 	readonly #spans: readonly Span[];
 
 	private constructor(spans: Span[]) {
@@ -27,13 +29,13 @@ export class TemplateSpans {
 	static collect(program: Node): TemplateSpans {
 		const spans: Span[] = [];
 
-		Ast.visit(program, (node) => {
+		TemplateSpans.#ast.visit(program, (node) => {
 			if (node.type !== 'TemplateLiteral') {
 				return;
 			}
 
-			const start = Ast.getStart(node);
-			const end = Ast.getEnd(node);
+			const start = TemplateSpans.#ast.getStart(node);
+			const end = TemplateSpans.#ast.getEnd(node);
 
 			if (start >= 0 && end >= 0) {
 				spans.push([start, end]);

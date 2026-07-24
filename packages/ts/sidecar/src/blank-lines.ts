@@ -1,19 +1,26 @@
 import { pathToFileURL } from 'node:url';
-import { FormatPipeline } from '#sidecar/format-pipeline';
-import { PassCliDto } from '#sidecar/pass-cli-dto';
+import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';
 import { NodeSourceFiles } from '#sidecar/io/source-files';
+import { PassCliDto } from '#sidecar/pass-cli-dto';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 
 async function main(): Promise<void> {
 	const cwd = process.cwd();
 	const options = PassCliDto.parse(process.argv.slice(2));
 	const files = [...options.files];
 	const { mode } = options;
-	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+	const factory = PipelineFactory.create();
+	const sourceFiles = new NodeSourceFiles();
 
-	const outcomes = await pipeline.runPass('blank-lines', files, mode, (file, passMode) => {
-		return pipeline.formatFile(file, passMode);
+	const pipeline = new FormatPipeline({
+		editor: new SourceFileEditor({ sourceFiles }),
+		processRunner: new NodeProcessRunner(),
+		validator: factory.syntaxValidator(sourceFiles),
 	});
+
+	const outcomes = await pipeline.runPass(factory.segmentFormatter(), files, mode);
 
 	let changedCount = 0;
 

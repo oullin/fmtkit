@@ -1,20 +1,31 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { availableParallelism, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { SourceFileUnreadable } from '#sidecar/kernel/errors';
 import { CliOptionsDto } from '#sidecar/format-all';
-import { FormatPipeline } from '#sidecar/format-pipeline';
+import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
+import { mapPool } from '#sidecar/kernel/concurrency';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';
-import { err, isErr, ok } from '#sidecar/kernel/result';
+import { isErr } from '#sidecar/kernel/result';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 import { NodeSourceFiles } from '#sidecar/io/source-files';
 
 const execFileAsync = promisify(execFile);
 const formatAllScript = resolve(import.meta.dirname, 'format-all.ts');
-const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+const factory = PipelineFactory.create();
+const sourceFiles = new NodeSourceFiles();
+
+const pipeline = new FormatPipeline({
+	editor: new SourceFileEditor({ sourceFiles }),
+	processRunner: new NodeProcessRunner(),
+	validator: factory.syntaxValidator(sourceFiles),
+});
+
+const segmentFormatter = factory.segmentFormatter();
 
 test('parseArgs splits flags and file sections', () => {
 	const options = CliOptionsDto.parse(['--check', '--oxfmt-bin', '/bin/oxfmt', '--oxfmt-config', '/etc/oxfmtrc.json', '--format-files', 'a.ts', 'b.vue', '--syntax-files', 'a.ts', 'types.d.ts']);
@@ -59,23 +70,25 @@ test('mapPool processes every item, preserves order, and honors the limit', asyn
 		return index;
 	});
 
-	const outcomes = await pipeline.runPass('test', items.map(String), 'check', async (item) => {
-		active++;
-		peak = Math.max(peak, active);
+	const outcomes = await mapPool(
+		items,
+		availableParallelism(),
+		async (item) => {
+			active++;
+			peak = Math.max(peak, active);
 
-		await new Promise((resolvePromise) => {
-			return setTimeout(resolvePromise, 1);
-		});
+			await new Promise((resolvePromise) => {
+				return setTimeout(resolvePromise, 1);
+			});
 
-		active--;
+			active--;
 
-		return ok(Number(item) % 2 === 0);
-	});
+			return item % 2 === 0;
+		},
+	);
 
 	assert.deepEqual(
-		outcomes.map((outcome) => {
-			return outcome.changed;
-		}),
+		outcomes,
 		items.map((item) => {
 			return item % 2 === 0;
 		}),
@@ -85,21 +98,35 @@ test('mapPool processes every item, preserves order, and honors the limit', asyn
 });
 
 test('runPass processes every file and skips missing ones', async () => {
-	const seen: string[] = [];
+	const dir = await mkdtemp(
+		join(
+			tmpdir(),
+			'fmtkit-sidecar-runpass-',
+		),
+	);
 
-	const outcomes = await pipeline.runPass('blank-lines', ['a.ts', 'missing.ts', 'b.ts'], 'write', async (file) => {
-		if (file === 'missing.ts') {
-			return err(new SourceFileUnreadable(file, { code: 'ENOENT' }));
-		}
+	try {
+		const first = join(dir, 'a.ts');
+		const missing = join(dir, 'missing.ts');
+		const last = join(dir, 'b.ts');
 
-		seen.push(file);
+		await writeFile(first, 'const value = 1;\n');
 
-		return ok(true);
-	});
+		await writeFile(last, 'const value = 1;\n');
 
-	assert.deepEqual(seen.sort(), ['a.ts', 'b.ts']);
+		const outcomes = await pipeline.runPass(segmentFormatter, [first, missing, last], 'write');
 
-	assert.equal(outcomes[1]?.error?._tag === 'SourceFileUnreadable' && outcomes[1].error.isNotFound(), true);
+		assert.equal(outcomes[0]?.error, null);
+
+		assert.equal(outcomes[2]?.error, null);
+
+		assert.equal(outcomes[1]?.error?._tag === 'SourceFileUnreadable' && outcomes[1].error.isNotFound(), true);
+	} finally {
+		await rm(
+			dir,
+			{ recursive: true, force: true },
+		);
+	}
 });
 
 test('runOxfmt resolves without spawning when no binary or no files are given', async () => {

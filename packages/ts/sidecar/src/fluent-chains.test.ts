@@ -5,7 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { FluentChains } from '#sidecar/fluent-chains';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+
+const fluentPipeline = PipelineFactory.create().fluentPipeline();
+
+// The composed fluent → Drizzle → expanded pipeline the fluent-chains CLI runs.
+function format(input: string, virtualName: string): string {
+	return fluentPipeline.apply(SourceDocument.of(virtualName, input)).text;
+}
 
 const script = fileURLToPath(
 	import.meta.resolve('#sidecar/fluent-chains'),
@@ -65,26 +73,26 @@ describe('fluent chain formatter', () => {
 			'',
 		].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('is idempotent for already split chains', () => {
 		const input = ['const routes = createRouter()', "\t.use('*', bindEnv)", "\t.get('/', getMe);", ''].join('\n');
 
-		assert.equal(FluentChains.format(FluentChains.format(input, 'fixture.ts'), 'fixture.ts'), input);
+		assert.equal(format(format(input, 'fixture.ts'), 'fixture.ts'), input);
 	});
 
 	it('uses the file indentation style for split chains', () => {
 		const input = ['function routes() {', "  return createRouter().use('*', bindEnv).get('/', getMe);", '}', ''].join('\n');
 		const expected = ['function routes() {', '  return createRouter()', "    .use('*', bindEnv)", "    .get('/', getMe);", '}', ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('splits chains with four spaces when the source is space-indented', () => {
 		const input = ['function routes() {', "    return createRouter().use('*', bindEnv).get('/', getMe);", '}', ''].join('\n');
 		const expected = ['function routes() {', '    return createRouter()', "        .use('*', bindEnv)", "        .get('/', getMe);", '}', ''].join('\n');
-		const output = FluentChains.format(input, 'fixture.ts');
+		const output = format(input, 'fixture.ts');
 
 		assert.equal(output, expected);
 		assert.ok(!output.includes('\t'), 'space-indented chain splitting must not introduce tabs');
@@ -96,7 +104,7 @@ describe('fluent chain formatter', () => {
 		// continuations land at 4 tabs, not 6.
 		const input = ['\t\t\tconst result = builder().withA(1).withB(2).withC(3).build();', ''].join('\n');
 		const expected = ['\t\t\tconst result = builder()', '\t\t\t\t.withA(1)', '\t\t\t\t.withB(2)', '\t\t\t\t.withC(3)', '\t\t\t\t.build();', ''].join('\n');
-		const output = FluentChains.format(input, 'fixture.ts');
+		const output = format(input, 'fixture.ts');
 
 		assert.equal(output, expected);
 
@@ -106,20 +114,20 @@ describe('fluent chain formatter', () => {
 	it('leaves short value transform chains unchanged', () => {
 		const input = ['const normalized = value.trim().toLowerCase();', ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), input);
+		assert.equal(format(input, 'fixture.ts'), input);
 	});
 
 	it('preserves optional chain operators', () => {
 		const input = ["const result = makeClient()?.use(auth).get('/');", ''].join('\n');
 		const expected = ['const result = makeClient()', '\t?.use(auth)', "\t.get('/');", ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), expected);
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 
 	it('skips chains with comments between links', () => {
 		const input = ['const routes = createRouter()', '\t// attach middleware first', "\t.use('*', bindEnv).get('/', getMe);", ''].join('\n');
 
-		assert.equal(FluentChains.format(input, 'fixture.ts'), input);
+		assert.equal(format(input, 'fixture.ts'), input);
 	});
 
 	it('reaches a fixed point over an expanded multiline template literal', () => {
@@ -127,12 +135,12 @@ describe('fluent chain formatter', () => {
 		// committed byte state survived another pass.
 		const interior = ['        <div>', '            <span>hello</span>', '        </div>'];
 		const input = ['const Harness = defineComponent({', '    template: `', ...interior, '    `,', '});', ''].join('\n');
-		const once = FluentChains.format(input, 'fixture.ts');
-		const twice = FluentChains.format(once, 'fixture.ts');
+		const once = format(input, 'fixture.ts');
+		const twice = format(once, 'fixture.ts');
 
 		assert.equal(twice, once);
 
-		assert.equal(FluentChains.format(twice, 'fixture.ts'), once);
+		assert.equal(format(twice, 'fixture.ts'), once);
 
 		assert.ok(once.includes(interior.join('\n')), 'the literal interior must keep its original bytes');
 	});

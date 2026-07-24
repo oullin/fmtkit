@@ -4,19 +4,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { Files } from '#sidecar/io/files';
-import { FormatPipeline } from '#sidecar/format-pipeline';
+import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';
-import { isErr } from '#sidecar/kernel/result';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 import { NodeSourceFiles } from '#sidecar/io/source-files';
 
-const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+const factory = PipelineFactory.create();
+const sourceFiles = new NodeSourceFiles();
+
+const pipeline = new FormatPipeline({
+	editor: new SourceFileEditor({ sourceFiles }),
+	processRunner: new NodeProcessRunner(),
+	validator: factory.syntaxValidator(sourceFiles),
+});
+
+const segmentFormatter = factory.segmentFormatter();
 
 async function processFile(file: string, mode: 'check' | 'write'): Promise<boolean> {
-	const outcome = await pipeline.formatFile(file, mode);
+	const [outcome] = await pipeline.runPass(segmentFormatter, [file], mode);
 
-	assert.equal(isErr(outcome), false);
+	assert.equal(outcome?.error, null);
 
-	return isErr(outcome) ? false : outcome.value;
+	return outcome?.changed ?? false;
 }
 
 async function withTempDir(fn: (dir: string) => Promise<void>): Promise<void> {

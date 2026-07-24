@@ -4,37 +4,55 @@ import { BodyWrapPass } from '#sidecar/passes/body-wrap-pass';
 import { ClassMemberPolicy } from '#sidecar/passes/policies/class-member-policy';
 import { ClassReorderPass } from '#sidecar/passes/class-reorder-pass';
 import { DeclarationReorderPass } from '#sidecar/passes/declaration-reorder-pass';
+import { DrizzleQueryPass } from '#sidecar/passes/drizzle-query-pass';
 import { EditApplier } from '#sidecar/syntax/edits';
+import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
+import { ExpandedCallPass } from '#sidecar/passes/expanded-call-pass';
+import { FileFormatter } from '#sidecar/pipeline/file-formatter';
+import { FluentChainPass } from '#sidecar/passes/fluent-chain-pass';
 import { IterationBudget, PassPipeline, PipelineStep } from '#sidecar/pipeline/pass-pipeline';
+import type { SourceFiles } from '#sidecar/io/source-files';
 import { SourceParser } from '#sidecar/syntax/source-parser';
 import { StatementSpacingPolicy } from '#sidecar/passes/policies/statement-spacing-policy';
+import { SyntaxValidator } from '#sidecar/pipeline/syntax-validator';
 import { VueReactivityIdioms } from '#sidecar/passes/policies/vue-reactivity-idioms';
 
 /** The maximum body-wrap iterations before the segment step settles. */
 const BODY_WRAP_ITERATIONS = 5;
 
-/** Composes formatting passes into the named pipelines the formatter runs. */
+/** Composes formatting passes into the named pipelines and formatters the formatter runs. */
 export class PipelineFactory {
+	readonly #parser: SourceParser;
+	readonly #splitter: EmbeddedBlockSplitter;
 	readonly #edits: EditApplier;
 	readonly #bodyWrap: BodyWrapPass;
 	readonly #classReorder: ClassReorderPass;
 	readonly #declarationReorder: DeclarationReorderPass;
 	readonly #blankLine: BlankLinePass;
+	readonly #fluentChain: FluentChainPass;
+	readonly #drizzleQuery: DrizzleQueryPass;
+	readonly #expandedCall: ExpandedCallPass;
 
 	/**
 	 * @param dependencies - The services and policies composed into passes.
 	 * @param dependencies.parser - Parses source into a trustworthy tree.
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 * @param dependencies.edits - Splices computed edits into source text.
+	 * @param dependencies.splitter - Extracts and rewrites host embedded blocks.
 	 * @param dependencies.members - Classifies class members for reordering.
 	 * @param dependencies.spacing - Decides statement blank-line obligations.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; members: ClassMemberPolicy; spacing: StatementSpacingPolicy }) {
+	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; splitter: EmbeddedBlockSplitter; members: ClassMemberPolicy; spacing: StatementSpacingPolicy }) {
+		this.#parser = dependencies.parser;
+		this.#splitter = dependencies.splitter;
 		this.#edits = dependencies.edits;
 		this.#bodyWrap = new BodyWrapPass({ parser: dependencies.parser, ast: dependencies.ast });
 		this.#classReorder = new ClassReorderPass({ parser: dependencies.parser, ast: dependencies.ast, members: dependencies.members });
 		this.#declarationReorder = new DeclarationReorderPass({ parser: dependencies.parser, ast: dependencies.ast });
 		this.#blankLine = new BlankLinePass({ parser: dependencies.parser, ast: dependencies.ast, spacing: dependencies.spacing });
+		this.#fluentChain = new FluentChainPass({ parser: dependencies.parser, ast: dependencies.ast });
+		this.#drizzleQuery = new DrizzleQueryPass({ parser: dependencies.parser, edits: dependencies.edits });
+		this.#expandedCall = new ExpandedCallPass({ parser: dependencies.parser, ast: dependencies.ast, edits: dependencies.edits });
 	}
 
 	/**
@@ -51,6 +69,7 @@ export class PipelineFactory {
 			parser: new SourceParser(),
 			ast,
 			edits: new EditApplier(),
+			splitter: new EmbeddedBlockSplitter(),
 			members,
 			spacing: new StatementSpacingPolicy({ ast, members, vue }),
 		});
@@ -75,6 +94,45 @@ export class PipelineFactory {
 		);
 	}
 
-	// TS-4 adds fluentPipeline() here, composing the fluent-chain, Drizzle-query,
-	// and expanded-call passes once those convert to the FormattingPass contract.
+	/**
+	 * Build the fluent pipeline: fluent-chain splitting, then Drizzle-query and
+	 * expanded-call formatting over the split source.
+	 *
+	 * @returns The fluent pipeline labelled `fluent-chains`.
+	 */
+	fluentPipeline(): PassPipeline {
+		return new PassPipeline(
+			'fluent-chains',
+			[new PipelineStep(this.#fluentChain, IterationBudget.once()), new PipelineStep(this.#drizzleQuery, IterationBudget.once()), new PipelineStep(this.#expandedCall, IterationBudget.once())],
+			this.#edits,
+		);
+	}
+
+	/**
+	 * Build a file formatter for the source-segment pipeline.
+	 *
+	 * @returns A formatter that applies the segment pipeline, host blocks included.
+	 */
+	segmentFormatter(): FileFormatter {
+		return new FileFormatter({ splitter: this.#splitter, pipeline: this.segmentPipeline() });
+	}
+
+	/**
+	 * Build a file formatter for the fluent pipeline.
+	 *
+	 * @returns A formatter that applies the fluent pipeline, host blocks included.
+	 */
+	fluentFormatter(): FileFormatter {
+		return new FileFormatter({ splitter: this.#splitter, pipeline: this.fluentPipeline() });
+	}
+
+	/**
+	 * Build a syntax validator over the factory's splitter and parser.
+	 *
+	 * @param sourceFiles - The filesystem port the validator reads through.
+	 * @returns A validator for TypeScript files and host embedded blocks.
+	 */
+	syntaxValidator(sourceFiles: SourceFiles): SyntaxValidator {
+		return new SyntaxValidator({ sourceFiles, splitter: this.#splitter, parser: this.#parser });
+	}
 }

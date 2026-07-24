@@ -1,9 +1,11 @@
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 import type { OxcErrorDto } from '#sidecar/kernel/errors';
-import { FormatPipeline } from '#sidecar/format-pipeline';
+import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
 import { NodeProcessRunner } from '#sidecar/io/process-runner';
 import { NodeSourceFiles } from '#sidecar/io/source-files';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 
 /** Immutable command-line options for standalone syntax validation. */
 export class SyntaxCliDto {
@@ -66,8 +68,14 @@ async function main(): Promise<void> {
 	const cwd = process.cwd();
 	const options = SyntaxCliDto.parse(process.argv.slice(2));
 	const files = [...options.files];
+	const factory = PipelineFactory.create();
+	const sourceFiles = new NodeSourceFiles();
 
-	const pipeline = new FormatPipeline({ sourceFiles: new NodeSourceFiles(), processRunner: new NodeProcessRunner() });
+	const pipeline = new FormatPipeline({
+		editor: new SourceFileEditor({ sourceFiles }),
+		processRunner: new NodeProcessRunner(),
+		validator: factory.syntaxValidator(sourceFiles),
+	});
 
 	const failures = await pipeline.validate(files);
 

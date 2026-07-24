@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import fc from 'fast-check';
 import { VueScript } from '#sidecar/hosts/vue-script';
 
+const vueScript = new VueScript();
+
 type GeneratedBlock = {
 	readonly markup: string;
 	readonly content: string;
@@ -82,10 +84,10 @@ const documentArbitrary = fc
 		};
 	});
 
-test('VueScript.extractBlocks preserves generated content offsets and language detection', () => {
+test('vueScript.extractBlocks preserves generated content offsets and language detection', () => {
 	fc.assert(
 		fc.property(documentArbitrary, ({ document, scripts }) => {
-			const extracted = VueScript.extractBlocks(document);
+			const extracted = vueScript.extractBlocks(document);
 
 			assert.equal(extracted.length, scripts.length);
 
@@ -99,9 +101,9 @@ test('VueScript.extractBlocks preserves generated content offsets and language d
 
 				assert.equal(block?.content, generated?.content);
 
-				assert.equal(VueScript.attribute(block?.openTag ?? '', 'lang'), generated?.lang);
+				assert.equal(vueScript.attribute(block?.openTag ?? '', 'lang'), generated?.lang);
 
-				assert.equal(VueScript.isJavaScriptOrTypeScript(block?.openTag ?? ''), generated?.javaScriptOrTypeScript);
+				assert.equal(vueScript.isJavaScriptOrTypeScript(block?.openTag ?? ''), generated?.javaScriptOrTypeScript);
 			}
 		}),
 		{ numRuns: 100 },

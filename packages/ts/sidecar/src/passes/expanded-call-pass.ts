@@ -1,7 +1,7 @@
 import type { AstReader } from '#sidecar/syntax/ast-reader';
 import type { CallParens } from '#sidecar/syntax/ast-reader';
 import type { EditApplier } from '#sidecar/syntax/edits';
-import { FileTargets } from '#sidecar/hosts/file-targets';
+import type { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 import { Node } from '#sidecar/syntax/node-schema';
 import type { ParsedSourceDto } from '#sidecar/syntax/node-schema';
 import { isErr } from '#sidecar/kernel/result';
@@ -21,17 +21,20 @@ export class ExpandedCallPass implements FormattingPass {
 	readonly #parser: SourceParser;
 	readonly #ast: AstReader;
 	readonly #edits: EditApplier;
+	readonly #targets: FileTargetPolicy;
 
 	/**
 	 * @param dependencies - The syntax services consumed by the pass.
 	 * @param dependencies.parser - Parses source into a trustworthy tree.
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 * @param dependencies.edits - Reduces candidate edits to a non-overlapping set.
+	 * @param dependencies.targets - Classifies declaration files the pass skips.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier }) {
+	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; targets: FileTargetPolicy }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#edits = dependencies.edits;
+		this.#targets = dependencies.targets;
 	}
 
 	/**
@@ -41,7 +44,7 @@ export class ExpandedCallPass implements FormattingPass {
 	 * @returns Non-overlapping expanded-call edits, or none for invalid source.
 	 */
 	computeEdits(document: SourceDocument): Edit[] {
-		if (FileTargets.isDeclarationFile(document.virtualName)) {
+		if (this.#targets.isDeclarationFile(document.virtualName)) {
 			return [];
 		}
 

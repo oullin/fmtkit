@@ -22,9 +22,9 @@ function makePass(): BlankLinePass {
 }
 
 /**
- * The former BlankLines.insert, kept here as the byte-for-byte reference the
- * zero-width-insert adaptation must reproduce. It dedupes positions, sorts them
- * descending, and inserts one newline at each.
+ * A standalone blank-line insertion, kept here as the byte-for-byte reference
+ * the BlankLinePass zero-width-insert adaptation must reproduce. It dedupes
+ * positions, sorts them descending, and inserts one newline at each.
  */
 function referenceInsert(content: string, positions: number[]): string {
 	const sorted = [...new Set(positions)].sort((a, b) => {

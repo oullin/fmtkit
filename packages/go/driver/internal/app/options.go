@@ -6,12 +6,14 @@ import (
 )
 
 type formatOptions struct {
-	steps stepSelection
-	quiet bool
+	// toolchains names the lanes to run, as the registry selects them. Empty
+	// means every lane (the no-flag default); --ts and --go narrow it.
+	toolchains []string
+	quiet      bool
 }
 
 // parseFormatArgs splits the format/format-all flags from the paths. With no
-// step flags the whole pipeline runs; --ts and --go narrow it.
+// lane flags every lane runs; --ts and --go narrow it.
 func parseFormatArgs(args []string) (formatOptions, []string, error) {
 	var opts formatOptions
 
@@ -20,9 +22,9 @@ func parseFormatArgs(args []string) (formatOptions, []string, error) {
 	for _, arg := range args {
 		switch arg {
 		case "--ts":
-			opts.steps.TS = true
+			opts.toolchains = append(opts.toolchains, "ts")
 		case "--go":
-			opts.steps.Go = true
+			opts.toolchains = append(opts.toolchains, "go")
 		case "--quiet", "-q":
 			opts.quiet = true
 		default:

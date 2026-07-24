@@ -6,8 +6,10 @@ import (
 	"io"
 
 	"go.ollin.sh/fmtkit/driver/internal/command"
-	"go.ollin.sh/fmtkit/driver/internal/gotool"
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/golang"
+	"go.ollin.sh/fmtkit/driver/internal/toolchain"
+	"go.ollin.sh/fmtkit/driver/internal/typescript"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/sourcefiles"
 	report "go.ollin.sh/fmtkit/driver/report"
 )
 
@@ -18,6 +20,10 @@ type deps struct {
 	version string
 	stdout  io.Writer
 	stderr  io.Writer
+
+	// toolchains are the language lanes the format pipeline runs, in execution
+	// order (ts before go). The --ts/--go flags select among them.
+	toolchains toolchain.Registry
 
 	// usage prints the enclosing Set's usage text; wired after the Set exists so
 	// the flag-parsing handlers can reprint it on a bad argument.
@@ -31,7 +37,14 @@ const umbrellaHeader = "usage: fmtkit <format|format-all|go|ts|lint|check|versio
 // Umbrella builds the fmtkit command surface: the pipeline commands plus the
 // embedded Go formatter CLI reached through `fmtkit go`.
 func Umbrella(version string, stdout, stderr io.Writer) command.Set {
-	d := &deps{version: version, stdout: stdout, stderr: stderr}
+	// Register the language lanes explicitly, in execution order: TS (lint then
+	// format) runs before Go, matching the pipeline the driver has always run.
+	d := &deps{
+		version:    version,
+		stdout:     stdout,
+		stderr:     stderr,
+		toolchains: toolchain.NewRegistry(typescript.New(), golang.New()),
+	}
 
 	// The Go CLI reached through `fmtkit go` prints "fmtkit go ..." usage and
 	// adopts the umbrella's exit code for bad subcommands.
@@ -140,8 +153,8 @@ func (d *deps) goCommandSet(name string, errExit int) command.Set {
 
 // goRunner is the unscoped Go formatter runner shared by `check` and the
 // standalone `format`.
-func (d *deps) goRunner() gotool.Runner {
-	return gotool.Runner{Stdout: d.stdout, Stderr: d.stderr}
+func (d *deps) goRunner() golang.Runner {
+	return golang.Runner{Stdout: d.stdout, Stderr: d.stderr}
 }
 
 func (d *deps) runCheck(ctx context.Context, args []string) int {

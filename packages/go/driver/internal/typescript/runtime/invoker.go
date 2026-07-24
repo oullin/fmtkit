@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/sourcefiles"
 )
 
 // Request describes one TS toolchain invocation.
@@ -35,13 +35,13 @@ type Request struct {
 // deep in the call paths.
 type Invoker struct {
 	Assets Assets
-	Env    sidecarproto.Overrides
+	Env    proto.Overrides
 }
 
 // NewInvoker builds an Invoker for the given assets, reading the environment
 // overrides once.
 func NewInvoker(a Assets) Invoker {
-	return Invoker{Assets: a, Env: sidecarproto.ReadOverrides()}
+	return Invoker{Assets: a, Env: proto.ReadOverrides()}
 }
 
 // RunPipeline runs the full TS/Vue formatting pipeline (blank-lines -> oxfmt
@@ -77,7 +77,7 @@ func (i Invoker) RunPipeline(ctx context.Context, req Request) error {
 		oxfmtBin = i.Assets.Sidecar()
 	}
 
-	command := sidecarproto.PipelineCommand{
+	command := proto.PipelineCommand{
 		OxfmtBin:    oxfmtBin,
 		OxfmtConfig: i.oxfmtConfigFor(ctx, cwd, req.Stderr),
 		FormatFiles: formatFiles,
@@ -119,7 +119,7 @@ func (i Invoker) RunLint(ctx context.Context, req Request) error {
 		bin = i.Assets.Sidecar()
 	}
 
-	command := sidecarproto.OxlintCommand{
+	command := proto.OxlintCommand{
 		ViaSidecar: viaSidecar,
 		Fix:        req.Fix,
 		Config:     i.oxlintConfigFor(cwd),

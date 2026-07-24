@@ -1,4 +1,4 @@
-// Package tsruntime manages the self-contained TS toolchain shipped inside
+// Package runtime manages the self-contained TS toolchain shipped inside
 // release binaries: a bun-compiled sidecar plus the oxc-parser, oxfmt, and
 // oxlint napi bindings. On first use the embedded assets are extracted to a
 // per-version cache directory and spawned as child processes from there.
@@ -6,8 +6,8 @@
 // The type split mirrors the three responsibilities: Assets owns the extracted
 // directory (extraction, caching, lookup); Invoker spawns the toolchain; and
 // PrettierMigration derives an oxfmt config from a project's Prettier setup. All
-// argv and environment construction goes through the sidecarproto package.
-package tsruntime
+// argv and environment construction goes through the proto package.
+package runtime
 
 import (
 	"crypto/sha256"
@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"go.ollin.sh/fmtkit/driver/internal/embedded"
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/embedded"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 // Assets locates the extracted TS toolchain on disk.
@@ -29,25 +29,25 @@ type Assets struct {
 	Dir string
 }
 
-// sentinelName marks a completed extraction; it is tsruntime's own bookkeeping,
-// not part of the sidecar wire protocol.
+// sentinelName marks a completed extraction; it is the runtime's own
+// bookkeeping, not part of the sidecar wire protocol.
 const sentinelName = ".fmtkit-complete"
 
 // Sidecar returns the path of the multiplexed toolchain executable.
 func (a Assets) Sidecar() string {
-	return filepath.Join(a.Dir, sidecarproto.SidecarName)
+	return filepath.Join(a.Dir, proto.SidecarName)
 }
 
 // OxfmtConfig returns the bundled oxfmt configuration path, or "" when the
 // support directory carries none.
 func (a Assets) OxfmtConfig() string {
-	return existingFile(filepath.Join(a.Dir, sidecarproto.OxfmtRCName))
+	return existingFile(filepath.Join(a.Dir, proto.OxfmtRCName))
 }
 
 // OxlintConfig returns the bundled oxlint configuration path, or "" when the
 // support directory carries none.
 func (a Assets) OxlintConfig() string {
-	return existingFile(filepath.Join(a.Dir, sidecarproto.OxlintRCName))
+	return existingFile(filepath.Join(a.Dir, proto.OxlintRCName))
 }
 
 func existingFile(path string) string {
@@ -62,11 +62,11 @@ func existingFile(path string) string {
 // user cache on first use. version tells extractions of different releases
 // apart; dev builds derive a digest from the assets instead.
 func Resolve(version string) (Assets, error) {
-	if dir := os.Getenv(sidecarproto.SupportDirEnv); dir != "" {
+	if dir := os.Getenv(proto.SupportDirEnv); dir != "" {
 		assets := Assets{Dir: dir}
 
 		if existingFile(assets.Sidecar()) == "" {
-			return Assets{}, fmt.Errorf("%s (%s) does not contain %s", sidecarproto.SupportDirEnv, dir, sidecarproto.SidecarName)
+			return Assets{}, fmt.Errorf("%s (%s) does not contain %s", proto.SupportDirEnv, dir, proto.SidecarName)
 		}
 
 		return assets, nil
@@ -77,7 +77,7 @@ func Resolve(version string) (Assets, error) {
 	if !ok {
 		return Assets{}, errors.New(
 			"this fmtkit build carries no TS toolchain (built without the fmtkit_sidecar tag); " +
-				"point " + sidecarproto.SupportDirEnv + " at a staged toolchain directory " +
+				"point " + proto.SupportDirEnv + " at a staged toolchain directory " +
 				"(see packages/ts/infra/stage-ts-assets.sh), or use a release binary",
 		)
 	}
@@ -160,7 +160,7 @@ func extract(dst string, assets fs.FS) error {
 
 		mode := os.FileMode(0o644)
 
-		if entry.Name() == sidecarproto.SidecarName {
+		if entry.Name() == proto.SidecarName {
 			mode = 0o755
 		}
 

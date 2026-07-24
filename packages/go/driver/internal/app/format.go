@@ -8,6 +8,7 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/console"
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	"go.ollin.sh/fmtkit/driver/internal/pipeline"
+	"go.ollin.sh/fmtkit/driver/internal/toolchain"
 )
 
 // runFormat formats what diverges from HEAD — modified files, staged or not,
@@ -47,7 +48,7 @@ func (d *deps) runFormatAll(ctx context.Context, args []string) int {
 }
 
 // runPipeline frames the format run (target header, completion footer) around
-// the typed steps it builds for the selection, handing them to the generic
+// the typed steps the selected lanes contribute, handing them to the generic
 // pipeline. Color is resolved once here, at the composition root.
 func (d *deps) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection gitfiles.Selection) int {
 	if len(paths) == 0 {
@@ -59,8 +60,16 @@ func (d *deps) runPipeline(ctx context.Context, paths []string, opts formatOptio
 	printer.Section("Formatting target(s)")
 	printer.Detail("paths", strings.Join(paths, " "))
 
+	req := toolchain.Request{Version: d.version, Paths: paths, Selection: selection}
+
+	var steps []pipeline.Step
+
+	for _, chain := range d.toolchains.Select(opts.toolchains...) {
+		steps = append(steps, chain.Steps(req)...)
+	}
+
 	pipe := pipeline.Pipeline{
-		Steps:   d.formatSteps(paths, opts.steps, selection),
+		Steps:   steps,
 		Quiet:   opts.quiet,
 		Printer: printer,
 		Stderr:  d.stderr,

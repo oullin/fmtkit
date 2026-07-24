@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestRunCLIPrintsNULSeparatedFiles(t *testing.T) {
+func TestRunPrintsNULSeparatedFiles(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
 	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
@@ -17,7 +17,7 @@ func TestRunCLIPrintsNULSeparatedFiles(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := RunCLI(context.Background(), []string{"--cwd", dir, "src"}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"--cwd", dir, "src"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
@@ -41,14 +41,14 @@ func TestRunCLIPrintsNULSeparatedFiles(t *testing.T) {
 	}
 }
 
-func TestRunCLIIncludesDeclarationsFlag(t *testing.T) {
+func TestRunIncludesDeclarationsFlag(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, filepath.Join(dir, "types.d.ts"), "declare const value: string;\n")
 	gitAdd(t, dir, ".")
 
 	var stdout, stderr bytes.Buffer
 
-	code := RunCLI(context.Background(), []string{"--cwd", dir, "--include-declarations"}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"--cwd", dir, "--include-declarations"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
@@ -61,14 +61,14 @@ func TestRunCLIIncludesDeclarationsFlag(t *testing.T) {
 	}
 }
 
-func TestRunCLIWarnsOnMissingScopes(t *testing.T) {
+func TestRunWarnsOnMissingScopes(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
 	gitAdd(t, dir, ".")
 
 	var stdout, stderr bytes.Buffer
 
-	code := RunCLI(context.Background(), []string{"--cwd", dir, "missing"}, &stdout, &stderr)
+	code := Run(context.Background(), []string{"--cwd", dir, "missing"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d", code)
@@ -79,7 +79,7 @@ func TestRunCLIWarnsOnMissingScopes(t *testing.T) {
 	}
 }
 
-func TestRunCLIDefaultsToWorkingDirectory(t *testing.T) {
+func TestRunDefaultsToWorkingDirectory(t *testing.T) {
 	dir := initRepo(t)
 	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
 	gitAdd(t, dir, ".")
@@ -87,7 +87,7 @@ func TestRunCLIDefaultsToWorkingDirectory(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if code := RunCLI(context.Background(), nil, &stdout, &stderr); code != 0 {
+	if code := Run(context.Background(), nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
 	}
 
@@ -99,29 +99,11 @@ func TestRunCLIDefaultsToWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestRunCLIReportsBadFlags(t *testing.T) {
+func TestRunReportsBadFlags(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	if code := RunCLI(context.Background(), []string{"--nope"}, &stdout, &stderr); code != 1 {
+	if code := Run(context.Background(), []string{"--nope"}, &stdout, &stderr); code != 1 {
 		t.Fatalf("expected exit 1 for an unknown flag, got %d", code)
-	}
-}
-
-func TestRunDelegatesToRunCLI(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".")
-
-	var stdout, stderr bytes.Buffer
-
-	if code := Run(context.Background(), []string{"--cwd", dir}, &stdout, &stderr); code != 0 {
-		t.Fatalf("Run exit = %d, stderr: %s", code, stderr.String())
-	}
-
-	got := splitNUL(stdout.String())
-
-	if len(got) != 1 || got[0] != filepath.Join(dir, "app.ts") {
-		t.Fatalf("Run output mismatch, got %#v", got)
 	}
 }
 

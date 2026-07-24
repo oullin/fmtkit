@@ -16,11 +16,6 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/prettierignore"
 )
 
-// Selection re-exports gitfiles.Selection so existing callers keep compiling.
-//
-// Transitional: G5 adopts gitfiles.Selection directly.
-type Selection = gitfiles.Selection
-
 // Collector composes git discovery, the extension taxonomy, and the
 // .prettierignore matcher into the formatter's and linter's file lists.
 type Collector struct {
@@ -29,29 +24,21 @@ type Collector struct {
 	Filter    filetypes.Filter
 }
 
-// Options configures the transitional Collect/CollectLintable wrappers.
-//
-// Transitional: G5 adopts Collector directly.
-type Options struct {
-	Cwd                 string
-	IncludeDeclarations bool
-	Scopes              []string
+// New builds a Collector rooted at cwd covering selection, keeping the files
+// the taxonomy classifies. IncludeDeclarations keeps .d.ts declaration files.
+func New(cwd string, selection gitfiles.Selection, includeDeclarations bool) (Collector, error) {
+	tree, err := gitfiles.NewTree(cwd)
 
-	// Selection defaults to SelectionAll.
-	Selection Selection
+	if err != nil {
+		return Collector{}, err
+	}
+
+	return Collector{
+		Tree:      tree,
+		Selection: selection,
+		Filter:    filetypes.Filter{IncludeDeclarations: includeDeclarations},
+	}, nil
 }
-
-const (
-	// SelectionAll covers every non-ignored file: tracked plus untracked.
-	//
-	// Transitional: G5 adopts gitfiles.SelectionAll directly.
-	SelectionAll = gitfiles.SelectionAll
-
-	// SelectionChanged covers only what has diverged from HEAD.
-	//
-	// Transitional: G5 adopts gitfiles.SelectionChanged directly.
-	SelectionChanged = gitfiles.SelectionChanged
-)
 
 // Formattable lists the files the formatter owns under the given scopes: the TS
 // and Vue families plus the HTML and Markdown documents whose embedded scripts
@@ -150,58 +137,4 @@ func (c Collector) honorPrettierIgnore(cwd string, files []string) ([]string, er
 	}
 
 	return matcher.FilterAbs(cwd, files)
-}
-
-// Collect lists the files the formatter owns under the given scopes.
-//
-// Transitional: G5 adopts Collector directly.
-func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
-	collector, err := collectorFor(opts)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return collector.Formattable(ctx, opts.Scopes)
-}
-
-// CollectLintable lists only the files oxlint can lint under the given scopes.
-//
-// Transitional: G5 adopts Collector directly.
-func CollectLintable(ctx context.Context, opts Options) ([]string, []string, error) {
-	collector, err := collectorFor(opts)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return collector.Lintable(ctx, opts.Scopes)
-}
-
-// ChangedPaths lists every file that diverges from HEAD under the given scopes,
-// whatever its extension, skipping .prettierignore filtering.
-//
-// Transitional: G5 adopts gitfiles.Tree directly.
-func ChangedPaths(ctx context.Context, cwd string, scopes []string) ([]string, error) {
-	tree, err := gitfiles.NewTree(cwd)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return tree.ChangedPaths(ctx, scopes)
-}
-
-func collectorFor(opts Options) (Collector, error) {
-	tree, err := gitfiles.NewTree(opts.Cwd)
-
-	if err != nil {
-		return Collector{}, err
-	}
-
-	return Collector{
-		Tree:      tree,
-		Selection: opts.Selection,
-		Filter:    filetypes.Filter{IncludeDeclarations: opts.IncludeDeclarations},
-	}, nil
 }

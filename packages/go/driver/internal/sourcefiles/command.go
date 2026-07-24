@@ -6,19 +6,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 )
 
-// Run is the transitional entry point kept so existing callers compile
-// unchanged; it delegates to RunCLI.
-//
-// Transitional: G5 adopts RunCLI directly.
+// Run parses the `sources` subcommand flags, collects the formattable files
+// under the given scopes, and prints them NUL-separated to stdout.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	return RunCLI(ctx, args, stdout, stderr)
-}
-
-// RunCLI parses the `sources` subcommand flags and prints the collected files
-// NUL-separated to stdout.
-func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sources", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -43,11 +37,15 @@ func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		}
 	}
 
-	files, warnings, err := Collect(ctx, Options{
-		Cwd:                 cwd,
-		IncludeDeclarations: *includeDeclarations,
-		Scopes:              fs.Args(),
-	})
+	collector, err := New(cwd, gitfiles.SelectionAll, *includeDeclarations)
+
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "[sources] %v\n", err)
+
+		return 1
+	}
+
+	files, warnings, err := collector.Formattable(ctx, fs.Args())
 
 	for _, warning := range warnings {
 		_, _ = fmt.Fprintf(stderr, "[sources] %s\n", warning)

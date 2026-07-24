@@ -42,7 +42,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stderr strings.Builder
 
 	// "dev" mirrors the unstamped binary: no embedded TS assets.
-	exitCode := New("dev", &stdout, &stderr).Run(context.Background(), args)
+	exitCode := Umbrella("dev", &stdout, &stderr).Dispatch(context.Background(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }
@@ -101,6 +101,55 @@ func run() {
 `)
 
 	return dir
+}
+
+// TestDispatchGoldens pins the umbrella binary's usage text, version string,
+// stdout/stderr routing, and exit codes byte for byte. The fmtkit-go binary
+// deliberately differs (unknown -> exit 1, a different usage prefix); its
+// counterpart lives in cmd/fmtkit-go/main_test.go. Keep both in sync only if the
+// behavior is intentionally unified.
+func TestDispatchGoldens(t *testing.T) {
+	usage, err := os.ReadFile(filepath.Join("testdata", "usage.txt"))
+
+	if err != nil {
+		t.Fatalf("read usage golden: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		args       []string
+		wantExit   int
+		wantStdout string
+		wantStderr string
+	}{
+		{"no args", nil, 2, "", string(usage)},
+		{"unknown", []string{"bogus"}, 2, "", "unknown subcommand - {\"bogus\"}\n\n" + string(usage)},
+		{"help", []string{"help"}, 0, "", string(usage)},
+		{"help long flag", []string{"--help"}, 0, "", string(usage)},
+		{"help short flag", []string{"-h"}, 0, "", string(usage)},
+		{"version", []string{"version"}, 0, "fmtkit dev\n", ""},
+		{"version long flag", []string{"--version"}, 0, "fmtkit dev\n", ""},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runCLI(t, t.TempDir(), tc.args...)
+
+			if exitCode != tc.wantExit {
+				t.Fatalf("exit = %d, want %d", exitCode, tc.wantExit)
+			}
+
+			if stdout != tc.wantStdout {
+				t.Fatalf("stdout mismatch\n--- got ---\n%q\n--- want ---\n%q", stdout, tc.wantStdout)
+			}
+
+			if stderr != tc.wantStderr {
+				t.Fatalf("stderr mismatch\n--- got ---\n%q\n--- want ---\n%q", stderr, tc.wantStderr)
+			}
+		})
+	}
 }
 
 func TestRunWithoutArgsPrintsUsage(t *testing.T) {

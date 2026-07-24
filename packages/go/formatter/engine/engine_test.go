@@ -398,7 +398,7 @@ func TestFormatFilesReportsWriteErrors(t *testing.T) {
 	}
 }
 
-func TestReportCountsAndAllErrors(t *testing.T) {
+func TestReportCounts(t *testing.T) {
 	report := engine.Report{
 		Errors: []engine.ErrorResult{
 			{Message: "workspace failed"},
@@ -424,20 +424,6 @@ func TestReportCountsAndAllErrors(t *testing.T) {
 
 	if got := report.ErrorCount(); got != 2 {
 		t.Fatalf("expected 2 errors, got %d", got)
-	}
-
-	errors := report.AllErrors()
-
-	if len(errors) != 2 {
-		t.Fatalf("expected 2 all errors, got %#v", errors)
-	}
-
-	if errors[0].Message != "workspace failed" {
-		t.Fatalf("unexpected workspace error: %#v", errors[0])
-	}
-
-	if errors[1].File != "b.go" || errors[1].Message != "read file: denied" {
-		t.Fatalf("unexpected file error: %#v", errors[1])
 	}
 }
 

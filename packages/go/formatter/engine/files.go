@@ -77,28 +77,6 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 	return files, nil
 }
 
-func filterFiles(files, selected []string) []string {
-	if len(files) == 0 || len(selected) == 0 {
-		return nil
-	}
-
-	allowed := make(map[string]struct{}, len(selected))
-
-	for _, path := range selected {
-		allowed[path] = struct{}{}
-	}
-
-	filtered := make([]string, 0, len(files))
-
-	for _, path := range files {
-		if _, ok := allowed[path]; ok {
-			filtered = append(filtered, path)
-		}
-	}
-
-	return filtered
-}
-
 func shouldSkipDir(path, root, name string, cfg config.Config) bool {
 	if path != root && strings.HasPrefix(name, ".") {
 		return true

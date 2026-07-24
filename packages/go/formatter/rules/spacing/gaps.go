@@ -8,46 +8,114 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"go.ollin.sh/fmtkit/formatter/rules"
 )
 
-type importAliases map[string]string
-
-var stdlibSpacingImports = map[string]string{
-	"sort":         "sort",
-	"slices":       "slices",
-	"math/rand":    "rand",
-	"math/rand/v2": "rand",
+// blankLineInserter records the blank lines the spacing rule must add between
+// statements and top-level declarations, then applies them to the source. It
+// reads the shared parse state through ctx and accumulates the byte offsets to
+// split in insertions.
+type blankLineInserter struct {
+	ctx        *fileContext
+	insertions map[int]struct{}
 }
 
-func setupSpacingLine(list []ast.Stmt, index int, current ast.Stmt, next ast.Stmt, aliases importAliases, fset *token.FileSet) (int, bool) {
-	if index == 0 {
-		return 0, false
+// newBlankLineInserter returns an inserter bound to the shared parse state.
+func newBlankLineInserter(ctx *fileContext) *blankLineInserter {
+	return &blankLineInserter{
+		ctx:        ctx,
+		insertions: map[int]struct{}{},
 	}
-
-	receiverName, ok := selectorReceiverName(next, aliases)
-
-	if !ok {
-		return 0, false
-	}
-
-	assignedName, ok := assignedIdentifier(current)
-
-	if !ok || assignedName != receiverName {
-		return 0, false
-	}
-
-	currentLine := fset.Position(current.Pos()).Line
-	prevEndLine := fset.Position(list[index-1].End()).Line
-
-	if currentLine >= prevEndLine+2 {
-		return 0, false
-	}
-
-	return currentLine, true
 }
 
-func inspectStmtLists(file *ast.File, visit func([]ast.Stmt)) {
-	ast.Inspect(file, func(node ast.Node) bool {
+// analyze walks the file's statement lists and top-level declarations, recording
+// a violation and an insertion offset for every missing blank line. filename
+// labels the returned violations.
+func (b *blankLineInserter) analyze(filename string) []rules.Violation {
+	fset := b.ctx.fset
+
+	var violations []rules.Violation
+
+	b.inspectStmtLists(func(list []ast.Stmt) {
+		for i := 0; i < len(list)-1; i++ {
+			current := list[i]
+			next := list[i+1]
+			endLine := fset.Position(current.End()).Line
+			nextLine := fset.Position(next.Pos()).Line
+
+			if currentLine, ok := b.setupSpacingLine(list, i, current, next); ok {
+				violations = append(violations, rules.Violation{
+					Rule:    "spacing",
+					File:    filename,
+					Line:    currentLine,
+					Message: "missing blank line before selector call setup",
+				})
+
+				b.insertions[b.ctx.lineStartOffset(currentLine)] = struct{}{}
+			}
+
+			if endLine == nextLine {
+				continue
+			}
+
+			if message, ok := b.statementGapRule(current, next); ok {
+				if nextLine < endLine+2 {
+					violations = append(violations, rules.Violation{
+						Rule:    "spacing",
+						File:    filename,
+						Line:    nextLine,
+						Message: message,
+					})
+
+					b.insertions[b.ctx.lineStartOffset(nextLine)] = struct{}{}
+				}
+			}
+		}
+	})
+
+	for i := 0; i < len(b.ctx.file.Decls)-1; i++ {
+		current := b.ctx.file.Decls[i]
+		next := b.ctx.file.Decls[i+1]
+
+		if !requiresTypeDeclSpacing(current, next) {
+			continue
+		}
+
+		endLine := fset.Position(current.End()).Line
+		nextLine := fset.Position(next.Pos()).Line
+
+		if nextLine >= endLine+2 {
+			continue
+		}
+
+		violations = append(violations, rules.Violation{
+			Rule:    "spacing",
+			File:    filename,
+			Line:    nextLine,
+			Message: "missing blank line around type definition",
+		})
+
+		b.insertions[b.ctx.lineStartOffset(nextLine)] = struct{}{}
+	}
+
+	return violations
+}
+
+// apply returns the source with the recorded blank-line insertions applied, or
+// the source unchanged when the analysis recorded none.
+func (b *blankLineInserter) apply() []byte {
+	if len(b.insertions) == 0 {
+		return b.ctx.src
+	}
+
+	return applyInsertions(b.ctx.src, b.insertions)
+}
+
+// inspectStmtLists visits every statement list in the file: block bodies, case
+// clause bodies, and communication clause bodies.
+func (b *blankLineInserter) inspectStmtLists(visit func([]ast.Stmt)) {
+	ast.Inspect(b.ctx.file, func(node ast.Node) bool {
 		switch typed := node.(type) {
 		case *ast.BlockStmt:
 			visit(typed.List)
@@ -61,42 +129,77 @@ func inspectStmtLists(file *ast.File, visit func([]ast.Stmt)) {
 	})
 }
 
-func statementGapRule(current ast.Stmt, next ast.Stmt, aliases importAliases, fset *token.FileSet) (string, bool) {
-	if label, ok := requiresLeadingBlankLine(next, aliases); ok {
+// setupSpacingLine reports the line that needs a leading blank line when the
+// current statement assigns the receiver of a following spaced selector call and
+// the two sit flush against the preceding statement.
+func (b *blankLineInserter) setupSpacingLine(list []ast.Stmt, index int, current ast.Stmt, next ast.Stmt) (int, bool) {
+	if index == 0 {
+		return 0, false
+	}
+
+	receiverName, ok := selectorReceiverName(next, b.ctx.aliases)
+
+	if !ok {
+		return 0, false
+	}
+
+	assignedName, ok := assignedIdentifier(current)
+
+	if !ok || assignedName != receiverName {
+		return 0, false
+	}
+
+	currentLine := b.ctx.fset.Position(current.Pos()).Line
+	prevEndLine := b.ctx.fset.Position(list[index-1].End()).Line
+
+	if currentLine >= prevEndLine+2 {
+		return 0, false
+	}
+
+	return currentLine, true
+}
+
+// statementGapRule reports the message for a missing blank line between current
+// and next, checking the leading rule for next before the trailing rule for
+// current.
+func (b *blankLineInserter) statementGapRule(current ast.Stmt, next ast.Stmt) (string, bool) {
+	if label, ok := b.requiresLeadingBlankLine(next); ok {
 		return fmt.Sprintf("missing blank line before %s", label), true
 	}
 
-	if label, ok := requiresTrailingBlankLine(current, next, aliases, fset); ok {
+	if label, ok := b.requiresTrailingBlankLine(current, next); ok {
 		return fmt.Sprintf("missing blank line after %s", label), true
 	}
 
 	return "", false
 }
 
-func requiresTrailingBlankLine(current ast.Stmt, next ast.Stmt, aliases importAliases, fset *token.FileSet) (string, bool) {
+// requiresTrailingBlankLine reports whether current must be followed by a blank
+// line, returning the label used in the violation message.
+func (b *blankLineInserter) requiresTrailingBlankLine(current ast.Stmt, next ast.Stmt) (string, bool) {
 	if isTestingHelperCall(current) {
 		return "t.Helper call", true
 	}
 
-	if isAnonymousFuncAssignmentStmt(current, fset) {
+	if isAnonymousFuncAssignmentStmt(current, b.ctx.fset) {
 		return "anonymous function assignment", true
 	}
 
-	if label, ok := stdlibSpacedCallLabel(current, aliases); ok {
+	if label, ok := stdlibSpacedCallLabel(current, b.ctx.aliases); ok {
 		return label, true
 	}
 
 	switch current.(type) {
 	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt, *ast.DeferStmt, *ast.BranchStmt:
-		return statementLabel(current, aliases), true
+		return statementLabel(current, b.ctx.aliases), true
 	case *ast.DeclStmt:
 		if isTypeDeclStmt(current) {
-			return statementLabel(current, aliases), true
+			return statementLabel(current, b.ctx.aliases), true
 		}
 
 		if isVarDeclStmt(current) {
 			if !isShortAssignStmt(next) && !isVarDeclStmt(next) {
-				return statementLabel(current, aliases), true
+				return statementLabel(current, b.ctx.aliases), true
 			}
 		}
 	}
@@ -104,21 +207,23 @@ func requiresTrailingBlankLine(current ast.Stmt, next ast.Stmt, aliases importAl
 	return "", false
 }
 
-func requiresLeadingBlankLine(stmt ast.Stmt, aliases importAliases) (string, bool) {
+// requiresLeadingBlankLine reports whether stmt must be preceded by a blank
+// line, returning the label used in the violation message.
+func (b *blankLineInserter) requiresLeadingBlankLine(stmt ast.Stmt) (string, bool) {
 	if label, ok := routeRegistryCallLabel(stmt); ok {
 		return label, true
 	}
 
-	if label, ok := stdlibSpacedCallLabel(stmt, aliases); ok {
+	if label, ok := stdlibSpacedCallLabel(stmt, b.ctx.aliases); ok {
 		return label, true
 	}
 
 	switch stmt.(type) {
 	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt, *ast.DeferStmt, *ast.ReturnStmt, *ast.BranchStmt:
-		return statementLabel(stmt, aliases), true
+		return statementLabel(stmt, b.ctx.aliases), true
 	case *ast.DeclStmt:
 		if isTypeDeclStmt(stmt) || isVarDeclStmt(stmt) {
-			return statementLabel(stmt, aliases), true
+			return statementLabel(stmt, b.ctx.aliases), true
 		}
 	}
 
@@ -197,6 +302,7 @@ func statementLabel(stmt ast.Stmt, aliases importAliases) string {
 
 func buildImportAliases(file *ast.File) importAliases {
 	aliases := make(importAliases)
+	stdlib := stdlibSpacingImports()
 
 	for _, spec := range file.Imports {
 		path, err := strconv.Unquote(spec.Path.Value)
@@ -205,7 +311,7 @@ func buildImportAliases(file *ast.File) importAliases {
 			continue
 		}
 
-		defaultName, ok := stdlibSpacingImports[path]
+		defaultName, ok := stdlib[path]
 
 		if !ok {
 			continue

@@ -214,7 +214,6 @@ func (e *Engine) processFile(ctx context.Context, path string, write bool) FileR
 	}
 
 	result.Changed = true
-	result.Diff = generateDiff(string(original), string(current))
 
 	if write {
 		if err := writeFileAtomic(path, current); err != nil {

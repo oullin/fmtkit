@@ -13,7 +13,7 @@ import (
 // renderTextPlain renders without ANSI escapes so substring asserts are
 // stable. color.NoColor is global state, so these tests must not run in
 // parallel.
-func renderTextPlain(t *testing.T, cwd, mode string, report Combined) string {
+func renderTextPlain(t *testing.T, cwd string, mode Mode, report Combined) string {
 	t.Helper()
 
 	previous := color.NoColor
@@ -23,7 +23,7 @@ func renderTextPlain(t *testing.T, cwd, mode string, report Combined) string {
 
 	var out bytes.Buffer
 
-	if err := RenderText(&out, cwd, mode, report); err != nil {
+	if err := (Renderer{Root: cwd, Mode: mode}).renderText(&out, report); err != nil {
 		t.Fatalf("render text: %v", err)
 	}
 
@@ -37,6 +37,78 @@ func assertContainsAll(t *testing.T, output string, wants []string) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("expected output to contain %q, got:\n%s", want, output)
 		}
+	}
+}
+
+// wantTextCheck and wantTextFormat pin the complete text render of
+// sampleCombinedReport (changed file + violation + per-file error + workspace
+// error + vet error), byte for byte, with paths projected relative to /work.
+// The JSON and agent renders are mode-independent and pinned byte-for-byte in
+// projection_test.go; the text render is the only one that varies with mode
+// ("Checked"/"would apply" vs "Formatted"/"applied").
+const wantTextCheck = `
+Formatter
+
+  Checked 2 file(s).
+
+  sample.go
+    [spacing] line 7: after if statement
+    ✓ would apply spacing, gofmt
+
+  broken.go
+    ! parse error
+
+  walk.go
+    ! walk failed
+
+  Result: fail. 1 changed, 1 violation(s), 2 error(s).
+
+Vet
+
+  module-a
+    ! automatic go vet ./... failed:
+vet output
+
+  Result: fail. 1 error(s).
+
+`
+
+const wantTextFormat = `
+Formatter
+
+  Formatted 2 file(s).
+
+  sample.go
+    [spacing] line 7: after if statement
+    ✓ applied spacing, gofmt
+
+  broken.go
+    ! parse error
+
+  walk.go
+    ! walk failed
+
+  Result: fail. 1 changed, 1 violation(s), 2 error(s).
+
+Vet
+
+  module-a
+    ! automatic go vet ./... failed:
+vet output
+
+  Result: fail. 1 error(s).
+
+`
+
+func TestRenderTextGoldenCheckMode(t *testing.T) {
+	if got := renderTextPlain(t, "/work", "check", sampleCombinedReport()); got != wantTextCheck {
+		t.Fatalf("check-mode text mismatch\n--- got ---\n%s\n--- want ---\n%s", got, wantTextCheck)
+	}
+}
+
+func TestRenderTextGoldenFormatMode(t *testing.T) {
+	if got := renderTextPlain(t, "/work", "format", sampleCombinedReport()); got != wantTextFormat {
+		t.Fatalf("format-mode text mismatch\n--- got ---\n%s\n--- want ---\n%s", got, wantTextFormat)
 	}
 }
 

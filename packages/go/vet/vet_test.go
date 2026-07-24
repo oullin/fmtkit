@@ -79,12 +79,6 @@ func TestParseGoEnvValuesPreservesOrderAndEmptyLines(t *testing.T) {
 	})
 }
 
-func TestDefaultEnablesVet(t *testing.T) {
-	if !Default().Enabled {
-		t.Fatal("expected default vet config to be enabled")
-	}
-}
-
 func TestRunSkipsWhenDisabled(t *testing.T) {
 	report := Run(context.Background(), t.TempDir(), Config{Enabled: false})
 
@@ -100,7 +94,7 @@ func TestRunSkipsWhenGoToolchainUnavailable(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), t.TempDir(), Default(), tc)
+	report := run(context.Background(), t.TempDir(), Config{Enabled: true}, tc)
 
 	if !report.Skipped {
 		t.Fatalf("expected skipped report, got %#v", report)
@@ -127,7 +121,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), workRoot, Default(), tc)
+	report := run(context.Background(), workRoot, Config{Enabled: true}, tc)
 
 	if report.Root != workspaceRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -147,7 +141,7 @@ func TestRunFallsBackToModuleWhenWorkspaceUnset(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), workRoot, Default(), tc)
+	report := run(context.Background(), workRoot, Config{Enabled: true}, tc)
 
 	if report.Root != moduleRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -183,7 +177,7 @@ use (
 )
 `)
 
-	report := Run(context.Background(), workspaceRoot, Default())
+	report := Run(context.Background(), workspaceRoot, Config{Enabled: true})
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one vet error, got %#v", report)
@@ -205,7 +199,7 @@ func TestRunReportsGoEnvLookupError(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), t.TempDir(), Default(), tc)
+	report := run(context.Background(), t.TempDir(), Config{Enabled: true}, tc)
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one error, got %#v", report)
@@ -217,7 +211,7 @@ func TestRunReportsGoEnvLookupError(t *testing.T) {
 }
 
 func TestRunSkipsOutsideModule(t *testing.T) {
-	report := Run(context.Background(), t.TempDir(), Default())
+	report := Run(context.Background(), t.TempDir(), Config{Enabled: true})
 
 	if report.ErrorCount() != 0 {
 		t.Fatalf("expected empty report: %#v", report)

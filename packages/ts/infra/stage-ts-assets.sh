@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Builds the self-contained TS toolchain assets embedded into the `fmtkit`
-# release binary (see packages/go/driver/internal/tsruntime):
+# release binary (see packages/go/driver/internal/typescript/runtime):
 #
 #   - fmtkit-ts-sidecar  bun-compiled bundle of packages/ts/sidecar/src/sidecar.ts
 #   - oxc-parser.node    napi binding, loaded via NAPI_RS_NATIVE_LIBRARY_PATH
@@ -11,7 +11,7 @@ set -euo pipefail
 #   - .oxfmtrc.json      repo-root config, the default for projects without one
 #   - .oxlintrc.json     repo-root config, the default for projects without one
 #
-# Output lands in packages/go/driver/internal/embedded/bin/<target>/, next to the
+# Output lands in packages/go/driver/internal/typescript/embedded/bin/<target>/, next to the
 # package that embeds it: go:embed cannot reach outside its own directory.
 #
 # Tool versions come from packages/ts/sidecar/package.json devDependencies;
@@ -31,7 +31,7 @@ if [[ $# -eq 0 ]]; then
 fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/go/driver/internal/embedded/bin}"
+dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/go/driver/internal/typescript/embedded/bin}"
 
 source "${root}/infra/lib/host-target.sh"
 

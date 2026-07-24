@@ -4,9 +4,11 @@ on:
     push:
         branches:
             - main
+            - release-refactor
     pull_request:
         branches:
             - main
+            - release-refactor
         types:
             - opened
             - reopened

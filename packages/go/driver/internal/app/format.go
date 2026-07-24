@@ -3,81 +3,84 @@ package app
 import (
 	"context"
 	"fmt"
-	"io"
+	"strings"
 
-	"go.ollin.sh/fmtkit/driver/internal/cli"
-	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
-	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
+	"go.ollin.sh/fmtkit/driver/internal/console"
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	"go.ollin.sh/fmtkit/driver/internal/pipeline"
+	"go.ollin.sh/fmtkit/driver/internal/toolchain"
 )
 
 // runFormat formats what diverges from HEAD — modified files, staged or not,
 // plus untracked ones — so an everyday format stays proportional to the diff.
 // Use format-all to cover every file.
-func (a App) runFormat(ctx context.Context, args []string) int {
+func (d *deps) runFormat(ctx context.Context, args []string) int {
 	opts, paths, err := parseFormatArgs(args)
 
 	if err != nil {
-		_, _ = fmt.Fprintf(a.stderr, "%v\n\n", err)
+		_, _ = fmt.Fprintf(d.stderr, "%v\n\n", err)
 
-		printUsage(a.stderr)
+		d.usage(d.stderr)
 
 		return 2
 	}
 
-	return a.runPipeline(ctx, paths, opts, sourcefiles.SelectionChanged)
+	return d.runPipeline(ctx, paths, opts, gitfiles.SelectionChanged)
 }
 
 // runFormatAll covers every non-ignored file rather than just the working
 // tree's changes, pinned to the current directory, so it takes flags but
 // rejects paths.
-func (a App) runFormatAll(ctx context.Context, args []string) int {
+func (d *deps) runFormatAll(ctx context.Context, args []string) int {
 	opts, extra, err := parseFormatArgs(args)
 
 	if err != nil || len(extra) != 0 {
 		if err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "%v\n\n", err)
+			_, _ = fmt.Fprintf(d.stderr, "%v\n\n", err)
 		}
 
-		printUsage(a.stderr)
+		d.usage(d.stderr)
 
 		return 2
 	}
 
-	return a.runPipeline(ctx, []string{"."}, opts, sourcefiles.SelectionAll)
+	return d.runPipeline(ctx, []string{"."}, opts, gitfiles.SelectionAll)
 }
 
-func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection sourcefiles.Selection) int {
-	pipeline := orchestrator.Pipeline{
-		Tools: orchestrator.Tools{
-			TS: func(ctx context.Context, scopes []string, output io.Writer) error {
-				support, err := tsruntime.Resolve(a.version)
-
-				if err != nil {
-					return err
-				}
-
-				return support.RunPipeline(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
-			},
-			Lint: func(ctx context.Context, scopes []string, output io.Writer) error {
-				support, err := tsruntime.Resolve(a.version)
-
-				if err != nil {
-					return err
-				}
-
-				return support.RunLint(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
-			},
-			Go: func(ctx context.Context, args []string, output io.Writer) int {
-				return cli.
-					NewScopedRunner(output, output, selection).
-					Run(ctx, cli.FormatMode, args[1:])
-			},
-		},
-		Steps:  opts.steps,
-		Quiet:  opts.quiet,
-		Stderr: a.stderr,
+// runPipeline frames the format run (target header, completion footer) around
+// the typed steps the selected lanes contribute, handing them to the generic
+// pipeline. Color is resolved once here, at the composition root.
+func (d *deps) runPipeline(ctx context.Context, paths []string, opts formatOptions, selection gitfiles.Selection) int {
+	if len(paths) == 0 {
+		paths = []string{"."}
 	}
 
-	return pipeline.RunFormat(ctx, paths)
+	printer := console.NewPrinter(d.stderr, console.DetectColor(d.stderr))
+
+	printer.Section("Formatting target(s)")
+	printer.Detail("paths", strings.Join(paths, " "))
+
+	req := toolchain.Request{Version: d.version, Paths: paths, Selection: selection}
+
+	var steps []pipeline.Step
+
+	for _, chain := range d.toolchains.Select(opts.toolchains...) {
+		steps = append(steps, chain.Steps(req)...)
+	}
+
+	pipe := pipeline.Pipeline{
+		Steps:   steps,
+		Quiet:   opts.quiet,
+		Printer: printer,
+		Stderr:  d.stderr,
+	}
+
+	if code := pipe.Run(ctx); code != 0 {
+		return code
+	}
+
+	printer.Section("Formatting complete")
+	printer.SuccessDetail("status", "done")
+
+	return 0
 }

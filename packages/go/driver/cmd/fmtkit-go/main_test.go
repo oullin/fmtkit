@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.ollin.sh/fmtkit/driver/internal/app"
 	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
@@ -186,6 +187,55 @@ func TestRunSourcesEmitsNullDelimitedTypeScriptFiles(t *testing.T) {
 
 	if stdout != want {
 		t.Fatalf("unexpected stdout\nwant: %q\n got: %q", want, stdout)
+	}
+}
+
+// TestDispatchGoldens pins the fmtkit-go binary's usage text, version string,
+// stdout/stderr routing, and exit codes byte for byte. Note the deliberate
+// differences from the umbrella (internal/app): unknown subcommands and missing
+// args exit 1 here (not 2), and the usage prefixes read "fmtkit check ..." (not
+// "fmtkit go check ..."). Pin the current bytes; do not reconcile the two.
+func TestDispatchGoldens(t *testing.T) {
+	usage, err := os.ReadFile(filepath.Join("testdata", "usage.txt"))
+
+	if err != nil {
+		t.Fatalf("read usage golden: %v", err)
+	}
+
+	cases := []struct {
+		name       string
+		args       []string
+		wantExit   int
+		wantStdout string
+		wantStderr string
+	}{
+		{"no args", nil, 1, "", string(usage)},
+		{"unknown", []string{"bogus"}, 1, "", "unknown subcommand - {\"bogus\"}\n\n" + string(usage)},
+		{"help", []string{"help"}, 0, "", string(usage)},
+		{"help long flag", []string{"--help"}, 0, "", string(usage)},
+		{"help short flag", []string{"-h"}, 0, "", string(usage)},
+		{"version", []string{"version"}, 0, "fmtkit dev\n", ""},
+		{"version long flag", []string{"--version"}, 0, "fmtkit dev\n", ""},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			exitCode, stdout, stderr := runCLI(t, t.TempDir(), tc.args...)
+
+			if exitCode != tc.wantExit {
+				t.Fatalf("exit = %d, want %d", exitCode, tc.wantExit)
+			}
+
+			if stdout != tc.wantStdout {
+				t.Fatalf("stdout mismatch\n--- got ---\n%q\n--- want ---\n%q", stdout, tc.wantStdout)
+			}
+
+			if stderr != tc.wantStderr {
+				t.Fatalf("stderr mismatch\n--- got ---\n%q\n--- want ---\n%q", stderr, tc.wantStderr)
+			}
+		})
 	}
 }
 
@@ -443,7 +493,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stdout strings.Builder
 
 	var stderr strings.Builder
-	exitCode := run(context.Background(), args, &stdout, &stderr)
+	exitCode := app.GoCLI("dev", &stdout, &stderr).Dispatch(context.Background(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

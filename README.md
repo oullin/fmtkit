@@ -277,7 +277,7 @@ make check                 # Go formatter in check mode
 ```
 
 The first run stages the host TS toolchain assets into
-`packages/go/driver/internal/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
+`packages/go/driver/internal/typescript/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
 few seconds); later runs reuse them and re-stage only when the support scripts,
 the tool pins, or the `.oxfmtrc.json` / `.oxlintrc.json` configs change. The
 inner loop is then a plain incremental `go build`.
@@ -286,17 +286,51 @@ That loop points `FMTKIT_SUPPORT_DIR` at the staged assets rather than embedding
 them, which keeps it fast. The embedded-asset path a release actually uses is
 covered by `vp run test:binary`.
 
-Package layout:
+## How the code is organized
 
-```text
-packages/go/              The Go module (go.ollin.sh/fmtkit)
-packages/go/driver/       Stand-alone Go CLI, config loading, report rendering
-packages/go/vet/          Vet planning and automatic go vet execution
-packages/go/formatter/    Formatter planning, engine, rules, and formatters
-packages/go/infra/        Go-toolchain task runner
-packages/ts/sidecar/      Oxc-based formatting for supported non-Go file types
-packages/ts/infra/        Staging for the bun-compiled TS toolchain assets
-infra/                    Repo-wide tasks, shared shell lib, release scripts
-```
+fmtkit is one binary with two halves:
 
-The pipeline runs `source → spacing rule → gofmt → goimports`, skipping any stage disabled in config. New rules can be added by implementing the `Rule` interface (`Name()`, `Apply()`) and registering them with the rule set before the engine is constructed.
+- A **Go driver** (`packages/go`) that owns the CLI, finds files, formats Go, runs `go vet`, renders reports, and orchestrates the whole run.
+- A **TypeScript sidecar** (`packages/ts/sidecar`), compiled with Bun and embedded in the binary, that formats TS/Vue and the embedded blocks in Markdown/HTML.
+
+The driver runs the sidecar as a child process. Everything that crosses that boundary — the executable name, the modes, the flags, the env vars, the summary lines the driver reads back — is defined once per side (`driver/internal/typescript/proto` in Go, the `cli/` DTOs in TS) and pinned by tests. Change one side and you change the other in the same PR.
+
+### Go side (`packages/go`, module `go.ollin.sh/fmtkit`)
+
+The importable library:
+
+| Package                   | What it does                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `formatter`               | The public entry points: `Check`, `Format`, `CheckFiles`, `FormatFiles`.                                                              |
+| `formatter/engine`        | Runs the formatters over files concurrently and builds the `Report`.                                                                  |
+| `formatter/config`        | The single source of truth for formatter settings and defaults.                                                                       |
+| `formatter/rules/spacing` | The spacing rule. Parses each file once, then three types do the work: blank-line insertion, type reordering, embed-directive repair. |
+| `vet`                     | Wraps `go vet` behind an injectable toolchain so tests can fake it.                                                                   |
+| `driver/config`           | CLI config. Embeds the formatter config and adds the vet toggle; the `config.yml` schema is a public contract.                        |
+| `driver/report`           | Typed output modes and the renderer; the JSON/agent shapes are a public contract.                                                     |
+
+The CLI internals (`driver/internal/...`), one job each: `command` holds the one dispatch table both binaries share; `app` only wires things together, registering the language lanes with `toolchain` — the contract and registry that turn `--ts`/`--go` into an ordered set of lanes to run (no flags means all, TS before Go); `pipeline` runs generic steps whose summaries come from typed results (nothing scrapes rendered text); `console` owns terminal colors and printing; `gitfiles` owns git-backed file selection. Each language then owns its own behaviour in its own package: `golang` is the Go check/format use case (returning a typed `Outcome`) plus its format step; `typescript` builds the TS/Vue lint and format steps and splits its machinery across subpackages — `typescript/runtime` extracts and spawns the sidecar, `typescript/proto` is the frozen wire protocol, `typescript/filetypes` and `typescript/prettierignore` each own one kind of file selection composed by `typescript/sourcefiles`, and `typescript/embedded` holds the `go:embed` assets (its `bin/` folder is where staging writes — do not move it).
+
+### TS side (`packages/ts/sidecar/src`)
+
+| Directory   | What it does                                                                                                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kernel/`   | `Result` helpers, error types, the concurrency pool.                                                                                                             |
+| `syntax/`   | Parsing and editing: `SourceDocument` (an immutable file value), `SourceParser` (the Zod boundary), `AstReader`, `EditApplier`.                                  |
+| `hosts/`    | Pulls TS out of `.vue`/`.md`/`.html` files and puts it back.                                                                                                     |
+| `passes/`   | One class per formatting rule. Every pass implements the same small interface: `computeEdits(document)` returns edits. Policy classes hold the layout knowledge. |
+| `pipeline/` | Runs passes in order. `PipelineFactory` is the only place a pass sequence is defined; loops and fixed points are declared there, not hidden inside passes.       |
+| `io/`       | File and process access behind ports, with Node adapters.                                                                                                        |
+| `cli/`      | The commands, the DTOs that parse argv, and `CompositionRoot` — the one place everything gets constructed. Entry files are just `main()` shims.                  |
+
+Adding a pass: write a class that implements `FormattingPass`, register it in `PipelineFactory`. Nothing else changes. Adding a Go rule: implement the `Rule` interface (`Name()`, `Apply()`) and register it before the engine is built.
+
+### Ground rules
+
+- **Logic lives on types.** Go logic belongs to structs with methods; free functions are for small stateless helpers only. TS code lives in classes with real instances and constructor-injected dependencies — the only exceptions are `main()` entry shims, the `Result` helpers, value types with factory statics (the Zod DTOs, `SourceDocument.of`), and error classes.
+- **Parse, don't validate.** Outside data enters through a Zod-backed DTO exactly once. No `typeof` checks in TS source.
+- **The wire is frozen.** The Go↔TS protocol values never change casually; golden tests on both sides fail loudly if they drift.
+- **The repo formats itself.** `make format-all` must leave the tree unchanged. Write class members in the formatter's order (properties, constructor, methods) or the self-check will reorder them for you.
+- **Goldens are never regenerated to make a change pass.** Pipeline transcripts, report renders, CLI usage/exit codes, and the spacing corpus are pinned byte-for-byte; if a golden fails, the code is wrong.
+
+The Go pipeline runs `source → spacing rule → gofmt → goimports`, skipping any stage disabled in config.

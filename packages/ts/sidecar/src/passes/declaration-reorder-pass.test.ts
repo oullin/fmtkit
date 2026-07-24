@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DeclarationReorder } from '#sidecar/declaration-reorder';
+import { AstReader } from '#sidecar/syntax/ast-reader';
+import { DeclarationReorderPass } from '#sidecar/passes/declaration-reorder-pass';
 import { EditApplier } from '#sidecar/syntax/edits';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
+const pass = new DeclarationReorderPass({ parser: new SourceParser(), ast: new AstReader() });
 const editApplier = new EditApplier();
 
+function computeEdits(source: string) {
+	return pass.computeEdits(SourceDocument.of('sample.ts', source));
+}
+
 function reorder(source: string): string {
-	const edits = DeclarationReorder.computeEdits(source, 'sample.ts');
+	const edits = computeEdits(source);
 
 	return edits.length > 0 ? editApplier.apply(source, edits) : source;
 }
@@ -46,5 +54,5 @@ test('reorders import groups so single-line imports precede multiline ones', () 
 });
 
 test('returns no edits for source with syntax errors', () => {
-	assert.deepEqual(DeclarationReorder.computeEdits('const broken = {;\nconst small = 1;\n', 'sample.ts'), []);
+	assert.deepEqual(computeEdits('const broken = {;\nconst small = 1;\n'), []);
 });

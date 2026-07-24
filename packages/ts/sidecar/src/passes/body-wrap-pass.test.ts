@@ -1,12 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BodyWrapper } from '#sidecar/body-wrapper';
+import { AstReader } from '#sidecar/syntax/ast-reader';
+import { BodyWrapPass } from '#sidecar/passes/body-wrap-pass';
 import { EditApplier } from '#sidecar/syntax/edits';
+import { SourceDocument } from '#sidecar/syntax/source-document';
+import { SourceParser } from '#sidecar/syntax/source-parser';
 
+const pass = new BodyWrapPass({ parser: new SourceParser(), ast: new AstReader() });
 const editApplier = new EditApplier();
 
+function computeEdits(source: string) {
+	return pass.computeEdits(SourceDocument.of('sample.ts', source));
+}
+
 function wrapOnce(source: string): string {
-	const edits = BodyWrapper.computeEdits(source, 'sample.ts');
+	const edits = computeEdits(source);
 
 	return edits.length > 0 ? editApplier.apply(source, edits) : source;
 }
@@ -67,9 +75,9 @@ test('wraps with four spaces when the source is space-indented', () => {
 test('leaves already-braced bodies alone', () => {
 	const source = 'if (ready) {\n\trun();\n}\n';
 
-	assert.deepEqual(BodyWrapper.computeEdits(source, 'sample.ts'), []);
+	assert.deepEqual(computeEdits(source), []);
 });
 
 test('returns no edits for source with syntax errors', () => {
-	assert.deepEqual(BodyWrapper.computeEdits('if (broken run();\n', 'sample.ts'), []);
+	assert.deepEqual(computeEdits('if (broken run();\n'), []);
 });

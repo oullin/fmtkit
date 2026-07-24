@@ -1,11 +1,13 @@
 import { availableParallelism } from 'node:os';
-import { EmbeddedBlocks } from '#sidecar/hosts/embedded-blocks';
+import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import type { OxfmtRunFailed, SourceFileUnreadable, SourceUnparsable } from '#sidecar/kernel/errors';
+import { FileFormatter } from '#sidecar/pipeline/file-formatter';
 import { FluentChains } from '#sidecar/fluent-chains';
+import { PipelineFactory } from '#sidecar/pipeline/pipeline-factory';
 import type { ProcessRunner } from '#sidecar/io/process-runner';
 import { isErr, ok } from '#sidecar/kernel/result';
 import type { Result } from '#sidecar/kernel/result';
-import { Segment } from '#sidecar/segment';
+import { SourceFileEditor } from '#sidecar/pipeline/source-file-editor';
 import type { SourceFileError, SourceFiles } from '#sidecar/io/source-files';
 import { SourceParser } from '#sidecar/syntax/source-parser';
 
@@ -57,10 +59,12 @@ type ProcessOne = (file: string, mode: FormatMode) => Promise<Result<boolean, So
 
 /** Coordinates formatting and validation through narrow filesystem and process ports. */
 export class FormatPipeline {
-	static readonly #parser = new SourceParser();
-
 	readonly #sourceFiles: SourceFiles;
 	readonly #processRunner: ProcessRunner;
+	readonly #parser: SourceParser;
+	readonly #splitter: EmbeddedBlockSplitter;
+	readonly #editor: SourceFileEditor;
+	readonly #fileFormatter: FileFormatter;
 
 	static async #mapPool<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
 		const results = new Array<R>(items.length);
@@ -102,6 +106,10 @@ export class FormatPipeline {
 	constructor(dependencies: { sourceFiles: SourceFiles; processRunner: ProcessRunner }) {
 		this.#sourceFiles = dependencies.sourceFiles;
 		this.#processRunner = dependencies.processRunner;
+		this.#parser = new SourceParser();
+		this.#splitter = new EmbeddedBlockSplitter();
+		this.#editor = new SourceFileEditor({ sourceFiles: dependencies.sourceFiles });
+		this.#fileFormatter = new FileFormatter({ splitter: this.#splitter, pipeline: PipelineFactory.create().segmentPipeline() });
 	}
 
 	/**
@@ -112,21 +120,9 @@ export class FormatPipeline {
 	 * @returns Whether the file changes, or the typed filesystem failure.
 	 */
 	async formatFile(path: string, mode: FormatMode): Promise<Result<boolean, SourceFileError>> {
-		const read = await this.#sourceFiles.readText(path);
-
-		if (isErr(read)) {
-			return read;
-		}
-
-		const original = read.value;
-
-		const updated = EmbeddedBlocks.isHost(path)
-			? EmbeddedBlocks.rewrite(path, original, (blockContent, virtualName) => {
-					return Segment.process(blockContent, virtualName);
-				})
-			: Segment.process(original, path);
-
-		return this.#writeChanged(path, original, updated, mode);
+		return this.#editor.apply(path, mode, (content) => {
+			return this.#fileFormatter.format(path, content);
+		});
 	}
 
 	/**
@@ -201,19 +197,19 @@ export class FormatPipeline {
 				return [{ file, error: read.error }];
 			}
 
-			if (!EmbeddedBlocks.isHost(file)) {
-				const parsed = FormatPipeline.#parser.parse(file, read.value);
+			if (!this.#splitter.isHost(file)) {
+				const parsed = this.#parser.parse(file, read.value);
 
 				return isErr(parsed) ? [{ file, error: parsed.error }] : [];
 			}
 
 			const hostFailures: ValidationFailure[] = [];
 
-			for (const block of EmbeddedBlocks.extract(file, read.value)) {
+			for (const block of this.#splitter.extract(file, read.value)) {
 				const virtualContent = FormatPipeline.#scriptPrefix(read.value, block.start) + block.content;
-				const parsed = FormatPipeline.#parser.parse(`${file}.script.${block.extension}`, virtualContent);
+				const parsed = this.#parser.parse(`${file}.script.${block.extension}`, virtualContent);
 
-				if (isErr(parsed) && EmbeddedBlocks.hardValidated(file)) {
+				if (isErr(parsed) && this.#splitter.hardValidated(file)) {
 					hostFailures.push({ file, error: parsed.error });
 				}
 			}
@@ -222,21 +218,5 @@ export class FormatPipeline {
 		});
 
 		return failures.flat();
-	}
-
-	async #writeChanged(path: string, original: string, updated: string, mode: FormatMode): Promise<Result<boolean, SourceFileError>> {
-		if (updated === original) {
-			return ok(false);
-		}
-
-		if (mode === 'write') {
-			const written = await this.#sourceFiles.writeTextAtomic(path, updated);
-
-			if (isErr(written)) {
-				return written;
-			}
-		}
-
-		return ok(true);
 	}
 }

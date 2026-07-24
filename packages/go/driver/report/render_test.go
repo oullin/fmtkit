@@ -15,10 +15,12 @@ func TestRenderDispatch(t *testing.T) {
 
 	t.Cleanup(func() { color.NoColor = previous })
 
-	for _, format := range []string{"text", "json", "agent"} {
+	renderer := Renderer{Root: "/work", Mode: ModeCheck}
+
+	for _, format := range []Format{FormatText, FormatJSON, FormatAgent} {
 		var out bytes.Buffer
 
-		if err := Render(&out, format, "/work", "check", sampleCombinedReport()); err != nil {
+		if err := renderer.Render(&out, format, sampleCombinedReport()); err != nil {
 			t.Fatalf("render %s: %v", format, err)
 		}
 
@@ -29,10 +31,86 @@ func TestRenderDispatch(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := Render(&out, "yaml", "/work", "check", sampleCombinedReport())
+	err := renderer.Render(&out, Format("yaml"), sampleCombinedReport())
 
 	if err == nil || err.Error() != "unsupported output format" {
 		t.Fatalf("expected unsupported format error, got %v", err)
+	}
+}
+
+func TestParseFormat(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		want Format
+	}{
+		{"text", FormatText},
+		{"json", FormatJSON},
+		{"agent", FormatAgent},
+	} {
+		got, err := ParseFormat(tc.in)
+
+		if err != nil {
+			t.Fatalf("ParseFormat(%q): %v", tc.in, err)
+		}
+
+		if got != tc.want {
+			t.Fatalf("ParseFormat(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	if _, err := ParseFormat("yaml"); err == nil || err.Error() != "unsupported output format" {
+		t.Fatalf("expected unsupported format error, got %v", err)
+	}
+}
+
+func TestExitCode(t *testing.T) {
+	cases := []struct {
+		name   string
+		mode   Mode
+		report Combined
+		want   int
+	}{
+		{
+			name:   "vet errors fail either mode",
+			mode:   ModeFormat,
+			report: Combined{Vet: vet.Report{Errors: []vet.ErrorResult{{Message: "boom"}}}},
+			want:   1,
+		},
+		{
+			name:   "check passes on pass result",
+			mode:   ModeCheck,
+			report: Combined{Formatter: formatterengine.Report{Result: "pass"}},
+			want:   0,
+		},
+		{
+			name:   "check fails on non-pass result",
+			mode:   ModeCheck,
+			report: Combined{Formatter: formatterengine.Report{Result: "fail"}},
+			want:   1,
+		},
+		{
+			name: "format fails on formatter errors",
+			mode: ModeFormat,
+			report: Combined{Formatter: formatterengine.Report{
+				Result: "fail",
+				Errors: []formatterengine.ErrorResult{{Message: "walk failed"}},
+			}},
+			want: 1,
+		},
+		{
+			name:   "format succeeds after applying fixes",
+			mode:   ModeFormat,
+			report: Combined{Formatter: formatterengine.Report{Result: "fixed"}},
+			want:   0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.report.ExitCode(tc.mode); got != tc.want {
+				t.Fatalf("ExitCode(%s) = %d, want %d", tc.mode, got, tc.want)
+			}
+		})
 	}
 }
 

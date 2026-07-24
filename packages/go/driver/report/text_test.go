@@ -13,7 +13,7 @@ import (
 // renderTextPlain renders without ANSI escapes so substring asserts are
 // stable. color.NoColor is global state, so these tests must not run in
 // parallel.
-func renderTextPlain(t *testing.T, cwd, mode string, report Combined) string {
+func renderTextPlain(t *testing.T, cwd string, mode Mode, report Combined) string {
 	t.Helper()
 
 	previous := color.NoColor
@@ -23,7 +23,7 @@ func renderTextPlain(t *testing.T, cwd, mode string, report Combined) string {
 
 	var out bytes.Buffer
 
-	if err := RenderText(&out, cwd, mode, report); err != nil {
+	if err := (Renderer{Root: cwd, Mode: mode}).renderText(&out, report); err != nil {
 		t.Fatalf("render text: %v", err)
 	}
 

@@ -10,13 +10,10 @@ import (
 	"strings"
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
-	"go.ollin.sh/fmtkit/driver/internal/gotool"
+	"go.ollin.sh/fmtkit/driver/internal/golang"
 	"go.ollin.sh/fmtkit/driver/internal/pipeline"
 	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
-	report "go.ollin.sh/fmtkit/driver/report"
-	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
-	"go.ollin.sh/fmtkit/vet"
 )
 
 // stepSelection selects which parts of the format pipeline run; the zero value
@@ -37,13 +34,6 @@ type tsLintStep struct {
 // passes).
 type tsFormatStep struct {
 	version   string
-	paths     []string
-	selection gitfiles.Selection
-}
-
-// goFormatStep formats Go files and runs go vet, deriving its details from the
-// typed outcome rather than the rendered report text.
-type goFormatStep struct {
 	paths     []string
 	selection gitfiles.Selection
 }
@@ -71,7 +61,7 @@ func (d *deps) formatSteps(paths []string, selected stepSelection, selection git
 	}
 
 	if selected.Go {
-		steps = append(steps, goFormatStep{paths: paths, selection: selection})
+		steps = append(steps, golang.FormatStep(paths, selection))
 	}
 
 	return steps
@@ -115,20 +105,6 @@ func (s tsFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result
 	}
 
 	return pipeline.Result{Details: tsFormatDetails(captured.String())}
-}
-
-func (s goFormatStep) Label() string { return "Running Go formatting" }
-
-func (s goFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
-	outcome, code := gotool.
-		Runner{Stdout: output, Stderr: output, Scope: s.selection}.
-		RunReport(ctx, report.ModeFormat, s.paths)
-
-	if code != 0 {
-		return pipeline.Result{ExitCode: code}
-	}
-
-	return pipeline.Result{Details: goFormatDetails(outcome)}
 }
 
 // invokeTS resolves the TS toolchain and invokes it through spawn, which
@@ -215,95 +191,4 @@ func tsFormatDetails(log string) []pipeline.Detail {
 	}
 
 	return details
-}
-
-// goFormatDetails computes the Go step's detail lines from the typed outcome,
-// reproducing the exact strings the text report renders (which the pipeline
-// previously scraped back out of that rendered text).
-func goFormatDetails(outcome gotool.Outcome) []pipeline.Detail {
-	fm := outcome.Combined.Formatter
-	vt := outcome.Combined.Vet
-
-	var details []pipeline.Detail
-
-	if summary := goFileSummary(fm, outcome.Mode); summary != "" {
-		details = append(details, pipeline.Detail{Label: "fmtkit", Value: summary})
-	}
-
-	// The formatter renders a Result line unless it found no files and hit no
-	// errors; the vet Result line always renders. The "result" detail is the
-	// first Result line (the formatter's when present, else the vet's), matching
-	// the text report's top-to-bottom order.
-	formatterResult := ""
-
-	if fm.Files != 0 || len(fm.Errors) != 0 {
-		formatterResult = fmt.Sprintf("%s. %d changed, %d violation(s), %d error(s).", fm.Result, fm.Changed, fm.ViolationCount(), fm.ErrorCount())
-	}
-
-	vetResult := fmt.Sprintf("%s. %d error(s).", goVetStatus(vt), vt.ErrorCount())
-
-	resultLine := formatterResult
-
-	if resultLine == "" {
-		resultLine = vetResult
-	}
-
-	details = append(details, pipeline.Detail{Label: "result", Value: resultLine})
-
-	if summary := goVetSummary(vt); summary != "" {
-		details = append(details, pipeline.Detail{Label: "vet", Value: summary})
-	}
-
-	if vetResult != resultLine {
-		details = append(details, pipeline.Detail{Label: "vet result", Value: vetResult})
-	}
-
-	return details
-}
-
-// goFileSummary is the formatter's file-count line: "No Go files found." when it
-// owns none, otherwise the mode's verb and count.
-func goFileSummary(fm formatterengine.Report, mode report.Mode) string {
-	if fm.Files == 0 {
-		return "No Go files found."
-	}
-
-	action := "Checked"
-
-	if mode == report.ModeFormat {
-		action = "Formatted"
-	}
-
-	return fmt.Sprintf("%s %d file(s).", action, fm.Files)
-}
-
-// goVetStatus classifies the vet report the same way the text report does.
-func goVetStatus(vt vet.Report) string {
-	switch {
-	case vt.Skipped || vt.Root == "":
-		return "skipped"
-	case vt.ErrorCount() > 0:
-		return "fail"
-	default:
-		return "pass"
-	}
-}
-
-// goVetSummary is the vet status line, or "" for a failure (whose per-error
-// lines the text report shows instead of a one-line summary).
-func goVetSummary(vt vet.Report) string {
-	switch goVetStatus(vt) {
-	case "skipped":
-		reason := "no Go module or workspace was detected"
-
-		if vt.Skipped {
-			reason = "the Go toolchain is not available"
-		}
-
-		return "Skipped automatic go vet ./... because " + reason + "."
-	case "pass":
-		return "go vet ./... passed."
-	default:
-		return ""
-	}
 }

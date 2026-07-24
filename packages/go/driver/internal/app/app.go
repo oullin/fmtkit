@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"go.ollin.sh/fmtkit/driver/internal/command"
-	"go.ollin.sh/fmtkit/driver/internal/gotool"
+	"go.ollin.sh/fmtkit/driver/internal/golang"
 	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
 	report "go.ollin.sh/fmtkit/driver/report"
 )
@@ -140,8 +140,8 @@ func (d *deps) goCommandSet(name string, errExit int) command.Set {
 
 // goRunner is the unscoped Go formatter runner shared by `check` and the
 // standalone `format`.
-func (d *deps) goRunner() gotool.Runner {
-	return gotool.Runner{Stdout: d.stdout, Stderr: d.stderr}
+func (d *deps) goRunner() golang.Runner {
+	return golang.Runner{Stdout: d.stdout, Stderr: d.stderr}
 }
 
 func (d *deps) runCheck(ctx context.Context, args []string) int {

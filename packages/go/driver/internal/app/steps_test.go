@@ -6,11 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"go.ollin.sh/fmtkit/driver/internal/gotool"
 	"go.ollin.sh/fmtkit/driver/internal/pipeline"
-	report "go.ollin.sh/fmtkit/driver/report"
-	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
-	"go.ollin.sh/fmtkit/vet"
 )
 
 func detailStrings(details []pipeline.Detail) []string {
@@ -29,106 +25,6 @@ func assertDetails(t *testing.T, got []pipeline.Detail, want ...string) {
 	if g := fmt.Sprint(detailStrings(got)); g != fmt.Sprint(want) {
 		t.Fatalf("details mismatch\n--- got ---\n%s\n--- want ---\n%s", g, fmt.Sprint(want))
 	}
-}
-
-// goOutcome builds a Go outcome for the given mode, formatter report, and vet
-// report.
-func goOutcome(mode report.Mode, fm formatterengine.Report, vt vet.Report) gotool.Outcome {
-	return gotool.Outcome{Mode: mode, Combined: report.Combined{Formatter: fm, Vet: vt}}
-}
-
-func TestGoFormatDetailsPass(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeFormat,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 2},
-		vet.Report{Root: "/work"},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|Formatted 2 file(s).",
-		"result|pass. 0 changed, 0 violation(s), 0 error(s).",
-		"vet|go vet ./... passed.",
-		"vet result|pass. 0 error(s).",
-	)
-}
-
-func TestGoFormatDetailsCheckModeVerb(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeCheck,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 3},
-		vet.Report{Root: "/work"},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|Checked 3 file(s).",
-		"result|pass. 0 changed, 0 violation(s), 0 error(s).",
-		"vet|go vet ./... passed.",
-		"vet result|pass. 0 error(s).",
-	)
-}
-
-// TestGoFormatDetailsNoFiles reproduces the scraper's quirk: with no formatter
-// Result line rendered, the "result" detail borrows the vet Result line and the
-// separate "vet result" line is suppressed (they are identical).
-func TestGoFormatDetailsNoFiles(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeFormat,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 0},
-		vet.Report{Root: "/work"},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|No Go files found.",
-		"result|pass. 0 error(s).",
-		"vet|go vet ./... passed.",
-	)
-}
-
-func TestGoFormatDetailsVetSkippedNoModule(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeFormat,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 1},
-		vet.Report{Root: ""},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|Formatted 1 file(s).",
-		"result|pass. 0 changed, 0 violation(s), 0 error(s).",
-		"vet|Skipped automatic go vet ./... because no Go module or workspace was detected.",
-		"vet result|skipped. 0 error(s).",
-	)
-}
-
-func TestGoFormatDetailsVetSkippedToolchain(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeFormat,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 1},
-		vet.Report{Root: "/work", Skipped: true},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|Formatted 1 file(s).",
-		"result|pass. 0 changed, 0 violation(s), 0 error(s).",
-		"vet|Skipped automatic go vet ./... because the Go toolchain is not available.",
-		"vet result|skipped. 0 error(s).",
-	)
-}
-
-// TestGoFormatDetailsVetFailure: a vet failure renders per-error lines instead
-// of a status summary, so there is no "vet" detail, but the differing vet Result
-// line still appears.
-func TestGoFormatDetailsVetFailure(t *testing.T) {
-	outcome := goOutcome(
-		report.ModeFormat,
-		formatterengine.Report{Result: formatterengine.ResultPass, Files: 2},
-		vet.Report{Root: "/work", Errors: []vet.ErrorResult{{File: "a.go", Message: "boom"}}},
-	)
-
-	assertDetails(t, goFormatDetails(outcome),
-		"fmtkit|Formatted 2 file(s).",
-		"result|pass. 0 changed, 0 violation(s), 0 error(s).",
-		"vet result|fail. 1 error(s).",
-	)
 }
 
 func TestTSFormatDetails(t *testing.T) {

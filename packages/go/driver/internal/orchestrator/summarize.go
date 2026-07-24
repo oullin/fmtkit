@@ -4,20 +4,18 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
 // The summarizers distill a step's captured output into the aligned detail
-// lines shown under its section header.
+// lines shown under its section header. Lines the TS sidecar emits are parsed
+// by sidecarproto; the Go-report scraping below stays here (G6 retires it).
 
 var (
-	lintResultPattern     = regexp.MustCompile(`Found [0-9]+ warning|[0-9]+ error`)
 	goFileSummaryPattern  = regexp.MustCompile(`^  (Formatted|Checked) [0-9]+ file\(s\)\.$|^  No Go files found\.$`)
 	goVetSummaryPattern   = regexp.MustCompile(`^  go vet \./\.\.\. passed\.$|^  Skipped automatic go vet `)
 	sourcesMissingPrefix  = "[sources] path not found, skipping:"
-	blankLinesPrefix      = "[blank-lines] processed "
-	fluentChainsPrefix    = "[fluent-chains] processed "
-	oxfmtFinishedPrefix   = "Finished in "
-	validateSyntaxPrefix  = "[validate-syntax] checked "
 	lintNothingToLintLine = "[lint] no TS/Vue files to lint."
 	goResultPrefix        = "  Result: "
 )
@@ -39,55 +37,45 @@ func lastWithPrefix(logLines []string, prefix string) string {
 }
 
 func summarizeTSFormat(log string, l *logger) {
-	logLines := lines(log)
+	summary := sidecarproto.ParsePipelineSummary(log)
 	missing := 0
 
-	for _, line := range logLines {
+	for _, line := range lines(log) {
 		if strings.HasPrefix(line, sourcesMissingPrefix) {
 			missing++
 		}
 	}
 
-	if line := lastWithPrefix(logLines, blankLinesPrefix); line != "" {
-		l.detail("blank-lines", strings.TrimPrefix(line, "[blank-lines] "))
+	if summary.BlankLines != "" {
+		l.detail("blank-lines", summary.BlankLines)
 	}
 
 	if missing > 0 {
 		l.detail("skipped", fmt.Sprintf("%d missing tracked file(s)", missing))
 	}
 
-	if line := lastWithPrefix(logLines, oxfmtFinishedPrefix); line != "" {
-		l.detail("oxfmt", line)
+	if summary.Oxfmt != "" {
+		l.detail("oxfmt", summary.Oxfmt)
 	}
 
-	if line := lastWithPrefix(logLines, fluentChainsPrefix); line != "" {
-		l.detail("fluent", strings.TrimPrefix(line, "[fluent-chains] "))
+	if summary.FluentChains != "" {
+		l.detail("fluent", summary.FluentChains)
 	}
 
-	if line := lastWithPrefix(logLines, validateSyntaxPrefix); line != "" {
-		l.detail("validated", strings.TrimPrefix(line, "[validate-syntax] "))
+	if summary.ValidateSyntax != "" {
+		l.detail("validated", summary.ValidateSyntax)
 	}
 }
 
 func summarizeTSLint(log string, l *logger) {
-	logLines := lines(log)
-
-	if lastWithPrefix(logLines, lintNothingToLintLine) != "" {
+	if lastWithPrefix(lines(log), lintNothingToLintLine) != "" {
 		l.detail("oxlint", strings.TrimPrefix(lintNothingToLintLine, "[lint] "))
 
 		return
 	}
 
-	var match string
-
-	for _, line := range logLines {
-		if lintResultPattern.MatchString(line) {
-			match = line
-		}
-	}
-
-	if match != "" {
-		l.detail("oxlint", match)
+	if result := sidecarproto.ParseLintSummary(log).Result; result != "" {
+		l.detail("oxlint", result)
 
 		return
 	}

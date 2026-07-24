@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
 // writeStub creates an executable that echoes its argv, one per line, so
@@ -48,14 +50,14 @@ func gitScratchRepo(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-func supportWithStub(t *testing.T) Support {
+func supportWithStub(t *testing.T) Assets {
 	t.Helper()
 
 	dir := t.TempDir()
 
-	writeStub(t, filepath.Join(dir, sidecarName))
+	writeStub(t, filepath.Join(dir, sidecarproto.SidecarName))
 
-	return Support{Dir: dir}
+	return Assets{Dir: dir}
 }
 
 func TestRunPipelineInvokesSidecar(t *testing.T) {
@@ -72,11 +74,11 @@ func TestRunPipelineInvokesSidecar(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	err := support.RunPipeline(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr})
+	err := NewInvoker(support).RunPipeline(context.Background(), Request{Stdout: &stdout, Stderr: &stderr})
 
 	if err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
@@ -120,11 +122,11 @@ func TestRunPipelineSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunPipeline(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunPipeline(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -138,11 +140,11 @@ func TestRunPipelineReportsMissingScopes(t *testing.T) {
 
 	support := supportWithStub(t)
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	err := support.RunPipeline(context.Background(), RunOptions{
+	err := NewInvoker(support).RunPipeline(context.Background(), Request{
 		Scopes: []string{"missing-dir"},
 		Stdout: &stdout,
 		Stderr: &stderr,
@@ -168,11 +170,11 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -204,11 +206,11 @@ func TestRunLintFixPassesFixFlag(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Fix: true, Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Fix: true, Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -244,11 +246,11 @@ func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -260,13 +262,13 @@ func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 	repo := gitScratchRepo(t, map[string]string{"main.go": "package main\n"})
 
-	support := Support{Dir: t.TempDir()} // no sidecar: spawning would fail
+	support := Assets{Dir: t.TempDir()} // no sidecar: spawning would fail
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v", err)
 	}
 
@@ -284,13 +286,13 @@ func TestRunLintSkipsSpawnForFormatOnlyDocuments(t *testing.T) {
 		"notes.md":   "# Notes\n",
 	})
 
-	support := Support{Dir: t.TempDir()} // no sidecar: spawning would fail
+	support := Assets{Dir: t.TempDir()} // no sidecar: spawning would fail
 
-	t.Setenv(SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v", err)
 	}
 
@@ -308,12 +310,12 @@ func TestRunLintHonorsOxlintBinOverride(t *testing.T) {
 
 	writeStub(t, override)
 
-	t.Setenv(SourcesCwdEnv, repo)
-	t.Setenv(OxlintBinEnv, override)
+	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(sidecarproto.OxlintBinEnv, override)
 
 	var stdout, stderr bytes.Buffer
 
-	if err := support.RunLint(context.Background(), RunOptions{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 

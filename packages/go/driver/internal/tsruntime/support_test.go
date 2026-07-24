@@ -5,18 +5,20 @@ import (
 	"path/filepath"
 	"testing"
 	"testing/fstest"
+
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
 // fakeAssets mirrors a directory staged by stage-ts-assets.sh: the bindings
 // and the sidecar, plus the configs that ride along with them.
 func fakeAssets() fstest.MapFS {
 	return fstest.MapFS{
-		sidecarName:       &fstest.MapFile{Data: []byte("#!/bin/sh\n"), Mode: 0o755},
-		"oxc-parser.node": &fstest.MapFile{Data: []byte("parser")},
-		"oxfmt.node":      &fstest.MapFile{Data: []byte("fmt")},
-		"oxlint.node":     &fstest.MapFile{Data: []byte("lint")},
-		".oxfmtrc.json":   &fstest.MapFile{Data: []byte("{}")},
-		".oxlintrc.json":  &fstest.MapFile{Data: []byte("{}")},
+		sidecarproto.SidecarName: &fstest.MapFile{Data: []byte("#!/bin/sh\n"), Mode: 0o755},
+		"oxc-parser.node":        &fstest.MapFile{Data: []byte("parser")},
+		"oxfmt.node":             &fstest.MapFile{Data: []byte("fmt")},
+		"oxlint.node":            &fstest.MapFile{Data: []byte("lint")},
+		".oxfmtrc.json":          &fstest.MapFile{Data: []byte("{}")},
+		".oxlintrc.json":         &fstest.MapFile{Data: []byte("{}")},
 	}
 }
 
@@ -27,7 +29,7 @@ func TestExtractOncePopulatesSupportDir(t *testing.T) {
 		t.Fatalf("extractOnce: %v", err)
 	}
 
-	support := Support{Dir: dir}
+	support := Assets{Dir: dir}
 
 	if _, err := os.Stat(support.Sidecar()); err != nil {
 		t.Fatalf("sidecar missing: %v", err)
@@ -97,11 +99,11 @@ func TestExtractOnceLosingRaceKeepsWinner(t *testing.T) {
 func TestResolvePrefersSupportDirEnv(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(dir, sidecarName), []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, sidecarproto.SidecarName), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write sidecar: %v", err)
 	}
 
-	t.Setenv(SupportDirEnv, dir)
+	t.Setenv(sidecarproto.SupportDirEnv, dir)
 
 	support, err := Resolve("v1.0.0")
 
@@ -115,7 +117,7 @@ func TestResolvePrefersSupportDirEnv(t *testing.T) {
 }
 
 func TestResolveRejectsSupportDirWithoutSidecar(t *testing.T) {
-	t.Setenv(SupportDirEnv, t.TempDir())
+	t.Setenv(sidecarproto.SupportDirEnv, t.TempDir())
 
 	if _, err := Resolve("v1.0.0"); err == nil {
 		t.Fatal("expected error for support dir without sidecar")

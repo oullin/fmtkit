@@ -51,22 +51,22 @@ func (a App) runPipeline(ctx context.Context, paths []string, opts formatOptions
 	pipeline := orchestrator.Pipeline{
 		Tools: orchestrator.Tools{
 			TS: func(ctx context.Context, scopes []string, output io.Writer) error {
-				support, err := tsruntime.Resolve(a.version)
+				assets, err := tsruntime.Resolve(a.version)
 
 				if err != nil {
 					return err
 				}
 
-				return support.RunPipeline(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
+				return tsruntime.NewInvoker(assets).RunPipeline(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Stdout: output, Stderr: output})
 			},
 			Lint: func(ctx context.Context, scopes []string, output io.Writer) error {
-				support, err := tsruntime.Resolve(a.version)
+				assets, err := tsruntime.Resolve(a.version)
 
 				if err != nil {
 					return err
 				}
 
-				return support.RunLint(ctx, tsruntime.RunOptions{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
+				return tsruntime.NewInvoker(assets).RunLint(ctx, tsruntime.Request{Scopes: scopes, Selection: selection, Fix: true, Stdout: output, Stderr: output})
 			},
 			Go: func(ctx context.Context, args []string, output io.Writer) int {
 				return cli.

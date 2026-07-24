@@ -6,27 +6,31 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 )
 
-func TestMigrateCommandDefaultsToSidecar(t *testing.T) {
-	support := Support{Dir: filepath.Join("some", "dir")}
+func TestOxfmtExecutableDefaultsToSidecar(t *testing.T) {
+	migration := PrettierMigration{Assets: Assets{Dir: filepath.Join("some", "dir")}}
 
-	bin, args := support.migrateCommand(overrides{})
+	bin, viaSidecar := migration.oxfmtExecutable()
 
-	if bin != support.Sidecar() {
-		t.Fatalf("bin = %q, want sidecar %q", bin, support.Sidecar())
+	if bin != migration.Assets.Sidecar() {
+		t.Fatalf("bin = %q, want sidecar %q", bin, migration.Assets.Sidecar())
 	}
 
-	if len(args) != 1 || args[0] != "oxfmt" {
-		t.Fatalf("args = %q, want [oxfmt]", args)
+	if !viaSidecar {
+		t.Fatal("expected the sidecar dispatch path (viaSidecar = true)")
 	}
 }
 
-func TestMigrateCommandHonorsOxfmtBin(t *testing.T) {
-	bin, args := Support{}.migrateCommand(overrides{oxfmtBin: "/usr/bin/oxfmt"})
+func TestOxfmtExecutableHonorsOxfmtBin(t *testing.T) {
+	migration := PrettierMigration{Env: sidecarproto.Overrides{OxfmtBin: "/usr/bin/oxfmt"}}
 
-	if bin != "/usr/bin/oxfmt" || len(args) != 0 {
-		t.Fatalf("migrateCommand = (%q, %q), want (/usr/bin/oxfmt, [])", bin, args)
+	bin, viaSidecar := migration.oxfmtExecutable()
+
+	if bin != "/usr/bin/oxfmt" || viaSidecar {
+		t.Fatalf("oxfmtExecutable = (%q, %v), want (/usr/bin/oxfmt, false)", bin, viaSidecar)
 	}
 }
 
@@ -61,7 +65,7 @@ func TestPackageJSONHasPrettierKeyMissingFile(t *testing.T) {
 	}
 }
 
-func TestPrettierDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
+func TestDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
 	support := supportWithStub(t)
 
 	oxfmt := filepath.Join(t.TempDir(), "oxfmt")
@@ -78,11 +82,11 @@ func TestPrettierDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	env := overrides{oxfmtBin: oxfmt}
+	migration := PrettierMigration{Assets: support, Env: sidecarproto.Overrides{OxfmtBin: oxfmt}}
 
 	var stderr strings.Builder
 
-	if got := support.prettierDerivedConfig(context.Background(), cwd, env, &stderr); got != "" {
+	if got := migration.DerivedConfig(context.Background(), cwd, &stderr); got != "" {
 		t.Fatalf("expected empty result on cache failure, got %q", got)
 	}
 
@@ -91,7 +95,7 @@ func TestPrettierDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
 	}
 }
 
-func TestPrettierDerivedConfigWarnsWhenMigrationWritesNoConfig(t *testing.T) {
+func TestDerivedConfigWarnsWhenMigrationWritesNoConfig(t *testing.T) {
 	support := supportWithStub(t)
 
 	// A stub that exits 0 but writes no .oxfmtrc.json: the read-back must fail.
@@ -107,9 +111,11 @@ func TestPrettierDerivedConfigWarnsWhenMigrationWritesNoConfig(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
+	migration := PrettierMigration{Assets: support, Env: sidecarproto.Overrides{OxfmtBin: silent}}
+
 	var stderr strings.Builder
 
-	got := support.prettierDerivedConfig(context.Background(), cwd, overrides{oxfmtBin: silent}, &stderr)
+	got := migration.DerivedConfig(context.Background(), cwd, &stderr)
 
 	if got != "" {
 		t.Fatalf("expected empty result when no config is produced, got %q", got)

@@ -8,7 +8,17 @@ import (
 	"os"
 )
 
+// Run is the transitional entry point kept so existing callers compile
+// unchanged; it delegates to RunCLI.
+//
+// Transitional: G5 adopts RunCLI directly.
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	return RunCLI(ctx, args, stdout, stderr)
+}
+
+// RunCLI parses the `sources` subcommand flags and prints the collected files
+// NUL-separated to stdout.
+func RunCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sources", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 

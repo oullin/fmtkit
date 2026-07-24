@@ -191,6 +191,29 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	}
 }
 
+func TestChangedPathsShimDelegatesToGitfiles(t *testing.T) {
+	dir := initRepo(t)
+	writeFile(t, filepath.Join(dir, ".prettierignore"), "main.go\n")
+	writeFile(t, filepath.Join(dir, "main.go"), "package main\n")
+	gitAdd(t, dir, ".")
+
+	files, err := ChangedPaths(context.Background(), dir, nil)
+
+	if err != nil {
+		t.Fatalf("changed paths: %v", err)
+	}
+
+	// The shim forwards to gitfiles, which does not consult .prettierignore.
+	want := []string{
+		filepath.Join(dir, ".prettierignore"),
+		filepath.Join(dir, "main.go"),
+	}
+
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("files mismatch\nwant: %#v\n got: %#v", want, files)
+	}
+}
+
 func initRepo(t *testing.T) string {
 	t.Helper()
 

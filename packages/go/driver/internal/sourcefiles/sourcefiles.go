@@ -1,19 +1,37 @@
+// Package sourcefiles composes the three source-discovery engines — git file
+// discovery (gitfiles), the extension taxonomy (filetypes), and the
+// .prettierignore matcher (prettierignore) — into the file lists the TS
+// toolchain formats and lints.
 package sourcefiles
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
+
+	"go.ollin.sh/fmtkit/driver/internal/filetypes"
+	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	"go.ollin.sh/fmtkit/driver/internal/prettierignore"
 )
 
-// Selection is how much of the working tree a collection covers.
-type Selection int
+// Selection re-exports gitfiles.Selection so existing callers keep compiling.
+//
+// Transitional: G5 adopts gitfiles.Selection directly.
+type Selection = gitfiles.Selection
 
+// Collector composes git discovery, the extension taxonomy, and the
+// .prettierignore matcher into the formatter's and linter's file lists.
+type Collector struct {
+	Tree      gitfiles.Tree
+	Selection gitfiles.Selection
+	Filter    filetypes.Filter
+}
+
+// Options configures the transitional Collect/CollectLintable wrappers.
+//
+// Transitional: G5 adopts Collector directly.
 type Options struct {
 	Cwd                 string
 	IncludeDeclarations bool
@@ -25,81 +43,32 @@ type Options struct {
 
 const (
 	// SelectionAll covers every non-ignored file: tracked plus untracked.
-	// This is what `format-all` runs against.
-	SelectionAll Selection = iota
+	//
+	// Transitional: G5 adopts gitfiles.SelectionAll directly.
+	SelectionAll = gitfiles.SelectionAll
 
-	// SelectionChanged covers only what has actually diverged from HEAD:
-	// modified-but-tracked (staged or not) plus untracked. This is what `format`
-	// runs against, so an everyday format stays proportional to the diff rather
-	// than the repo.
-	SelectionChanged
+	// SelectionChanged covers only what has diverged from HEAD.
+	//
+	// Transitional: G5 adopts gitfiles.SelectionChanged directly.
+	SelectionChanged = gitfiles.SelectionChanged
 )
 
-// gitCommands returns the git invocations whose combined output lists the
-// files s covers under scope. Every command prints NUL-separated paths
-// relative to the directory git runs in.
-func (s Selection) gitCommands(scope string) [][]string {
-	if s == SelectionChanged {
-		return [][]string{
-			// Untracked files, plus tracked ones whose working-tree copy differs
-			// from the index.
-			{"ls-files", "--others", "--modified", "--exclude-standard", "-z", "--", scope},
-
-			// Staged changes are invisible to ls-files' worktree-vs-index view —
-			// a pre-commit hook would otherwise see nothing to format — so they
-			// come from an index-vs-HEAD diff. --relative keeps paths cwd-relative
-			// like ls-files; --diff-filter=d drops staged deletions, which leave
-			// no file to format.
-			{"diff", "--cached", "--name-only", "--relative", "--diff-filter=d", "-z", "--", scope},
-		}
-	}
-
-	return [][]string{{"ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", scope}}
-}
-
-// Collect lists the files the formatter owns under the given scopes: the TS
+// Formattable lists the files the formatter owns under the given scopes: the TS
 // and Vue families plus the HTML and Markdown documents whose embedded scripts
-// get formatted.
-func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
-	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, true, func(path string) bool {
-		return isTargetFile(path, opts.IncludeDeclarations)
-	})
+// get formatted. It returns warnings for scopes that do not exist.
+func (c Collector) Formattable(ctx context.Context, scopes []string) ([]string, []string, error) {
+	return c.collect(ctx, scopes, c.Filter.Formattable)
 }
 
-// CollectLintable lists only the files oxlint can lint under the given scopes:
-// the TS and Vue families. It is a subset of Collect — HTML and Markdown are
+// Lintable lists only the files oxlint can lint under the given scopes: the TS
+// and Vue families. It is a subset of Formattable — HTML and Markdown are
 // formattable but not lintable.
-func CollectLintable(ctx context.Context, opts Options) ([]string, []string, error) {
-	return collect(ctx, opts.Cwd, opts.Scopes, opts.Selection, true, func(path string) bool {
-		return isLintableFile(path, opts.IncludeDeclarations)
-	})
+func (c Collector) Lintable(ctx context.Context, scopes []string) ([]string, []string, error) {
+	return c.collect(ctx, scopes, c.Filter.Lintable)
 }
 
-// ChangedPaths lists every file that diverges from HEAD — modified, staged, or
-// added — under the given scopes, whatever its extension. Callers do their own
-// filtering — the Go formatter, for one, has its own notion of which files it
-// owns.
-// ChangedPaths deliberately skips .prettierignore filtering: it feeds the Go
-// formatter, whose file set has nothing to do with Prettier's JS/TS ignore
-// list.
-func ChangedPaths(ctx context.Context, cwd string, scopes []string) ([]string, error) {
-	files, _, err := collect(ctx, cwd, scopes, SelectionChanged, false, func(string) bool {
-		return true
-	})
-
-	return files, err
-}
-
-func collect(ctx context.Context, cwd string, scopes []string, selection Selection, honorPrettierIgnore bool, keep func(string) bool) ([]string, []string, error) {
-	if strings.TrimSpace(cwd) == "" {
-		var err error
-
-		cwd, err = os.Getwd()
-
-		if err != nil {
-			return nil, nil, err
-		}
-	}
+func (c Collector) collect(ctx context.Context, scopes []string, keep func(string) bool) ([]string, []string, error) {
+	cwd := c.Tree.Dir
 
 	if len(scopes) == 0 {
 		scopes = []string{"."}
@@ -126,7 +95,7 @@ func collect(ctx context.Context, cwd string, scopes []string, selection Selecti
 			return nil, warnings, err
 		}
 
-		entries, err := gitFiles(ctx, cwd, absolute, selection)
+		entries, err := c.Tree.Files(ctx, absolute, c.Selection)
 
 		if err != nil {
 			return nil, warnings, err
@@ -154,134 +123,85 @@ func collect(ctx context.Context, cwd string, scopes []string, selection Selecti
 		}
 	}
 
-	if honorPrettierIgnore {
-		kept, err := filterPrettierIgnored(cwd, files)
+	kept, err := c.honorPrettierIgnore(cwd, files)
 
-		if err != nil {
-			return nil, warnings, err
-		}
-
-		files = kept
+	if err != nil {
+		return nil, warnings, err
 	}
+
+	files = kept
 
 	slices.Sort(files)
 
 	return files, warnings, nil
 }
 
-// filterPrettierIgnored drops any collected path the project's .prettierignore
-// excludes. Paths outside cwd are kept untouched: .prettierignore is anchored
-// to the directory that holds it and cannot speak to files above it.
-func filterPrettierIgnored(cwd string, files []string) ([]string, error) {
-	ignore, err := loadPrettierIgnore(filepath.Join(cwd, ".prettierignore"))
+// honorPrettierIgnore drops any collected path the project's .prettierignore
+// excludes. When there is no .prettierignore, the files pass through unchanged.
+func (c Collector) honorPrettierIgnore(cwd string, files []string) ([]string, error) {
+	matcher, err := prettierignore.Load(filepath.Join(cwd, ".prettierignore"))
 
 	if err != nil {
 		return nil, err
 	}
 
-	if ignore == nil {
+	if matcher == nil {
 		return files, nil
 	}
 
-	kept := make([]string, 0, len(files))
-
-	for _, path := range files {
-		rel, err := filepath.Rel(cwd, path)
-
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			kept = append(kept, path)
-
-			continue
-		}
-
-		if ignore.ignores(filepath.ToSlash(rel)) {
-			continue
-		}
-
-		kept = append(kept, path)
-	}
-
-	return kept, nil
+	return matcher.FilterAbs(cwd, files)
 }
 
-func gitFiles(ctx context.Context, cwd, scope string, selection Selection) ([]string, error) {
-	entries := []string{}
-
-	for _, args := range selection.gitCommands(scope) {
-		found, err := runGit(ctx, cwd, args)
-
-		if err != nil {
-			return nil, err
-		}
-
-		entries = append(entries, found...)
-	}
-
-	return entries, nil
-}
-
-func runGit(ctx context.Context, cwd string, args []string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = cwd
-
-	var stderr bytes.Buffer
-
-	cmd.Stderr = &stderr
-
-	out, err := cmd.Output()
+// Collect lists the files the formatter owns under the given scopes.
+//
+// Transitional: G5 adopts Collector directly.
+func Collect(ctx context.Context, opts Options) ([]string, []string, error) {
+	collector, err := collectorFor(opts)
 
 	if err != nil {
-		reason := strings.TrimSpace(stderr.String())
-
-		if reason == "" {
-			return nil, fmt.Errorf("git %s failed: %w", args[0], err)
-		}
-
-		return nil, fmt.Errorf("git %s failed: %s: %w", args[0], reason, err)
+		return nil, nil, err
 	}
 
-	parts := bytes.Split(out, []byte{0})
-	entries := make([]string, 0, len(parts))
-
-	for _, part := range parts {
-		if len(part) == 0 {
-			continue
-		}
-
-		entries = append(entries, string(part))
-	}
-
-	return entries, nil
+	return collector.Formattable(ctx, opts.Scopes)
 }
 
-// targetSuffixes are the extensions the sidecar knows how to format. The .ts
-// entry also covers .d.ts; whether declarations are kept is decided separately.
-var targetSuffixes = []string{".ts", ".vue", ".html", ".htm", ".md", ".markdown"}
+// CollectLintable lists only the files oxlint can lint under the given scopes.
+//
+// Transitional: G5 adopts Collector directly.
+func CollectLintable(ctx context.Context, opts Options) ([]string, []string, error) {
+	collector, err := collectorFor(opts)
 
-func isTargetFile(path string, includeDeclarations bool) bool {
-	matched := false
-
-	for _, suffix := range targetSuffixes {
-		if strings.HasSuffix(path, suffix) {
-			matched = true
-
-			break
-		}
+	if err != nil {
+		return nil, nil, err
 	}
 
-	if !matched {
-		return false
-	}
-
-	return includeDeclarations || !strings.HasSuffix(path, ".d.ts")
+	return collector.Lintable(ctx, opts.Scopes)
 }
 
-// isLintableFile reports whether oxlint can lint path: the TS family (minus
-// declarations unless includeDeclarations) and Vue, but not HTML or Markdown.
-func isLintableFile(path string, includeDeclarations bool) bool {
-	if !strings.HasSuffix(path, ".ts") && !strings.HasSuffix(path, ".vue") {
-		return false
+// ChangedPaths lists every file that diverges from HEAD under the given scopes,
+// whatever its extension, skipping .prettierignore filtering.
+//
+// Transitional: G5 adopts gitfiles.Tree directly.
+func ChangedPaths(ctx context.Context, cwd string, scopes []string) ([]string, error) {
+	tree, err := gitfiles.NewTree(cwd)
+
+	if err != nil {
+		return nil, err
 	}
 
-	return includeDeclarations || !strings.HasSuffix(path, ".d.ts")
+	return tree.ChangedPaths(ctx, scopes)
+}
+
+func collectorFor(opts Options) (Collector, error) {
+	tree, err := gitfiles.NewTree(opts.Cwd)
+
+	if err != nil {
+		return Collector{}, err
+	}
+
+	return Collector{
+		Tree:      tree,
+		Selection: opts.Selection,
+		Filter:    filetypes.Filter{IncludeDeclarations: opts.IncludeDeclarations},
+	}, nil
 }

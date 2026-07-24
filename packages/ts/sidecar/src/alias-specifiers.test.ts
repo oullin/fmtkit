@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, join } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { Ast } from '#sidecar/ast';
 import { isErr } from '#sidecar/result';
 import { Sources } from '#sidecar/sources';
@@ -11,11 +10,10 @@ import type { Node } from '#sidecar/types';
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const exemptFiles = new Set(['sidecar.ts']);
 
-const scriptsDir = dirname(
-	fileURLToPath(
-		import.meta.resolve('#sidecar/ast'),
-	),
-);
+// Root the scan at this test's own directory so it keeps covering every source
+// file regardless of how the tree is nested, rather than at a single module's
+// resolved location, which would silently shift if that module ever moved.
+const scriptsDir = import.meta.dirname;
 
 function isRelativeSpecifier(value: string): boolean {
 	return value.startsWith('./') || value.startsWith('../');

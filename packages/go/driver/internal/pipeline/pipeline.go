@@ -1,10 +1,10 @@
-// Package orchestrator drives a sequence of typed pipeline steps, rendering
+// Package pipeline drives a sequence of typed pipeline steps, rendering
 // sectioned, colorized progress: each step's tool output streams live, indented
 // under its section header, followed by the condensed detail lines the step
 // derives from its typed result. It owns only the section/tee/quiet-failure-dump
 // mechanics; the concrete steps (and their detail computation) live with the
 // composition root that builds them.
-package orchestrator
+package pipeline
 
 import (
 	"bytes"

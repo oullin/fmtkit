@@ -11,7 +11,7 @@ import (
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	"go.ollin.sh/fmtkit/driver/internal/gotool"
-	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
+	"go.ollin.sh/fmtkit/driver/internal/pipeline"
 	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
 	"go.ollin.sh/fmtkit/driver/internal/tsruntime"
 	report "go.ollin.sh/fmtkit/driver/report"
@@ -36,10 +36,10 @@ func (s stepSelection) normalized() stepSelection {
 
 // formatSteps builds the ordered pipeline steps for the selection. Lint runs
 // first so the formatting passes normalize whatever oxlint rewrites.
-func (d *deps) formatSteps(paths []string, selected stepSelection, selection gitfiles.Selection) []orchestrator.Step {
+func (d *deps) formatSteps(paths []string, selected stepSelection, selection gitfiles.Selection) []pipeline.Step {
 	selected = selected.normalized()
 
-	var steps []orchestrator.Step
+	var steps []pipeline.Step
 
 	if selected.TS {
 		steps = append(steps,
@@ -72,7 +72,7 @@ type tsLintStep struct {
 
 func (s tsLintStep) Label() string { return "Running TS/Vue lint" }
 
-func (s tsLintStep) Run(ctx context.Context, output io.Writer) orchestrator.Result {
+func (s tsLintStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
 	var captured bytes.Buffer
 
 	err := invokeTS(s.version, io.MultiWriter(output, &captured), func(invoker tsruntime.Invoker, w io.Writer) error {
@@ -80,10 +80,10 @@ func (s tsLintStep) Run(ctx context.Context, output io.Writer) orchestrator.Resu
 	})
 
 	if code := tsExitCode(err, output); code != 0 {
-		return orchestrator.Result{ExitCode: code}
+		return pipeline.Result{ExitCode: code}
 	}
 
-	return orchestrator.Result{Details: tsLintDetails(captured.String())}
+	return pipeline.Result{Details: tsLintDetails(captured.String())}
 }
 
 // tsFormatStep runs the full TS/Vue formatting pipeline (oxfmt plus the project
@@ -96,7 +96,7 @@ type tsFormatStep struct {
 
 func (s tsFormatStep) Label() string { return "Running TS/Vue formatting" }
 
-func (s tsFormatStep) Run(ctx context.Context, output io.Writer) orchestrator.Result {
+func (s tsFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
 	var captured bytes.Buffer
 
 	err := invokeTS(s.version, io.MultiWriter(output, &captured), func(invoker tsruntime.Invoker, w io.Writer) error {
@@ -104,10 +104,10 @@ func (s tsFormatStep) Run(ctx context.Context, output io.Writer) orchestrator.Re
 	})
 
 	if code := tsExitCode(err, output); code != 0 {
-		return orchestrator.Result{ExitCode: code}
+		return pipeline.Result{ExitCode: code}
 	}
 
-	return orchestrator.Result{Details: tsFormatDetails(captured.String())}
+	return pipeline.Result{Details: tsFormatDetails(captured.String())}
 }
 
 // goFormatStep formats Go files and runs go vet, deriving its details from the
@@ -119,16 +119,16 @@ type goFormatStep struct {
 
 func (s goFormatStep) Label() string { return "Running Go formatting" }
 
-func (s goFormatStep) Run(ctx context.Context, output io.Writer) orchestrator.Result {
+func (s goFormatStep) Run(ctx context.Context, output io.Writer) pipeline.Result {
 	outcome, code := gotool.
 		Runner{Stdout: output, Stderr: output, Scope: s.selection}.
 		RunReport(ctx, report.ModeFormat, s.paths)
 
 	if code != 0 {
-		return orchestrator.Result{ExitCode: code}
+		return pipeline.Result{ExitCode: code}
 	}
 
-	return orchestrator.Result{Details: goFormatDetails(outcome)}
+	return pipeline.Result{Details: goFormatDetails(outcome)}
 }
 
 // invokeTS resolves the TS toolchain and invokes it through spawn, which
@@ -165,29 +165,29 @@ func tsExitCode(err error, output io.Writer) int {
 
 // tsLintDetails derives the oxlint summary line. A driver "no files" notice
 // wins; otherwise oxlint's own result line; otherwise a clean fallback.
-func tsLintDetails(log string) []orchestrator.Detail {
+func tsLintDetails(log string) []pipeline.Detail {
 	for _, line := range strings.Split(log, "\n") {
 		if strings.HasPrefix(line, lintNothingToLintLine) {
-			return []orchestrator.Detail{{Label: "oxlint", Value: strings.TrimPrefix(lintNothingToLintLine, "[lint] ")}}
+			return []pipeline.Detail{{Label: "oxlint", Value: strings.TrimPrefix(lintNothingToLintLine, "[lint] ")}}
 		}
 	}
 
 	if result := sidecarproto.ParseLintSummary(log).Result; result != "" {
-		return []orchestrator.Detail{{Label: "oxlint", Value: result}}
+		return []pipeline.Detail{{Label: "oxlint", Value: result}}
 	}
 
-	return []orchestrator.Detail{{Label: "oxlint", Value: "no issues found"}}
+	return []pipeline.Detail{{Label: "oxlint", Value: "no issues found"}}
 }
 
 // tsFormatDetails derives the TS pipeline's detail lines from the sidecar's
 // progress output plus the driver's missing-source notices.
-func tsFormatDetails(log string) []orchestrator.Detail {
+func tsFormatDetails(log string) []pipeline.Detail {
 	summary := sidecarproto.ParsePipelineSummary(log)
 
-	var details []orchestrator.Detail
+	var details []pipeline.Detail
 
 	if summary.BlankLines != "" {
-		details = append(details, orchestrator.Detail{Label: "blank-lines", Value: summary.BlankLines})
+		details = append(details, pipeline.Detail{Label: "blank-lines", Value: summary.BlankLines})
 	}
 
 	missing := 0
@@ -199,19 +199,19 @@ func tsFormatDetails(log string) []orchestrator.Detail {
 	}
 
 	if missing > 0 {
-		details = append(details, orchestrator.Detail{Label: "skipped", Value: fmt.Sprintf("%d missing tracked file(s)", missing)})
+		details = append(details, pipeline.Detail{Label: "skipped", Value: fmt.Sprintf("%d missing tracked file(s)", missing)})
 	}
 
 	if summary.Oxfmt != "" {
-		details = append(details, orchestrator.Detail{Label: "oxfmt", Value: summary.Oxfmt})
+		details = append(details, pipeline.Detail{Label: "oxfmt", Value: summary.Oxfmt})
 	}
 
 	if summary.FluentChains != "" {
-		details = append(details, orchestrator.Detail{Label: "fluent", Value: summary.FluentChains})
+		details = append(details, pipeline.Detail{Label: "fluent", Value: summary.FluentChains})
 	}
 
 	if summary.ValidateSyntax != "" {
-		details = append(details, orchestrator.Detail{Label: "validated", Value: summary.ValidateSyntax})
+		details = append(details, pipeline.Detail{Label: "validated", Value: summary.ValidateSyntax})
 	}
 
 	return details
@@ -220,14 +220,14 @@ func tsFormatDetails(log string) []orchestrator.Detail {
 // goFormatDetails computes the Go step's detail lines from the typed outcome,
 // reproducing the exact strings the text report renders (which the pipeline
 // previously scraped back out of that rendered text).
-func goFormatDetails(outcome gotool.Outcome) []orchestrator.Detail {
+func goFormatDetails(outcome gotool.Outcome) []pipeline.Detail {
 	fm := outcome.Combined.Formatter
 	vt := outcome.Combined.Vet
 
-	var details []orchestrator.Detail
+	var details []pipeline.Detail
 
 	if summary := goFileSummary(fm, outcome.Mode); summary != "" {
-		details = append(details, orchestrator.Detail{Label: "fmtkit", Value: summary})
+		details = append(details, pipeline.Detail{Label: "fmtkit", Value: summary})
 	}
 
 	// The formatter renders a Result line unless it found no files and hit no
@@ -248,14 +248,14 @@ func goFormatDetails(outcome gotool.Outcome) []orchestrator.Detail {
 		resultLine = vetResult
 	}
 
-	details = append(details, orchestrator.Detail{Label: "result", Value: resultLine})
+	details = append(details, pipeline.Detail{Label: "result", Value: resultLine})
 
 	if summary := goVetSummary(vt); summary != "" {
-		details = append(details, orchestrator.Detail{Label: "vet", Value: summary})
+		details = append(details, pipeline.Detail{Label: "vet", Value: summary})
 	}
 
 	if vetResult != resultLine {
-		details = append(details, orchestrator.Detail{Label: "vet result", Value: vetResult})
+		details = append(details, pipeline.Detail{Label: "vet result", Value: vetResult})
 	}
 
 	return details

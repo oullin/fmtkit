@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"go.ollin.sh/fmtkit/driver/internal/gotool"
-	"go.ollin.sh/fmtkit/driver/internal/orchestrator"
+	"go.ollin.sh/fmtkit/driver/internal/pipeline"
 	report "go.ollin.sh/fmtkit/driver/report"
 	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
 	"go.ollin.sh/fmtkit/vet"
 )
 
-func detailStrings(details []orchestrator.Detail) []string {
+func detailStrings(details []pipeline.Detail) []string {
 	out := make([]string, 0, len(details))
 
 	for _, d := range details {
@@ -23,7 +23,7 @@ func detailStrings(details []orchestrator.Detail) []string {
 	return out
 }
 
-func assertDetails(t *testing.T, got []orchestrator.Detail, want ...string) {
+func assertDetails(t *testing.T, got []pipeline.Detail, want ...string) {
 	t.Helper()
 
 	if g := fmt.Sprint(detailStrings(got)); g != fmt.Sprint(want) {
@@ -205,7 +205,7 @@ func TestStepSelectionNormalized(t *testing.T) {
 func TestFormatStepsSelection(t *testing.T) {
 	d := &deps{version: "dev"}
 
-	labels := func(steps []orchestrator.Step) []string {
+	labels := func(steps []pipeline.Step) []string {
 		out := make([]string, 0, len(steps))
 
 		for _, s := range steps {

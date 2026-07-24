@@ -1,4 +1,4 @@
-package orchestrator
+package pipeline
 
 import (
 	"bytes"
@@ -117,7 +117,7 @@ func successSteps(log *[]string) []Step {
 // streaming and quiet modes. Color is forced off, so the golden files carry no
 // ANSI escapes. These goldens characterize the rendering so refactors cannot
 // silently change it; regenerate with
-// `go test ./driver/internal/orchestrator -run TestRunFormatTranscriptGoldens -update`.
+// `go test ./driver/internal/pipeline -run TestRunFormatTranscriptGoldens -update`.
 func TestRunFormatTranscriptGoldens(t *testing.T) {
 	cases := []struct {
 		name   string

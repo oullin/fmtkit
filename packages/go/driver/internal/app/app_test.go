@@ -42,7 +42,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stderr strings.Builder
 
 	// "dev" mirrors the unstamped binary: no embedded TS assets.
-	exitCode := New("dev", &stdout, &stderr).Run(context.Background(), args)
+	exitCode := Umbrella("dev", &stdout, &stderr).Dispatch(context.Background(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

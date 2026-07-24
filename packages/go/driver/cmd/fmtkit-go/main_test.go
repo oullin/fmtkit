@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.ollin.sh/fmtkit/driver/internal/app"
 	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
@@ -492,7 +493,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stdout strings.Builder
 
 	var stderr strings.Builder
-	exitCode := run(context.Background(), args, &stdout, &stderr)
+	exitCode := app.GoCLI("dev", &stdout, &stderr).Dispatch(context.Background(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

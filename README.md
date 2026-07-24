@@ -277,7 +277,7 @@ make check                 # Go formatter in check mode
 ```
 
 The first run stages the host TS toolchain assets into
-`packages/go/driver/internal/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
+`packages/go/driver/internal/typescript/embedded/bin/<os>_<arch>/` (this needs Bun and takes a
 few seconds); later runs reuse them and re-stage only when the support scripts,
 the tool pins, or the `.oxfmtrc.json` / `.oxlintrc.json` configs change. The
 inner loop is then a plain incremental `go build`.
@@ -293,7 +293,7 @@ fmtkit is one binary with two halves:
 - A **Go driver** (`packages/go`) that owns the CLI, finds files, formats Go, runs `go vet`, renders reports, and orchestrates the whole run.
 - A **TypeScript sidecar** (`packages/ts/sidecar`), compiled with Bun and embedded in the binary, that formats TS/Vue and the embedded blocks in Markdown/HTML.
 
-The driver runs the sidecar as a child process. Everything that crosses that boundary — the executable name, the modes, the flags, the env vars, the summary lines the driver reads back — is defined once per side (`driver/internal/sidecarproto` in Go, the `cli/` DTOs in TS) and pinned by tests. Change one side and you change the other in the same PR.
+The driver runs the sidecar as a child process. Everything that crosses that boundary — the executable name, the modes, the flags, the env vars, the summary lines the driver reads back — is defined once per side (`driver/internal/typescript/proto` in Go, the `cli/` DTOs in TS) and pinned by tests. Change one side and you change the other in the same PR.
 
 ### Go side (`packages/go`, module `go.ollin.sh/fmtkit`)
 
@@ -309,7 +309,7 @@ The importable library:
 | `driver/config`           | CLI config. Embeds the formatter config and adds the vet toggle; the `config.yml` schema is a public contract.                        |
 | `driver/report`           | Typed output modes and the renderer; the JSON/agent shapes are a public contract.                                                     |
 
-The CLI internals (`driver/internal/...`), one job each: `command` holds the one dispatch table both binaries share; `app` only wires things together; `gotool` is the Go check/format use case returning a typed `Outcome`; `pipeline` runs generic steps whose summaries come from typed results (nothing scrapes rendered text); `console` owns terminal colors and printing; `gitfiles`, `filetypes`, and `prettierignore` each own one kind of file selection, composed by `sourcefiles`; `tsruntime` extracts and spawns the sidecar; `embedded` holds the `go:embed` assets (its `bin/` folder is where staging writes — do not move it).
+The CLI internals (`driver/internal/...`), one job each: `command` holds the one dispatch table both binaries share; `app` only wires things together, registering the language lanes with `toolchain` — the contract and registry that turn `--ts`/`--go` into an ordered set of lanes to run (no flags means all, TS before Go); `pipeline` runs generic steps whose summaries come from typed results (nothing scrapes rendered text); `console` owns terminal colors and printing; `gitfiles` owns git-backed file selection. Each language then owns its own behaviour in its own package: `golang` is the Go check/format use case (returning a typed `Outcome`) plus its format step; `typescript` builds the TS/Vue lint and format steps and splits its machinery across subpackages — `typescript/runtime` extracts and spawns the sidecar, `typescript/proto` is the frozen wire protocol, `typescript/filetypes` and `typescript/prettierignore` each own one kind of file selection composed by `typescript/sourcefiles`, and `typescript/embedded` holds the `go:embed` assets (its `bin/` folder is where staging writes — do not move it).
 
 ### TS side (`packages/ts/sidecar/src`)
 

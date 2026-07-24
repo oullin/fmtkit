@@ -7,7 +7,7 @@ import (
 
 	"go.ollin.sh/fmtkit/driver/internal/command"
 	"go.ollin.sh/fmtkit/driver/internal/golang"
-	"go.ollin.sh/fmtkit/driver/internal/sourcefiles"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/sourcefiles"
 	report "go.ollin.sh/fmtkit/driver/report"
 )
 

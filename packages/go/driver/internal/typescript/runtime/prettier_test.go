@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 // writeMigrateStub creates a fake oxfmt that, on --migrate=prettier, writes an
@@ -154,9 +154,9 @@ func TestOxfmtConfigForDerivesFromPrettier(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.OxfmtBinEnv, oxfmt)
+	t.Setenv(proto.OxfmtBinEnv, oxfmt)
 
-	env := sidecarproto.ReadOverrides()
+	env := proto.ReadOverrides()
 
 	var stderr bytes.Buffer
 
@@ -193,9 +193,9 @@ func TestOxfmtConfigForCachesDerivedConfig(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.OxfmtBinEnv, oxfmt)
+	t.Setenv(proto.OxfmtBinEnv, oxfmt)
 
-	env := sidecarproto.ReadOverrides()
+	env := proto.ReadOverrides()
 
 	var stderr bytes.Buffer
 
@@ -225,9 +225,9 @@ func TestOxfmtConfigForRemigratesWhenConfigChanges(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.OxfmtBinEnv, oxfmt)
+	t.Setenv(proto.OxfmtBinEnv, oxfmt)
 
-	env := sidecarproto.ReadOverrides()
+	env := proto.ReadOverrides()
 
 	var stderr bytes.Buffer
 
@@ -254,7 +254,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 	oxfmt := filepath.Join(t.TempDir(), "oxfmt")
 	writeMigrateStub(t, oxfmt)
 
-	t.Setenv(sidecarproto.OxfmtBinEnv, oxfmt)
+	t.Setenv(proto.OxfmtBinEnv, oxfmt)
 
 	t.Run("project .oxfmtrc beats prettier", func(t *testing.T) {
 		cwd := t.TempDir()
@@ -269,7 +269,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		if got := (Invoker{Assets: support, Env: sidecarproto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != "" {
+		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != "" {
 			t.Fatalf("expected auto-discovery signal for project config, got %q", got)
 		}
 	})
@@ -283,7 +283,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		got := Invoker{Assets: support, Env: sidecarproto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+		got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
 
 		if !strings.HasPrefix(got, filepath.Join(support.Dir, "prettier-derived")) {
 			t.Fatalf("expected derived config, got %q", got)
@@ -295,7 +295,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		if got := (Invoker{Assets: support, Env: sidecarproto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != support.OxfmtConfig() {
+		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != support.OxfmtConfig() {
 			t.Fatalf("expected bundled config %q, got %q", support.OxfmtConfig(), got)
 		}
 	})
@@ -313,7 +313,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 			t.Fatalf("write override config: %v", err)
 		}
 
-		env := sidecarproto.ReadOverrides()
+		env := proto.ReadOverrides()
 		env.OxfmtConfig = override
 
 		if got := (Invoker{Assets: support, Env: env}).oxfmtConfigFor(context.Background(), cwd, &bytes.Buffer{}); got != override {
@@ -342,11 +342,11 @@ func TestOxfmtConfigForFallsBackWhenMigrationFails(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.OxfmtBinEnv, failing)
+	t.Setenv(proto.OxfmtBinEnv, failing)
 
 	var stderr bytes.Buffer
 
-	got := Invoker{Assets: support, Env: sidecarproto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
 
 	if got != support.OxfmtConfig() {
 		t.Fatalf("expected bundled fallback %q, got %q", support.OxfmtConfig(), got)

@@ -1,4 +1,4 @@
-package sidecarproto
+package proto
 
 // The command types below build the exact argument vectors each sidecar mode
 // expects. The bin resolution (which executable to spawn) is the caller's

@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"slices"
 
-	"go.ollin.sh/fmtkit/driver/internal/filetypes"
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
-	"go.ollin.sh/fmtkit/driver/internal/prettierignore"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/filetypes"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/prettierignore"
 )
 
 // Collector composes git discovery, the extension taxonomy, and the

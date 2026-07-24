@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 // PrettierMigration derives an oxfmt config from a project's Prettier setup by
@@ -20,7 +20,7 @@ import (
 // OXFMT_BIN override).
 type PrettierMigration struct {
 	Assets Assets
-	Env    sidecarproto.Overrides
+	Env    proto.Overrides
 }
 
 // prettierConfigNames are the standalone Prettier configuration filenames, in
@@ -145,7 +145,7 @@ func (m PrettierMigration) migrate(ctx context.Context, source string) ([]byte, 
 	}
 
 	bin, viaSidecar := m.oxfmtExecutable()
-	args := sidecarproto.MigrateCommand{ViaSidecar: viaSidecar}.Argv()
+	args := proto.MigrateCommand{ViaSidecar: viaSidecar}.Argv()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
@@ -156,7 +156,7 @@ func (m PrettierMigration) migrate(ctx context.Context, source string) ([]byte, 
 		return nil, fmt.Errorf("oxfmt --migrate=prettier: %w", err)
 	}
 
-	derived, err := os.ReadFile(filepath.Join(dir, sidecarproto.OxfmtRCName))
+	derived, err := os.ReadFile(filepath.Join(dir, proto.OxfmtRCName))
 
 	if err != nil {
 		return nil, fmt.Errorf("read migrated config: %w", err)

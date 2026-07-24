@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"os"
@@ -6,19 +6,19 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 // fakeAssets mirrors a directory staged by stage-ts-assets.sh: the bindings
 // and the sidecar, plus the configs that ride along with them.
 func fakeAssets() fstest.MapFS {
 	return fstest.MapFS{
-		sidecarproto.SidecarName: &fstest.MapFile{Data: []byte("#!/bin/sh\n"), Mode: 0o755},
-		"oxc-parser.node":        &fstest.MapFile{Data: []byte("parser")},
-		"oxfmt.node":             &fstest.MapFile{Data: []byte("fmt")},
-		"oxlint.node":            &fstest.MapFile{Data: []byte("lint")},
-		".oxfmtrc.json":          &fstest.MapFile{Data: []byte("{}")},
-		".oxlintrc.json":         &fstest.MapFile{Data: []byte("{}")},
+		proto.SidecarName: &fstest.MapFile{Data: []byte("#!/bin/sh\n"), Mode: 0o755},
+		"oxc-parser.node": &fstest.MapFile{Data: []byte("parser")},
+		"oxfmt.node":      &fstest.MapFile{Data: []byte("fmt")},
+		"oxlint.node":     &fstest.MapFile{Data: []byte("lint")},
+		".oxfmtrc.json":   &fstest.MapFile{Data: []byte("{}")},
+		".oxlintrc.json":  &fstest.MapFile{Data: []byte("{}")},
 	}
 }
 
@@ -99,11 +99,11 @@ func TestExtractOnceLosingRaceKeepsWinner(t *testing.T) {
 func TestResolvePrefersSupportDirEnv(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(dir, sidecarproto.SidecarName), []byte("#!/bin/sh\n"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, proto.SidecarName), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatalf("write sidecar: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SupportDirEnv, dir)
+	t.Setenv(proto.SupportDirEnv, dir)
 
 	support, err := Resolve("v1.0.0")
 
@@ -117,7 +117,7 @@ func TestResolvePrefersSupportDirEnv(t *testing.T) {
 }
 
 func TestResolveRejectsSupportDirWithoutSidecar(t *testing.T) {
-	t.Setenv(sidecarproto.SupportDirEnv, t.TempDir())
+	t.Setenv(proto.SupportDirEnv, t.TempDir())
 
 	if _, err := Resolve("v1.0.0"); err == nil {
 		t.Fatal("expected error for support dir without sidecar")

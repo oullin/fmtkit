@@ -1,4 +1,4 @@
-package sidecarproto
+package proto
 
 import (
 	"regexp"

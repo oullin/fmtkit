@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 func TestOxfmtExecutableDefaultsToSidecar(t *testing.T) {
@@ -25,7 +25,7 @@ func TestOxfmtExecutableDefaultsToSidecar(t *testing.T) {
 }
 
 func TestOxfmtExecutableHonorsOxfmtBin(t *testing.T) {
-	migration := PrettierMigration{Env: sidecarproto.Overrides{OxfmtBin: "/usr/bin/oxfmt"}}
+	migration := PrettierMigration{Env: proto.Overrides{OxfmtBin: "/usr/bin/oxfmt"}}
 
 	bin, viaSidecar := migration.oxfmtExecutable()
 
@@ -82,7 +82,7 @@ func TestDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	migration := PrettierMigration{Assets: support, Env: sidecarproto.Overrides{OxfmtBin: oxfmt}}
+	migration := PrettierMigration{Assets: support, Env: proto.Overrides{OxfmtBin: oxfmt}}
 
 	var stderr strings.Builder
 
@@ -111,7 +111,7 @@ func TestDerivedConfigWarnsWhenMigrationWritesNoConfig(t *testing.T) {
 		t.Fatalf("write prettier config: %v", err)
 	}
 
-	migration := PrettierMigration{Assets: support, Env: sidecarproto.Overrides{OxfmtBin: silent}}
+	migration := PrettierMigration{Assets: support, Env: proto.Overrides{OxfmtBin: silent}}
 
 	var stderr strings.Builder
 

@@ -1,4 +1,4 @@
-// Package sidecarproto is the single source of truth for the stringly-typed
+// Package proto is the single source of truth for the stringly-typed
 // wire protocol between the Go driver and the bun-compiled TS sidecar: the
 // asset filenames, the sidecar's dispatch modes, the environment variables that
 // override toolchain resolution, the exact argument vectors each mode expects,
@@ -8,7 +8,7 @@
 // forms and reads these environment names, and CI's smoke test plus the Go
 // fake-bin tests prove both ends agree. Change a constant here only in lockstep
 // with packages/ts/sidecar.
-package sidecarproto
+package proto
 
 import "os"
 

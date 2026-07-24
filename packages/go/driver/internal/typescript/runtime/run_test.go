@@ -1,4 +1,4 @@
-package tsruntime
+package runtime
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.ollin.sh/fmtkit/driver/internal/sidecarproto"
+	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
 )
 
 // writeStub creates an executable that echoes its argv, one per line, so
@@ -55,7 +55,7 @@ func supportWithStub(t *testing.T) Assets {
 
 	dir := t.TempDir()
 
-	writeStub(t, filepath.Join(dir, sidecarproto.SidecarName))
+	writeStub(t, filepath.Join(dir, proto.SidecarName))
 
 	return Assets{Dir: dir}
 }
@@ -74,7 +74,7 @@ func TestRunPipelineInvokesSidecar(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -122,7 +122,7 @@ func TestRunPipelineSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -140,7 +140,7 @@ func TestRunPipelineReportsMissingScopes(t *testing.T) {
 
 	support := supportWithStub(t)
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -170,7 +170,7 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -206,7 +206,7 @@ func TestRunLintFixPassesFixFlag(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -246,7 +246,7 @@ func TestRunLintSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 		t.Fatalf("write bundled config: %v", err)
 	}
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -264,7 +264,7 @@ func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 
 	support := Assets{Dir: t.TempDir()} // no sidecar: spawning would fail
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -288,7 +288,7 @@ func TestRunLintSkipsSpawnForFormatOnlyDocuments(t *testing.T) {
 
 	support := Assets{Dir: t.TempDir()} // no sidecar: spawning would fail
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
+	t.Setenv(proto.SourcesCwdEnv, repo)
 
 	var stdout, stderr bytes.Buffer
 
@@ -310,8 +310,8 @@ func TestRunLintHonorsOxlintBinOverride(t *testing.T) {
 
 	writeStub(t, override)
 
-	t.Setenv(sidecarproto.SourcesCwdEnv, repo)
-	t.Setenv(sidecarproto.OxlintBinEnv, override)
+	t.Setenv(proto.SourcesCwdEnv, repo)
+	t.Setenv(proto.OxlintBinEnv, override)
 
 	var stdout, stderr bytes.Buffer
 

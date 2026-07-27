@@ -49,7 +49,7 @@ func Load(path string) (*Matcher, error) {
 func Compile(data []byte) *Matcher {
 	matcher := &Matcher{}
 
-	for _, line := range strings.Split(string(data), "\n") {
+	for line := range strings.SplitSeq(string(data), "\n") {
 		if pattern, ok := compilePattern(line); ok {
 			matcher.patterns = append(matcher.patterns, pattern)
 		}

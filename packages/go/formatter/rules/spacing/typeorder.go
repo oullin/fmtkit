@@ -2,6 +2,7 @@ package spacing
 
 import (
 	"bytes"
+	"cmp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -84,7 +85,7 @@ func (r *typeOrderRewriter) rewrite(filename string, src []byte) ([]byte, bool, 
 
 	desired := desiredDeclOrder(file)
 
-	if declOrdersEqual(file.Decls, desired) {
+	if slices.Equal(file.Decls, desired) {
 		return src, false, nil
 	}
 
@@ -146,9 +147,7 @@ func declSourceRegions(decls []ast.Decl, fset *token.FileSet, src []byte) map[as
 		if i > 0 {
 			prevEnd := lineStartOffset(lineStarts, fset.Position(decls[i-1].End()).Line+1)
 
-			if start < prevEnd {
-				start = prevEnd
-			}
+			start = max(start, prevEnd)
 		}
 
 		starts[i] = start
@@ -163,11 +162,7 @@ func declSourceRegions(decls []ast.Decl, fset *token.FileSet, src []byte) map[as
 			// The last declaration ends at the line after its body, not at EOF:
 			// trailing comments and blank lines beyond it are the file's, not the
 			// declaration's, so they must not travel when this declaration moves.
-			end = lineStartOffset(lineStarts, fset.Position(decl.End()).Line+1)
-
-			if end > len(src) {
-				end = len(src)
-			}
+			end = min(lineStartOffset(lineStarts, fset.Position(decl.End()).Line+1), len(src))
 		}
 
 		regions[decl] = declRegion{start: starts[i], end: end}
@@ -206,14 +201,7 @@ func topLevelDeclBlocks(file *ast.File) []declBlock {
 	}
 
 	slices.SortStableFunc(blocks, func(a declBlock, b declBlock) int {
-		switch {
-		case a.effectivePos < b.effectivePos:
-			return -1
-		case a.effectivePos > b.effectivePos:
-			return 1
-		default:
-			return 0
-		}
+		return cmp.Compare(a.effectivePos, b.effectivePos)
 	})
 
 	return blocks
@@ -276,20 +264,6 @@ func leadingImportDeclsEnd(decls []ast.Decl) int {
 	}
 
 	return importsEnd
-}
-
-func declOrdersEqual(current []ast.Decl, desired []ast.Decl) bool {
-	if len(current) != len(desired) {
-		return false
-	}
-
-	for i := range current {
-		if current[i] != desired[i] {
-			return false
-		}
-	}
-
-	return true
 }
 
 func hasOutOfOrderTypeDecls(file *ast.File) bool {

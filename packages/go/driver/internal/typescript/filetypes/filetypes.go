@@ -3,7 +3,10 @@
 // filesystem — so callers can filter a discovered file list without any I/O.
 package filetypes
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // Filter classifies paths by extension. IncludeDeclarations, when set, keeps
 // .d.ts declaration files that would otherwise be dropped.
@@ -19,15 +22,9 @@ var targetSuffixes = []string{".ts", ".vue", ".html", ".htm", ".md", ".markdown"
 // families plus the HTML and Markdown documents whose embedded scripts get
 // formatted.
 func (f Filter) Formattable(path string) bool {
-	matched := false
-
-	for _, suffix := range targetSuffixes {
-		if strings.HasSuffix(path, suffix) {
-			matched = true
-
-			break
-		}
-	}
+	matched := slices.ContainsFunc(targetSuffixes, func(suffix string) bool {
+		return strings.HasSuffix(path, suffix)
+	})
 
 	if !matched {
 		return false

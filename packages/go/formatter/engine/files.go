@@ -82,35 +82,27 @@ func shouldSkipDir(path, root, name string, cfg config.Config) bool {
 		return true
 	}
 
-	for _, excluded := range cfg.Exclude {
-		if name == excluded {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(cfg.Exclude, name)
 }
 
 func isExcludedFile(path string, cfg config.Config) bool {
 	base := filepath.Base(path)
 
-	for _, pattern := range cfg.NotName {
+	nameExcluded := slices.ContainsFunc(cfg.NotName, func(pattern string) bool {
 		matched, _ := filepath.Match(pattern, base)
 
-		if matched {
-			return true
-		}
+		return matched
+	})
+
+	if nameExcluded {
+		return true
 	}
 
 	slashed := filepath.ToSlash(path)
 
-	for _, pattern := range cfg.NotPath {
-		if strings.Contains(slashed, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(cfg.NotPath, func(pattern string) bool {
+		return strings.Contains(slashed, pattern)
+	})
 }
 
 func isGoSource(path string) bool {

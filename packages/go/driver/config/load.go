@@ -28,9 +28,9 @@ func Load(cwd, explicitPath string) (Config, error) {
 	}
 
 	if err := v.ReadInConfig(); err != nil {
-		var notFound viper.ConfigFileNotFoundError
+		_, notFound := errors.AsType[viper.ConfigFileNotFoundError](err)
 
-		if explicitPath == "" && (errors.As(err, &notFound) || os.IsNotExist(err)) {
+		if explicitPath == "" && (notFound || os.IsNotExist(err)) {
 			return cfg, nil
 		}
 

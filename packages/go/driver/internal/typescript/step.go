@@ -126,9 +126,7 @@ func exitCode(err error, output io.Writer) int {
 		return 0
 	}
 
-	var exit *exec.ExitError
-
-	if errors.As(err, &exit) {
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exit.ExitCode()
 	}
 
@@ -140,7 +138,7 @@ func exitCode(err error, output io.Writer) int {
 // lintDetails derives the oxlint summary line. A driver "no files" notice wins;
 // otherwise oxlint's own result line; otherwise a clean fallback.
 func lintDetails(log string) []pipeline.Detail {
-	for _, line := range strings.Split(log, "\n") {
+	for line := range strings.SplitSeq(log, "\n") {
 		if strings.HasPrefix(line, lintNothingToLintLine) {
 			return []pipeline.Detail{{Label: "oxlint", Value: strings.TrimPrefix(lintNothingToLintLine, "[lint] ")}}
 		}
@@ -166,7 +164,7 @@ func formatDetails(log string) []pipeline.Detail {
 
 	missing := 0
 
-	for _, line := range strings.Split(log, "\n") {
+	for line := range strings.SplitSeq(log, "\n") {
 		if strings.HasPrefix(line, sourcesMissingPrefix) {
 			missing++
 		}

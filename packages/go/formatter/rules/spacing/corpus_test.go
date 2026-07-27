@@ -30,7 +30,6 @@ func TestSpacingCorpus(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		input := input
 		name := strings.TrimSuffix(filepath.Base(input), ".input")
 
 		t.Run(name, func(t *testing.T) {

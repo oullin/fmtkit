@@ -1360,47 +1360,6 @@ func TestApplyPreservesImportsBeforeAnchoredDecls(t *testing.T) {
 	}
 }
 
-func TestIsEmbedDirectiveTextRejectsInvalidPrefixes(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		text string
-		want bool
-	}{
-		{
-			name: "space separated directive",
-			text: "//go:embed foo.txt",
-			want: true,
-		},
-		{
-			name: "tab separated directive",
-			text: "//go:embed\tfoo.txt",
-			want: true,
-		},
-		{
-			name: "bare directive",
-			text: "//go:embed",
-			want: false,
-		},
-		{
-			name: "embedded prefix",
-			text: "//go:embedded foo.txt",
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := isEmbedDirectiveText(tt.text); got != tt.want {
-				t.Fatalf("isEmbedDirectiveText(%q) = %v, want %v", tt.text, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestApplyReordersTypesWithoutEmbedDirective(t *testing.T) {
 	path := writeTempGoFile(t, `package sample
 

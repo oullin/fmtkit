@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -500,15 +501,9 @@ func isAnonymousFuncAssignmentStmt(stmt ast.Stmt, fset *token.FileSet) bool {
 }
 
 func hasAnonymousFuncInitializerExpr(exprs []ast.Expr, fset *token.FileSet) bool {
-	for _, expr := range exprs {
-		if !isMultiLineAnonymousFuncInitializerExpr(expr, fset) {
-			continue
-		}
-
-		return true
-	}
-
-	return false
+	return slices.ContainsFunc(exprs, func(expr ast.Expr) bool {
+		return isMultiLineAnonymousFuncInitializerExpr(expr, fset)
+	})
 }
 
 func isMultiLineAnonymousFuncInitializerExpr(expr ast.Expr, fset *token.FileSet) bool {
@@ -573,13 +568,7 @@ func lineStartOffset(starts []int, line int) int {
 }
 
 func applyInsertions(src []byte, insertions map[int]struct{}) []byte {
-	offsets := make([]int, 0, len(insertions))
-
-	for offset := range insertions {
-		offsets = append(offsets, offset)
-	}
-
-	slices.Sort(offsets)
+	offsets := slices.Sorted(maps.Keys(insertions))
 
 	var out bytes.Buffer
 	last := 0

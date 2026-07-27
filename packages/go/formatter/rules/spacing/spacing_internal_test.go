@@ -191,51 +191,36 @@ func TestContainsEmbedDirectiveNilAndMultipleComments(t *testing.T) {
 	}
 }
 
-func TestEmbedDirectiveLinePrefixEdges(t *testing.T) {
+// TestEmbedDirectiveEdges pins the directive grammar for both entry points at
+// once: the string form the AST pass reads off comments, and the []byte form
+// the byte-level collapse pass reads off raw lines. They share an
+// implementation, so testing them apart only hid that they had to agree.
+func TestEmbedDirectiveEdges(t *testing.T) {
 	tests := []struct {
 		line string
 		want bool
 	}{
 		{line: "//go:embed fixtures/*.txt", want: true},
 		{line: "//go:embed\tfixtures/*.txt", want: true},
+		{line: "//go:embed  fixtures/*.txt", want: true},
+		{line: "  //go:embed fixtures/*.txt", want: true},
 		{line: "//go:embed", want: false},
 		{line: "//go:embedded fixtures/*.txt", want: false},
 		{line: "//go:embed-fixtures", want: false},
+		{line: "// go:embed fixtures/*.txt", want: false},
+		{line: "//go:generate echo ok", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
-			if got := hasEmbedDirectiveLinePrefix([]byte(tt.line)); got != tt.want {
-				t.Fatalf("expected %v, got %v", tt.want, got)
+			if got := isEmbedDirectiveText(tt.line); got != tt.want {
+				t.Fatalf("isEmbedDirectiveText(%q) = %v, want %v", tt.line, got, tt.want)
+			}
+
+			if got := isEmbedDirectiveLine([]byte(tt.line)); got != tt.want {
+				t.Fatalf("isEmbedDirectiveLine(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestDeclOrdersEqualBranches(t *testing.T) {
-	orderedFile, err := parser.ParseFile(token.NewFileSet(), "sample.go", `package sample
-
-type config struct{}
-
-func run() {}
-`, parser.ParseComments)
-
-	if err != nil {
-		t.Fatalf("parse ordered source: %v", err)
-	}
-
-	if !declOrdersEqual(orderedFile.Decls, orderedFile.Decls) {
-		t.Fatal("expected identical declaration order to match")
-	}
-
-	reversed := []ast.Decl{orderedFile.Decls[1], orderedFile.Decls[0]}
-
-	if declOrdersEqual(orderedFile.Decls, reversed) {
-		t.Fatal("expected reordered declarations to differ")
-	}
-
-	if declOrdersEqual(orderedFile.Decls, orderedFile.Decls[:1]) {
-		t.Fatal("expected declaration slices with different lengths to differ")
 	}
 }
 

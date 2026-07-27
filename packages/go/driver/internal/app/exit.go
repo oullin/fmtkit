@@ -13,9 +13,7 @@ func (d *deps) reportError(err error) int {
 		return 0
 	}
 
-	var exit *exec.ExitError
-
-	if errors.As(err, &exit) {
+	if exit, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exit.ExitCode()
 	}
 

@@ -23,8 +23,6 @@ func TestEffectiveConcurrencyBounds(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			if got := effectiveConcurrency(tt.configured, tt.fileCount); got != tt.want {
 				t.Fatalf("expected %d, got %d", tt.want, got)

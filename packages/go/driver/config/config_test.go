@@ -44,8 +44,6 @@ func TestWithJobs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := Default()
 			cfg.Concurrency = 7

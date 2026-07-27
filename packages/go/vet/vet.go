@@ -161,11 +161,9 @@ func goEnv(ctx context.Context, workRoot string, tc toolchain, keys ...string) (
 	out, err := tc.EnvOutput(ctx, workRoot, keys...)
 
 	if err != nil {
-		var exitErr *exec.ExitError
-
 		label := strings.Join(keys, " ")
 
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, fmt.Errorf("resolve go %s: %s: %w", label, strings.TrimSpace(string(exitErr.Stderr)), err)
 		}
 
@@ -217,9 +215,7 @@ func discoverVetTargets(ctx context.Context, root string, tc toolchain) ([]strin
 	out, err := tc.ListModulesOutput(ctx, root)
 
 	if err != nil {
-		var exitErr *exec.ExitError
-
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return nil, fmt.Errorf("resolve go vet targets: %s: %w", strings.TrimSpace(string(exitErr.Stderr)), err)
 		}
 

@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 )
 
 // Command is one dispatchable subcommand. Name is how it is invoked; Aliases
@@ -39,13 +40,7 @@ func (c Command) matches(name string) bool {
 		return true
 	}
 
-	for _, alias := range c.Aliases {
-		if name == alias {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(c.Aliases, name)
 }
 
 // Dispatch routes args to a command. An empty argument list or an unknown

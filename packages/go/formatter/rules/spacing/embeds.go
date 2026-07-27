@@ -2,6 +2,7 @@ package spacing
 
 import (
 	"bytes"
+	"cmp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -99,15 +100,10 @@ func (e *embedDirectiveRepairer) repair(filename string, src []byte) ([]byte, er
 
 	lines := bytes.SplitAfter(src, []byte{'\n'})
 
+	// Descending: moves are applied bottom-up so the line indices of the moves
+	// still to come stay valid. Hence b before a.
 	slices.SortStableFunc(moves, func(a embedMove, b embedMove) int {
-		switch {
-		case a.commentStartLine > b.commentStartLine:
-			return -1
-		case a.commentStartLine < b.commentStartLine:
-			return 1
-		default:
-			return 0
-		}
+		return cmp.Compare(b.commentStartLine, a.commentStartLine)
 	})
 
 	for _, move := range moves {
@@ -192,8 +188,14 @@ func nextTopLevelVarDeclAfter(decls []ast.Decl, pos token.Pos) (ast.Decl, bool) 
 	return nil, false
 }
 
+// isEmbedDirectiveText reports whether text is a go:embed directive carrying at
+// least one pattern. The directive grammar comes from go/ast, so a bare
+// //go:embed, a longer name such as //go:embedded, and anything that is not a
+// directive at all are rejected without restating those rules here.
 func isEmbedDirectiveText(text string) bool {
-	return hasEmbedDirectivePrefix(strings.TrimSpace(text))
+	directive, ok := ast.ParseDirective(token.NoPos, strings.TrimSpace(text))
+
+	return ok && directive.Tool == "go" && directive.Name == "embed" && directive.Args != ""
 }
 
 func containsEmbedDirective(group *ast.CommentGroup) bool {
@@ -201,13 +203,9 @@ func containsEmbedDirective(group *ast.CommentGroup) bool {
 		return false
 	}
 
-	for _, comment := range group.List {
-		if isEmbedDirectiveText(comment.Text) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(group.List, func(comment *ast.Comment) bool {
+		return isEmbedDirectiveText(comment.Text)
+	})
 }
 
 // collapseEmbedSpacing removes a single blank line left between a go:embed
@@ -243,37 +241,7 @@ func collapseEmbedSpacing(src []byte) []byte {
 }
 
 func isEmbedDirectiveLine(line []byte) bool {
-	return hasEmbedDirectiveLinePrefix(bytes.TrimSpace(line))
-}
-
-func hasEmbedDirectivePrefix(text string) bool {
-	const prefix = "//go:embed"
-
-	if !strings.HasPrefix(text, prefix) || len(text) == len(prefix) {
-		return false
-	}
-
-	switch text[len(prefix)] {
-	case ' ', '\t':
-		return true
-	default:
-		return false
-	}
-}
-
-func hasEmbedDirectiveLinePrefix(line []byte) bool {
-	const prefix = "//go:embed"
-
-	if !bytes.HasPrefix(line, []byte(prefix)) || len(line) == len(prefix) {
-		return false
-	}
-
-	switch line[len(prefix)] {
-	case ' ', '\t':
-		return true
-	default:
-		return false
-	}
+	return isEmbedDirectiveText(string(line))
 }
 
 func isVarDeclStart(line []byte) bool {

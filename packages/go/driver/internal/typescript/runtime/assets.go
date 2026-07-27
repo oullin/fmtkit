@@ -18,7 +18,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"go.ollin.sh/fmtkit/driver/internal/typescript/embedded"
 	"go.ollin.sh/fmtkit/driver/internal/typescript/proto"
@@ -219,7 +219,7 @@ func assetsDigest(assets fs.FS) (string, error) {
 		}
 	}
 
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for _, name := range names {
 		hash.Write([]byte(name))

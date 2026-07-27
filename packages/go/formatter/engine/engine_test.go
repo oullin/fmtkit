@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -198,15 +199,7 @@ func TestCollectGoFilesAppliesConfiguredExclusionsAndDeduplicates(t *testing.T) 
 			t.Fatalf("abs: %v", err)
 		}
 
-		found := false
-
-		for _, got := range files {
-			if got == abs {
-				found = true
-
-				break
-			}
-		}
+		found := slices.Contains(files, abs)
 
 		if !found {
 			t.Fatalf("expected collected files to include %s: %#v", abs, files)
@@ -339,8 +332,6 @@ func TestProcessFileReportsReadRuleAndFormatterErrors(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			report, err := engine.New(config.Default(), tt.rules, tt.formatters).CheckFiles(context.Background(), tt.files)
 
@@ -443,7 +434,7 @@ func run() {
 
 		root := t.TempDir()
 
-		for i := 0; i < fileCount; i++ {
+		for i := range fileCount {
 			path := filepath.Join(root, fmt.Sprintf("pkg%02d", i), "sample.go")
 			testutil.WriteGoFile(t, path, source)
 		}

@@ -219,8 +219,6 @@ func TestDispatchGoldens(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
-
 		t.Run(tc.name, func(t *testing.T) {
 			exitCode, stdout, stderr := runCLI(t, t.TempDir(), tc.args...)
 

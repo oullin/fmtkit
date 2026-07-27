@@ -38,7 +38,7 @@ git init --quiet .
 # rewrites it, while a dropped config leaves oxfmt on its double-quote default.
 printf 'const  a = { x:1, s:"hi" }\nexport default a\n' > app.ts
 printf 'package p\n\nfunc f() {\n\tdefer println("d")\n\treturn\n}\n' > app.go
-printf 'module fixture\n\ngo 1.26.4\n' > go.mod
+printf 'module fixture\n\ngo 1.26.5\n' > go.mod
 
 # The Vue SFC is the embedded-formatter probe: its <template> and <style> blocks
 # are formatted by oxfmt's external (prettier) formatter, the code path that a

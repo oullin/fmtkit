@@ -1,7 +1,7 @@
 # fmtkit
 
 [![Go Reference](https://pkg.go.dev/badge/go.ollin.sh/fmtkit/driver.svg)](https://pkg.go.dev/go.ollin.sh/fmtkit/driver)
-[![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
+[![Go 1.26.5](https://img.shields.io/badge/go-1.26.5-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.26)
 [![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
 
@@ -351,7 +351,7 @@ Note that `format` exits `0` when it _fixes_ violations — it only fails on a g
 
 ## Development
 
-You'll need Go 1.26.4+, [Bun](https://bun.com) (to compile the TS sidecar), and Vite+ (which manages the Node.js runtime and pnpm version the workspace declares).
+You'll need Go 1.26.5+, [Bun](https://bun.com) (to compile the TS sidecar), and Vite+ (which manages the Node.js runtime and pnpm version the workspace declares).
 
 ```bash
 curl -fsSL https://vite.plus -o install-vp.sh

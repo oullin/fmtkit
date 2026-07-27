@@ -8,7 +8,7 @@
 		"typecheck": "vp run --filter sidecar --filter ts-toolchain --fail-if-no-match typecheck"
 	},
 	"devDependencies": {
-		"vite-plus": "0.2.4"
+		"vite-plus": "0.2.6"
 	},
-	"packageManager": "pnpm@10.33.0"
+	"packageManager": "pnpm@11.17.0"
 }

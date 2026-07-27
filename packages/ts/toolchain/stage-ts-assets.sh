@@ -105,7 +105,11 @@ workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
 
 # Mirror the layout sidecar.ts expects in the repo: the sources next to their
-# package.json (for the #sidecar imports map) with node_modules one level up.
+# package.json (for the #sidecar imports map) with node_modules one level up,
+# and the tsconfig beside that node_modules. sidecar.ts reaches the vendored
+# oxfmt and oxlint CLI entries through its @vendor/* compilerOptions.paths
+# aliases, whose targets resolve relative to the tsconfig's own directory — the
+# sidecar package root in the repo, "${workdir}" here.
 mkdir -p "${workdir}/src"
 
 # Copy the sources recursively, preserving the directory structure, so nested
@@ -118,6 +122,7 @@ while IFS= read -r script; do
 done < <(cd "${src}" && find . -name '*.ts' ! -name '*.test.ts')
 
 cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
+cp "${root}/packages/ts/sidecar/tsconfig.json" "${workdir}/tsconfig.json"
 
 (
 	cd "${workdir}"
@@ -199,7 +204,10 @@ for target in "${targets[@]}"; do
 
 	# Run bun from the throwaway workdir: bun drops *.bun-build scratch files
 	# into the invoking directory, and a dirty repo would fail the release's
-	# git state check.
+	# git state check. The cwd is also how bun picks up the tsconfig copied
+	# above, which carries the @vendor/* aliases sidecar.ts imports; passing
+	# --tsconfig-override instead builds fine but makes bun 1.3.14 report a
+	# spurious "directory mismatch" internal error on every target.
 	(
 		cd "${workdir}"
 

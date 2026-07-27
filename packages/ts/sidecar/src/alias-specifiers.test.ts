@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { AstReader } from '#sidecar/syntax/ast-reader';
 import { isErr } from '#sidecar/kernel/result';
@@ -8,7 +8,6 @@ import { SourceParser } from '#sidecar/syntax/source-parser';
 import type { Node } from '#sidecar/syntax/node-schema';
 
 const sourceExtensions = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
-const exemptFiles = new Set(['sidecar.ts']);
 
 const ast = new AstReader();
 const parser = new SourceParser();
@@ -104,10 +103,6 @@ test('script module specifiers use aliases instead of relative paths', async () 
 	const violations: string[] = [];
 
 	for (const file of files) {
-		if (exemptFiles.has(basename(file))) {
-			continue;
-		}
-
 		const source = await readFile(file, 'utf8');
 
 		const specifiers = collectModuleSpecifiers(file, source);

@@ -11,7 +11,11 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"types": ["node"],
-		"noEmit": true
+		"noEmit": true,
+		"paths": {
+			"@vendor/oxfmt-cli": ["./node_modules/oxfmt/dist/cli.js"],
+			"@vendor/oxlint-cli": ["./node_modules/oxlint/dist/cli.js"]
+		}
 	},
 	"include": ["src/**/*.ts"]
 }

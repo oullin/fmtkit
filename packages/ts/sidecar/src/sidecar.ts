@@ -7,6 +7,17 @@
  * only shipped once. The napi bindings (oxc-parser, oxfmt, oxlint) are NOT
  * bundled; they are extracted next to this executable and loaded through the
  * napi-rs NAPI_RS_NATIVE_LIBRARY_PATH override.
+ *
+ * The `@vendor/*` specifiers below are `compilerOptions.paths` entries in
+ * packages/ts/sidecar/tsconfig.json, not npm packages. oxfmt and oxlint keep
+ * their CLI entry out of their `exports` map, so `oxfmt/dist/cli.js` does not
+ * resolve, and a `#`-prefixed alias cannot reach it either: Node rejects an
+ * `imports` target that escapes the package or names a node_modules segment.
+ * `paths` is the one mechanism both `tsc` and `bun build` honour — which means
+ * these two imports do NOT resolve under plain node or tsx. Targets resolve
+ * relative to the tsconfig's own directory, so node_modules must sit beside the
+ * tsconfig; that is why stage-ts-assets.sh copies it into the build workdir.
+ * Both entries are side-effect-only and typed in vendor-cli.d.ts.
  */
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
@@ -86,15 +97,14 @@ switch (mode) {
 	case 'oxfmt':
 		process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindings.oxfmt;
 
-		await import('../node_modules/oxfmt/dist/cli.js');
+		await import('@vendor/oxfmt-cli');
 
 		break;
 
 	case 'oxlint':
 		process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindings.oxlint;
 
-		// @ts-expect-error -- the oxlint CLI entry ships without declarations.
-		await import('../node_modules/oxlint/dist/cli.js');
+		await import('@vendor/oxlint-cli');
 
 		break;
 

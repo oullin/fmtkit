@@ -57,6 +57,7 @@ sidecar_is_stale() {
 	newer="$(find \
 		"${REPO_ROOT}/packages/ts/sidecar/src" \
 		"${REPO_ROOT}/packages/ts/sidecar/package.json" \
+		"${REPO_ROOT}/packages/ts/sidecar/tsconfig.json" \
 		"${REPO_ROOT}/.oxfmtrc.json" \
 		"${REPO_ROOT}/.oxlintrc.json" \
 		-newer "$sidecar" -print -quit 2>/dev/null)"

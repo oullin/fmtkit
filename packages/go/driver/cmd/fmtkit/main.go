@@ -20,8 +20,8 @@ func main() {
 	// os.Exit skips deferred calls, so release the signal handler explicitly
 	// before exiting with the captured code.
 	code := app.
-		New(version, os.Stdout, os.Stderr).
-		Run(ctx, os.Args[1:])
+		Umbrella(version, os.Stdout, os.Stderr).
+		Dispatch(ctx, os.Args[1:])
 
 	stop()
 	os.Exit(code)

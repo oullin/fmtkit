@@ -1,0 +1,8 @@
+package sample
+
+type A struct{}
+type B struct{}
+
+func use() (A, B) {
+	return A{}, B{}
+}

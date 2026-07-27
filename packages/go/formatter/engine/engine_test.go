@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -153,7 +154,7 @@ func TestCollectGoFilesSkipsHiddenVendorAndGenerated(t *testing.T) {
 	testutil.WriteGoFile(t, filepath.Join(root, "vendor", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, ".hidden", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, "generated.gen.go"), "package sample\n")
-	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.golang"), "FROM golang:1.26.4-bookworm\n")
+	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.golang"), "FROM golang:1.26.5-bookworm\n")
 
 	files, err := engine.CollectGoFiles([]string{root}, config.Default())
 
@@ -198,15 +199,7 @@ func TestCollectGoFilesAppliesConfiguredExclusionsAndDeduplicates(t *testing.T) 
 			t.Fatalf("abs: %v", err)
 		}
 
-		found := false
-
-		for _, got := range files {
-			if got == abs {
-				found = true
-
-				break
-			}
-		}
+		found := slices.Contains(files, abs)
 
 		if !found {
 			t.Fatalf("expected collected files to include %s: %#v", abs, files)
@@ -339,8 +332,6 @@ func TestProcessFileReportsReadRuleAndFormatterErrors(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			report, err := engine.New(config.Default(), tt.rules, tt.formatters).CheckFiles(context.Background(), tt.files)
 
@@ -398,7 +389,7 @@ func TestFormatFilesReportsWriteErrors(t *testing.T) {
 	}
 }
 
-func TestReportCountsAndAllErrors(t *testing.T) {
+func TestReportCounts(t *testing.T) {
 	report := engine.Report{
 		Errors: []engine.ErrorResult{
 			{Message: "workspace failed"},
@@ -425,20 +416,6 @@ func TestReportCountsAndAllErrors(t *testing.T) {
 	if got := report.ErrorCount(); got != 2 {
 		t.Fatalf("expected 2 errors, got %d", got)
 	}
-
-	errors := report.AllErrors()
-
-	if len(errors) != 2 {
-		t.Fatalf("expected 2 all errors, got %#v", errors)
-	}
-
-	if errors[0].Message != "workspace failed" {
-		t.Fatalf("unexpected workspace error: %#v", errors[0])
-	}
-
-	if errors[1].File != "b.go" || errors[1].Message != "read file: denied" {
-		t.Fatalf("unexpected file error: %#v", errors[1])
-	}
 }
 
 func TestFormatIsDeterministicAcrossConcurrencyLevels(t *testing.T) {
@@ -457,7 +434,7 @@ func run() {
 
 		root := t.TempDir()
 
-		for i := 0; i < fileCount; i++ {
+		for i := range fileCount {
 			path := filepath.Join(root, fmt.Sprintf("pkg%02d", i), "sample.go")
 			testutil.WriteGoFile(t, path, source)
 		}

@@ -2,10 +2,10 @@
 	"name": "driver",
 	"private": true,
 	"scripts": {
-		"build": "cd ../../.. && ./infra/task.sh build",
-		"check": "../infra/task.sh check",
-		"gofmt": "../infra/task.sh gofmt",
-		"test": "../infra/task.sh test",
-		"vet": "../infra/task.sh vet"
+		"build": "cd ../../.. && ./scripts/task.sh build",
+		"check": "../scripts/task.sh check",
+		"gofmt": "../scripts/task.sh gofmt",
+		"test": "../scripts/task.sh test",
+		"vet": "../scripts/task.sh vet"
 	}
 }

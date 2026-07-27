@@ -9,31 +9,6 @@ import (
 	"go.ollin.sh/fmtkit/formatter/config"
 )
 
-func TestFilterFiles(t *testing.T) {
-	files := []string{"a.go", "b.go", "c.go"}
-
-	if got := filterFiles(nil, []string{"a.go"}); got != nil {
-		t.Fatalf("expected nil for empty files, got %#v", got)
-	}
-
-	if got := filterFiles(files, nil); got != nil {
-		t.Fatalf("expected nil for empty selected, got %#v", got)
-	}
-
-	got := filterFiles(files, []string{"c.go", "a.go"})
-	want := []string{"a.go", "c.go"}
-
-	if len(got) != len(want) {
-		t.Fatalf("expected %#v, got %#v", want, got)
-	}
-
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("expected %#v, got %#v", want, got)
-		}
-	}
-}
-
 func TestEffectiveConcurrencyBounds(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -48,8 +23,6 @@ func TestEffectiveConcurrencyBounds(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
-
 		t.Run(tt.name, func(t *testing.T) {
 			if got := effectiveConcurrency(tt.configured, tt.fileCount); got != tt.want {
 				t.Fatalf("expected %d, got %d", tt.want, got)

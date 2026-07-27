@@ -41,11 +41,6 @@ type toolchain interface {
 // execToolchain is the exec-backed toolchain used outside tests.
 type execToolchain struct{}
 
-// Default returns the default vet configuration.
-func Default() Config {
-	return Config{Enabled: true}
-}
-
 // LookGo resolves the go executable on PATH.
 func (execToolchain) LookGo() (string, error) {
 	return exec.LookPath("go")
@@ -166,18 +161,21 @@ func goEnv(ctx context.Context, workRoot string, tc toolchain, keys ...string) (
 	out, err := tc.EnvOutput(ctx, workRoot, keys...)
 
 	if err != nil {
-		var exitErr *exec.ExitError
-
-		label := strings.Join(keys, " ")
-
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("resolve go %s: %s: %w", label, strings.TrimSpace(string(exitErr.Stderr)), err)
-		}
-
-		return nil, fmt.Errorf("resolve go %s: %w", label, err)
+		return nil, wrapExitError(err, "resolve go "+strings.Join(keys, " "))
 	}
 
 	return parseGoEnvValues(out, len(keys)), nil
+}
+
+// wrapExitError annotates err with what was being resolved. When the failure
+// came from the child process itself, its stderr is folded in: that is where
+// the go tool explains what actually went wrong.
+func wrapExitError(err error, what string) error {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		return fmt.Errorf("%s: %s: %w", what, strings.TrimSpace(string(exitErr.Stderr)), err)
+	}
+
+	return fmt.Errorf("%s: %w", what, err)
 }
 
 func parseGoEnvValues(out []byte, count int) []string {
@@ -222,13 +220,7 @@ func discoverVetTargets(ctx context.Context, root string, tc toolchain) ([]strin
 	out, err := tc.ListModulesOutput(ctx, root)
 
 	if err != nil {
-		var exitErr *exec.ExitError
-
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("resolve go vet targets: %s: %w", strings.TrimSpace(string(exitErr.Stderr)), err)
-		}
-
-		return nil, fmt.Errorf("resolve go vet targets: %w", err)
+		return nil, wrapExitError(err, "resolve go vet targets")
 	}
 
 	lines := strings.Split(string(out), "\n")

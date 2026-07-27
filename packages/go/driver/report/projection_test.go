@@ -52,7 +52,7 @@ func TestProjectReportNormalizesFormatterAndVetResults(t *testing.T) {
 func TestRenderJSONUsesProjectedReport(t *testing.T) {
 	var out bytes.Buffer
 
-	if err := RenderJSON(&out, "/work", sampleCombinedReport()); err != nil {
+	if err := (Renderer{Root: "/work"}).renderJSON(&out, sampleCombinedReport()); err != nil {
 		t.Fatalf("render json: %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestRenderJSONUsesProjectedReport(t *testing.T) {
 func TestRenderAgentUsesProjectedReport(t *testing.T) {
 	var out bytes.Buffer
 
-	if err := RenderAgent(&out, "/work", sampleCombinedReport()); err != nil {
+	if err := (Renderer{Root: "/work"}).renderAgent(&out, sampleCombinedReport()); err != nil {
 		t.Fatalf("render agent: %v", err)
 	}
 

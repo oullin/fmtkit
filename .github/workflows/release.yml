@@ -32,7 +32,7 @@ jobs:
 
             - uses: voidzero-dev/setup-vp@v1
               with:
-                  node-version: 25.8.2
+                  node-version: 25.9.0
                   cache: true
 
             - uses: actions/setup-go@v6
@@ -58,7 +58,7 @@ jobs:
 
             - uses: voidzero-dev/setup-vp@v1
               with:
-                  node-version: 25.8.2
+                  node-version: 25.9.0
                   cache: true
 
             - uses: actions/setup-go@v6
@@ -100,7 +100,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG_PREFIX: v
                   DEFAULT_BUMP: patch
-              run: ./infra/release/create-release-tag.sh
+              run: ./scripts/release/create-release-tag.sh
 
     # Publishing is invoked directly so this workflow does not rely on tag-push
     # fan-out from a workflow-created tag.

@@ -106,11 +106,7 @@ func (e *Engine) run(ctx context.Context, files []string, write bool) (Report, e
 			case sem <- struct{}{}:
 			}
 
-			wg.Add(1)
-
-			go func(i int, file string) {
-				defer wg.Done()
-
+			wg.Go(func() {
 				defer func() { <-sem }()
 
 				if ctx.Err() != nil {
@@ -120,7 +116,7 @@ func (e *Engine) run(ctx context.Context, files []string, write bool) (Report, e
 				}
 
 				results[i] = e.processFile(ctx, file, write)
-			}(i, file)
+			})
 		}
 
 		wg.Wait()
@@ -156,15 +152,7 @@ func effectiveConcurrency(configured, fileCount int) int {
 		n = runtime.NumCPU()
 	}
 
-	if n > fileCount {
-		n = fileCount
-	}
-
-	if n < 1 {
-		n = 1
-	}
-
-	return n
+	return max(min(n, fileCount), 1)
 }
 
 func (e *Engine) processFile(ctx context.Context, path string, write bool) FileResult {
@@ -214,7 +202,6 @@ func (e *Engine) processFile(ctx context.Context, path string, write bool) FileR
 	}
 
 	result.Changed = true
-	result.Diff = generateDiff(string(original), string(current))
 
 	if write {
 		if err := writeFileAtomic(path, current); err != nil {

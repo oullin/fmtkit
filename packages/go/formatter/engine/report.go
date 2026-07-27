@@ -10,7 +10,6 @@ type FileResult struct {
 	File       string            `json:"file"`
 	Applied    []string          `json:"applied,omitempty"`
 	Violations []rules.Violation `json:"violations,omitempty"`
-	Diff       string            `json:"diff,omitempty"`
 	Error      string            `json:"error,omitempty"`
 	Changed    bool              `json:"changed,omitempty"`
 }
@@ -60,22 +59,4 @@ func (r Report) ErrorCount() int {
 	}
 
 	return total
-}
-
-// AllErrors returns every engine error, including per-file errors.
-func (r Report) AllErrors() []ErrorResult {
-	out := append([]ErrorResult(nil), r.Errors...)
-
-	for _, result := range r.Results {
-		if result.Error == "" {
-			continue
-		}
-
-		out = append(out, ErrorResult{
-			File:    result.File,
-			Message: result.Error,
-		})
-	}
-
-	return out
 }

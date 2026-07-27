@@ -2,13 +2,13 @@
 	"name": "workspaces",
 	"private": true,
 	"scripts": {
-		"build": "./infra/task.sh build",
+		"build": "./scripts/task.sh build",
 		"lint": "vp run --filter sidecar --fail-if-no-match lint:check",
-		"test": "vp run --filter formatter --filter vet --filter driver --filter sidecar --filter ts-infra --fail-if-no-match test",
-		"typecheck": "vp run --filter sidecar --filter ts-infra --fail-if-no-match typecheck"
+		"test": "vp run --filter formatter --filter vet --filter driver --filter sidecar --filter ts-toolchain --fail-if-no-match test",
+		"typecheck": "vp run --filter sidecar --filter ts-toolchain --fail-if-no-match typecheck"
 	},
 	"devDependencies": {
-		"vite-plus": "0.2.4"
+		"vite-plus": "0.2.6"
 	},
-	"packageManager": "pnpm@10.33.0"
+	"packageManager": "pnpm@11.17.0"
 }

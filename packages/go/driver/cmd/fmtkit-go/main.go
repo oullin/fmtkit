@@ -1,14 +1,15 @@
+// Command fmtkit-go is the standalone Go formatter CLI. Its command surface
+// lives in internal/app (app.GoCLI); this entrypoint only carries the version
+// stamped in by -X main.version and the signal handling.
 package main
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"go.ollin.sh/fmtkit/driver/internal/cli"
+	"go.ollin.sh/fmtkit/driver/internal/app"
 )
 
 var version = "dev"
@@ -18,49 +19,10 @@ func main() {
 
 	// os.Exit skips deferred calls, so release the signal handler explicitly
 	// before exiting with the captured code.
-	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	code := app.
+		GoCLI(version, os.Stdout, os.Stderr).
+		Dispatch(ctx, os.Args[1:])
 
 	stop()
 	os.Exit(code)
-}
-
-func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		printUsage(stderr)
-
-		return 1
-	}
-
-	switch args[0] {
-	case "check":
-		return cli.
-			NewRunner(stdout, stderr).
-			Run(ctx, cli.CheckMode, args[1:])
-	case "format":
-		return cli.
-			NewRunner(stdout, stderr).
-			Run(ctx, cli.FormatMode, args[1:])
-	case "sources":
-		return cli.RunSources(ctx, args[1:], stdout, stderr)
-	case "version", "--version", "-version":
-		_, _ = fmt.Fprintf(stdout, "fmtkit %s\n", version)
-
-		return 0
-	case "help", "--help", "-h":
-		printUsage(stderr)
-
-		return 0
-	default:
-		_, _ = fmt.Fprintf(stderr, "unknown subcommand - {%q}\n\n", args[0])
-
-		printUsage(stderr)
-
-		return 1
-	}
-}
-
-func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintf(w, "fmtkit check [paths...]\n\n")
-	_, _ = fmt.Fprintf(w, "fmtkit format [paths...]\n\n")
-	_, _ = fmt.Fprintf(w, "fmtkit sources [--include-declarations] [paths...]\n\n")
 }

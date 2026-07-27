@@ -2,9 +2,9 @@
 	"name": "vet",
 	"private": true,
 	"scripts": {
-		"check": "../infra/task.sh check",
-		"gofmt": "../infra/task.sh gofmt",
-		"test": "../infra/task.sh test",
-		"vet": "../infra/task.sh vet"
+		"check": "../scripts/task.sh check",
+		"gofmt": "../scripts/task.sh gofmt",
+		"test": "../scripts/task.sh test",
+		"vet": "../scripts/task.sh vet"
 	}
 }

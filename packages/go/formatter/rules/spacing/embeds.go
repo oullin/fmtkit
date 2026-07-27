@@ -2,6 +2,7 @@ package spacing
 
 import (
 	"bytes"
+	"cmp"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -10,6 +11,17 @@ import (
 
 	"go.ollin.sh/fmtkit/formatter/rules"
 )
+
+// embedDirectiveRepairer keeps go:embed directives immediately above the var
+// declaration they annotate, reading the shared parse state through ctx.
+type embedDirectiveRepairer struct {
+	ctx *fileContext
+}
+
+// newEmbedDirectiveRepairer returns a repairer bound to the shared parse state.
+func newEmbedDirectiveRepairer(ctx *fileContext) *embedDirectiveRepairer {
+	return &embedDirectiveRepairer{ctx: ctx}
+}
 
 func attachEmbedDirectiveDocs(file *ast.File) {
 	for decl, group := range embedDirectiveMatches(file) {
@@ -23,12 +35,14 @@ func attachEmbedDirectiveDocs(file *ast.File) {
 	}
 }
 
-func embedAdjacencyViolations(file *ast.File, fset *token.FileSet, filename string) []rules.Violation {
+// analyze reports every go:embed directive separated from the var declaration it
+// annotates, labelling the returned violations with filename.
+func (e *embedDirectiveRepairer) analyze(filename string) []rules.Violation {
 	var violations []rules.Violation
 
-	for decl, group := range embedDirectiveMatches(file) {
-		commentEndLine := fset.Position(group.End()).Line
-		declLine := fset.Position(decl.Pos()).Line
+	for decl, group := range embedDirectiveMatches(e.ctx.file) {
+		commentEndLine := e.ctx.fset.Position(group.End()).Line
+		declLine := e.ctx.fset.Position(decl.Pos()).Line
 
 		if declLine == commentEndLine+1 {
 			continue
@@ -45,7 +59,11 @@ func embedAdjacencyViolations(file *ast.File, fset *token.FileSet, filename stri
 	return violations
 }
 
-func repairDetachedEmbedDirectives(filename string, src []byte) ([]byte, error) {
+// repair re-parses src — which may already carry the type reorder — and moves
+// every detached go:embed directive group back immediately above its var
+// declaration. It parses its own file rather than reusing ctx because it operates
+// on the transformed bytes.
+func (e *embedDirectiveRepairer) repair(filename string, src []byte) ([]byte, error) {
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
 
@@ -82,15 +100,10 @@ func repairDetachedEmbedDirectives(filename string, src []byte) ([]byte, error) 
 
 	lines := bytes.SplitAfter(src, []byte{'\n'})
 
+	// Descending: moves are applied bottom-up so the line indices of the moves
+	// still to come stay valid. Hence b before a.
 	slices.SortStableFunc(moves, func(a embedMove, b embedMove) int {
-		switch {
-		case a.commentStartLine > b.commentStartLine:
-			return -1
-		case a.commentStartLine < b.commentStartLine:
-			return 1
-		default:
-			return 0
-		}
+		return cmp.Compare(b.commentStartLine, a.commentStartLine)
 	})
 
 	for _, move := range moves {
@@ -175,8 +188,14 @@ func nextTopLevelVarDeclAfter(decls []ast.Decl, pos token.Pos) (ast.Decl, bool) 
 	return nil, false
 }
 
+// isEmbedDirectiveText reports whether text is a go:embed directive carrying at
+// least one pattern. The directive grammar comes from go/ast, so a bare
+// //go:embed, a longer name such as //go:embedded, and anything that is not a
+// directive at all are rejected without restating those rules here.
 func isEmbedDirectiveText(text string) bool {
-	return hasEmbedDirectivePrefix(strings.TrimSpace(text))
+	directive, ok := ast.ParseDirective(token.NoPos, strings.TrimSpace(text))
+
+	return ok && directive.Tool == "go" && directive.Name == "embed" && directive.Args != ""
 }
 
 func containsEmbedDirective(group *ast.CommentGroup) bool {
@@ -184,15 +203,14 @@ func containsEmbedDirective(group *ast.CommentGroup) bool {
 		return false
 	}
 
-	for _, comment := range group.List {
-		if isEmbedDirectiveText(comment.Text) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(group.List, func(comment *ast.Comment) bool {
+		return isEmbedDirectiveText(comment.Text)
+	})
 }
 
+// collapseEmbedSpacing removes a single blank line left between a go:embed
+// directive and the var declaration it annotates. It works purely on bytes with
+// no parse state, so it stays a free function the repairer's collapse step calls.
 func collapseEmbedSpacing(src []byte) []byte {
 	lines := bytes.Split(src, []byte{'\n'})
 	out := make([][]byte, 0, len(lines))
@@ -223,37 +241,7 @@ func collapseEmbedSpacing(src []byte) []byte {
 }
 
 func isEmbedDirectiveLine(line []byte) bool {
-	return hasEmbedDirectiveLinePrefix(bytes.TrimSpace(line))
-}
-
-func hasEmbedDirectivePrefix(text string) bool {
-	const prefix = "//go:embed"
-
-	if !strings.HasPrefix(text, prefix) || len(text) == len(prefix) {
-		return false
-	}
-
-	switch text[len(prefix)] {
-	case ' ', '\t':
-		return true
-	default:
-		return false
-	}
-}
-
-func hasEmbedDirectiveLinePrefix(line []byte) bool {
-	const prefix = "//go:embed"
-
-	if !bytes.HasPrefix(line, []byte(prefix)) || len(line) == len(prefix) {
-		return false
-	}
-
-	switch line[len(prefix)] {
-	case ' ', '\t':
-		return true
-	default:
-		return false
-	}
+	return isEmbedDirectiveText(string(line))
 }
 
 func isVarDeclStart(line []byte) bool {

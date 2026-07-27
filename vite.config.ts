@@ -24,14 +24,14 @@ export default defineConfig({
 		tasks: {
 			check: `vp run ${workspacePackages} check`,
 			// fmtkit formats itself with the binary it ships.
-			format: './infra/task.sh format',
-			gofmt: './infra/task.sh gofmt',
-			'install-cli': './infra/task.sh with-env go -C packages/go install ./driver/cmd/fmtkit-go',
-			release: './infra/release/release.sh',
-			'test:binary': './infra/test-binary-smoke.sh',
-			'test:coverage': './infra/task.sh coverage',
+			format: './scripts/task.sh format',
+			gofmt: './scripts/task.sh gofmt',
+			'install-cli': './scripts/task.sh with-env go -C packages/go install ./driver/cmd/fmtkit-go',
+			release: './scripts/release/release.sh',
+			'test:binary': './scripts/test-binary-smoke.sh',
+			'test:coverage': './scripts/task.sh coverage',
 			'test-race':
-				'CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/formatter test ./... -race -v && CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/vet test ./... -race -v && CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/driver test ./... -race -v',
+				'CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/formatter test ./... -race -v && CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/vet test ./... -race -v && CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/driver test ./... -race -v',
 			vet: `vp run ${goPackages} vet`,
 		},
 	},

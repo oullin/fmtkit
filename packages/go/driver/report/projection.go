@@ -82,7 +82,7 @@ func projectFormatterReport(cwd string, report Combined) projectedFormatterRepor
 
 func projectVetReport(cwd string, report Combined) projectedVetReport {
 	out := projectedVetReport{
-		Status: vetStatus(report.Vet),
+		Status: VetStatus(report.Vet),
 	}
 
 	for _, result := range report.Vet.Errors {

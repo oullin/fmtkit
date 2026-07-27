@@ -1,4 +1,12 @@
 packages:
     - packages/go/*
-    - packages/ts/infra
+    - packages/ts/toolchain
     - packages/ts/sidecar
+
+# pnpm 11 blocks dependency build scripts unless they are listed here. esbuild
+# arrives as a transitive dependency of Vite+, which resolves its native binary
+# through the @esbuild/<platform> optional dependency, so esbuild's own install
+# script has nothing left to do. It has never run in this workspace; keeping it
+# off preserves that and silences the prompt on every install.
+allowBuilds:
+    esbuild: false

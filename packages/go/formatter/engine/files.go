@@ -77,62 +77,32 @@ func CollectGoFiles(paths []string, cfg config.Config) ([]string, error) {
 	return files, nil
 }
 
-func filterFiles(files, selected []string) []string {
-	if len(files) == 0 || len(selected) == 0 {
-		return nil
-	}
-
-	allowed := make(map[string]struct{}, len(selected))
-
-	for _, path := range selected {
-		allowed[path] = struct{}{}
-	}
-
-	filtered := make([]string, 0, len(files))
-
-	for _, path := range files {
-		if _, ok := allowed[path]; ok {
-			filtered = append(filtered, path)
-		}
-	}
-
-	return filtered
-}
-
 func shouldSkipDir(path, root, name string, cfg config.Config) bool {
 	if path != root && strings.HasPrefix(name, ".") {
 		return true
 	}
 
-	for _, excluded := range cfg.Exclude {
-		if name == excluded {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(cfg.Exclude, name)
 }
 
 func isExcludedFile(path string, cfg config.Config) bool {
 	base := filepath.Base(path)
 
-	for _, pattern := range cfg.NotName {
+	nameExcluded := slices.ContainsFunc(cfg.NotName, func(pattern string) bool {
 		matched, _ := filepath.Match(pattern, base)
 
-		if matched {
-			return true
-		}
+		return matched
+	})
+
+	if nameExcluded {
+		return true
 	}
 
 	slashed := filepath.ToSlash(path)
 
-	for _, pattern := range cfg.NotPath {
-		if strings.Contains(slashed, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(cfg.NotPath, func(pattern string) bool {
+		return strings.Contains(slashed, pattern)
+	})
 }
 
 func isGoSource(path string) bool {

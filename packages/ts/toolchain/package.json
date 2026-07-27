@@ -1,5 +1,5 @@
 {
-	"name": "ts-infra",
+	"name": "ts-toolchain",
 	"private": true,
 	"type": "module",
 	"imports": {

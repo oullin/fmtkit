@@ -100,7 +100,7 @@ jobs:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG_PREFIX: v
                   DEFAULT_BUMP: patch
-              run: ./infra/release/create-release-tag.sh
+              run: ./scripts/release/create-release-tag.sh
 
     # Publishing is invoked directly so this workflow does not rely on tag-push
     # fan-out from a workflow-created tag.

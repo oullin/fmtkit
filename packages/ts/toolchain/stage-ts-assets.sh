@@ -15,8 +15,8 @@ set -euo pipefail
 # package that embeds it: go:embed cannot reach outside its own directory.
 #
 # Tool versions come from packages/ts/sidecar/package.json devDependencies;
-# patch-script versions come from packages/ts/infra/package.json. Requires bash,
-# node, npm, and bun.
+# patch-script versions come from packages/ts/toolchain/package.json. Requires
+# bash, node, npm, and bun.
 #
 # usage: stage-ts-assets.sh <all|host|goos_goarch...>
 
@@ -33,7 +33,7 @@ fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 dist="${FMTKIT_TS_ASSET_DIR:-${root}/packages/go/driver/internal/typescript/embedded/bin}"
 
-source "${root}/infra/lib/host-target.sh"
+source "${root}/scripts/lib/host-target.sh"
 
 all_targets=(darwin_arm64 darwin_amd64 linux_arm64 linux_amd64)
 
@@ -94,12 +94,12 @@ pin() {
 }
 
 sidecar_package_json="${root}/packages/ts/sidecar/package.json"
-infra_package_json="${root}/packages/ts/infra/package.json"
+toolchain_package_json="${root}/packages/ts/toolchain/package.json"
 
 oxfmt_pin="$(pin "${sidecar_package_json}" oxfmt)"
 oxlint_pin="$(pin "${sidecar_package_json}" oxlint)"
 oxc_parser_pin="$(pin "${sidecar_package_json}" oxc-parser)"
-zod_pin="$(pin "${infra_package_json}" zod)"
+zod_pin="$(pin "${toolchain_package_json}" zod)"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -133,20 +133,20 @@ cp "${root}/packages/ts/sidecar/src/package.json" "${workdir}/src/package.json"
 # Tinypool child_process pool whose worker entry scripts do not survive
 # `bun build --compile` (they resolve to non-existent /$bunfs/root/ paths), which
 # hangs the binary on any such file. Rewrite oxfmt to do that work in-process
-# before it is bundled. See packages/ts/infra/oxfmt-inprocess for the full
+# before it is bundled. See packages/ts/toolchain/oxfmt-inprocess for the full
 # rationale. Run by node directly (type stripping) so staging needs no tsx.
-# Its ESM imports resolve from the infra package, not the temporary workdir.
+# Its ESM imports resolve from the toolchain package, not the temporary workdir.
 if ! (
-	cd "${root}/packages/ts/infra"
+	cd "${root}/packages/ts/toolchain"
 	node -e "import('zod')" >/dev/null 2>&1
 ); then
 	printf 'stage-ts-assets: installing zod for the oxfmt patch script\n' >&2
 	npm install --no-save --no-audit --no-fund \
-		--prefix "${root}/packages/ts/infra" \
+		--prefix "${root}/packages/ts/toolchain" \
 		"zod@${zod_pin}" >/dev/null
 fi
 
-node "${root}/packages/ts/infra/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
+node "${root}/packages/ts/toolchain/patch-oxfmt-inprocess.ts" "${workdir}/node_modules/oxfmt/dist"
 
 # The napi bindings stay external: every target loads them from files staged
 # next to the sidecar through NAPI_RS_NATIVE_LIBRARY_PATH, which keeps the JS

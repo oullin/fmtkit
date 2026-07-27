@@ -4,11 +4,9 @@ on:
     push:
         branches:
             - main
-            - release-refactor
     pull_request:
         branches:
             - main
-            - release-refactor
         types:
             - opened
             - reopened
@@ -114,13 +112,13 @@ jobs:
               run: vp install --frozen-lockfile
 
             - name: Go - Run formatter tests with race detector and coverage
-              run: CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - name: Go - Run vet tests with race detector and coverage
-              run: CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - name: Go - Run driver tests with race detector and coverage
-              run: CGO_ENABLED=1 ./infra/task.sh with-env go -C packages/go/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+              run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
             - uses: actions/upload-artifact@v4
               name: Upload formatter coverage artifact
@@ -178,12 +176,12 @@ jobs:
                   args: check
 
             - name: Smoke test the self-contained binary
-              run: ./infra/test-binary-smoke.sh
+              run: ./scripts/test-binary-smoke.sh
 
             # Runs here rather than in `check`, which has no Go: the only tool
             # that can say whether this tree is formatted is fmtkit itself.
             - name: Check the repository is fmtkit-formatted
-              run: ./infra/task.sh self-check
+              run: ./scripts/task.sh self-check
 
     coverage:
         needs: test

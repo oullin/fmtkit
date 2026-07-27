@@ -1,4 +1,4 @@
 packages:
     - packages/go/*
-    - packages/ts/infra
+    - packages/ts/toolchain
     - packages/ts/sidecar

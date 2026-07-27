@@ -8,7 +8,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
-"${repo_root}/packages/ts/infra/stage-ts-assets.sh" host
+"${repo_root}/packages/ts/toolchain/stage-ts-assets.sh" host
 
 tmp_root="$(mktemp -d)"
 

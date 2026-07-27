@@ -2,7 +2,7 @@
 
 # Maps the running machine onto one of the <goos>_<goarch> names that the staged
 # TS toolchain assets are keyed by. Sourced by stage-ts-assets.sh to pick what to
-# build, and by tasks/fmtkit.sh to find what was built.
+# build, and by scripts/task.sh to find what was built.
 
 host_target() {
 	local os arch

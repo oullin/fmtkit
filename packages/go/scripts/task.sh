@@ -3,13 +3,13 @@ set -euo pipefail
 
 # Go-toolchain tasks scoped to one package of the module. The package.json
 # shims in driver/, formatter/, and vet/ call this from their own directory,
-# so ./... means that package's tree. Repo-wide tasks live in infra/task.sh.
+# so ./... means that package's tree. Repo-wide tasks live in scripts/task.sh.
 #
 # usage: task.sh <check|test|vet|gofmt> [args...]
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-source "${script_dir}/../../../infra/lib/env.sh"
+source "${script_dir}/../../../scripts/lib/env.sh"
 
 with_env() {
 	local status

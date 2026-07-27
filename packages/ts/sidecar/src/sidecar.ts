@@ -1,7 +1,7 @@
 /**
  * Entry point for the self-contained TS toolchain sidecar bundled into the
  * `fmtkit` release binary via `bun build --compile` (see
- * infra/scripts/release/stage-ts-assets.sh).
+ * packages/ts/toolchain/stage-ts-assets.sh).
  *
  * One executable multiplexes the three Node-based tools so the Bun runtime is
  * only shipped once. The napi bindings (oxc-parser, oxfmt, oxlint) are NOT

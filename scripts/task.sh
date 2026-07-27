@@ -3,8 +3,8 @@ set -euo pipefail
 
 # Single entrypoint for the repo-wide tasks: everything that spans both halves
 # of the pipeline lives here as a subcommand. Go-toolchain tasks scoped to a
-# single package live in packages/go/infra/task.sh instead; the release tag
-# machinery is under infra/release/.
+# single package live in packages/go/scripts/task.sh instead; the release tag
+# machinery is under scripts/release/.
 #
 # usage: task.sh <format|fmtkit|self-check|build|gofmt|coverage|with-env|help> [args...]
 
@@ -69,7 +69,7 @@ sidecar_is_stale() {
 # staged on demand and reused until their sources change. The repo root is not
 # inside the Go module, so the inner loop is an incremental build into storage/
 # rather than a `go run`; the embedded-asset path releases use is covered
-# separately by infra/test-binary-smoke.sh.
+# separately by scripts/test-binary-smoke.sh.
 run_fmtkit() {
 	local support_dir sidecar bin
 
@@ -77,7 +77,7 @@ run_fmtkit() {
 	sidecar="${support_dir}/fmtkit-ts-sidecar"
 
 	if sidecar_is_stale "$sidecar"; then
-		"${REPO_ROOT}/packages/ts/infra/stage-ts-assets.sh" host
+		"${REPO_ROOT}/packages/ts/toolchain/stage-ts-assets.sh" host
 	fi
 
 	ensure_storage_layout

@@ -45,7 +45,7 @@ export class ShimSource {
 	 * @returns The `worker-proxy` region, formatting embedded code in-process.
 	 */
 	static workerProxyRegion(): string {
-		return `//#region src-js/cli/worker-proxy.ts (${SHIM_MARKER} — see infra/scripts/release/oxfmt-inprocess)
+		return `//#region src-js/cli/worker-proxy.ts (${SHIM_MARKER} — see packages/ts/toolchain/oxfmt-inprocess)
 async function initExternalFormatter(numThreads) {}
 async function disposeExternalFormatter() {}
 function formatFile(options, code) {

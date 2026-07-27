@@ -78,7 +78,7 @@ func Resolve(version string) (Assets, error) {
 		return Assets{}, errors.New(
 			"this fmtkit build carries no TS toolchain (built without the fmtkit_sidecar tag); " +
 				"point " + proto.SupportDirEnv + " at a staged toolchain directory " +
-				"(see packages/ts/infra/stage-ts-assets.sh), or use a release binary",
+				"(see packages/ts/toolchain/stage-ts-assets.sh), or use a release binary",
 		)
 	}
 

@@ -7,9 +7,7 @@ package sourcefiles
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"slices"
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	"go.ollin.sh/fmtkit/driver/internal/typescript/filetypes"
@@ -57,70 +55,29 @@ func (c Collector) Lintable(ctx context.Context, scopes []string) ([]string, []s
 func (c Collector) collect(ctx context.Context, scopes []string, keep func(string) bool) ([]string, []string, error) {
 	cwd := c.Tree.Dir
 
-	if len(scopes) == 0 {
-		scopes = []string{"."}
+	files, missing, err := c.Tree.Walk(ctx, scopes, c.Selection, keep)
+
+	// A scope that is not there is a warning here rather than the silent skip
+	// the git lane wants: the TS lane is driven by user-supplied paths, so a
+	// typo should say so instead of quietly formatting nothing.
+	warnings := make([]string, 0, len(missing))
+
+	for _, absolute := range missing {
+		warnings = append(warnings, fmt.Sprintf("path not found, skipping: %s", absolute))
 	}
 
-	files := []string{}
-	warnings := []string{}
-	seen := map[string]struct{}{}
-
-	for _, scope := range scopes {
-		absolute := scope
-
-		if !filepath.IsAbs(absolute) {
-			absolute = filepath.Join(cwd, scope)
-		}
-
-		if _, err := os.Stat(absolute); err != nil {
-			if os.IsNotExist(err) {
-				warnings = append(warnings, fmt.Sprintf("path not found, skipping: %s", absolute))
-
-				continue
-			}
-
-			return nil, warnings, err
-		}
-
-		entries, err := c.Tree.Files(ctx, absolute, c.Selection)
-
-		if err != nil {
-			return nil, warnings, err
-		}
-
-		for _, entry := range entries {
-			if !keep(entry) {
-				continue
-			}
-
-			path := entry
-
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(cwd, path)
-			}
-
-			path = filepath.Clean(path)
-
-			if _, ok := seen[path]; ok {
-				continue
-			}
-
-			files = append(files, path)
-			seen[path] = struct{}{}
-		}
+	if err != nil {
+		return nil, warnings, err
 	}
 
+	// Walk already sorted; dropping ignored paths preserves that order.
 	kept, err := c.honorPrettierIgnore(cwd, files)
 
 	if err != nil {
 		return nil, warnings, err
 	}
 
-	files = kept
-
-	slices.Sort(files)
-
-	return files, warnings, nil
+	return kept, warnings, nil
 }
 
 // honorPrettierIgnore drops any collected path the project's .prettierignore

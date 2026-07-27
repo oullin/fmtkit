@@ -102,19 +102,7 @@ func renderFormatterText(w io.Writer, cwd string, mode Mode, report formattereng
 	}
 
 	for _, result := range report.Errors {
-		rel := relativePath(cwd, result.File)
-
-		if rel != "" && rel != "." {
-			if _, err := color.New(color.FgCyan, color.Bold).Fprintf(w, "  %s\n", rel); err != nil {
-				return err
-			}
-		} else {
-			if _, err := color.New(color.FgCyan, color.Bold).Fprintf(w, "  workspace\n"); err != nil {
-				return err
-			}
-		}
-
-		if _, err := color.New(color.FgRed).Fprintf(w, "    ! %s\n\n", result.Message); err != nil {
+		if err := renderErrorEntry(w, cwd, result.File, result.Message); err != nil {
 			return err
 		}
 	}
@@ -134,37 +122,44 @@ func renderFormatterText(w io.Writer, cwd string, mode Mode, report formattereng
 	return err
 }
 
+// renderErrorEntry writes one error: its path relative to cwd (or "workspace"
+// when the error belongs to no single file), then the message.
+//
+// It takes the two fields rather than a record because the formatter and vet
+// carry their own identically shaped error types. Go has no field-access
+// constraint, so a type parameter here would have to be handed accessor
+// closures by every caller — more code than the two strings it would abstract.
+func renderErrorEntry(w io.Writer, cwd string, file string, message string) error {
+	rel := relativePath(cwd, file)
+
+	label := "workspace"
+
+	if rel != "" && rel != "." {
+		label = rel
+	}
+
+	if _, err := color.New(color.FgCyan, color.Bold).Fprintf(w, "  %s\n", label); err != nil {
+		return err
+	}
+
+	_, err := color.New(color.FgRed).Fprintf(w, "    ! %s\n\n", message)
+
+	return err
+}
+
 func renderVetText(w io.Writer, cwd string, report Combined) error {
-	switch vetStatus(report.Vet) {
+	switch VetStatus(report.Vet) {
 	case "skipped":
-		reason := "no Go module or workspace was detected"
-
-		if report.Vet.Skipped {
-			reason = "the Go toolchain is not available"
-		}
-
-		if _, err := color.New(color.FgYellow).Fprint(w, "  Skipped automatic go vet ./... because "+reason+".\n\n"); err != nil {
+		if _, err := color.New(color.FgYellow).Fprint(w, "  "+VetSummary(report.Vet)+"\n\n"); err != nil {
 			return err
 		}
 	case "pass":
-		if _, err := color.New(color.FgGreen).Fprintf(w, "  go vet ./... passed.\n\n"); err != nil {
+		if _, err := color.New(color.FgGreen).Fprint(w, "  "+VetSummary(report.Vet)+"\n\n"); err != nil {
 			return err
 		}
 	default:
 		for _, result := range report.Vet.Errors {
-			rel := relativePath(cwd, result.File)
-
-			if rel != "" && rel != "." {
-				if _, err := color.New(color.FgCyan, color.Bold).Fprintf(w, "  %s\n", rel); err != nil {
-					return err
-				}
-			} else {
-				if _, err := color.New(color.FgCyan, color.Bold).Fprintf(w, "  workspace\n"); err != nil {
-					return err
-				}
-			}
-
-			if _, err := color.New(color.FgRed).Fprintf(w, "    ! %s\n\n", result.Message); err != nil {
+			if err := renderErrorEntry(w, cwd, result.File, result.Message); err != nil {
 				return err
 			}
 		}
@@ -172,7 +167,7 @@ func renderVetText(w io.Writer, cwd string, report Combined) error {
 
 	summaryColor := color.New(color.Bold)
 
-	switch vetStatus(report.Vet) {
+	switch VetStatus(report.Vet) {
 	case "pass":
 		summaryColor.Add(color.FgGreen)
 	case "skipped":
@@ -181,7 +176,7 @@ func renderVetText(w io.Writer, cwd string, report Combined) error {
 		summaryColor.Add(color.FgRed)
 	}
 
-	_, err := summaryColor.Fprintf(w, "  Result: %s. %d error(s).\n\n", vetStatus(report.Vet), report.Vet.ErrorCount())
+	_, err := summaryColor.Fprintf(w, "  Result: %s. %d error(s).\n\n", VetStatus(report.Vet), report.Vet.ErrorCount())
 
 	return err
 }

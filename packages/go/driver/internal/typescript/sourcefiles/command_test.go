@@ -6,14 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 func TestRunPrintsNULSeparatedFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
-	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	var stdout, stderr bytes.Buffer
 
@@ -42,9 +44,9 @@ func TestRunPrintsNULSeparatedFiles(t *testing.T) {
 }
 
 func TestRunIncludesDeclarationsFlag(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "types.d.ts"), "declare const value: string;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "types.d.ts"), "declare const value: string;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	var stdout, stderr bytes.Buffer
 
@@ -62,9 +64,9 @@ func TestRunIncludesDeclarationsFlag(t *testing.T) {
 }
 
 func TestRunWarnsOnMissingScopes(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	var stdout, stderr bytes.Buffer
 
@@ -80,9 +82,9 @@ func TestRunWarnsOnMissingScopes(t *testing.T) {
 }
 
 func TestRunDefaultsToWorkingDirectory(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 	t.Chdir(dir)
 
 	var stdout, stderr bytes.Buffer

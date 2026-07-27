@@ -10,7 +10,6 @@ import (
 	"go.ollin.sh/fmtkit/driver/internal/toolchain"
 	report "go.ollin.sh/fmtkit/driver/report"
 	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
-	"go.ollin.sh/fmtkit/vet"
 )
 
 // Toolchain is the Go lane: it formats Go files and runs go vet, contributing a
@@ -76,7 +75,7 @@ func formatDetails(outcome Outcome) []pipeline.Detail {
 		formatterResult = fmt.Sprintf("%s. %d changed, %d violation(s), %d error(s).", fm.Result, fm.Changed, fm.ViolationCount(), fm.ErrorCount())
 	}
 
-	vetResult := fmt.Sprintf("%s. %d error(s).", vetStatus(vt), vt.ErrorCount())
+	vetResult := fmt.Sprintf("%s. %d error(s).", report.VetStatus(vt), vt.ErrorCount())
 
 	resultLine := formatterResult
 
@@ -86,7 +85,7 @@ func formatDetails(outcome Outcome) []pipeline.Detail {
 
 	details = append(details, pipeline.Detail{Label: "result", Value: resultLine})
 
-	if summary := vetSummary(vt); summary != "" {
+	if summary := report.VetSummary(vt); summary != "" {
 		details = append(details, pipeline.Detail{Label: "vet", Value: summary})
 	}
 
@@ -111,35 +110,4 @@ func fileSummary(fm formatterengine.Report, mode report.Mode) string {
 	}
 
 	return fmt.Sprintf("%s %d file(s).", action, fm.Files)
-}
-
-// vetStatus classifies the vet report the same way the text report does.
-func vetStatus(vt vet.Report) string {
-	switch {
-	case vt.Skipped || vt.Root == "":
-		return "skipped"
-	case vt.ErrorCount() > 0:
-		return "fail"
-	default:
-		return "pass"
-	}
-}
-
-// vetSummary is the vet status line, or "" for a failure (whose per-error lines
-// the text report shows instead of a one-line summary).
-func vetSummary(vt vet.Report) string {
-	switch vetStatus(vt) {
-	case "skipped":
-		reason := "no Go module or workspace was detected"
-
-		if vt.Skipped {
-			reason = "the Go toolchain is not available"
-		}
-
-		return "Skipped automatic go vet ./... because " + reason + "."
-	case "pass":
-		return "go vet ./... passed."
-	default:
-		return ""
-	}
 }

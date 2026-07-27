@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 func TestCollectSurfacesUnreadablePrettierIgnore(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	// A directory named .prettierignore is not IsNotExist, so the read error must
 	// surface rather than being swallowed.
@@ -26,12 +27,12 @@ func TestCollectSurfacesUnreadablePrettierIgnore(t *testing.T) {
 }
 
 func TestCollectHonorsPrettierIgnore(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".prettierignore"), "generated.ts\ndist/\n")
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "generated.ts"), "const generated = 1;\n")
-	writeFile(t, filepath.Join(dir, "dist", "bundle.ts"), "const bundle = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".prettierignore"), "generated.ts\ndist/\n")
+	testutil.WriteFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "generated.ts"), "const generated = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "dist", "bundle.ts"), "const bundle = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll)
 
@@ -51,11 +52,11 @@ func TestCollectHonorsPrettierIgnore(t *testing.T) {
 }
 
 func TestCollectLintableHonorsPrettierIgnore(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".prettierignore"), "vendor/\n")
-	writeFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "vendor", "lib.ts"), "const lib = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".prettierignore"), "vendor/\n")
+	testutil.WriteFile(t, filepath.Join(dir, "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "vendor", "lib.ts"), "const lib = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, _, err := collectLintable(t, dir, false, gitfiles.SelectionAll)
 

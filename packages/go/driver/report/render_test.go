@@ -160,8 +160,8 @@ func TestVetStatus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := vetStatus(tc.report); got != tc.want {
-				t.Fatalf("vetStatus() = %q, want %q", got, tc.want)
+			if got := VetStatus(tc.report); got != tc.want {
+				t.Fatalf("VetStatus() = %q, want %q", got, tc.want)
 			}
 		})
 	}

@@ -3,10 +3,11 @@ package gitfiles
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 func TestNewTreeDefaultsToWorkingDirectory(t *testing.T) {
@@ -42,10 +43,10 @@ func TestNewTreeKeepsGivenDirectory(t *testing.T) {
 }
 
 func TestFilesListsTrackedAndUntracked(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "tracked.ts"), "const value = 1;\n")
-	gitAdd(t, dir, "tracked.ts")
-	writeFile(t, filepath.Join(dir, "untracked.ts"), "const other = 2;\n")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "tracked.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, "tracked.ts")
+	testutil.WriteFile(t, filepath.Join(dir, "untracked.ts"), "const other = 2;\n")
 
 	tree, err := NewTree(dir)
 
@@ -88,14 +89,14 @@ func TestFilesSurfacesGitErrorsOutsideARepo(t *testing.T) {
 }
 
 func TestChangedPathsCoversOnlyTheWorkingTreesChanges(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
-	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 1;\n")
-	gitAdd(t, dir, "untouched.ts", "modified.ts")
-	gitCommit(t, dir)
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "modified.ts"), "const modified = 1;\n")
+	testutil.GitAdd(t, dir, "untouched.ts", "modified.ts")
+	testutil.GitCommit(t, dir)
 
-	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 2;\n")
-	writeFile(t, filepath.Join(dir, "added.ts"), "const added = 3;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "modified.ts"), "const modified = 2;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "added.ts"), "const added = 3;\n")
 
 	tree, err := NewTree(dir)
 
@@ -120,10 +121,10 @@ func TestChangedPathsCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 }
 
 func TestChangedPathsIgnoresPrettierIgnore(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".prettierignore"), "main.go\n")
-	writeFile(t, filepath.Join(dir, "main.go"), "package main\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".prettierignore"), "main.go\n")
+	testutil.WriteFile(t, filepath.Join(dir, "main.go"), "package main\n")
+	testutil.GitAdd(t, dir, ".")
 
 	tree, err := NewTree(dir)
 
@@ -150,9 +151,9 @@ func TestChangedPathsIgnoresPrettierIgnore(t *testing.T) {
 }
 
 func TestChangedPathsSkipsMissingScopes(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	tree, err := NewTree(dir)
 
@@ -174,10 +175,10 @@ func TestChangedPathsSkipsMissingScopes(t *testing.T) {
 }
 
 func TestIntersectChangedKeepsOnlyOwnedAndChanged(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "changed.go"), "package main\n")
-	writeFile(t, filepath.Join(dir, "untracked.go"), "package main\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "changed.go"), "package main\n")
+	testutil.WriteFile(t, filepath.Join(dir, "untracked.go"), "package main\n")
+	testutil.GitAdd(t, dir, ".")
 
 	tree, err := NewTree(dir)
 
@@ -216,52 +217,5 @@ func TestIntersectChangedSurfacesGitErrors(t *testing.T) {
 
 	if _, err := tree.IntersectChanged(context.Background(), nil, []string{filepath.Join(dir, "a.go")}); err == nil {
 		t.Fatal("expected an error running git outside a work tree")
-	}
-}
-
-func initRepo(t *testing.T) string {
-	t.Helper()
-
-	dir := t.TempDir()
-	run(t, dir, "git", "init", "-q")
-	run(t, dir, "git", "config", "user.email", "tests@example.com")
-	run(t, dir, "git", "config", "user.name", "Test Runner")
-
-	return dir
-}
-
-func gitAdd(t *testing.T, dir string, paths ...string) {
-	t.Helper()
-
-	args := append([]string{"add"}, paths...)
-	run(t, dir, "git", args...)
-}
-
-func gitCommit(t *testing.T, dir string) {
-	t.Helper()
-
-	run(t, dir, "git", "commit", "-q", "-m", "fixture")
-}
-
-func writeFile(t *testing.T, path string, content string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-}
-
-func run(t *testing.T, dir string, name string, args ...string) {
-	t.Helper()
-
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
 	}
 }

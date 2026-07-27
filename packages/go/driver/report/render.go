@@ -120,7 +120,10 @@ func combinedResult(report Combined) string {
 	return string(report.Formatter.Result)
 }
 
-func vetStatus(report vet.Report) string {
+// VetStatus classifies a vet report as "skipped", "fail", or "pass". The Go
+// lane's pipeline step reports the same classification, so both read it here
+// rather than each restating the rule.
+func VetStatus(report vet.Report) string {
 	switch {
 	case report.Skipped || report.Root == "":
 		return "skipped"
@@ -128,5 +131,25 @@ func vetStatus(report vet.Report) string {
 		return "fail"
 	default:
 		return "pass"
+	}
+}
+
+// VetSummary is the one-line vet status sentence, or "" for a failure, whose
+// per-error lines are shown instead of a summary. The text render wraps this in
+// color; the pipeline step prints it as-is.
+func VetSummary(report vet.Report) string {
+	switch VetStatus(report) {
+	case "skipped":
+		reason := "no Go module or workspace was detected"
+
+		if report.Skipped {
+			reason = "the Go toolchain is not available"
+		}
+
+		return "Skipped automatic go vet ./... because " + reason + "."
+	case "pass":
+		return "go vet ./... passed."
+	default:
+		return ""
 	}
 }

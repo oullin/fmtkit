@@ -2,13 +2,12 @@ package sourcefiles
 
 import (
 	"context"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
 
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
+	"go.ollin.sh/fmtkit/driver/testutil"
 )
 
 // collectFormattable and collectLintable build a Collector rooted at cwd and
@@ -39,13 +38,13 @@ func collectLintable(t *testing.T, cwd string, includeDeclarations bool, selecti
 }
 
 func TestCollectFiltersSourceFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
-	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
-	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
-	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll, "src")
 
@@ -70,10 +69,10 @@ func TestCollectFiltersSourceFiles(t *testing.T) {
 }
 
 func TestCollectCanIncludeDeclarationFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, warnings, err := collectFormattable(t, dir, true, gitfiles.SelectionAll, "src")
 
@@ -96,14 +95,14 @@ func TestCollectCanIncludeDeclarationFiles(t *testing.T) {
 }
 
 func TestCollectLintableExcludesNonScriptDocuments(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
-	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
-	writeFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
-	writeFile(t, filepath.Join(dir, "src", "readme.markdown"), "# Readme\n")
-	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "component.vue"), "<script setup lang=\"ts\">\nconst value = 1;\n</script>\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "notes.md"), "# Notes\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "readme.markdown"), "# Readme\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
+	testutil.GitAdd(t, dir, ".")
 
 	// Formatting owns the HTML and Markdown documents alongside the TS/Vue files.
 	formatFiles, _, err := collectFormattable(t, dir, false, gitfiles.SelectionAll, "src")
@@ -143,11 +142,11 @@ func TestCollectLintableExcludesNonScriptDocuments(t *testing.T) {
 }
 
 func TestCollectLintableCanIncludeDeclarationFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
-	writeFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "types.d.ts"), "declare const value: string;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "src", "index.html"), "<script>const value = 1;</script>\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, _, err := collectLintable(t, dir, true, gitfiles.SelectionAll, "src")
 
@@ -167,12 +166,12 @@ func TestCollectLintableCanIncludeDeclarationFiles(t *testing.T) {
 }
 
 func TestCollectIncludesUntrackedAndIgnoresIgnored(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".gitignore"), "ignored.ts\n")
-	writeFile(t, filepath.Join(dir, "tracked.ts"), "const value = 1;\n")
-	gitAdd(t, dir, ".gitignore", "tracked.ts")
-	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
-	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".gitignore"), "ignored.ts\n")
+	testutil.WriteFile(t, filepath.Join(dir, "tracked.ts"), "const value = 1;\n")
+	testutil.GitAdd(t, dir, ".gitignore", "tracked.ts")
+	testutil.WriteFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
+	testutil.WriteFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll)
 
@@ -195,10 +194,10 @@ func TestCollectIncludesUntrackedAndIgnoresIgnored(t *testing.T) {
 }
 
 func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
-	writeFile(t, filepath.Join(dir, "other", "app.ts"), "const value = 2;\n")
-	gitAdd(t, dir, ".")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "src", "app.ts"), "const value = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "other", "app.ts"), "const value = 2;\n")
+	testutil.GitAdd(t, dir, ".")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionAll,
 		"src", filepath.Join(dir, "src", "app.ts"), "missing")
@@ -218,60 +217,19 @@ func TestCollectScopesAndDeduplicatesFiles(t *testing.T) {
 	}
 }
 
-func initRepo(t *testing.T) string {
-	t.Helper()
-
-	dir := t.TempDir()
-	run(t, dir, "git", "init", "-q")
-	run(t, dir, "git", "config", "user.email", "tests@example.com")
-	run(t, dir, "git", "config", "user.name", "Test Runner")
-
-	return dir
-}
-
-func gitAdd(t *testing.T, dir string, paths ...string) {
-	t.Helper()
-
-	args := append([]string{"add"}, paths...)
-	run(t, dir, "git", args...)
-}
-
-func writeFile(t *testing.T, path string, content string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write file: %v", err)
-	}
-}
-
-func run(t *testing.T, dir string, name string, args ...string) {
-	t.Helper()
-
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
-	}
-}
-
 func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, ".gitignore"), "ignored.ts\n")
-	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
-	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 1;\n")
-	gitAdd(t, dir, ".gitignore", "untouched.ts", "modified.ts")
-	gitCommit(t, dir)
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".gitignore"), "ignored.ts\n")
+	testutil.WriteFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "modified.ts"), "const modified = 1;\n")
+	testutil.GitAdd(t, dir, ".gitignore", "untouched.ts", "modified.ts")
+	testutil.GitCommit(t, dir)
 
 	// Only these three diverge from the commit: a tracked file edited in the
 	// working tree, a brand new file, and an ignored one that must stay out.
-	writeFile(t, filepath.Join(dir, "modified.ts"), "const modified = 2;\n")
-	writeFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
-	writeFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "modified.ts"), "const modified = 2;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "untracked.vue"), "<script setup lang=\"ts\"></script>\n")
+	testutil.WriteFile(t, filepath.Join(dir, "ignored.ts"), "const ignored = true;\n")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
@@ -294,20 +252,20 @@ func TestCollectChangedCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 }
 
 func TestCollectChangedIncludesStagedFiles(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
-	writeFile(t, filepath.Join(dir, "removed.ts"), "const removed = 1;\n")
-	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
-	gitAdd(t, dir, "staged.ts", "removed.ts", "untouched.ts")
-	gitCommit(t, dir)
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "removed.ts"), "const removed = 1;\n")
+	testutil.WriteFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	testutil.GitAdd(t, dir, "staged.ts", "removed.ts", "untouched.ts")
+	testutil.GitCommit(t, dir)
 
 	// Fully staged: the working tree and index agree, but HEAD does not. This is
 	// the pre-commit-hook shape, where everything is added before the hook runs.
-	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 2;\n")
-	gitAdd(t, dir, "staged.ts")
+	testutil.WriteFile(t, filepath.Join(dir, "staged.ts"), "const staged = 2;\n")
+	testutil.GitAdd(t, dir, "staged.ts")
 
 	// A staged deletion leaves no file to format and must stay out.
-	run(t, dir, "git", "rm", "-q", "removed.ts")
+	testutil.Run(t, dir, "git", "rm", "-q", "removed.ts")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
@@ -327,9 +285,9 @@ func TestCollectChangedIncludesStagedFiles(t *testing.T) {
 }
 
 func TestCollectChangedWorksBeforeTheFirstCommit(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
-	gitAdd(t, dir, "staged.ts")
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "staged.ts"), "const staged = 1;\n")
+	testutil.GitAdd(t, dir, "staged.ts")
 
 	files, warnings, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
@@ -349,10 +307,10 @@ func TestCollectChangedWorksBeforeTheFirstCommit(t *testing.T) {
 }
 
 func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
-	gitAdd(t, dir, "untouched.ts")
-	gitCommit(t, dir)
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	testutil.GitAdd(t, dir, "untouched.ts")
+	testutil.GitCommit(t, dir)
 
 	changed, _, err := collectFormattable(t, dir, false, gitfiles.SelectionChanged)
 
@@ -378,10 +336,10 @@ func TestCollectAllCoversCommittedFilesThatChangedSelectionSkips(t *testing.T) {
 }
 
 func TestCollectDefaultsToAll(t *testing.T) {
-	dir := initRepo(t)
-	writeFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
-	gitAdd(t, dir, "untouched.ts")
-	gitCommit(t, dir)
+	dir := testutil.InitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, "untouched.ts"), "const untouched = 1;\n")
+	testutil.GitAdd(t, dir, "untouched.ts")
+	testutil.GitCommit(t, dir)
 
 	// The zero gitfiles.Selection is SelectionAll, so a Collector built with it
 	// must cover committed files a changed run would skip.
@@ -396,10 +354,4 @@ func TestCollectDefaultsToAll(t *testing.T) {
 	if !reflect.DeepEqual(files, want) {
 		t.Fatalf("the zero Selection must cover everything\nwant: %#v\n got: %#v", want, files)
 	}
-}
-
-func gitCommit(t *testing.T, dir string) {
-	t.Helper()
-
-	run(t, dir, "git", "commit", "-q", "-m", "fixture")
 }

@@ -139,15 +139,20 @@ func (t Tree) IntersectChanged(ctx context.Context, scopes, owned []string) ([]s
 	return files, nil
 }
 
-// collect walks scopes, listing the files sel covers under each, and returns
-// them as absolute cleaned paths, deduplicated and sorted. Missing scopes are
-// skipped silently; any other stat failure surfaces.
-func (t Tree) collect(ctx context.Context, scopes []string, sel Selection) ([]string, error) {
+// Walk lists the files sel covers under each scope and returns them as absolute
+// cleaned paths, deduplicated and sorted.
+//
+// keep, when non-nil, drops entries it rejects before they are collected.
+// Scopes that do not exist are returned in missing rather than failing the
+// walk, so a caller can report them or ignore them; any other stat failure does
+// fail the walk, with the scopes found missing so far still returned.
+func (t Tree) Walk(ctx context.Context, scopes []string, sel Selection, keep func(string) bool) ([]string, []string, error) {
 	if len(scopes) == 0 {
 		scopes = []string{"."}
 	}
 
 	files := []string{}
+	missing := []string{}
 	seen := map[string]struct{}{}
 
 	for _, scope := range scopes {
@@ -159,19 +164,25 @@ func (t Tree) collect(ctx context.Context, scopes []string, sel Selection) ([]st
 
 		if _, err := os.Stat(absolute); err != nil {
 			if os.IsNotExist(err) {
+				missing = append(missing, absolute)
+
 				continue
 			}
 
-			return nil, err
+			return nil, missing, err
 		}
 
 		entries, err := t.Files(ctx, absolute, sel)
 
 		if err != nil {
-			return nil, err
+			return nil, missing, err
 		}
 
 		for _, entry := range entries {
+			if keep != nil && !keep(entry) {
+				continue
+			}
+
 			path := entry
 
 			if !filepath.IsAbs(path) {
@@ -191,7 +202,15 @@ func (t Tree) collect(ctx context.Context, scopes []string, sel Selection) ([]st
 
 	slices.Sort(files)
 
-	return files, nil
+	return files, missing, nil
+}
+
+// collect walks scopes for the files sel covers, skipping missing scopes
+// silently.
+func (t Tree) collect(ctx context.Context, scopes []string, sel Selection) ([]string, error) {
+	files, _, err := t.Walk(ctx, scopes, sel, nil)
+
+	return files, err
 }
 
 func (t Tree) runGit(ctx context.Context, args []string) ([]string, error) {

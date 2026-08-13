@@ -262,6 +262,15 @@ export class DeclarationReorderPass implements FormattingPass {
 	}
 
 	#groupEdit(document: SourceDocument, group: Node[], canReorder: boolean): Edit | null {
+		// A group edit rewrites the whole span from the first declaration to the last
+		// out of node text alone, so anything living in the gaps between them — a
+		// comment above an inner declaration, or trailing one beside it — is not
+		// reproduced and would be deleted. Decline the reorder instead: losing a
+		// cosmetic ordering is recoverable, losing a comment is not.
+		if (this.#hasCommentBetweenMembers(document, group)) {
+			return null;
+		}
+
 		const singleLine = group.filter((node) => {
 			return !this.#isMultiline(document, node);
 		});
@@ -318,5 +327,35 @@ export class DeclarationReorderPass implements FormattingPass {
 			end: lastEnd,
 			replacement,
 		};
+	}
+
+	#hasCommentBetweenMembers(document: SourceDocument, group: Node[]): boolean {
+		for (let i = 0; i < group.length - 1; i++) {
+			const current = group[i];
+			const following = group[i + 1];
+
+			if (!current || !following) {
+				continue;
+			}
+
+			const gapStart = this.#ast.getEnd(current);
+			const gapEnd = this.#ast.getStart(following);
+
+			if (gapStart < 0 || gapEnd < 0 || gapEnd <= gapStart) {
+				continue;
+			}
+
+			// Only whitespace and comments can sit between two statements, so
+			// scanning the gap text for a comment opener needs no tokenizing.
+			if (this.#containsComment(document.slice(gapStart, gapEnd))) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	#containsComment(source: string): boolean {
+		return /\/\/|\/\*/.test(source);
 	}
 }

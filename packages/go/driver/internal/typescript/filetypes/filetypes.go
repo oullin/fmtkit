@@ -9,36 +9,48 @@ import (
 )
 
 // Filter classifies paths by extension. IncludeDeclarations, when set, keeps
-// .d.ts declaration files that would otherwise be dropped.
+// the .d.ts declaration family that would otherwise be dropped.
 type Filter struct {
 	IncludeDeclarations bool
 }
 
-// targetSuffixes are the extensions the sidecar knows how to format. The .ts
-// entry also covers .d.ts; whether declarations are kept is decided separately.
-var targetSuffixes = []string{".ts", ".vue", ".html", ".htm", ".md", ".markdown"}
+// tsFamilySuffixes are the TypeScript-family extensions oxc parses directly.
+// The extension is what selects the parser dialect, so .tsx is what turns JSX
+// on; a .tsx file read as .ts fails to parse the moment it holds an element.
+var tsFamilySuffixes = []string{".ts", ".tsx", ".mts", ".cts"}
+
+// documentSuffixes are the host documents that embed scripts rather than being
+// scripts: their fenced or <script> blocks are what gets formatted.
+var documentSuffixes = []string{".vue", ".html", ".htm", ".md", ".markdown"}
+
+// declarationSuffixes are the declaration forms dropped unless a caller asks
+// for them. There is no .d.tsx: JSX cannot appear in a declaration file.
+var declarationSuffixes = []string{".d.ts", ".d.mts", ".d.cts"}
+
+// hasSuffix reports whether path ends in any of suffixes.
+func hasSuffix(path string, suffixes []string) bool {
+	return slices.ContainsFunc(suffixes, func(suffix string) bool {
+		return strings.HasSuffix(path, suffix)
+	})
+}
 
 // Formattable reports whether path is one the formatter owns: the TS and Vue
 // families plus the HTML and Markdown documents whose embedded scripts get
 // formatted.
 func (f Filter) Formattable(path string) bool {
-	matched := slices.ContainsFunc(targetSuffixes, func(suffix string) bool {
-		return strings.HasSuffix(path, suffix)
-	})
-
-	if !matched {
+	if !hasSuffix(path, tsFamilySuffixes) && !hasSuffix(path, documentSuffixes) {
 		return false
 	}
 
-	return f.IncludeDeclarations || !strings.HasSuffix(path, ".d.ts")
+	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
 }
 
 // Lintable reports whether oxlint can lint path: the TS family (minus
 // declarations unless IncludeDeclarations) and Vue, but not HTML or Markdown.
 func (f Filter) Lintable(path string) bool {
-	if !strings.HasSuffix(path, ".ts") && !strings.HasSuffix(path, ".vue") {
+	if !hasSuffix(path, tsFamilySuffixes) && !strings.HasSuffix(path, ".vue") {
 		return false
 	}
 
-	return f.IncludeDeclarations || !strings.HasSuffix(path, ".d.ts")
+	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
 }

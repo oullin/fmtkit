@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ScriptExtensions } from '#sidecar/hosts/script-extensions';
 
 /** Immutable command-line options for standalone syntax validation. */
 export class SyntaxCliDto {
@@ -28,7 +29,7 @@ export class SyntaxCliDto {
 		const argv = SyntaxCliDto.#argvSchema.parse(input);
 
 		const files = argv.filter((file) => {
-			return file.endsWith('.ts') || file.endsWith('.vue');
+			return ScriptExtensions.isScript(file) || file.endsWith('.vue');
 		});
 
 		return new SyntaxCliDto(SyntaxCliDto.#schema.parse({ files }));

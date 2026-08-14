@@ -80,6 +80,44 @@ test('accepts Vue TSX and JSX script blocks', async () => {
 	);
 });
 
+test('accepts standalone TSX, MTS, and CTS files', async () => {
+	await withFixture(
+		{
+			'Screen.tsx': 'export const Screen = (): JSX.Element => <section>Ready</section>;\n',
+			'loader.mts': 'export const load = async (): Promise<number> => 1;\n',
+			'legacy.cts': 'export const value: number = 1;\n',
+		},
+		async (dir) => {
+			const result = spawnSync(
+				process.execPath,
+				['--import', tsx, script, 'Screen.tsx', 'loader.mts', 'legacy.cts'],
+				{ cwd: dir, encoding: 'utf8' },
+			);
+
+			assert.equal(result.status, 0, result.stderr || result.stdout);
+			assert.match(result.stdout, /\[validate-syntax\] checked 3 file\(s\)/);
+		},
+	);
+});
+
+test('reports TSX syntax errors on original file lines', async () => {
+	await withFixture(
+		{
+			'Broken.tsx': 'export const Screen = () => <section>Ready</div>;\n',
+		},
+		async (dir) => {
+			const result = spawnSync(
+				process.execPath,
+				['--import', tsx, script, 'Broken.tsx'],
+				{ cwd: dir, encoding: 'utf8' },
+			);
+
+			assert.equal(result.status, 1);
+			assert.match(result.stderr, /\[validate-syntax\].*Broken\.tsx/);
+		},
+	);
+});
+
 test('reports Vue syntax errors on original file lines', async () => {
 	await withFixture(
 		{

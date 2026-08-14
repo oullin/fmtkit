@@ -56,3 +56,37 @@ test('reorders import groups so single-line imports precede multiline ones', () 
 test('returns no edits for source with syntax errors', () => {
 	assert.deepEqual(computeEdits('const broken = {;\nconst small = 1;\n'), []);
 });
+
+test('declines to reorder a const group holding a comment between declarations', () => {
+	const source = ['const small = 1;', '// Explains the next declaration.', '// Second line of the explanation.', 'const big = {', '\tone: 1,', '};', ''].join('\n');
+
+	assert.deepEqual(computeEdits(source), []);
+
+	assert.equal(reorder(source), source);
+});
+
+test('declines to reorder a const group holding a trailing comment beside a declaration', () => {
+	const source = ['const small = 1; // Why this value.', 'const big = {', '\tone: 1,', '};', ''].join('\n');
+
+	assert.deepEqual(computeEdits(source), []);
+});
+
+test('declines to reorder a const group holding a block comment between declarations', () => {
+	const source = ['const small = 1;', '/* Explains the next declaration. */', 'const big = {', '\tone: 1,', '};', ''].join('\n');
+
+	assert.deepEqual(computeEdits(source), []);
+});
+
+test('declines to reorder an import group holding a comment between declarations', () => {
+	const source = ["import { tiny } from 'narrow';", '// Explains the wide import.', 'import {', '\talpha,', '\tbeta,', "} from 'wide';", ''].join('\n');
+
+	assert.deepEqual(computeEdits(source), []);
+});
+
+test('still reorders a group whose only comment sits above the first declaration', () => {
+	const source = ['// Explains the whole group.', 'const big = {', '\tone: 1,', '};', 'const small = 1;', ''].join('\n');
+
+	const result = reorder(source);
+
+	assert.match(result, /^\/\/ Explains the whole group\.\nconst small = 1;\n\nconst big = \{/);
+});

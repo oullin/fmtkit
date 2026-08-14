@@ -1,4 +1,5 @@
 import type { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
+import { ScriptExtensions } from '#sidecar/hosts/script-extensions';
 
 /** Classifies paths accepted by sidecar formatting passes. */
 export class FileTargetPolicy {
@@ -16,10 +17,10 @@ export class FileTargetPolicy {
 	 * Report whether a virtual filename denotes a TypeScript declaration file.
 	 *
 	 * @param virtualName - The filename to classify.
-	 * @returns `true` when the filename ends in `.d.ts`.
+	 * @returns `true` when the filename ends in `.d.ts`, `.d.mts`, or `.d.cts`.
 	 */
 	isDeclarationFile(virtualName: string): boolean {
-		return virtualName.endsWith('.d.ts');
+		return ScriptExtensions.isDeclaration(virtualName);
 	}
 
 	/**
@@ -29,7 +30,7 @@ export class FileTargetPolicy {
 	 * @returns `true` for host documents and non-declaration TypeScript files.
 	 */
 	isTargetFile(path: string): boolean {
-		return (path.endsWith('.ts') && !path.endsWith('.d.ts')) || this.#embeddedBlocks.isHost(path);
+		return (ScriptExtensions.isScript(path) && !ScriptExtensions.isDeclaration(path)) || this.#embeddedBlocks.isHost(path);
 	}
 
 	/**
@@ -39,6 +40,6 @@ export class FileTargetPolicy {
 	 * @returns `true` for host documents and every TypeScript file.
 	 */
 	isSyntaxTarget(path: string): boolean {
-		return path.endsWith('.ts') || this.#embeddedBlocks.isHost(path);
+		return ScriptExtensions.isScript(path) || this.#embeddedBlocks.isHost(path);
 	}
 }

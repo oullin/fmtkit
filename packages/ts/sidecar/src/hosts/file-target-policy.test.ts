@@ -12,6 +12,12 @@ const targets = new FileTargetPolicy({
 test('isTargetFile accepts ts and host documents but not declarations', () => {
 	assert.equal(targets.isTargetFile('app.ts'), true);
 
+	assert.equal(targets.isTargetFile('Screen.tsx'), true);
+
+	assert.equal(targets.isTargetFile('app.mts'), true);
+
+	assert.equal(targets.isTargetFile('app.cts'), true);
+
 	assert.equal(targets.isTargetFile('widget.vue'), true);
 
 	assert.equal(targets.isTargetFile('page.html'), true);
@@ -24,11 +30,17 @@ test('isTargetFile accepts ts and host documents but not declarations', () => {
 
 	assert.equal(targets.isTargetFile('types.d.ts'), false);
 
+	assert.equal(targets.isTargetFile('types.d.mts'), false);
+
+	assert.equal(targets.isTargetFile('types.d.cts'), false);
+
 	assert.equal(targets.isTargetFile('data.json'), false);
 });
 
 test('isSyntaxTarget accepts every ts file plus host documents', () => {
 	assert.equal(targets.isSyntaxTarget('app.ts'), true);
+
+	assert.equal(targets.isSyntaxTarget('Screen.tsx'), true);
 
 	assert.equal(targets.isSyntaxTarget('types.d.ts'), true);
 
@@ -41,8 +53,14 @@ test('isSyntaxTarget accepts every ts file plus host documents', () => {
 	assert.equal(targets.isSyntaxTarget('data.json'), false);
 });
 
-test('isDeclarationFile only matches .d.ts', () => {
+test('isDeclarationFile only matches the declaration family', () => {
 	assert.equal(targets.isDeclarationFile('types.d.ts'), true);
 
+	assert.equal(targets.isDeclarationFile('types.d.mts'), true);
+
+	assert.equal(targets.isDeclarationFile('types.d.cts'), true);
+
 	assert.equal(targets.isDeclarationFile('app.ts'), false);
+
+	assert.equal(targets.isDeclarationFile('Screen.tsx'), false);
 });

@@ -5,6 +5,17 @@
 	"ignorePatterns": ["tools/oxlint/anti-slop/**"],
 	"jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 	"rules": {
+		"no-restricted-imports": [
+			"error",
+			{
+				"patterns": [
+					{
+						"group": ["./*", "../*"],
+						"message": "Use the package's #-prefixed imports map instead of relative paths."
+					}
+				]
+			}
+		],
 		"anti-slop/no-chained-type-assertions": "error",
 		"anti-slop/no-conditional-empty-object-spread": "error",
 		"anti-slop/no-known-value-widening": "error",

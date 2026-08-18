@@ -2,6 +2,9 @@
 	"name": "anti-slop",
 	"private": true,
 	"type": "module",
+	"imports": {
+		"#anti-slop/*": "./*.ts"
+	},
 	"scripts": {
 		"typecheck": "tsc --noEmit"
 	},

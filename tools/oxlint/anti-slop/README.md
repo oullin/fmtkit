@@ -15,4 +15,6 @@ This directory is excluded from the repo lint (`ignorePatterns` in
 `.oxlintrc.dev.json`) because several rules would fire on their own
 implementation. The files are formatted by fmtkit itself, so they diverge
 byte-wise from upstream; when syncing a newer upstream, re-copy the bundle,
-update the pinned commit above, and re-run `./scripts/task.sh format`.
+update the pinned commit above, rewrite upstream's relative imports to the
+`#anti-slop/*` map declared in this package.json (the repo bans relative
+import paths), and re-run `./scripts/task.sh format`.

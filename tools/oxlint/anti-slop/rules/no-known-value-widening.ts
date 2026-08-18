@@ -1,7 +1,7 @@
 import { defineRule } from '@oxlint/plugins';
 import type { ESTree, Scope, SourceCode, Variable } from '@oxlint/plugins';
 
-import { classifyWideningTarget, createTypeEnvironment, isKnownEvidenceExpression, type TypeEnvironment, type WideningTarget } from '../shared/dictionary-types.ts';
+import { classifyWideningTarget, createTypeEnvironment, isKnownEvidenceExpression, type TypeEnvironment, type WideningTarget } from '#anti-slop/shared/dictionary-types';
 
 type FunctionExpression = ESTree.ArrowFunctionExpression | ESTree.Function;
 

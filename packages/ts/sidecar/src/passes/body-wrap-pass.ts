@@ -6,15 +6,15 @@ import type { FormattingPass } from '#sidecar/passes/pass';
 import type { Node } from '#sidecar/syntax/node-schema';
 import type { SourceDocument } from '#sidecar/syntax/source-document';
 
-const STATEMENT_BODY_KEYS: Record<string, string[]> = {
-	DoWhileStatement: ['body'],
-	ForInStatement: ['body'],
-	ForOfStatement: ['body'],
-	ForStatement: ['body'],
-	IfStatement: ['consequent', 'alternate'],
-	WhileStatement: ['body'],
-	WithStatement: ['body'],
-};
+const STATEMENT_BODY_KEYS = new Map<string, readonly string[]>([
+	['DoWhileStatement', ['body']],
+	['ForInStatement', ['body']],
+	['ForOfStatement', ['body']],
+	['ForStatement', ['body']],
+	['IfStatement', ['consequent', 'alternate']],
+	['WhileStatement', ['body']],
+	['WithStatement', ['body']],
+]);
 
 /** Wraps unbraced statement bodies without changing unparsable source. */
 export class BodyWrapPass implements FormattingPass {
@@ -51,7 +51,7 @@ export class BodyWrapPass implements FormattingPass {
 		const indentUnit = document.indentUnit();
 
 		this.#ast.visit(parsed.value.program, (node) => {
-			const bodyKeys = STATEMENT_BODY_KEYS[node.type];
+			const bodyKeys = STATEMENT_BODY_KEYS.get(node.type);
 
 			if (!bodyKeys) {
 				return;

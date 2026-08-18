@@ -31,7 +31,7 @@ export class PassCliDto {
 	 * @param targets - The policy that classifies eligible target files.
 	 * @returns Immutable formatting pass options.
 	 */
-	static parse(input: unknown, targets: FileTargetPolicy): PassCliDto {
+	static parse(input: readonly string[], targets: FileTargetPolicy): PassCliDto {
 		const argv = PassCliDto.#argvSchema.parse(input);
 
 		const candidate = {

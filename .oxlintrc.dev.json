@@ -1,0 +1,35 @@
+{
+	"$schema": "https://cdn.jsdelivr.net/npm/oxlint@1.75.0/configuration_schema.json",
+	"extends": ["./.oxlintrc.json"],
+	"plugins": ["typescript", "oxc"],
+	"ignorePatterns": ["tools/oxlint/anti-slop/**"],
+	"jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
+	"rules": {
+		"no-restricted-imports": [
+			"error",
+			{
+				"patterns": [
+					{
+						"group": ["./*", "../*"],
+						"message": "Use the package's #-prefixed imports map instead of relative paths."
+					}
+				]
+			}
+		],
+		"anti-slop/no-chained-type-assertions": "error",
+		"anti-slop/no-conditional-empty-object-spread": "error",
+		"anti-slop/no-known-value-widening": "error",
+		"anti-slop/no-module-mocking": "error",
+		"anti-slop/no-object-parameters": "error",
+		"anti-slop/no-reflect-apply": "error",
+		"anti-slop/no-reflect-get": "error",
+		"anti-slop/no-runtime-typeof": ["error", { "allowInTypeGuards": false }],
+		"anti-slop/no-shape-in-symbol-names": "error",
+		"anti-slop/no-unknown-parameters": "error",
+		"anti-slop/no-unknown-returns": "error",
+		"anti-slop/no-unknown-type-aliases": "error",
+		"anti-slop/no-unsafe-dictionary-type": "error",
+		"anti-slop/no-widen-then-assert": "error",
+		"anti-slop/require-safety-comment-for-type-assertion": "error"
+	}
+}

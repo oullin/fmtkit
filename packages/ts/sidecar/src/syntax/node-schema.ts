@@ -56,6 +56,9 @@ export class Node {
 
 	/** The shallow schema used once at the parser boundary. */
 	static readonly schema: z.ZodType<Node> = NodeHeadSchema.transform((value) => {
+		// SAFETY: NodeHeadSchema has just validated the discriminator and
+		// positional head, so the frozen passthrough object satisfies the
+		// shallow Node contract this schema admits.
 		return Object.freeze(value) as Node;
 	});
 
@@ -67,7 +70,7 @@ export class Node {
 	 * @param value - The possible AST node.
 	 * @returns `true` when the value is an object carrying a node discriminator.
 	 */
-	static [Symbol.hasInstance](value: unknown): boolean {
+	static [Symbol.hasInstance](value: AstValue): boolean {
 		return value instanceof Object && 'type' in value;
 	}
 }
@@ -110,6 +113,7 @@ export class ParsedSourceDto {
 	 * @param value - The untrusted parser payload.
 	 * @returns The validated DTO, or the Zod validation failure.
 	 */
+	// oxlint-disable-next-line anti-slop/no-unknown-parameters -- this DTO is the Zod boundary parser the rule routes callers toward; it must admit arbitrary payloads in order to reject them.
 	static from(value: unknown): { success: true; data: ParsedSourceDto } | { success: false; error: z.ZodError } {
 		const parsed = ParsedSourceDto.#schema.safeParse(value);
 

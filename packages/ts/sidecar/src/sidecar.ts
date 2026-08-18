@@ -51,7 +51,7 @@ class SidecarRuntimeDto {
 	 * @param input - The untrusted CLI and environment mode values.
 	 * @returns An immutable runtime selection.
 	 */
-	static from(input: unknown): SidecarRuntimeDto {
+	static from(input: { readonly argument: string | undefined; readonly environment: string | undefined }): SidecarRuntimeDto {
 		const parsed = SidecarRuntimeDto.#schema.parse(input);
 
 		return new SidecarRuntimeDto(parsed.argument ?? parsed.environment, parsed.argument !== undefined);
@@ -60,11 +60,11 @@ class SidecarRuntimeDto {
 
 const here = dirname(process.execPath);
 
-const bindings: Record<Mode, string> = {
+const bindings = {
 	pipeline: join(here, 'oxc-parser.node'),
 	oxfmt: join(here, 'oxfmt.node'),
 	oxlint: join(here, 'oxlint.node'),
-};
+} satisfies Record<Mode, string>;
 
 const runtime = SidecarRuntimeDto.from({
 	argument: process.argv[2],

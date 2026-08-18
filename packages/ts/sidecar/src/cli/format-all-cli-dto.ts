@@ -4,6 +4,15 @@ import type { FormatMode } from '#sidecar/pipeline/format-pipeline';
 import { err, ok } from '#sidecar/kernel/result';
 import type { Result } from '#sidecar/kernel/result';
 
+/** Mutable draft of the pipeline options accumulated while scanning argv. */
+type CliOptionsDraft = {
+	mode: FormatMode;
+	oxfmtBin: string | null;
+	oxfmtConfig: string | null;
+	formatFiles: string[];
+	syntaxFiles: string[];
+};
+
 /** Immutable command-line options for the full formatting pipeline. */
 export class CliOptionsDto {
 	/** Whether the pipeline checks source or writes changes. */
@@ -31,7 +40,7 @@ export class CliOptionsDto {
 		syntaxFiles: z.array(z.string()),
 	});
 
-	private constructor(value: { mode: FormatMode; oxfmtBin: string | null; oxfmtConfig: string | null; formatFiles: string[]; syntaxFiles: string[] }) {
+	private constructor(value: CliOptionsDraft) {
 		this.mode = value.mode;
 		this.oxfmtBin = value.oxfmtBin;
 		this.oxfmtConfig = value.oxfmtConfig;
@@ -48,15 +57,15 @@ export class CliOptionsDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Parsed options, or the unexpected argument as a typed value.
 	 */
-	static parse(input: unknown): Result<CliOptionsDto, UnexpectedCliArgument> {
+	static parse(input: readonly string[]): Result<CliOptionsDto, UnexpectedCliArgument> {
 		const argv = CliOptionsDto.#argvSchema.parse(input);
 
-		const candidate = {
-			mode: 'write' as FormatMode,
-			oxfmtBin: null as string | null,
-			oxfmtConfig: null as string | null,
-			formatFiles: [] as string[],
-			syntaxFiles: [] as string[],
+		const candidate: CliOptionsDraft = {
+			mode: 'write',
+			oxfmtBin: null,
+			oxfmtConfig: null,
+			formatFiles: [],
+			syntaxFiles: [],
 		};
 
 		let section: 'formatFiles' | 'syntaxFiles' | null = null;

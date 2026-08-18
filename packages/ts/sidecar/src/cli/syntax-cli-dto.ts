@@ -25,7 +25,7 @@ export class SyntaxCliDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Immutable syntax-validation options.
 	 */
-	static parse(input: unknown): SyntaxCliDto {
+	static parse(input: readonly string[]): SyntaxCliDto {
 		const argv = SyntaxCliDto.#argvSchema.parse(input);
 
 		const files = argv.filter((file) => {

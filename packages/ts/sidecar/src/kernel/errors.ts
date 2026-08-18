@@ -30,11 +30,11 @@ export class OxcErrorDto {
 	/**
 	 * Parse one Oxc diagnostic at the parser boundary.
 	 *
-	 * @param error - The untrusted diagnostic payload.
+	 * @param cause - The untrusted diagnostic payload.
 	 * @returns An immutable DTO containing only reporter fields.
 	 */
-	static from(error: unknown): OxcErrorDto {
-		const parsed = OxcErrorDto.#schema.safeParse(error);
+	static from(cause: unknown): OxcErrorDto {
+		const parsed = OxcErrorDto.#schema.safeParse(cause);
 
 		return parsed.success ? new OxcErrorDto(parsed.data.message, parsed.data.codeframe) : new OxcErrorDto(undefined, undefined);
 	}

@@ -56,6 +56,9 @@ test('ParsedSourceDto.hasCommentBetween reports comments contained by a range', 
 test('SourceParser.parse maps a rejected parser envelope to SourceUnparsable', () => {
 	const originalFrom = ParsedSourceDto.from;
 
+	// SAFETY: the stub deliberately returns an envelope that mismatches the
+	// DTO's signature so the failure branch runs; `never` installs it past the
+	// static type for this test only, and `finally` restores the original.
 	ParsedSourceDto.from = (() => {
 		return Node.schema.safeParse({});
 	}) as never;

@@ -11,13 +11,13 @@ export type CallParens = {
 	readonly close: number;
 };
 
-const STATEMENT_LIST_KEYS: Record<string, 'body' | 'consequent'> = {
-	Program: 'body',
-	BlockStatement: 'body',
-	StaticBlock: 'body',
-	SwitchCase: 'consequent',
-	ClassBody: 'body',
-};
+const STATEMENT_LIST_KEYS = new Map<string, 'body' | 'consequent'>([
+	['Program', 'body'],
+	['BlockStatement', 'body'],
+	['StaticBlock', 'body'],
+	['SwitchCase', 'consequent'],
+	['ClassBody', 'body'],
+]);
 
 const stringSchema = z.string();
 
@@ -146,7 +146,7 @@ export class AstReader {
 		const lists: Node[][] = [];
 
 		this.visit(program, (node) => {
-			const key = STATEMENT_LIST_KEYS[node.type];
+			const key = STATEMENT_LIST_KEYS.get(node.type);
 
 			if (key && Array.isArray(node[key])) {
 				lists.push(this.childNodes(node, key));

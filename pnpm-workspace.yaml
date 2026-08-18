@@ -2,6 +2,7 @@ packages:
     - packages/go/*
     - packages/ts/toolchain
     - packages/ts/sidecar
+    - tools/oxlint/anti-slop
 
 # pnpm 11 blocks dependency build scripts unless they are listed here. esbuild
 # arrives as a transitive dependency of Vite+, which resolves its native binary

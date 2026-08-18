@@ -1,0 +1,12 @@
+{
+	"name": "anti-slop",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@oxlint/plugins": "1.75.0",
+		"typescript": "7.0.2"
+	}
+}

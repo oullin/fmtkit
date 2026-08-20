@@ -178,6 +178,9 @@ jobs:
             - name: Smoke test the self-contained binary
               run: ./scripts/test-binary-smoke.sh
 
+            - name: Smoke test the Docker image
+              run: ./scripts/test-docker-smoke.sh
+
             # Runs here rather than in `check`, which has no Go: the only tool
             # that can say whether this tree is formatted is fmtkit itself.
             - name: Check the repository is fmtkit-formatted

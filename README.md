@@ -30,14 +30,14 @@ It is deliberately opinionated. There is one spacing rule with one shape, and th
 
 - Teams with a **Go backend and a TS/Vue frontend in one repo** who are tired of running two toolchains with two config surfaces and two CI steps.
 - Anyone who wants **more structure than `gofmt` provides** and would rather not hand-maintain it.
-- **CI pipelines** that want a formatting gate with no daemon, no image pull, and no Node.js on the runner.
+- **CI pipelines** that want a formatting gate with no daemon and no Node.js on the runner — a plain binary by default, or an image from GHCR if your CI is container-shaped.
 - **AI coding agents and scripts**, via the `json` and `agent` output modes.
 
 It is probably _not_ for you if you want a configurable style engine — fmtkit has opinions and only a few dials.
 
 ## Install
 
-Both routes produce identical output. Pick whichever fits.
+Every route ships the same binary and produces identical output. Pick whichever fits.
 
 ### Homebrew (recommended)
 
@@ -60,6 +60,29 @@ sudo install -m 0755 fmtkit /usr/local/bin/fmtkit
 ```
 
 Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap `linux_amd64` for your platform. The snippet resolves the [latest release](https://github.com/oullin/fmtkit/releases/latest) rather than naming a version, so it does not go stale. But **for CI, pin `tag` to a known release** so a new upstream version can't change your build.
+
+### Docker
+
+Every release also ships as a multi-arch image (`linux/amd64` + `linux/arm64`) at [ghcr.io/oullin/fmtkit](https://github.com/oullin/fmtkit/pkgs/container/fmtkit), for container-shaped CI and for machines where installing a binary is inconvenient:
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/work ghcr.io/oullin/fmtkit:latest format .
+```
+
+The container expects your repository bind-mounted at `/work`. `-u` keeps rewritten files owned by you rather than root. The image carries everything the pipeline needs — `git`, a Go toolchain (goimports and the automatic `go vet` pass need the `go` command), and the TS toolchain pre-extracted so there is no first-run cost. **For CI, pin a version tag** (`ghcr.io/oullin/fmtkit:vX.Y.Z`) instead of `latest`.
+
+#### Windows and WSL
+
+There are no native Windows binaries; on Windows, the Docker image is the supported route.
+
+- **WSL2** is a regular glibc Linux: use the [Linux install](#linux--github-releases) or the `docker run` command above unchanged. Keep the repository in the WSL filesystem (not `/mnt/c/...`) — bind mounts from the Windows drive are slow.
+- **Docker Desktop from PowerShell**: same image, Windows-shaped syntax — and skip `-u`, which is a Unix-ism that NTFS bind mounts don't need:
+
+    ```powershell
+    docker run --rm -v "${PWD}:/work" ghcr.io/oullin/fmtkit:latest format .
+    ```
+
+- **Line endings**: fmtkit writes LF (oxfmt's default; gofmt always does). A checkout made with `core.autocrlf=true` will show every line as changed on first format — set `core.autocrlf` to `false` (or `input`) and let `.gitattributes` own line endings.
 
 ### Go install (Go-only CLI)
 

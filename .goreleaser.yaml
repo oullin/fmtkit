@@ -61,6 +61,35 @@ release:
     # actually work.
     replace_existing_artifacts: true
 
+# The image carries the same self-contained binary; the runtime pieces the
+# binary cannot provide itself (glibc, git, a Go toolchain, a pre-extracted
+# TS toolchain) live in the Dockerfile. goreleaser supplies the build context:
+# the Dockerfile plus the prebuilt linux binaries laid out under <os>/<arch>/.
+dockers_v2:
+    - images:
+          - ghcr.io/oullin/fmtkit
+      tags:
+          - '{{ .Tag }}'
+          - latest
+      platforms:
+          - linux/amd64
+          - linux/arm64
+      labels:
+          org.opencontainers.image.title: fmtkit
+          org.opencontainers.image.description: TS/Vue and Go formatting pipeline in a single self-contained binary
+          org.opencontainers.image.source: https://github.com/oullin/fmtkit
+          org.opencontainers.image.licenses: MIT
+          org.opencontainers.image.version: '{{ .Tag }}'
+          org.opencontainers.image.revision: '{{ .FullCommit }}'
+      # The source annotation is what links the GHCR package to the repository.
+      annotations:
+          org.opencontainers.image.source: https://github.com/oullin/fmtkit
+      # buildx attestations render as "unknown/unknown" platforms in the GHCR
+      # UI; keep the manifest list to the two real platforms.
+      sbom: false
+      flags:
+          - --provenance=false
+
 homebrew_casks:
     - name: fmtkit
       repository:

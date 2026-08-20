@@ -71,6 +71,19 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/work ghcr.io/oullin/fmtkit:lat
 
 The container expects your repository bind-mounted at `/work`. `-u` keeps rewritten files owned by you rather than root. The image carries everything the pipeline needs — `git`, a Go toolchain (goimports and the automatic `go vet` pass need the `go` command), and the TS toolchain pre-extracted so there is no first-run cost. **For CI, pin a version tag** (`ghcr.io/oullin/fmtkit:vX.Y.Z`) instead of `latest`.
 
+#### Windows and WSL
+
+There are no native Windows binaries; on Windows, the Docker image is the supported route.
+
+- **WSL2** is a regular glibc Linux: use the [Linux install](#linux--github-releases) or the `docker run` command above unchanged. Keep the repository in the WSL filesystem (not `/mnt/c/...`) — bind mounts from the Windows drive are slow.
+- **Docker Desktop from PowerShell**: same image, Windows-shaped syntax — and skip `-u`, which is a Unix-ism that NTFS bind mounts don't need:
+
+    ```powershell
+    docker run --rm -v "${PWD}:/work" ghcr.io/oullin/fmtkit:latest format .
+    ```
+
+- **Line endings**: fmtkit writes LF (oxfmt's default; gofmt always does). A checkout made with `core.autocrlf=true` will show every line as changed on first format — set `core.autocrlf` to `false` (or `input`) and let `.gitattributes` own line endings.
+
 ### Go install (Go-only CLI)
 
 ```bash

@@ -39,6 +39,7 @@ export class ComplexityCommand implements CliCommand {
 	 */
 	async run(argv: readonly string[]): Promise<number> {
 		const options = ComplexityCliDto.parse(argv);
+
 		const files = (await this.#targets(options)).filter((file) => {
 			return ComplexityCliDto.isScorable(file);
 		});
@@ -58,6 +59,7 @@ export class ComplexityCommand implements CliCommand {
 
 	async #scanFile(file: string, root: string): Promise<{ functions: ScoredFunction[]; errors: ScanFailure[] }> {
 		const name = relative(root, file) || file;
+
 		const source = await this.#sourceFiles.readText(file);
 
 		if (isErr(source)) {

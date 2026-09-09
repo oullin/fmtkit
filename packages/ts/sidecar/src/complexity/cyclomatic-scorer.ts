@@ -1,19 +1,9 @@
 import { childEntries, childNode, isFunctionNode, stringProperty } from '#sidecar/complexity/ast-entries';
 import type { Node } from '#sidecar/syntax/node-schema';
 
-const DECISION_TYPES: ReadonlySet<string> = new Set([
-	'CatchClause',
-	'ConditionalExpression',
-	'DoWhileStatement',
-	'ForInStatement',
-	'ForOfStatement',
-	'ForStatement',
-	'IfStatement',
-	'WhileStatement',
-]);
+const DECISION_TYPES: ReadonlySet<string> = new Set(['CatchClause', 'ConditionalExpression', 'DoWhileStatement', 'ForInStatement', 'ForOfStatement', 'ForStatement', 'IfStatement', 'WhileStatement']);
 
 const LOGICAL_OPERATORS: ReadonlySet<string> = new Set(['&&', '??', '||']);
-
 const LOGICAL_ASSIGNMENTS: ReadonlySet<string> = new Set(['&&=', '??=', '||=']);
 
 /**

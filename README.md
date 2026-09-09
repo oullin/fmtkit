@@ -258,10 +258,10 @@ It also folds into `fmtkit check` (Go) and `fmtkit lint` (TS), so a repository w
 
 ### The two numbers
 
-| Metric       | Measures                                         | How                                                                     |
-| ------------ | ------------------------------------------------ | ------------------------------------------------------------------------ |
-| `cyclomatic` | Independent paths — how many tests it takes.     | Go: `gocyclo`. TS: ESLint's `complexity` rule, to the increment.        |
-| `cognitive`  | How hard it is to follow — nesting is what hurts. | Go: `gocognit`. TS: the SonarSource rules, to the increment.            |
+| Metric       | Measures                                          | How                                                              |
+| ------------ | ------------------------------------------------- | ---------------------------------------------------------------- |
+| `cyclomatic` | Independent paths — how many tests it takes.      | Go: `gocyclo`. TS: ESLint's `complexity` rule, to the increment. |
+| `cognitive`  | How hard it is to follow — nesting is what hurts. | Go: `gocognit`. TS: the SonarSource rules, to the increment.     |
 
 Where a construct exists in both languages the two lanes produce the same number, which a shared fixture asserts in both test suites.
 
@@ -325,16 +325,16 @@ complexity:
           reason: 'One err check per field; becomes a table in the next pass.'
 ```
 
-| Field                   | Type | Default                          | Description                                 |
-| ----------------------- | ---- | -------------------------------- | ------------------------------------------- |
-| `rules.spacing.enabled` | bool | `true`                           | Enables the spacing rule.                   |
-| `vet.enabled`           | bool | `true`                           | Runs `go vet ./...` after formatting.       |
-| `formatters.gofmt`      | bool | `true`                           | Runs `gofmt` after the rules.               |
-| `formatters.goimports`  | bool | `true`                           | Runs `goimports` after `gofmt`.             |
-| `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names skipped during traversal.   |
-| `not_path`              | list | empty                            | Substrings matched against full file paths. |
-| `not_name`              | list | empty                            | Globs matched against file names.           |
-| `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).     |
+| Field                   | Type | Default                          | Description                                               |
+| ----------------------- | ---- | -------------------------------- | --------------------------------------------------------- |
+| `rules.spacing.enabled` | bool | `true`                           | Enables the spacing rule.                                 |
+| `vet.enabled`           | bool | `true`                           | Runs `go vet ./...` after formatting.                     |
+| `formatters.gofmt`      | bool | `true`                           | Runs `gofmt` after the rules.                             |
+| `formatters.goimports`  | bool | `true`                           | Runs `goimports` after `gofmt`.                           |
+| `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names skipped during traversal.                 |
+| `not_path`              | list | empty                            | Substrings matched against full file paths.               |
+| `not_name`              | list | empty                            | Globs matched against file names.                         |
+| `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).                   |
 | `complexity.cyclomatic` | int  | `15`                             | Max cyclomatic complexity per function; `0` turns it off. |
 | `complexity.cognitive`  | int  | `20`                             | Max cognitive complexity per function; `0` turns it off.  |
 | `complexity.allow`      | list | empty                            | `{key, reason}` baseline entries; a stale entry fails.    |
@@ -443,14 +443,14 @@ The `json` and `agent` shapes are a public contract, pinned by golden tests.
 
 ## Exit codes
 
-| Command  | Code | Meaning                              |
-| -------- | ---- | ------------------------------------ |
-| `check`  | `0`  | No violations found.                 |
-| `check`  | `1`  | Violations or errors detected.       |
-| `format` | `0`  | Formatting applied successfully.     |
-| `format` | `1`  | An error occurred during formatting. |
-| `complexity` | `0` | Every function is within its limits.       |
-| `complexity` | `1` | A function breached, or an allow entry is stale. |
+| Command      | Code | Meaning                                          |
+| ------------ | ---- | ------------------------------------------------ |
+| `check`      | `0`  | No violations found.                             |
+| `check`      | `1`  | Violations or errors detected.                   |
+| `format`     | `0`  | Formatting applied successfully.                 |
+| `format`     | `1`  | An error occurred during formatting.             |
+| `complexity` | `0`  | Every function is within its limits.             |
+| `complexity` | `1`  | A function breached, or an allow entry is stale. |
 
 Note that `format` exits `0` when it _fixes_ violations — it only fails on a genuine error. Use `check` for gates.
 
@@ -523,16 +523,16 @@ Each language then owns its behavior in its own package. `golang` is the Go chec
 
 ### TS side (`packages/ts/sidecar/src`)
 
-| Directory   | What it does                                                                                                                                                     |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kernel/`   | `Result` helpers, error types, the concurrency pool.                                                                                                             |
-| `complexity/` | Scores functions over the parsed AST: the cyclomatic and cognitive scorers and the naming that decides what a closure reports under. |
-| `syntax/`   | Parsing and editing: `SourceDocument` (an immutable file value), `SourceParser` (the Zod boundary), `AstReader`, `EditApplier`.                                  |
-| `hosts/`    | Pulls TS out of `.vue`/`.md`/`.html` files and puts it back.                                                                                                     |
-| `passes/`   | One class per formatting rule. Every pass implements the same small interface: `computeEdits(document)` returns edits. Policy classes hold the layout knowledge. |
-| `pipeline/` | Runs passes in order. `PipelineFactory` is the only place a pass sequence is defined; loops and fixed points are declared there, not hidden inside passes.       |
-| `io/`       | File and process access behind ports, with Node adapters.                                                                                                        |
-| `cli/`      | The commands, the DTOs that parse argv, and `CompositionRoot` — the one place everything gets constructed. Entry files are just `main()` shims.                  |
+| Directory     | What it does                                                                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kernel/`     | `Result` helpers, error types, the concurrency pool.                                                                                                             |
+| `complexity/` | Scores functions over the parsed AST: the cyclomatic and cognitive scorers and the naming that decides what a closure reports under.                             |
+| `syntax/`     | Parsing and editing: `SourceDocument` (an immutable file value), `SourceParser` (the Zod boundary), `AstReader`, `EditApplier`.                                  |
+| `hosts/`      | Pulls TS out of `.vue`/`.md`/`.html` files and puts it back.                                                                                                     |
+| `passes/`     | One class per formatting rule. Every pass implements the same small interface: `computeEdits(document)` returns edits. Policy classes hold the layout knowledge. |
+| `pipeline/`   | Runs passes in order. `PipelineFactory` is the only place a pass sequence is defined; loops and fixed points are declared there, not hidden inside passes.       |
+| `io/`         | File and process access behind ports, with Node adapters.                                                                                                        |
+| `cli/`        | The commands, the DTOs that parse argv, and `CompositionRoot` — the one place everything gets constructed. Entry files are just `main()` shims.                  |
 
 **Adding a TS pass:** write a class implementing `FormattingPass`, register it in `PipelineFactory`. Nothing else changes.
 **Adding a Go rule:** implement the `Rule` interface (`Name()`, `Apply()`) and register it before the engine is built.

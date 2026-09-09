@@ -67,7 +67,10 @@ async function run(files: ReadonlyMap<string, string>, argv: string[]): Promise<
 test('the scan reports every scored function relative to the root', async () => {
 	const files = new Map([['/repo/src/app.ts', 'export function read(a: number): number {\n\tif (a > 0) {\n\t\treturn a;\n\t}\n\n\treturn 0;\n}\n']]);
 
-	const { code, payload } = await run(files, ['--root', '/repo', '/repo/src/app.ts']);
+	const { code, payload } = await run(
+		files,
+		['--root', '/repo', '/repo/src/app.ts'],
+	);
 
 	assert.equal(code, 0);
 	assert.deepEqual(JSON.parse(payload), {
@@ -82,7 +85,10 @@ test('the scan reads its targets from a NUL-separated listing', async () => {
 		['/repo/src/app.ts', 'export const read = (): number => 0;\n'],
 	]);
 
-	const { code, payload } = await run(files, ['--root', '/repo', '--files-from', '/tmp/list']);
+	const { code, payload } = await run(
+		files,
+		['--root', '/repo', '--files-from', '/tmp/list'],
+	);
 
 	assert.equal(code, 0);
 	assert.equal(JSON.parse(payload).functions.length, 1);
@@ -91,14 +97,20 @@ test('the scan reads its targets from a NUL-separated listing', async () => {
 test('an unreadable listing leaves the direct targets alone', async () => {
 	const files = new Map([['/repo/src/app.ts', 'export const read = (): number => 0;\n']]);
 
-	const { code, payload } = await run(files, ['--root', '/repo', '--files-from', '/tmp/missing', '/repo/src/app.ts']);
+	const { code, payload } = await run(
+		files,
+		['--root', '/repo', '--files-from', '/tmp/missing', '/repo/src/app.ts'],
+	);
 
 	assert.equal(code, 0);
 	assert.equal(JSON.parse(payload).functions.length, 1);
 });
 
 test('an unreadable source is reported as a file error and fails the run', async () => {
-	const { code, payload } = await run(new Map(), ['--root', '/repo', '/repo/src/app.ts']);
+	const { code, payload } = await run(
+		new Map(),
+		['--root', '/repo', '/repo/src/app.ts'],
+	);
 
 	assert.equal(code, 1);
 	assert.equal(JSON.parse(payload).errors.length, 1);

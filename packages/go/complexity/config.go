@@ -11,6 +11,21 @@ import (
 // over the other lane's baseline.
 type Lane string
 
+// AllowEntry exempts one function key from both limits until it is refactored.
+// Reason is documentation only; the check never reads it.
+type AllowEntry struct {
+	Key    string `mapstructure:"key"`
+	Reason string `mapstructure:"reason"`
+}
+
+// Config is the complexity policy: the two per-function limits and the keyed
+// baseline that holds today's offenders while they are burnt down.
+type Config struct {
+	Cyclomatic int
+	Cognitive  int
+	Allow      []AllowEntry
+}
+
 const (
 	// LaneGo owns .go keys.
 	LaneGo Lane = "go"
@@ -42,21 +57,6 @@ const (
 // scores. It mirrors the sidecar's own list; a key outside both lanes is
 // ignored rather than guessed at.
 var tsExtensions = []string{".ts", ".tsx", ".mts", ".cts", ".js", ".jsx"}
-
-// AllowEntry exempts one function key from both limits until it is refactored.
-// Reason is documentation only; the check never reads it.
-type AllowEntry struct {
-	Key    string `mapstructure:"key"`
-	Reason string `mapstructure:"reason"`
-}
-
-// Config is the complexity policy: the two per-function limits and the keyed
-// baseline that holds today's offenders while they are burnt down.
-type Config struct {
-	Cyclomatic int
-	Cognitive  int
-	Allow      []AllowEntry
-}
 
 // Default returns the shipped policy.
 func Default() Config {

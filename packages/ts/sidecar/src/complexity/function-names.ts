@@ -82,7 +82,10 @@ function nameText(node: Node | undefined): string {
 	}
 
 	if (node.type === 'MemberExpression') {
-		return [nameText(childNode(node, 'object')), nameText(childNode(node, 'property'))].filter(Boolean).join('.');
+		const object = nameText(childNode(node, 'object'));
+		const property = nameText(childNode(node, 'property'));
+
+		return [object, property].filter(Boolean).join('.');
 	}
 
 	if (node.type === 'PrivateIdentifier') {
@@ -123,13 +126,23 @@ export class FunctionSiteCollector {
 			return;
 		}
 
-		const className = CLASS_TYPES.has(node.type) ? nameText(childNode(node, 'id')) || context.pending : context.className;
+		this.#descend(node, { ...context, className: this.#classNameFor(node, context) }, sites);
+	}
 
-		this.#descend(node, { ...context, className }, sites);
+	/** Resolve the class name members below this node qualify with. */
+	#classNameFor(node: Node, context: NameContext): string {
+		if (!CLASS_TYPES.has(node.type)) {
+			return context.className;
+		}
+
+		const declared = nameText(childNode(node, 'id'));
+
+		return declared || context.pending;
 	}
 
 	#visitFunction(node: Node, context: NameContext, sites: FunctionSite[]): void {
-		const own = nameText(childNode(node, 'id')) || context.pending;
+		const declared = nameText(childNode(node, 'id'));
+		const own = declared || context.pending;
 		const name = own || context.owner || ANONYMOUS;
 
 		sites.push({ node, name, named: own !== '', start: node.start ?? node.range?.[0] ?? 0 });
@@ -154,7 +167,8 @@ export class FunctionSiteCollector {
 			return '';
 		}
 
-		const name = accessorPrefix(parent) + nameText(childNode(parent, source.names));
+		const declared = nameText(childNode(parent, source.names));
+		const name = accessorPrefix(parent) + declared;
 
 		if (name === '' || !source.qualified || !className) {
 			return name;

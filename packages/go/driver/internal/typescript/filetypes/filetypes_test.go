@@ -67,3 +67,39 @@ func TestLintable(t *testing.T) {
 		})
 	}
 }
+
+func TestScorable(t *testing.T) {
+	cases := []struct {
+		name                string
+		path                string
+		includeDeclarations bool
+		want                bool
+	}{
+		{"typescript is scorable", "src/app.ts", false, true},
+		{"tsx is scorable", "src/Screen.tsx", false, true},
+		{"mts is scorable", "src/app.mts", false, true},
+		{"cts is scorable", "src/app.cts", false, true},
+		{"javascript is scorable", "src/app.js", false, true},
+		{"jsx is scorable", "src/Screen.jsx", false, true},
+		{"mjs is scorable", "src/app.mjs", false, true},
+		{"cjs is scorable", "src/app.cjs", false, true},
+		{"vue is not scorable", "src/component.vue", false, false},
+		{"markdown is not scorable", "docs/notes.md", false, false},
+		{"go is not scorable", "main.go", false, false},
+		{"tests are skipped", "src/app.test.ts", false, false},
+		{"specs are skipped", "src/app.spec.tsx", false, false},
+		{"a test directory name does not skip its sources", "src/app.test.helpers/app.ts", false, true},
+		{"declarations drop by default", "src/types.d.ts", false, false},
+		{"declarations kept when requested", "src/types.d.ts", true, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := Filter{IncludeDeclarations: tc.includeDeclarations}
+
+			if got := filter.Scorable(tc.path); got != tc.want {
+				t.Fatalf("Scorable(%q) = %v, want %v", tc.path, got, tc.want)
+			}
+		})
+	}
+}

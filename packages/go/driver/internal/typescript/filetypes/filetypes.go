@@ -63,11 +63,11 @@ func (f Filter) Scorable(path string) bool {
 		return false
 	}
 
-	if hasSuffix(path, declarationSuffixes) || IsTestScript(path) {
+	if IsTestScript(path) {
 		return false
 	}
 
-	return true
+	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
 }
 
 // IsTestScript reports whether a script path names a test file.

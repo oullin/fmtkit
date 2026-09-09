@@ -4,6 +4,7 @@
 package filetypes
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -43,6 +44,39 @@ func (f Filter) Formattable(path string) bool {
 	}
 
 	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
+}
+
+// scriptSuffixes are the plain JavaScript extensions the complexity check
+// scores alongside the TS family. oxfmt and oxlint are not pointed at them
+// here, so they are kept out of Formattable and Lintable.
+var scriptSuffixes = []string{".js", ".jsx", ".mjs", ".cjs"}
+
+// testInfixes mark a script as a test rather than the source under test. The
+// complexity check leaves tests out — a long table of cases is not the
+// complexity it is about — matching the Go lane's *_test.go exclusion.
+var testInfixes = []string{".test.", ".spec."}
+
+// Scorable reports whether the complexity check can score path: the TS family
+// plus plain JavaScript, minus declarations and tests.
+func (f Filter) Scorable(path string) bool {
+	if !hasSuffix(path, tsFamilySuffixes) && !hasSuffix(path, scriptSuffixes) {
+		return false
+	}
+
+	if IsTestScript(path) {
+		return false
+	}
+
+	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
+}
+
+// IsTestScript reports whether a script path names a test file.
+func IsTestScript(path string) bool {
+	base := filepath.Base(path)
+
+	return slices.ContainsFunc(testInfixes, func(infix string) bool {
+		return strings.Contains(base, infix)
+	})
 }
 
 // Lintable reports whether oxlint can lint path: the TS family (minus

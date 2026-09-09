@@ -1,0 +1,8 @@
+
+Complexity
+
+  sample.go:3: complexity/cognitive: sample.go#Branchy scores 6 (limit 3)
+  sample.go:3: complexity/cyclomatic: sample.go#Branchy scores 5 (limit 3)
+
+  Result: fail. 2 finding(s), 0 error(s).
+

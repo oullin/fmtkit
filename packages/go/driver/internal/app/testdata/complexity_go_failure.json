@@ -1,0 +1,1 @@
+{"result":"fail","complexity":{"status":"fail","files":1,"functions":1,"findings":[{"file":"sample.go","rule":"complexity/cognitive","line":3,"key":"sample.go#Branchy","message":"sample.go#Branchy scores 6 (limit 3)"},{"file":"sample.go","rule":"complexity/cyclomatic","line":3,"key":"sample.go#Branchy","message":"sample.go#Branchy scores 5 (limit 3)"}]}}

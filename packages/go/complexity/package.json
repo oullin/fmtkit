@@ -1,0 +1,10 @@
+{
+	"name": "complexity",
+	"private": true,
+	"scripts": {
+		"check": "../scripts/task.sh check",
+		"gofmt": "../scripts/task.sh gofmt",
+		"test": "../scripts/task.sh test",
+		"vet": "../scripts/task.sh vet"
+	}
+}

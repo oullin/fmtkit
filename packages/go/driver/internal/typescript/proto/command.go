@@ -25,6 +25,15 @@ type OxlintCommand struct {
 	Files      []string
 }
 
+// ComplexityCommand describes a complexity-scan invocation. Root is the
+// directory the reported paths are made relative to, and FilesFrom names a
+// NUL-separated listing of the sources to score — a file rather than an argv
+// tail, because a whole repository's worth of paths does not fit in one.
+type ComplexityCommand struct {
+	Root      string
+	FilesFrom string
+}
+
 // MigrateCommand describes an `oxfmt --migrate=prettier` invocation. ViaSidecar
 // is set when the sidecar dispatches oxfmt; a direct OXFMT_BIN override clears
 // it.
@@ -69,6 +78,11 @@ func (c OxlintCommand) Argv() []string {
 	args = append(args, c.Files...)
 
 	return args
+}
+
+// Argv returns the complexity mode's argument vector.
+func (c ComplexityCommand) Argv() []string {
+	return []string{ModeComplexity, "--root", c.Root, "--files-from", c.FilesFrom}
 }
 
 // Argv returns the migration argument vector.

@@ -6,11 +6,16 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"go.ollin.sh/fmtkit/complexity"
 	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
 )
 
 // renderText writes the human-readable text report representation.
 func (r Renderer) renderText(w io.Writer, report Combined) error {
+	if r.Mode == ModeComplexity {
+		return renderComplexityText(w, report)
+	}
+
 	if _, err := color.New(color.Bold).Fprintf(w, "\nFormatter\n\n"); err != nil {
 		return err
 	}
@@ -23,7 +28,110 @@ func (r Renderer) renderText(w io.Writer, report Combined) error {
 		return err
 	}
 
-	return renderVetText(w, r.Root, report)
+	if err := renderVetText(w, r.Root, report); err != nil {
+		return err
+	}
+
+	if report.Complexity == nil {
+		return nil
+	}
+
+	return renderComplexityText(w, report)
+}
+
+// renderComplexityText writes the complexity section: one line per finding,
+// shaped like the formatter's violations, then the status summary.
+func renderComplexityText(w io.Writer, report Combined) error {
+	if _, err := color.New(color.Bold).Fprintf(w, "\nComplexity\n\n"); err != nil {
+		return err
+	}
+
+	if summary := ComplexitySummary(report); summary != "" {
+		if err := renderComplexitySummary(w, summary, ComplexityStatus(report)); err != nil {
+			return err
+		}
+	}
+
+	if report.Complexity != nil {
+		if err := renderComplexityFindings(w, *report.Complexity); err != nil {
+			return err
+		}
+	}
+
+	return renderComplexityResult(w, report)
+}
+
+func renderComplexitySummary(w io.Writer, summary string, status string) error {
+	tone := color.FgGreen
+
+	if status == "skipped" {
+		tone = color.FgYellow
+	}
+
+	_, err := color.New(tone).Fprint(w, "  "+summary+"\n\n")
+
+	return err
+}
+
+func renderComplexityFindings(w io.Writer, report complexity.Report) error {
+	for _, finding := range report.Findings {
+		rule := color.New(color.FgMagenta).Sprintf("%s", finding.Rule)
+
+		if _, err := fmt.Fprintf(w, "  %s: %s: %s\n", location(finding.File, finding.Line), rule, finding.Message); err != nil {
+			return err
+		}
+	}
+
+	if len(report.Findings) > 0 {
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+	}
+
+	for _, result := range report.Errors {
+		if err := renderErrorEntry(w, "", result.File, result.Message); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// location renders "path:line", dropping the line when the finding belongs to
+// the file as a whole (a stale allow entry).
+func location(file string, line int) string {
+	if line <= 0 {
+		return file
+	}
+
+	return fmt.Sprintf("%s:%d", file, line)
+}
+
+func renderComplexityResult(w io.Writer, report Combined) error {
+	status := ComplexityStatus(report)
+
+	summaryColor := color.New(color.Bold)
+
+	switch status {
+	case "pass":
+		summaryColor.Add(color.FgGreen)
+	case "skipped":
+		summaryColor.Add(color.FgYellow)
+	default:
+		summaryColor.Add(color.FgRed)
+	}
+
+	findings := 0
+	errorCount := 0
+
+	if report.Complexity != nil {
+		findings = report.Complexity.FindingCount()
+		errorCount = report.Complexity.ErrorCount()
+	}
+
+	_, err := summaryColor.Fprintf(w, "  Result: %s. %d finding(s), %d error(s).\n\n", status, findings, errorCount)
+
+	return err
 }
 
 func renderFormatterText(w io.Writer, cwd string, mode Mode, report formatterengine.Report) error {

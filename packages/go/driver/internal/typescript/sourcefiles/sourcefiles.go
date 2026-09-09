@@ -52,6 +52,12 @@ func (c Collector) Lintable(ctx context.Context, scopes []string) ([]string, []s
 	return c.collect(ctx, scopes, c.Filter.Lintable)
 }
 
+// Scorable lists the files the complexity check scores under the given
+// scopes: the TS family plus plain JavaScript.
+func (c Collector) Scorable(ctx context.Context, scopes []string) ([]string, []string, error) {
+	return c.collect(ctx, scopes, c.Filter.Scorable)
+}
+
 func (c Collector) collect(ctx context.Context, scopes []string, keep func(string) bool) ([]string, []string, error) {
 	cwd := c.Tree.Dir
 

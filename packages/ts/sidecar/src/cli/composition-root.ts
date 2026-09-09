@@ -1,3 +1,5 @@
+import { ComplexityCommand } from '#sidecar/cli/complexity-command';
+import { ComplexityScanner } from '#sidecar/complexity/complexity-scanner';
 import { FormatAllCommand } from '#sidecar/cli/format-all-command';
 import { FormatPassCommand } from '#sidecar/cli/format-pass-command';
 import { FormatPipeline } from '#sidecar/pipeline/format-pipeline';
@@ -18,6 +20,7 @@ import { ValidateSyntaxCommand } from '#sidecar/cli/validate-syntax-command';
 export class CompositionRoot {
 	readonly #factory: PipelineFactory;
 	readonly #pipeline: FormatPipeline;
+	readonly #sourceFiles: SourceFiles;
 
 	/**
 	 * @param ports - The Node adapters the pipeline reads and runs through.
@@ -25,6 +28,7 @@ export class CompositionRoot {
 	 * @param ports.processRunner - The process port for invoking oxfmt.
 	 */
 	private constructor(ports: { sourceFiles: SourceFiles; processRunner: ProcessRunner }) {
+		this.#sourceFiles = ports.sourceFiles;
 		this.#factory = PipelineFactory.create();
 		this.#pipeline = new FormatPipeline({
 			editor: new SourceFileEditor({ sourceFiles: ports.sourceFiles }),
@@ -90,6 +94,18 @@ export class CompositionRoot {
 			targets: this.#factory.fileTargetPolicy(),
 			label: 'fluent-chains',
 			failureNoun: 'fluent-chain edits',
+		});
+	}
+
+	/**
+	 * Build the complexity-scan command.
+	 *
+	 * @returns The composed {@link ComplexityCommand}.
+	 */
+	complexityCommand(): ComplexityCommand {
+		return new ComplexityCommand({
+			sourceFiles: this.#sourceFiles,
+			scanner: new ComplexityScanner(),
 		});
 	}
 

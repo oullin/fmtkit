@@ -28,8 +28,11 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# Runtime config
+# Runtime config. The repository root's own config.yml is committed: it is
+# where fmtkit's complexity baseline lives, and it is what makes `make check`
+# green on a clean tree.
 config.yml
+!/config.yml
 
 .claude/*
 !.claude/.gitkeep

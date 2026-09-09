@@ -22,9 +22,9 @@
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 
-type Mode = 'pipeline' | 'oxfmt' | 'oxlint';
+type Mode = 'complexity' | 'pipeline' | 'oxfmt' | 'oxlint';
 
-const ModeSchema = z.enum(['pipeline', 'oxfmt', 'oxlint']);
+const ModeSchema = z.enum(['complexity', 'pipeline', 'oxfmt', 'oxlint']);
 
 /** Immutable sidecar mode selected from CLI and environment boundaries. */
 class SidecarRuntimeDto {
@@ -61,6 +61,7 @@ class SidecarRuntimeDto {
 const here = dirname(process.execPath);
 
 const bindings = {
+	complexity: join(here, 'oxc-parser.node'),
 	pipeline: join(here, 'oxc-parser.node'),
 	oxfmt: join(here, 'oxfmt.node'),
 	oxlint: join(here, 'oxlint.node'),
@@ -78,6 +79,21 @@ if (runtime.consumeArgument) {
 }
 
 switch (mode) {
+	case 'complexity': {
+		process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindings.complexity;
+
+		// Every bundled module shares this executable's import.meta.url, which
+		// matches argv[1] and would fire each script's run-as-main guard on
+		// import; blank argv[1] so only the explicit main() call below runs.
+		process.argv[1] = '';
+
+		const { main } = await import('#sidecar/cli/complexity');
+
+		await main();
+
+		break;
+	}
+
 	case 'pipeline': {
 		process.env.NAPI_RS_NATIVE_LIBRARY_PATH = bindings.pipeline;
 		process.env.FMTKIT_SIDECAR_MODE = 'oxfmt';
@@ -109,6 +125,6 @@ switch (mode) {
 		break;
 
 	default:
-		console.error('usage: fmtkit-ts-sidecar <pipeline|oxfmt|oxlint> [args...]');
+		console.error('usage: fmtkit-ts-sidecar <complexity|pipeline|oxfmt|oxlint> [args...]');
 		process.exit(2);
 }

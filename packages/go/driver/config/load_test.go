@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"go.ollin.sh/fmtkit/complexity"
 )
 
 func writeConfig(t *testing.T, content string) string {
@@ -23,7 +25,7 @@ func writeConfig(t *testing.T, content string) string {
 // schema decodes onto its field. It guards the schema contract the loader must
 // keep byte-compatible.
 func TestLoadFullConfigRoundTrips(t *testing.T) {
-	dir := writeConfig(t, "rules:\n  spacing:\n    enabled: false\nvet:\n  enabled: false\nformatters:\n  gofmt: false\n  goimports: false\nexclude:\n  - build\nnot_path:\n  - generated\nnot_name:\n  - '*.pb.go'\nconcurrency: 4\n")
+	dir := writeConfig(t, "rules:\n  spacing:\n    enabled: false\nvet:\n  enabled: false\nformatters:\n  gofmt: false\n  goimports: false\nexclude:\n  - build\nnot_path:\n  - generated\nnot_name:\n  - '*.pb.go'\nconcurrency: 4\ncomplexity:\n  cyclomatic: 8\n  cognitive: 9\n  allow:\n    - key: 'src/app.ts#read'\n      reason: 'burnt down next'\n")
 
 	cfg, err := Load(dir, "")
 
@@ -57,6 +59,33 @@ func TestLoadFullConfigRoundTrips(t *testing.T) {
 
 	if cfg.Concurrency != 4 {
 		t.Fatalf("unexpected concurrency: %d", cfg.Concurrency)
+	}
+
+	if cfg.Complexity.Cyclomatic != 8 || cfg.Complexity.Cognitive != 9 {
+		t.Fatalf("unexpected complexity limits: %#v", cfg.Complexity)
+	}
+
+	want := []complexity.AllowEntry{{Key: "src/app.ts#read", Reason: "burnt down next"}}
+
+	if !reflect.DeepEqual(cfg.Complexity.Allow, want) {
+		t.Fatalf("unexpected allow list: %#v", cfg.Complexity.Allow)
+	}
+}
+
+// TestLoadKeepsComplexityDefaultsWhenTheSectionIsAbsent pins that a config file
+// that says nothing about complexity still carries the shipped limits, which is
+// what makes the check work with no configuration at all.
+func TestLoadKeepsComplexityDefaultsWhenTheSectionIsAbsent(t *testing.T) {
+	dir := writeConfig(t, "vet:\n  enabled: false\n")
+
+	cfg, err := Load(dir, "")
+
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if cfg.Complexity.Cyclomatic != 15 || cfg.Complexity.Cognitive != 20 {
+		t.Fatalf("unexpected complexity defaults: %#v", cfg.Complexity)
 	}
 }
 

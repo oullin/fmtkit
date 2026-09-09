@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"go.ollin.sh/fmtkit/complexity"
 	driverconfig "go.ollin.sh/fmtkit/driver/config"
 	"go.ollin.sh/fmtkit/driver/internal/gitfiles"
 	report "go.ollin.sh/fmtkit/driver/report"
@@ -48,11 +49,26 @@ func Execute(ctx context.Context, req Request) (Outcome, error) {
 	}
 
 	combined := report.Combined{
-		Formatter: formatterReport,
-		Vet:       vet.Run(ctx, req.Root, req.Config.VetConfig()),
+		Formatter:  formatterReport,
+		Vet:        vet.Run(ctx, req.Root, req.Config.VetConfig()),
+		Complexity: goComplexity(req),
 	}
 
 	return Outcome{Combined: combined, Mode: req.Mode}, nil
+}
+
+// goComplexity scores the Go lane for the report-only mode. `fmtkit check` is
+// the gate, so it carries the complexity report; `format` rewrites files and
+// leaves the judgement to the gate rather than failing a formatting run on it.
+func goComplexity(req Request) *complexity.Report {
+	if req.Mode != report.ModeCheck {
+		return nil
+	}
+
+	scan := complexity.ScanGo(req.Root, req.Paths, req.Config.Formatter())
+	scored := complexity.Evaluate(req.Root, req.Config.ComplexityConfig(), []complexity.Scan{scan})
+
+	return &scored
 }
 
 func runFormatter(ctx context.Context, req Request, cfg formatterconfig.Config) (formatterengine.Report, error) {

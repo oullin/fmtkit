@@ -38,9 +38,10 @@ const (
 // Dispatch modes: the sidecar selects a toolchain by its first positional
 // argument (process.argv[2]) or, equivalently, by SidecarModeEnv.
 const (
-	ModePipeline = "pipeline"
-	ModeOxfmt    = "oxfmt"
-	ModeOxlint   = "oxlint"
+	ModeComplexity = "complexity"
+	ModePipeline   = "pipeline"
+	ModeOxfmt      = "oxfmt"
+	ModeOxlint     = "oxlint"
 )
 
 // Environment variable names that cross the Go/TS boundary or steer toolchain

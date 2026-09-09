@@ -32,7 +32,7 @@ type deps struct {
 
 // umbrellaHeader is the top line of the umbrella usage; the per-command lines
 // follow from each Command's Usage.
-const umbrellaHeader = "usage: fmtkit <format|format-all|go|ts|lint|check|version|help> [args...]\n"
+const umbrellaHeader = "usage: fmtkit <format|format-all|go|ts|lint|check|complexity|version|help> [args...]\n"
 
 // Umbrella builds the fmtkit command surface: the pipeline commands plus the
 // embedded Go formatter CLI reached through `fmtkit go`.
@@ -85,6 +85,11 @@ func Umbrella(version string, stdout, stderr io.Writer) command.Set {
 				Name:  "check",
 				Usage: "  check [args...]                          run the Go formatter in check mode\n",
 				Run:   d.runCheck,
+			},
+			{
+				Name:  "complexity",
+				Usage: "  complexity [--ts] [--go] [--config path] [--format text|json|agent] [--quiet] [paths...]\n      report functions over the configured cyclomatic and cognitive limits\n",
+				Run:   d.runComplexity,
 			},
 			{
 				Name:    "version",

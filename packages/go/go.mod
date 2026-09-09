@@ -4,9 +4,11 @@ go 1.26.5
 
 require (
 	github.com/fatih/color v1.19.0
+	github.com/fzipp/gocyclo v0.6.0
 	github.com/mattn/go-isatty v0.0.24
 	github.com/spf13/viper v1.21.0
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
+	github.com/uudashr/gocognit v1.2.1
 	golang.org/x/tools v0.48.0
 )
 

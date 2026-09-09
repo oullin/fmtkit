@@ -161,7 +161,7 @@ func TestRunWithoutArgsPrintsUsage(t *testing.T) {
 		t.Fatalf("expected exit code 2, got %d", exitCode)
 	}
 
-	if !strings.Contains(stderr, "usage: fmtkit <format|format-all|go|ts|lint|check|version|help> [args...]") {
+	if !strings.Contains(stderr, "usage: fmtkit <format|format-all|go|ts|lint|check|complexity|version|help> [args...]") {
 		t.Fatalf("unexpected usage output:\n%s", stderr)
 	}
 }

@@ -6,9 +6,18 @@ import (
 )
 
 type jsonReport struct {
-	Result    string              `json:"result"`
-	Formatter formatterJSONReport `json:"formatter"`
-	Vet       vetJSONReport       `json:"vet"`
+	Result     string                `json:"result"`
+	Formatter  formatterJSONReport   `json:"formatter"`
+	Vet        vetJSONReport         `json:"vet"`
+	Complexity *complexityJSONReport `json:"complexity,omitempty"`
+}
+
+type complexityJSONReport struct {
+	Status    string                  `json:"status"`
+	Files     int                     `json:"files"`
+	Functions int                     `json:"functions"`
+	Findings  []jsonComplexityFinding `json:"findings,omitempty"`
+	Errors    []jsonErrorMessage      `json:"errors,omitempty"`
 }
 
 type formatterJSONReport struct {
@@ -44,9 +53,10 @@ func (r Renderer) renderJSON(w io.Writer, report Combined) error {
 
 func toJSONReport(report projectedReport) jsonReport {
 	return jsonReport{
-		Result:    report.Result,
-		Formatter: toFormatterJSONReport(report.Formatter),
-		Vet:       toVetJSONReport(report.Vet),
+		Result:     report.Result,
+		Formatter:  toFormatterJSONReport(report.Formatter),
+		Vet:        toVetJSONReport(report.Vet),
+		Complexity: toComplexityJSONReport(report.Complexity),
 	}
 }
 
@@ -81,4 +91,17 @@ func toFormatterJSONReport(report projectedFormatterReport) formatterJSONReport 
 
 func toVetJSONReport(report projectedVetReport) vetJSONReport {
 	return vetJSONReport(report)
+}
+
+// toComplexityJSONReport renders the complexity section, or nothing at all for
+// a run that never measured it, so the shape a formatting run has always had
+// is unchanged.
+func toComplexityJSONReport(report projectedComplexityReport) *complexityJSONReport {
+	if report.Status == "skipped" {
+		return nil
+	}
+
+	out := complexityJSONReport(report)
+
+	return &out
 }

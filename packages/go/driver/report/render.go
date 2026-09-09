@@ -2,9 +2,11 @@ package report
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 
+	"go.ollin.sh/fmtkit/complexity"
 	formatterengine "go.ollin.sh/fmtkit/formatter/engine"
 	"go.ollin.sh/fmtkit/vet"
 )
@@ -21,6 +23,10 @@ type Format string
 type Combined struct {
 	Formatter formatterengine.Report `json:"formatter"`
 	Vet       vet.Report             `json:"vet"`
+
+	// Complexity is the per-function complexity report, present only for the
+	// runs that measured it: the standalone command and `fmtkit check`.
+	Complexity *complexity.Report `json:"complexity,omitempty"`
 }
 
 // Renderer writes a Combined report. Root is the base that file paths are made
@@ -41,6 +47,9 @@ const (
 
 	// ModeFormat rewrites files in place.
 	ModeFormat Mode = "format"
+
+	// ModeComplexity reports function complexity and touches nothing else.
+	ModeComplexity Mode = "complexity"
 )
 
 const (
@@ -69,6 +78,14 @@ func ParseFormat(s string) (Format, error) {
 // Vet errors always fail. In check mode any non-pass formatter result fails; in
 // format mode only formatter errors (not fixable violations) fail.
 func (c Combined) ExitCode(m Mode) int {
+	if c.Complexity != nil && c.Complexity.Status() == "fail" {
+		return 1
+	}
+
+	if m == ModeComplexity {
+		return 0
+	}
+
 	if c.Vet.ErrorCount() > 0 {
 		return 1
 	}
@@ -113,11 +130,34 @@ func relativePath(root, path string) string {
 }
 
 func combinedResult(report Combined) string {
-	if report.Vet.ErrorCount() > 0 || report.Formatter.ErrorCount() > 0 {
+	if report.Vet.ErrorCount() > 0 || report.Formatter.ErrorCount() > 0 || ComplexityStatus(report) == "fail" {
 		return "fail"
 	}
 
 	return string(report.Formatter.Result)
+}
+
+// ComplexityStatus classifies a combined report's complexity section, reading
+// "skipped" for a run that never measured it.
+func ComplexityStatus(report Combined) string {
+	if report.Complexity == nil {
+		return "skipped"
+	}
+
+	return report.Complexity.Status()
+}
+
+// ComplexitySummary is the one-line complexity status sentence, or "" for a
+// failure, whose per-finding lines are shown instead of a summary.
+func ComplexitySummary(report Combined) string {
+	switch ComplexityStatus(report) {
+	case "skipped":
+		return "Skipped the complexity check."
+	case "pass":
+		return fmt.Sprintf("Scored %d function(s) in %d file(s); none over the limits.", report.Complexity.Functions, report.Complexity.Files)
+	default:
+		return ""
+	}
 }
 
 // VetStatus classifies a vet report as "skipped", "fail", or "pass". The Go

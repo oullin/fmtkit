@@ -1,7 +1,7 @@
 import { relative } from 'node:path';
 import type { CliCommand } from '#sidecar/cli/command';
 import { ComplexityCliDto } from '#sidecar/cli/complexity-cli-dto';
-import { ComplexityScanner } from '#sidecar/complexity/complexity-scanner';
+import type { ComplexityScanner } from '#sidecar/complexity/complexity-scanner';
 import type { ScanFailure, ScoredFunction } from '#sidecar/complexity/complexity-scanner';
 import { isErr } from '#sidecar/kernel/result';
 import { mapPool } from '#sidecar/kernel/concurrency';

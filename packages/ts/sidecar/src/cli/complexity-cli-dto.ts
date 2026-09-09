@@ -6,6 +6,13 @@ const DECLARATION_SUFFIXES = ['.d.ts', '.d.mts', '.d.cts'];
 
 const TEST_INFIXES = ['.test.', '.spec.'];
 
+/** Mutable draft of the scan options accumulated while scanning argv. */
+type ScanOptionsDraft = {
+	root: string;
+	filesFrom: string;
+	files: string[];
+};
+
 /** Immutable command-line options for the complexity scan. */
 export class ComplexityCliDto {
 	/** The directory the reported file paths are made relative to. */
@@ -25,7 +32,7 @@ export class ComplexityCliDto {
 		files: z.array(z.string()),
 	});
 
-	private constructor(value: { root: string; filesFrom: string; files: string[] }) {
+	private constructor(value: ScanOptionsDraft) {
 		this.root = value.root;
 		this.filesFrom = value.filesFrom;
 		this.files = Object.freeze(value.files);
@@ -61,7 +68,7 @@ export class ComplexityCliDto {
 	static parse(input: readonly string[]): ComplexityCliDto {
 		const argv = ComplexityCliDto.#argvSchema.parse(input);
 
-		const candidate = { root: process.cwd(), filesFrom: '', files: [] as string[] };
+		const candidate: ScanOptionsDraft = { root: process.cwd(), filesFrom: '', files: [] };
 
 		for (let index = 0; index < argv.length; index++) {
 			const argument = argv[index] ?? '';

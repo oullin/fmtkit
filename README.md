@@ -14,6 +14,8 @@ A single self-contained binary that formats both halves of a full-stack repo:
 - **Go** — an AST-based spacing rule, then `gofmt` and `goimports`, plus an automatic `go vet ./...`.
 - **TypeScript / Vue** — `oxlint --fix`, then `oxfmt`, then structural passes for blank lines, class member order, and fluent chains. Also formats the embedded TS blocks in Markdown and HTML.
 
+Both halves also carry one non-formatting gate: `fmtkit complexity` scores every function's cyclomatic and cognitive complexity and reports the ones over your limits.
+
 The TS toolchain is compiled with Bun and embedded in the binary, so there is **no Node.js requirement** and nothing to `npm install`. One download, one command, both languages.
 
 If you only want the Go half, `fmtkit-go` is a separate `go install`-able CLI, and the engine is importable as a library.
@@ -198,6 +200,7 @@ When given directories, the engine walks recursively and always skips:
 | `ts [paths...]`                             | TS/Vue formatting only.                              |
 | `lint [paths...]`                           | Report TS/Vue lint violations. Never writes.         |
 | `check [args...]`                           | Run the Go formatter in check mode.                  |
+| `complexity [--ts] [--go] [paths...]`       | Report functions over the complexity limits.         |
 | `go <check\|format\|sources\|version>`      | The Go formatter CLI.                                |
 | `version`, `help`                           | The usual.                                           |
 
@@ -241,6 +244,48 @@ fmtkit-go check --format json .
 fmtkit-go check ./packages/go/formatter/rules/spacing/spacing.go
 ```
 
+## Complexity
+
+`fmtkit complexity` scores every function in both languages and reports the ones over your limits. It is report-only: it never writes source, and it exits `1` when anything breaches.
+
+```bash
+fmtkit complexity .              # both lanes
+fmtkit complexity --go ./infra   # one lane
+fmtkit complexity --format json .
+```
+
+It also folds into `fmtkit check` (Go) and `fmtkit lint` (TS), so a repository with one lane keeps one command.
+
+### The two numbers
+
+| Metric       | Measures                                         | How                                                                     |
+| ------------ | ------------------------------------------------ | ------------------------------------------------------------------------ |
+| `cyclomatic` | Independent paths — how many tests it takes.     | Go: `gocyclo`. TS: ESLint's `complexity` rule, to the increment.        |
+| `cognitive`  | How hard it is to follow — nesting is what hurts. | Go: `gocognit`. TS: the SonarSource rules, to the increment.            |
+
+Where a construct exists in both languages the two lanes produce the same number, which a shared fixture asserts in both test suites.
+
+A function's key is `<repository-relative path>#<name>`. Go methods are receiver-qualified (`internal/envcfg/envcfg.go#(*Source).Read`); TypeScript members are class-qualified, accessors included (`src/store.ts#Store.get size`).
+
+An anonymous callback has no name of its own, so its **cognitive** cost folds into the nearest named declaration above it — a closure is part of what that declaration asks a reader to hold. Its **cyclomatic** number stays its own, and the key reports the worst of them, so neither metric can be hidden behind a callback.
+
+Test files are left out of both lanes (`*_test.go`, `*.test.*`, `*.spec.*`): a long table of cases is not the complexity this check is about.
+
+### The allow list
+
+An `allow` entry exempts one function from both limits. It is a baseline to shrink, not a suppression to sprinkle: an entry that matches no function is itself a finding, so the list cannot rot quietly.
+
+```yaml
+complexity:
+    cyclomatic: 15
+    cognitive: 20
+    allow:
+        - key: 'infra/cli/internal/envcfg/envcfg.go#(*Source).Read'
+          reason: 'One err check per field; becomes a table in the next pass.'
+```
+
+An entry is only judged by the lane that owns its extension, and only when the run could have matched it — its file was scanned, or its file is gone. A `--go` run therefore never trips over the TypeScript baseline, and a run scoped to one directory never trips over another's.
+
 ## Configuration
 
 ### Go (`config.yml`)
@@ -271,6 +316,13 @@ not_name:
     - '*.pb.go'
 
 concurrency: 0
+
+complexity:
+    cyclomatic: 15
+    cognitive: 20
+    allow:
+        - key: 'internal/envcfg/envcfg.go#(*Source).Read'
+          reason: 'One err check per field; becomes a table in the next pass.'
 ```
 
 | Field                   | Type | Default                          | Description                                 |
@@ -283,6 +335,9 @@ concurrency: 0
 | `not_path`              | list | empty                            | Substrings matched against full file paths. |
 | `not_name`              | list | empty                            | Globs matched against file names.           |
 | `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).     |
+| `complexity.cyclomatic` | int  | `15`                             | Max cyclomatic complexity per function; `0` turns it off. |
+| `complexity.cognitive`  | int  | `20`                             | Max cognitive complexity per function; `0` turns it off.  |
+| `complexity.allow`      | list | empty                            | `{key, reason}` baseline entries; a stale entry fails.    |
 
 ### TS/Vue lint (`.oxlintrc.json`)
 
@@ -394,6 +449,8 @@ The `json` and `agent` shapes are a public contract, pinned by golden tests.
 | `check`  | `1`  | Violations or errors detected.       |
 | `format` | `0`  | Formatting applied successfully.     |
 | `format` | `1`  | An error occurred during formatting. |
+| `complexity` | `0` | Every function is within its limits.       |
+| `complexity` | `1` | A function breached, or an allow entry is stale. |
 
 Note that `format` exits `0` when it _fixes_ violations — it only fails on a genuine error. Use `check` for gates.
 
@@ -456,6 +513,7 @@ The importable library:
 | `formatter/config`        | Single source of truth for formatter settings and defaults.                                                                           |
 | `formatter/rules/spacing` | The spacing rule. Parses each file once, then three types do the work: blank-line insertion, type reordering, embed-directive repair. |
 | `vet`                     | Wraps `go vet` behind an injectable toolchain so tests can fake it.                                                                   |
+| `complexity`              | The complexity policy and the Go scorer: limits, the keyed allow list, findings, and the `gocyclo`/`gocognit` walk.                   |
 | `driver/config`           | CLI config. Embeds the formatter config and adds the vet toggle; the `config.yml` schema is a public contract.                        |
 | `driver/report`           | Typed output modes and the renderer; the JSON/agent shapes are a public contract.                                                     |
 
@@ -468,6 +526,7 @@ Each language then owns its behavior in its own package. `golang` is the Go chec
 | Directory   | What it does                                                                                                                                                     |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `kernel/`   | `Result` helpers, error types, the concurrency pool.                                                                                                             |
+| `complexity/` | Scores functions over the parsed AST: the cyclomatic and cognitive scorers and the naming that decides what a closure reports under. |
 | `syntax/`   | Parsing and editing: `SourceDocument` (an immutable file value), `SourceParser` (the Zod boundary), `AstReader`, `EditApplier`.                                  |
 | `hosts/`    | Pulls TS out of `.vue`/`.md`/`.html` files and puts it back.                                                                                                     |
 | `passes/`   | One class per formatting rule. Every pass implements the same small interface: `computeEdits(document)` returns edits. Policy classes hold the layout knowledge. |

@@ -53,6 +53,22 @@ const NAME_SOURCES = new Map<string, NameSource>([
 
 const CLASS_TYPES: ReadonlySet<string> = new Set(['ClassDeclaration', 'ClassExpression']);
 
+const ACCESSOR_KINDS: ReadonlySet<string> = new Set(['get', 'set']);
+
+/**
+ * Render the `get `/`set ` prefix an accessor reports under. A getter and a
+ * setter share one property name, so without it the pair would collide on a
+ * single key and one of them would silently inherit the other's allow entry.
+ *
+ * @param owner - The member declaration the function hangs off.
+ * @returns `'get '`, `'set '`, or `''` for every other member.
+ */
+function accessorPrefix(owner: Node): string {
+	const kind = stringProperty(owner, 'kind');
+
+	return ACCESSOR_KINDS.has(kind) ? `${kind} ` : '';
+}
+
 /**
  * Render the name a node writes: an identifier, a literal key, a private
  * name, or a dotted member path.
@@ -138,9 +154,9 @@ export class FunctionSiteCollector {
 			return '';
 		}
 
-		const name = nameText(childNode(parent, source.names));
+		const name = accessorPrefix(parent) + nameText(childNode(parent, source.names));
 
-		if (!name || !source.qualified || !className) {
+		if (name === '' || !source.qualified || !className) {
 			return name;
 		}
 

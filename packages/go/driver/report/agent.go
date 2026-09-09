@@ -48,7 +48,13 @@ func (r Renderer) renderAgent(w io.Writer, report Combined) error {
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 
-	return encoder.Encode(toAgentReport(projectReport(r.Root, report)))
+	projected := projectReport(r.Root, report)
+
+	if r.Mode == ModeComplexity {
+		return encoder.Encode(toComplexityOnlyReport(projected))
+	}
+
+	return encoder.Encode(toAgentReport(projected))
 }
 
 func toAgentReport(report projectedReport) agentReport {

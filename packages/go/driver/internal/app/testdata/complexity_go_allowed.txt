@@ -1,0 +1,7 @@
+
+Complexity
+
+  Scored 1 function(s) in 1 file(s); none over the limits.
+
+  Result: pass. 0 finding(s), 0 error(s).
+

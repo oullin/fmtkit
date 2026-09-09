@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"go.ollin.sh/fmtkit/complexity"
 	formatterconfig "go.ollin.sh/fmtkit/formatter/config"
 )
 
@@ -16,6 +17,31 @@ func TestDefaultComposesFormatterDefaults(t *testing.T) {
 
 	if !cfg.Vet.Enabled {
 		t.Fatal("expected vet enabled by default")
+	}
+
+	if cfg.Complexity.Cyclomatic != 15 || cfg.Complexity.Cognitive != 20 {
+		t.Fatalf("unexpected complexity defaults: %#v", cfg.Complexity)
+	}
+
+	if len(cfg.Complexity.Allow) != 0 {
+		t.Fatalf("expected an empty allow list, got %#v", cfg.Complexity.Allow)
+	}
+}
+
+func TestComplexityConfigProjectsLimitsAndAllowList(t *testing.T) {
+	cfg := Default()
+	cfg.Complexity.Cyclomatic = 8
+	cfg.Complexity.Cognitive = 9
+	cfg.Complexity.Allow = []complexity.AllowEntry{{Key: "src/app.ts#read", Reason: "next pass"}}
+
+	projected := cfg.ComplexityConfig()
+
+	if projected.Cyclomatic != 8 || projected.Cognitive != 9 {
+		t.Fatalf("unexpected limits: %#v", projected)
+	}
+
+	if !projected.Allowed("src/app.ts#read") {
+		t.Fatalf("allow list did not project: %#v", projected.Allow)
 	}
 }
 

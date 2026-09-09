@@ -64,6 +64,9 @@ func stubSupportDir(t *testing.T) (string, string) {
 		"\tprintf 'Finished in 10ms on 3 files using 8 threads.\\n'\n" +
 		"\tprintf '[fluent-chains] processed 3 file(s) in /work, 1 changed\\n'\n" +
 		"\t;;\n" +
+		"complexity)\n" +
+		"\tprintf '{\"functions\":[{\"key\":\"app.ts#stubbed\",\"file\":\"app.ts\",\"line\":1,\"cyclomatic\":9,\"cognitive\":2}],\"errors\":[]}\\n'\n" +
+		"\t;;\n" +
 		"oxlint)\n" +
 		"\tprintf 'Found 0 warnings and 0 errors.\\n'\n" +
 		"\t;;\n" +

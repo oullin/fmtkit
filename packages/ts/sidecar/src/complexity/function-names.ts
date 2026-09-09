@@ -52,7 +52,6 @@ const NAME_SOURCES = new Map<string, NameSource>([
 ]);
 
 const CLASS_TYPES: ReadonlySet<string> = new Set(['ClassDeclaration', 'ClassExpression']);
-
 const ACCESSOR_KINDS: ReadonlySet<string> = new Set(['get', 'set']);
 
 /**
@@ -82,10 +81,10 @@ function nameText(node: Node | undefined): string {
 	}
 
 	if (node.type === 'MemberExpression') {
-		const object = nameText(childNode(node, 'object'));
-		const property = nameText(childNode(node, 'property'));
+		const object = childNode(node, 'object');
+		const property = childNode(node, 'property');
 
-		return [object, property].filter(Boolean).join('.');
+		return [nameText(object), nameText(property)].filter(Boolean).join('.');
 	}
 
 	if (node.type === 'PrivateIdentifier') {
@@ -135,14 +134,14 @@ export class FunctionSiteCollector {
 			return context.className;
 		}
 
-		const declared = nameText(childNode(node, 'id'));
+		const declared = childNode(node, 'id');
 
-		return declared || context.pending;
+		return nameText(declared) || context.pending;
 	}
 
 	#visitFunction(node: Node, context: NameContext, sites: FunctionSite[]): void {
-		const declared = nameText(childNode(node, 'id'));
-		const own = declared || context.pending;
+		const declared = childNode(node, 'id');
+		const own = nameText(declared) || context.pending;
 		const name = own || context.owner || ANONYMOUS;
 
 		sites.push({ node, name, named: own !== '', start: node.start ?? node.range?.[0] ?? 0 });
@@ -167,8 +166,8 @@ export class FunctionSiteCollector {
 			return '';
 		}
 
-		const declared = nameText(childNode(parent, source.names));
-		const name = accessorPrefix(parent) + declared;
+		const declared = childNode(parent, source.names);
+		const name = accessorPrefix(parent) + nameText(declared);
 
 		if (name === '' || !source.qualified || !className) {
 			return name;

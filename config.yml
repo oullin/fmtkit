@@ -1,0 +1,56 @@
+# fmtkit's own configuration, which is also how it eats its own cooking.
+#
+# The allow list below is a baseline, not a licence: it holds the functions
+# that already breached the limits on the day the check landed, so that
+# `fmtkit check` and `fmtkit lint` are green on a clean tree while they get
+# rewritten one at a time. It only ever shrinks. Never add an entry.
+
+complexity:
+    cyclomatic: 15
+    cognitive: 20
+    allow:
+        # Go: the file walk and the report render both grew a branch per case
+        # they learned about.
+        - key: 'packages/go/driver/internal/gitfiles/gitfiles.go#(Tree).Walk'
+          reason: 'Scope resolution, selection, and filtering in one pass; splits by phase.'
+        - key: 'packages/go/driver/internal/typescript/oxlintconfig/plan.go#WithBatches'
+          reason: 'Config discovery, composition, and batching in one function.'
+        - key: 'packages/go/driver/internal/typescript/oxlintconfig/plan.go#materialise'
+          reason: 'Every config shape handled inline; becomes a table of writers.'
+        - key: 'packages/go/driver/report/text.go#renderFormatterText'
+          reason: 'One branch per report state; splits into per-section renderers.'
+        - key: 'packages/go/formatter/engine/engine.go#(*Engine).run'
+          reason: 'Mode, scope, and error handling interleaved.'
+        - key: 'packages/go/formatter/engine/files.go#CollectGoFiles'
+          reason: 'Two nested walks with the same keep/skip logic written twice.'
+
+        # TypeScript: the passes and the lint rules both classify AST shapes by
+        # hand, which is where the nesting comes from.
+        - key: 'packages/ts/sidecar/src/passes/blank-line-pass.ts#BlankLinePass.computeEdits'
+          reason: 'Statement classification inlined into the edit loop.'
+        - key: 'packages/ts/sidecar/src/passes/declaration-reorder-pass.ts#DeclarationReorderPass.#isSideEffectSafeExpression'
+          reason: 'A predicate over every expression shape; becomes a lookup.'
+        - key: 'packages/ts/sidecar/src/passes/drizzle/drizzle-import-scanner.ts#DrizzleImportScanner.scan'
+          reason: 'Import shapes enumerated inline.'
+        - key: 'tools/oxlint/anti-slop/rules/no-known-value-widening.ts#createOnce'
+          reason: 'Rule state, visitors, and reporting folded into one closure.'
+        - key: 'tools/oxlint/anti-slop/rules/no-object-parameters.ts#createOnce'
+          reason: 'Rule state, visitors, and reporting folded into one closure.'
+        - key: 'tools/oxlint/anti-slop/rules/no-unknown-returns.ts#createOnce'
+          reason: 'Rule state, visitors, and reporting folded into one closure.'
+        - key: 'tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts#createOnce'
+          reason: 'Rule state, visitors, and reporting folded into one closure.'
+        - key: 'tools/oxlint/anti-slop/rules/no-widen-then-assert.ts#isBroadRecordType'
+          reason: 'A predicate over every type shape; becomes a lookup.'
+        - key: 'tools/oxlint/anti-slop/rules/no-widen-then-assert.ts#knownValueEvidence'
+          reason: 'A predicate over every expression shape; becomes a lookup.'
+        - key: 'tools/oxlint/anti-slop/shared/dictionary-types.ts#classifyAliasBroadTarget'
+          reason: 'Type classification written as a chain of guards.'
+        - key: 'tools/oxlint/anti-slop/shared/dictionary-types.ts#classifyWideningTarget'
+          reason: 'Type classification written as a chain of guards.'
+        - key: 'tools/oxlint/anti-slop/shared/dictionary-types.ts#createTypeEnvironment'
+          reason: 'Alias collection and resolution in one nested walk.'
+        - key: 'tools/oxlint/anti-slop/shared/dictionary-types.ts#dictionaryValueTypes'
+          reason: 'Type classification written as a chain of guards.'
+        - key: 'tools/oxlint/anti-slop/shared/dictionary-types.ts#unsafeDirectValue'
+          reason: 'Type classification written as a chain of guards.'

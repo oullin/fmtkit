@@ -115,6 +115,9 @@ jobs:
             - name: Go - Run formatter tests with race detector and coverage
               run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/formatter test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
+            - name: Go - Run complexity tests with race detector and coverage
+              run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/complexity test ./... -race -coverprofile=coverage.out -covermode=atomic -v
+
             - name: Go - Run vet tests with race detector and coverage
               run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/vet test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 

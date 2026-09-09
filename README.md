@@ -284,6 +284,8 @@ complexity:
           reason: 'One err check per field; becomes a table in the next pass.'
 ```
 
+fmtkit keeps its own baseline in the repository's `config.yml`, which is what makes `make check` green on a clean tree while the twenty functions it lists get rewritten.
+
 An entry is only judged by the lane that owns its extension, and only when the run could have matched it — its file was scanned, or its file is gone. A `--go` run therefore never trips over the TypeScript baseline, and a run scoped to one directory never trips over another's.
 
 ## Configuration

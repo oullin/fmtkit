@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import { AstReader } from '#sidecar/syntax/ast-reader';
 import { EditApplier } from '#sidecar/syntax/edits';
 import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
+import { isErr } from '#sidecar/kernel/result';
 import { ExpandedCallPass } from '#sidecar/passes/expanded-call-pass';
 import { FileTargetPolicy } from '#sidecar/hosts/file-target-policy';
 import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
@@ -17,6 +18,11 @@ const pass = new ExpandedCallPass({ parser: new SourceParser(), ast: new AstRead
 /** The source between the first and last backtick — a template's literal bytes. */
 function templateBody(source: string): string {
 	return source.slice(source.indexOf('`') + 1, source.lastIndexOf('`'));
+}
+
+/** Reparse formatted output so a truncated rewrite fails as a syntax error. */
+function assertParses(source: string): void {
+	assert.equal(isErr(new SourceParser().parse('fixture.ts', source)), false, 'formatted output must still parse');
 }
 
 function format(input: string, virtualName: string): string {
@@ -228,5 +234,56 @@ describe('expanded call formatter', () => {
 		assert.equal(format(current, 'fixture.ts'), current, 'the fixed point must be stable');
 
 		assert.equal(templateBody(current), templateBody(input), 'template interior bytes must be preserved');
+	});
+
+	it('keeps a call-site type argument holding a function type intact', () => {
+		const input = ['const continueByFrame = useMemo<Readonly<Record<AddMemberFrame, () => void>>>(() => ({ type: () => {}, details: () => {} }), [a, b]);', ''].join('\n');
+
+		const expected = ['const continueByFrame = useMemo<Readonly<Record<AddMemberFrame, () => void>>>(', '\t() => ({ type: () => {}, details: () => {} }),', '\t[a, b],', ');', ''].join('\n');
+
+		const once = format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assertParses(once);
+
+		assert.equal(format(once, 'fixture.ts'), once);
+	});
+
+	it('keeps a bare arrow type argument intact', () => {
+		const input = ['const run = useCallback<(x: number) => void>(() => ({ a: 1 }), [a]);', ''].join('\n');
+		const expected = ['const run = useCallback<(x: number) => void>(', '\t() => ({ a: 1 }),', '\t[a],', ');', ''].join('\n');
+		const once = format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assertParses(once);
+	});
+
+	it('keeps a nested generic type argument holding a function type intact', () => {
+		const input = ['const registry = build<Map<string, () => Promise<void>>>({ a: 1 }, [b]);', ''].join('\n');
+		const expected = ['const registry = build<Map<string, () => Promise<void>>>(', '\t{ a: 1 },', '\t[b],', ');', ''].join('\n');
+		const once = format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assertParses(once);
+	});
+
+	it("keeps a plain call's function-type argument intact", () => {
+		const input = ['foo<() => void>({ a: 1 }, [b]);', ''].join('\n');
+		const expected = ['foo<() => void>(', '\t{ a: 1 },', '\t[b],', ');', ''].join('\n');
+		const once = format(input, 'fixture.ts');
+
+		assert.equal(once, expected);
+
+		assertParses(once);
+	});
+
+	it('expands a call whose type arguments carry no parenthesis', () => {
+		const input = ['const store = create<StoreShape>({ a: 1 }, [b]);', ''].join('\n');
+		const expected = ['const store = create<StoreShape>(', '\t{ a: 1 },', '\t[b],', ');', ''].join('\n');
+
+		assert.equal(format(input, 'fixture.ts'), expected);
 	});
 });

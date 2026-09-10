@@ -192,6 +192,13 @@ export class AstReader {
 	/**
 	 * Locate the argument parentheses of a call with a caller-unwrapped callee.
 	 *
+	 * The opening parenthesis is the first one written after the callee *and*
+	 * after any call-site type arguments. Scanning from the callee alone is
+	 * wrong for `f<() => void>(x)`: a function type inside the type-argument
+	 * list carries its own parenthesis, and it comes before the argument list,
+	 * so callers would splice their replacement over the type arguments and
+	 * truncate them.
+	 *
 	 * @param source - The complete source text.
 	 * @param call - The call expression node.
 	 * @param callee - The callee after the caller's own unwrapping rules.
@@ -205,7 +212,7 @@ export class AstReader {
 			return null;
 		}
 
-		const open = source.indexOf('(', calleeEnd);
+		const open = source.indexOf('(', Math.max(calleeEnd, this.#typeArgumentsEnd(call)));
 
 		if (open < 0 || open >= callEnd) {
 			return null;
@@ -232,6 +239,15 @@ export class AstReader {
 		}
 
 		return node;
+	}
+
+	// `typeArguments` is the ESTree-TS field oxc emits for a call site's explicit
+	// type arguments; older shapes spell it `typeParameters`. Both are read so a
+	// tree from either shape scans past the whole list.
+	#typeArgumentsEnd(call: Node): number {
+		const typeArguments = this.childNode(call, 'typeArguments') ?? this.childNode(call, 'typeParameters');
+
+		return typeArguments ? this.getEnd(typeArguments) : -1;
 	}
 
 	#stringValue(value: AstValue): string | undefined {

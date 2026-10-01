@@ -8,7 +8,7 @@ export const SHIM_MARKER = 'fmtkit: in-process external formatter';
  *
  * The generated code keeps the original function names and their
  * Promise-returning contract, so the rest of oxfmt's CLI — the `runCli` wiring
- * that receives these as callbacks, and the `disposeExternalFormatter` call on
+ * that receives these as callbacks, and the `disposeExternalServices` call on
  * the way out — is left untouched.
  */
 export class ShimSource {
@@ -46,8 +46,8 @@ export class ShimSource {
 	 */
 	static workerProxyRegion(): string {
 		return `//#region src-js/cli/worker-proxy.ts (${SHIM_MARKER} — see packages/ts/toolchain/oxfmt-inprocess)
-async function initExternalFormatter(numThreads) {}
-async function disposeExternalFormatter() {}
+async function initExternalServices(numThreads) {}
+async function disposeExternalServices() {}
 function formatFile(options, code) {
 	return toFormatFileResult(__fmtkitFormatFile({ options, code }));
 }

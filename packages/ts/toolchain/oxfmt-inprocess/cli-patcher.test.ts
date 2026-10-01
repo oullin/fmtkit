@@ -85,14 +85,14 @@ const CLI_SOURCE = `import { runCli, toFormatFileResult, toNullable } from "./ch
 ${TINYPOOL_IMPORT}
 ${REGION_MARKER}
 let pool;
-async function initExternalFormatter(numThreads) {
+async function initExternalServices(numThreads) {
 	pool = new Tinypool({
 		filename: new URL("./cli-worker.js", import.meta.url).href,
 		maxThreads: numThreads,
 		${RUNTIME_ANCHOR},
 	});
 }
-async function disposeExternalFormatter() {
+async function disposeExternalServices() {
 	await pool.destroy();
 }
 function formatFile(options, code) {
@@ -102,7 +102,7 @@ function formatEmbeddedCode(options, code) {
 	return toNullable(pool.run({ options, code }, { name: "formatEmbeddedCode" }));
 }
 //#endregion
-runCli({ formatFile, formatEmbeddedCode, initExternalFormatter, disposeExternalFormatter });
+runCli({ formatFile, formatEmbeddedCode, initExternalServices, disposeExternalServices });
 `;
 
 /**
@@ -174,7 +174,9 @@ test('patch() rewrites the CLI in place and reports what changed', () => {
 	assert.ok(!patched.includes('pool = '));
 
 	// The wiring outside the region is untouched, and the worker entry unwritten.
-	assert.ok(patched.includes('runCli({ formatFile, formatEmbeddedCode, initExternalFormatter, disposeExternalFormatter });'));
+	assert.ok(patched.includes('runCli({ formatFile, formatEmbeddedCode, initExternalServices, disposeExternalServices });'));
+	assert.ok(patched.includes('async function initExternalServices(numThreads) {}'));
+	assert.ok(patched.includes('async function disposeExternalServices() {}'));
 	assert.equal(files.files.get(WORKER_PATH), WORKER_SOURCE);
 });
 

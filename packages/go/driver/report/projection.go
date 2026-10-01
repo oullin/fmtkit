@@ -18,7 +18,7 @@ type projectedComplexityReport struct {
 type jsonComplexityFinding struct {
 	File    string `json:"file"`
 	Rule    string `json:"rule"`
-	Line    int    `json:"line,omitempty"`
+	Line    int    `json:"line,omitzero"`
 	Key     string `json:"key,omitempty"`
 	Message string `json:"message"`
 }

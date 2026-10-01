@@ -25,7 +25,7 @@ type ErrorResult struct {
 // Report summarizes the automatic go vet run.
 type Report struct {
 	Root    string        `json:"root,omitempty"`
-	Skipped bool          `json:"skipped,omitempty"`
+	Skipped bool          `json:"skipped,omitzero"`
 	Errors  []ErrorResult `json:"errors,omitempty"`
 }
 
@@ -187,7 +187,7 @@ func parseGoEnvValues(out []byte, count int) []string {
 
 	values := make([]string, count)
 
-	for i := 0; i < count && i < len(lines); i++ {
+	for i := range min(count, len(lines)) {
 		values[i] = strings.TrimSuffix(lines[i], "\r")
 	}
 

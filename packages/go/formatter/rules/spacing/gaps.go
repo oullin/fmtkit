@@ -39,7 +39,7 @@ func (b *blankLineInserter) analyze(filename string) []rules.Violation {
 	var violations []rules.Violation
 
 	b.inspectStmtLists(func(list []ast.Stmt) {
-		for i := 0; i < len(list)-1; i++ {
+		for i := range len(list) - 1 {
 			current := list[i]
 			next := list[i+1]
 			endLine := fset.Position(current.End()).Line
@@ -75,7 +75,7 @@ func (b *blankLineInserter) analyze(filename string) []rules.Violation {
 		}
 	})
 
-	for i := 0; i < len(b.ctx.file.Decls)-1; i++ {
+	for i := range len(b.ctx.file.Decls) - 1 {
 		current := b.ctx.file.Decls[i]
 		next := b.ctx.file.Decls[i+1]
 

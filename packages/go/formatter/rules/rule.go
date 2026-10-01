@@ -4,7 +4,7 @@ package rules
 type Violation struct {
 	Rule    string `json:"rule"`
 	File    string `json:"file"`
-	Line    int    `json:"line,omitempty"`
+	Line    int    `json:"line,omitzero"`
 	Message string `json:"message"`
 }
 

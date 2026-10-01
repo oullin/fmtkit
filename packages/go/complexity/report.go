@@ -24,7 +24,7 @@ type Function struct {
 type Finding struct {
 	Rule    string `json:"rule"`
 	File    string `json:"file"`
-	Line    int    `json:"line,omitempty"`
+	Line    int    `json:"line,omitzero"`
 	Key     string `json:"key,omitempty"`
 	Message string `json:"message"`
 }
@@ -49,7 +49,7 @@ type Scan struct {
 // Report is the complexity check's outcome for one run.
 type Report struct {
 	// Skipped marks a run that measured nothing because no lane ran.
-	Skipped bool `json:"skipped,omitempty"`
+	Skipped bool `json:"skipped,omitzero"`
 
 	Files     int           `json:"files"`
 	Functions int           `json:"functions"`

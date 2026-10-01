@@ -37,12 +37,12 @@ type jsonFileResult struct {
 	File       string          `json:"file"`
 	Applied    []string        `json:"applied,omitempty"`
 	Violations []jsonViolation `json:"violations,omitempty"`
-	Changed    bool            `json:"changed,omitempty"`
+	Changed    bool            `json:"changed,omitzero"`
 }
 
 type jsonViolation struct {
 	Rule    string `json:"rule"`
-	Line    int    `json:"line,omitempty"`
+	Line    int    `json:"line,omitzero"`
 	Message string `json:"message"`
 }
 

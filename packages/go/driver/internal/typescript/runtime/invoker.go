@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -73,11 +74,7 @@ func (i Invoker) RunPipeline(ctx context.Context, req Request) error {
 		return err
 	}
 
-	oxfmtBin := i.Env.OxfmtBin
-
-	if oxfmtBin == "" {
-		oxfmtBin = i.Assets.Sidecar()
-	}
+	oxfmtBin := cmp.Or(i.Env.OxfmtBin, i.Assets.Sidecar())
 
 	command := proto.PipelineCommand{
 		OxfmtBin:    oxfmtBin,
@@ -177,9 +174,7 @@ func (i Invoker) runOxlintBatches(
 			return err
 		}
 
-		if firstLintFailure == nil {
-			firstLintFailure = err
-		}
+		firstLintFailure = cmp.Or(firstLintFailure, err)
 	}
 
 	return firstLintFailure
@@ -188,11 +183,7 @@ func (i Invoker) runOxlintBatches(
 // pipelineExecutable resolves the executable spawned for the pipeline: a
 // FMTKIT_TS_PIPELINE_BIN override, otherwise the sidecar.
 func (i Invoker) pipelineExecutable() string {
-	if i.Env.PipelineBin != "" {
-		return i.Env.PipelineBin
-	}
-
-	return i.Assets.Sidecar()
+	return cmp.Or(i.Env.PipelineBin, i.Assets.Sidecar())
 }
 
 func (i Invoker) sourcesCwd() (string, error) {

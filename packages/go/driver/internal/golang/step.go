@@ -1,6 +1,7 @@
 package golang
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -77,11 +78,7 @@ func formatDetails(outcome Outcome) []pipeline.Detail {
 
 	vetResult := fmt.Sprintf("%s. %d error(s).", report.VetStatus(vt), vt.ErrorCount())
 
-	resultLine := formatterResult
-
-	if resultLine == "" {
-		resultLine = vetResult
-	}
+	resultLine := cmp.Or(formatterResult, vetResult)
 
 	details = append(details, pipeline.Detail{Label: "result", Value: resultLine})
 

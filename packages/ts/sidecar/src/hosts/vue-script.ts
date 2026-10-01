@@ -1,10 +1,10 @@
 /** A script block embedded in a Vue single-file component. */
 export type VueScriptBlock = {
-	/** The complete opening `<script>` tag. */
-	readonly openTag: string;
-
 	/** The source text between the opening and closing tags. */
 	readonly content: string;
+
+	/** The complete opening `<script>` tag. */
+	readonly openTag: string;
 
 	/** The source offset where `content` starts in the Vue source. */
 	readonly start: number;
@@ -20,8 +20,8 @@ export class VueScript {
 	 * @param content - The complete Vue source text.
 	 * @returns The embedded script blocks in source order.
 	 */
-	extractBlocks(content: string): VueScriptBlock[] {
-		const blocks: VueScriptBlock[] = [];
+	extractBlocks(content: string): Array<VueScriptBlock> {
+		const blocks: Array<VueScriptBlock> = [];
 
 		VUE_SCRIPT_REGEX.lastIndex = 0;
 
@@ -31,8 +31,8 @@ export class VueScript {
 			const openTag = match[1] ?? '';
 
 			blocks.push({
-				openTag,
 				content: match[2] ?? '',
+				openTag,
 				start: match.index + openTag.length,
 			});
 		}

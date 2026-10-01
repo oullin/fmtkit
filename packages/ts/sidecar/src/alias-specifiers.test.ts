@@ -35,13 +35,13 @@ function isSourceFile(name: string): boolean {
 	return false;
 }
 
-async function listSourceFiles(dir: string): Promise<string[]> {
+async function listSourceFiles(dir: string): Promise<Array<string>> {
 	const entries = await readdir(
 		dir,
 		{ recursive: true, withFileTypes: true },
 	);
 
-	const files: string[] = [];
+	const files: Array<string> = [];
 
 	for (const entry of entries) {
 		if (!entry.isFile() || !isSourceFile(entry.name)) {
@@ -54,9 +54,9 @@ async function listSourceFiles(dir: string): Promise<string[]> {
 	return files;
 }
 
-function collectModuleSpecifiers(file: string, source: string): string[] {
+function collectModuleSpecifiers(file: string, source: string): Array<string> {
 	const parsed = parser.parse(file, source);
-	const specifiers: string[] = [];
+	const specifiers: Array<string> = [];
 
 	if (isErr(parsed)) {
 		return specifiers;
@@ -100,7 +100,7 @@ function collectModuleSpecifiers(file: string, source: string): string[] {
 test('script module specifiers use aliases instead of relative paths', async () => {
 	const files = await listSourceFiles(scriptsDir);
 
-	const violations: string[] = [];
+	const violations: Array<string> = [];
 
 	for (const file of files) {
 		const source = await readFile(file, 'utf8');

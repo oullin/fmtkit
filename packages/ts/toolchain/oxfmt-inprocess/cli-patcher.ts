@@ -14,21 +14,21 @@ const TINYPOOL_IMPORT = 'import Tinypool from "tinypool";';
  * The structures the rewrite edits. Absent any one of them, oxfmt's CLI has
  * changed shape and the rewrite must be re-derived rather than misapplied.
  */
-const ANCHORS: readonly string[] = [TINYPOOL_IMPORT, '//#region src-js/cli/worker-proxy.ts', 'runtime: "child_process"'];
+const ANCHORS: ReadonlyArray<string> = [TINYPOOL_IMPORT, '//#region src-js/cli/worker-proxy.ts', 'runtime: "child_process"'];
 
 /** oxfmt's `worker-proxy` region, from its marker to the first region end. */
 const WORKER_PROXY_REGION = /\/\/#region src-js\/cli\/worker-proxy\.ts[\s\S]*?\/\/#endregion/;
 
 /** Worker-pool code that must not survive the rewrite. */
-const RESIDUE: readonly string[] = ['Tinypool', 'pool.run', 'pool = '];
+const RESIDUE: ReadonlyArray<string> = ['Tinypool', 'pool.run', 'pool = '];
 
 /** What a successful rewrite changed. */
 export type PatchOutcome = {
-	/** The CLI file that was rewritten. */
-	readonly cliPath: string;
-
 	/** The API module the shim now calls directly. */
 	readonly apiModuleSpecifier: string;
+
+	/** The CLI file that was rewritten. */
+	readonly cliPath: string;
 };
 
 /**
@@ -101,7 +101,7 @@ export class OxfmtCliPatcher {
 		}
 
 		return ok(
-			{ cliPath, apiModuleSpecifier: bindings.value.moduleSpecifier },
+			{ apiModuleSpecifier: bindings.value.moduleSpecifier, cliPath },
 		);
 	}
 

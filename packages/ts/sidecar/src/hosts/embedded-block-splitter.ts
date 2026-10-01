@@ -6,11 +6,11 @@ export type EmbeddedBlock = {
 	/** The source text of the embedded block. */
 	readonly content: string;
 
-	/** The source offset where `content` starts in the host source. */
-	readonly start: number;
-
 	/** The parser extension used to lex the block. */
 	readonly extension: 'ts' | 'tsx';
+
+	/** The source offset where `content` starts in the host source. */
+	readonly start: number;
 };
 
 /** Rewrites one embedded block, given its content and virtual filename. */
@@ -26,7 +26,7 @@ export class EmbeddedBlockSplitter {
 	 * @param scanners.vueScript - Reads script blocks from Vue and HTML host markup.
 	 * @param scanners.markdownFences - Reads fenced code blocks from Markdown hosts.
 	 */
-	constructor(scanners: { vueScript: VueScript; markdownFences: MarkdownFences }) {
+	constructor(scanners: { markdownFences: MarkdownFences; vueScript: VueScript }) {
 		this.#vueScript = scanners.vueScript;
 		this.#markdownFences = scanners.markdownFences;
 	}
@@ -58,7 +58,7 @@ export class EmbeddedBlockSplitter {
 	 * @param content - The complete host source text.
 	 * @returns The embedded blocks in source order, with parser extensions.
 	 */
-	extract(path: string, content: string): EmbeddedBlock[] {
+	extract(path: string, content: string): Array<EmbeddedBlock> {
 		if (this.#isMarkdown(path)) {
 			return this.#markdownFences
 				.extractBlocks(content)
@@ -66,7 +66,7 @@ export class EmbeddedBlockSplitter {
 					return this.#markdownFences.isJavaScriptOrTypeScript(block.lang);
 				})
 				.map((block) => {
-					return { content: block.content, start: block.start, extension: this.#markdownFences.scriptExtension(block.lang) };
+					return { content: block.content, extension: this.#markdownFences.scriptExtension(block.lang), start: block.start };
 				});
 		}
 
@@ -80,7 +80,7 @@ export class EmbeddedBlockSplitter {
 				return this.#vueScript.isJavaScriptOrTypeScript(block.openTag);
 			})
 			.map((block) => {
-				return { content: block.content, start: block.start, extension: this.#markupExtension(block.openTag) };
+				return { content: block.content, extension: this.#markupExtension(block.openTag), start: block.start };
 			});
 	}
 

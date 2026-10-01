@@ -52,38 +52,38 @@ export class PipelineFactory {
 	 * @param dependencies.spacing - Decides statement blank-line obligations.
 	 */
 	constructor(dependencies: {
-		parser: SourceParser;
 		ast: AstReader;
 		edits: EditApplier;
+		members: ClassMemberPolicy;
+		parser: SourceParser;
+		spacing: StatementSpacingPolicy;
 		splitter: EmbeddedBlockSplitter;
 		targets: FileTargetPolicy;
-		members: ClassMemberPolicy;
-		spacing: StatementSpacingPolicy;
 	}) {
 		this.#parser = dependencies.parser;
 		this.#splitter = dependencies.splitter;
 		this.#targets = dependencies.targets;
 		this.#edits = dependencies.edits;
-		this.#bodyWrap = new BodyWrapPass({ parser: dependencies.parser, ast: dependencies.ast });
-		this.#classReorder = new ClassReorderPass({ parser: dependencies.parser, ast: dependencies.ast, members: dependencies.members });
-		this.#declarationReorder = new DeclarationReorderPass({ parser: dependencies.parser, ast: dependencies.ast });
-		this.#blankLine = new BlankLinePass({ parser: dependencies.parser, ast: dependencies.ast, spacing: dependencies.spacing });
-		this.#fluentChain = new FluentChainPass({ parser: dependencies.parser, ast: dependencies.ast });
+		this.#bodyWrap = new BodyWrapPass({ ast: dependencies.ast, parser: dependencies.parser });
+		this.#classReorder = new ClassReorderPass({ ast: dependencies.ast, members: dependencies.members, parser: dependencies.parser });
+		this.#declarationReorder = new DeclarationReorderPass({ ast: dependencies.ast, parser: dependencies.parser });
+		this.#blankLine = new BlankLinePass({ ast: dependencies.ast, parser: dependencies.parser, spacing: dependencies.spacing });
+		this.#fluentChain = new FluentChainPass({ ast: dependencies.ast, parser: dependencies.parser });
 
 		const vocabulary = DrizzleVocabulary.standard();
 		const classifier = new DrizzleCallClassifier({ ast: dependencies.ast, vocabulary });
 
 		this.#drizzleQuery = new DrizzleQueryPass({
-			parser: dependencies.parser,
 			ast: dependencies.ast,
-			edits: dependencies.edits,
-			scanner: new DrizzleImportScanner({ ast: dependencies.ast }),
 			classifier,
-			writer: new DrizzleArgumentWriter({ ast: dependencies.ast, vocabulary, classifier }),
+			edits: dependencies.edits,
+			parser: dependencies.parser,
+			scanner: new DrizzleImportScanner({ ast: dependencies.ast }),
 			targets: dependencies.targets,
+			writer: new DrizzleArgumentWriter({ ast: dependencies.ast, classifier, vocabulary }),
 		});
 
-		this.#expandedCall = new ExpandedCallPass({ parser: dependencies.parser, ast: dependencies.ast, edits: dependencies.edits, targets: dependencies.targets });
+		this.#expandedCall = new ExpandedCallPass({ ast: dependencies.ast, edits: dependencies.edits, parser: dependencies.parser, targets: dependencies.targets });
 	}
 
 	/**
@@ -95,16 +95,16 @@ export class PipelineFactory {
 		const ast = new AstReader();
 		const members = new ClassMemberPolicy({ ast });
 		const vue = new VueReactivityIdioms({ ast });
-		const splitter = new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() });
+		const splitter = new EmbeddedBlockSplitter({ markdownFences: new MarkdownFences(), vueScript: new VueScript() });
 
 		return new PipelineFactory({
-			parser: new SourceParser(),
 			ast,
 			edits: new EditApplier(),
+			members,
+			parser: new SourceParser(),
+			spacing: new StatementSpacingPolicy({ ast, members, vue }),
 			splitter,
 			targets: new FileTargetPolicy({ embeddedBlocks: splitter }),
-			members,
-			spacing: new StatementSpacingPolicy({ ast, members, vue }),
 		});
 	}
 
@@ -156,7 +156,7 @@ export class PipelineFactory {
 	 * @returns A formatter that applies the segment pipeline, host blocks included.
 	 */
 	segmentFormatter(): FileFormatter {
-		return new FileFormatter({ splitter: this.#splitter, pipeline: this.segmentPipeline() });
+		return new FileFormatter({ pipeline: this.segmentPipeline(), splitter: this.#splitter });
 	}
 
 	/**
@@ -165,7 +165,7 @@ export class PipelineFactory {
 	 * @returns A formatter that applies the fluent pipeline, host blocks included.
 	 */
 	fluentFormatter(): FileFormatter {
-		return new FileFormatter({ splitter: this.#splitter, pipeline: this.fluentPipeline() });
+		return new FileFormatter({ pipeline: this.fluentPipeline(), splitter: this.#splitter });
 	}
 
 	/**
@@ -175,6 +175,6 @@ export class PipelineFactory {
 	 * @returns A validator for TypeScript files and host embedded blocks.
 	 */
 	syntaxValidator(sourceFiles: SourceFiles): SyntaxValidator {
-		return new SyntaxValidator({ sourceFiles, splitter: this.#splitter, parser: this.#parser });
+		return new SyntaxValidator({ parser: this.#parser, sourceFiles, splitter: this.#splitter });
 	}
 }

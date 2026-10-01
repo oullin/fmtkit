@@ -38,7 +38,7 @@ test('NodeSourceFiles atomically replaces content and leaves no temp files', asy
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -67,7 +67,7 @@ test('NodeSourceFiles carries read and write failures', async () => {
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });

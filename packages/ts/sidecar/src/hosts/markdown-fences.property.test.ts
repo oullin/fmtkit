@@ -7,15 +7,15 @@ import type { MarkdownFenceBlock } from '#sidecar/hosts/markdown-fences';
 const markdownFences = new MarkdownFences();
 
 type ExpectedBlock = {
-	readonly lang: string;
 	readonly content: string;
+	readonly lang: string;
 	readonly start: number;
 };
 
 const fenceArbitrary = fc.constantFrom('```', '````', '~~~', '~~~~');
 const langArbitrary = fc.constantFrom('ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript', 'mjs', 'json', 'bash', 'yaml', '');
 const bodyLineArbitrary = fc.constantFrom('const value = 1;', 'export default {};', '// a comment', 'let total = sum(a, b);');
-const bodyArbitrary = fc.array(bodyLineArbitrary, { minLength: 0, maxLength: 3 });
+const bodyArbitrary = fc.array(bodyLineArbitrary, { maxLength: 3, minLength: 0 });
 
 function assertBlock(document: string, block: MarkdownFenceBlock | undefined, generated: ExpectedBlock | undefined): void {
 	assert.ok(block);
@@ -26,10 +26,10 @@ function assertBlock(document: string, block: MarkdownFenceBlock | undefined, ge
 	assert.equal(document.slice(block.start, block.start + block.content.length), block.content);
 }
 
-const documentArbitrary = fc.array(fc.record({ fence: fenceArbitrary, lang: langArbitrary, body: bodyArbitrary }), { minLength: 1, maxLength: 6 }).map((specs) => {
+const documentArbitrary = fc.array(fc.record({ body: bodyArbitrary, fence: fenceArbitrary, lang: langArbitrary }), { maxLength: 6, minLength: 1 }).map((specs) => {
 	let document = '';
 
-	const expected: ExpectedBlock[] = [];
+	const expected: Array<ExpectedBlock> = [];
 
 	for (const spec of specs) {
 		document += 'intro prose line\n\n';
@@ -44,7 +44,7 @@ const documentArbitrary = fc.array(fc.record({ fence: fenceArbitrary, lang: lang
 			.join('');
 
 		document += content;
-		expected.push({ lang: spec.lang, content, start });
+		expected.push({ content, lang: spec.lang, start });
 		document += `${spec.fence}\n\n`;
 	}
 

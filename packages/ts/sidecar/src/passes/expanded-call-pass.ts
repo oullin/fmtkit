@@ -30,7 +30,7 @@ export class ExpandedCallPass implements FormattingPass {
 	 * @param dependencies.edits - Reduces candidate edits to a non-overlapping set.
 	 * @param dependencies.targets - Classifies declaration files the pass skips.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; edits: EditApplier; targets: FileTargetPolicy }) {
+	constructor(dependencies: { ast: AstReader; edits: EditApplier; parser: SourceParser; targets: FileTargetPolicy }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#edits = dependencies.edits;
@@ -43,7 +43,7 @@ export class ExpandedCallPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Non-overlapping expanded-call edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		if (this.#targets.isDeclarationFile(document.virtualName)) {
 			return [];
 		}
@@ -55,7 +55,7 @@ export class ExpandedCallPass implements FormattingPass {
 		}
 
 		const parents = new WeakMap<Node, Node>();
-		const edits: Edit[] = [];
+		const edits: Array<Edit> = [];
 		const indentUnit = document.indentUnit();
 		const spans = TemplateSpans.collect(parsed.value.program);
 
@@ -90,9 +90,9 @@ export class ExpandedCallPass implements FormattingPass {
 			}
 
 			edits.push({
-				start: parens.open,
 				end: parens.close + 1,
 				replacement,
+				start: parens.open,
 			});
 		});
 
@@ -121,7 +121,7 @@ export class ExpandedCallPass implements FormattingPass {
 		return this.#ast.callParens(document.text, call, this.#unwrapExpression(this.#ast.childNode(call, 'callee')));
 	}
 
-	#callArguments(call: Node): Node[] {
+	#callArguments(call: Node): Array<Node> {
 		return this.#ast.childNodes(call, 'arguments');
 	}
 
@@ -147,12 +147,12 @@ export class ExpandedCallPass implements FormattingPass {
 		for (const value of Object.values(node)) {
 			if (Array.isArray(value)) {
 				for (const child of value) {
-					if (child instanceof Node) {
+					if (Node.is(child)) {
 						parents.set(child, node);
 						this.#collectParents(child, parents);
 					}
 				}
-			} else if (value instanceof Node) {
+			} else if (Node.is(value)) {
 				parents.set(value, node);
 				this.#collectParents(value, parents);
 			}
@@ -238,7 +238,7 @@ export class ExpandedCallPass implements FormattingPass {
 			return text;
 		}
 
-		const rebased: string[] = [];
+		const rebased: Array<string> = [];
 
 		let lineStart = start;
 

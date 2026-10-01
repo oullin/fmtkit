@@ -28,16 +28,16 @@ const editApplier = new EditApplier();
 const ast = new AstReader();
 const vocabulary = DrizzleVocabulary.standard();
 const classifier = new DrizzleCallClassifier({ ast, vocabulary });
-const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }) });
+const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ markdownFences: new MarkdownFences(), vueScript: new VueScript() }) });
 
 const drizzlePass = new DrizzleQueryPass({
-	parser: new SourceParser(),
 	ast,
-	edits: editApplier,
-	scanner: new DrizzleImportScanner({ ast }),
 	classifier,
-	writer: new DrizzleArgumentWriter({ ast, vocabulary, classifier }),
+	edits: editApplier,
+	parser: new SourceParser(),
+	scanner: new DrizzleImportScanner({ ast }),
 	targets,
+	writer: new DrizzleArgumentWriter({ ast, classifier, vocabulary }),
 });
 
 function drizzleFormat(input: string, virtualName: string): string {

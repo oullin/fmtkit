@@ -24,7 +24,7 @@ export class PatchCliDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Immutable patch options, or `null` when the distribution path is absent.
 	 */
-	static parse(input: readonly string[]): PatchCliDto | null {
+	static parse(input: ReadonlyArray<string>): PatchCliDto | null {
 		const argv = PatchCliDto.#argvSchema.parse(input);
 		const parsed = PatchCliDto.#schema.safeParse({ distDir: argv[0] });
 

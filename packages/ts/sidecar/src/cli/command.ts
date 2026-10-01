@@ -6,5 +6,5 @@ export interface CliCommand {
 	 * @param argv - Arguments after the executable and script path.
 	 * @returns The process exit code; the command never calls `process.exit`.
 	 */
-	run(argv: readonly string[]): Promise<number>;
+	run(argv: ReadonlyArray<string>): Promise<number>;
 }

@@ -22,7 +22,7 @@ const tsx = fileURLToPath(
 	import.meta.resolve('tsx'),
 );
 
-function run(command: string, args: string[], cwd: string): void {
+function run(command: string, args: Array<string>, cwd: string): void {
 	const result = spawnSync(
 		command,
 		args,
@@ -52,7 +52,7 @@ async function withFixture(files: Record<string, string>, fn: (dir: string) => P
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 }

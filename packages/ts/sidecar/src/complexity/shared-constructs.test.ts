@@ -86,7 +86,7 @@ export function loopWithIf(items: number[]): number {
 `;
 
 /** The numbers both lanes must produce for the shared shapes. */
-const SHARED_SCORES: readonly (readonly [string, number, number])[] = [
+const SHARED_SCORES: ReadonlyArray<readonly [string, number, number]> = [
 	['ifChain', 4, 3],
 	['elseIfLadder', 4, 4],
 	['switchFour', 5, 1],

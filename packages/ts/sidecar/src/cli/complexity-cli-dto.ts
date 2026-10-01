@@ -8,9 +8,9 @@ const TEST_INFIXES = ['.test.', '.spec.'];
 
 /** Mutable draft of the scan options accumulated while scanning argv. */
 type ScanOptionsDraft = {
-	root: string;
+	files: Array<string>;
 	filesFrom: string;
-	files: string[];
+	root: string;
 };
 
 /** Immutable command-line options for the complexity scan. */
@@ -22,14 +22,14 @@ export class ComplexityCliDto {
 	readonly filesFrom: string;
 
 	/** Sources named directly on the command line. */
-	readonly files: readonly string[];
+	readonly files: ReadonlyArray<string>;
 
 	static readonly #argvSchema = z.array(z.string());
 
 	static readonly #schema = z.object({
-		root: z.string(),
-		filesFrom: z.string(),
 		files: z.array(z.string()),
+		filesFrom: z.string(),
+		root: z.string(),
 	});
 
 	private constructor(value: ScanOptionsDraft) {
@@ -65,10 +65,10 @@ export class ComplexityCliDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Immutable scan options.
 	 */
-	static parse(input: readonly string[]): ComplexityCliDto {
+	static parse(input: ReadonlyArray<string>): ComplexityCliDto {
 		const argv = ComplexityCliDto.#argvSchema.parse(input);
 
-		const candidate: ScanOptionsDraft = { root: process.cwd(), filesFrom: '', files: [] };
+		const candidate: ScanOptionsDraft = { files: [], filesFrom: '', root: process.cwd() };
 
 		for (let index = 0; index < argv.length; index++) {
 			const argument = argv[index] ?? '';

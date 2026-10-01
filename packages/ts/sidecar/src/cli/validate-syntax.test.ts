@@ -37,7 +37,7 @@ async function withFixture(files: Record<string, string>, fn: (dir: string) => v
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 }
@@ -83,9 +83,9 @@ test('accepts Vue TSX and JSX script blocks', async () => {
 test('accepts standalone TSX, MTS, and CTS files', async () => {
 	await withFixture(
 		{
-			'Screen.tsx': 'export const Screen = (): JSX.Element => <section>Ready</section>;\n',
-			'loader.mts': 'export const load = async (): Promise<number> => 1;\n',
 			'legacy.cts': 'export const value: number = 1;\n',
+			'loader.mts': 'export const load = async (): Promise<number> => 1;\n',
+			'Screen.tsx': 'export const Screen = (): JSX.Element => <section>Ready</section>;\n',
 		},
 		(dir) => {
 			const result = spawnSync(

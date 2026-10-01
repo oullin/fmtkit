@@ -84,7 +84,7 @@ test('parse() reports WorkerImportUnrecognised when the entry carries no API imp
 		ApiBindings.parse('export {};\n', WORKER_PATH),
 	);
 
-	assert.ok(error instanceof WorkerImportUnrecognised);
+	assert.ok(error.constructor === WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
 	assert.equal(error.path, WORKER_PATH);
 	assert.equal(error.detail, 'cannot find the API import');
@@ -98,7 +98,7 @@ test('parse() reports WorkerImportUnrecognised for a binding it cannot read', ()
 		ApiBindings.parse(workerSource, WORKER_PATH),
 	);
 
-	assert.ok(error instanceof WorkerImportUnrecognised);
+	assert.ok(error.constructor === WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
 	assert.equal(error.path, WORKER_PATH);
 	assert.equal(error.detail, 'unexpected binding "1bad"');
@@ -112,7 +112,7 @@ test('parse() reports ApiExportMissing for the function the entry no longer re-e
 		ApiBindings.parse(workerSource, WORKER_PATH),
 	);
 
-	assert.ok(error instanceof ApiExportMissing);
+	assert.ok(error.constructor === ApiExportMissing);
 	assert.equal(error._tag, 'ApiExportMissing');
 	assert.equal(error.role, 'sortTailwindClasses');
 	assert.equal(error.path, WORKER_PATH);

@@ -6,7 +6,7 @@ import type { FormattingPass } from '#sidecar/passes/pass';
 import type { Node } from '#sidecar/syntax/node-schema';
 import type { SourceDocument } from '#sidecar/syntax/source-document';
 
-const STATEMENT_BODY_KEYS = new Map<string, readonly string[]>([
+const STATEMENT_BODY_KEYS = new Map<string, ReadonlyArray<string>>([
 	['DoWhileStatement', ['body']],
 	['ForInStatement', ['body']],
 	['ForOfStatement', ['body']],
@@ -29,7 +29,7 @@ export class BodyWrapPass implements FormattingPass {
 	 * @param dependencies.parser - Parses source into a trustworthy tree.
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader }) {
+	constructor(dependencies: { ast: AstReader; parser: SourceParser }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 	}
@@ -40,14 +40,14 @@ export class BodyWrapPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Non-overlapping body-wrap edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		const parsed = this.#parser.parse(document.virtualName, document.text);
 
 		if (isErr(parsed)) {
 			return [];
 		}
 
-		const edits: Edit[] = [];
+		const edits: Array<Edit> = [];
 		const indentUnit = document.indentUnit();
 
 		this.#ast.visit(parsed.value.program, (node) => {
@@ -104,9 +104,9 @@ export class BodyWrapPass implements FormattingPass {
 		const bodySource = document.slice(start, end);
 
 		return {
-			start,
 			end,
 			replacement: `{\n${indent}${indentUnit}${bodySource}\n${indent}}`,
+			start,
 		};
 	}
 }

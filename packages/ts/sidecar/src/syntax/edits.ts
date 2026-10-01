@@ -1,13 +1,13 @@
 /** A source replacement expressed against the original text offsets. */
 export type Edit = {
-	/** The inclusive replacement start. */
-	start: number;
-
 	/** The exclusive replacement end. */
 	end: number;
 
 	/** The text inserted in place of the selected range. */
 	replacement: string;
+
+	/** The inclusive replacement start. */
+	start: number;
 };
 
 /** Applies source edits in offset-safe order. */
@@ -29,8 +29,8 @@ export class EditApplier {
 	 * @param edits - Candidate edits expressed against the same source text.
 	 * @returns Accepted edits sorted from the lowest offset to the highest.
 	 */
-	nonOverlapping(edits: Edit[]): Edit[] {
-		const accepted: Edit[] = [];
+	nonOverlapping(edits: Array<Edit>): Array<Edit> {
+		const accepted: Array<Edit> = [];
 
 		const sorted = [...edits].sort((a, b) => {
 			return a.start - b.start || b.end - b.start - (a.end - a.start);
@@ -56,7 +56,7 @@ export class EditApplier {
 	 * @param edits - The edits expressed against the original offsets.
 	 * @returns The edited source text.
 	 */
-	apply(source: string, edits: Edit[]): string {
+	apply(source: string, edits: Array<Edit>): string {
 		const sorted = [...edits].sort((a, b) => {
 			return b.start - a.start;
 		});

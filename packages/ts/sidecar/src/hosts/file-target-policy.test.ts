@@ -6,7 +6,7 @@ import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 import { VueScript } from '#sidecar/hosts/vue-script';
 
 const targets = new FileTargetPolicy({
-	embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }),
+	embeddedBlocks: new EmbeddedBlockSplitter({ markdownFences: new MarkdownFences(), vueScript: new VueScript() }),
 });
 
 test('isTargetFile accepts ts and host documents but not declarations', () => {
@@ -17,6 +17,10 @@ test('isTargetFile accepts ts and host documents but not declarations', () => {
 	assert.equal(targets.isTargetFile('app.mts'), true);
 
 	assert.equal(targets.isTargetFile('app.cts'), true);
+	assert.equal(targets.isTargetFile('app.js'), true);
+	assert.equal(targets.isTargetFile('Screen.jsx'), true);
+	assert.equal(targets.isTargetFile('app.mjs'), true);
+	assert.equal(targets.isTargetFile('app.cjs'), true);
 
 	assert.equal(targets.isTargetFile('widget.vue'), true);
 
@@ -41,6 +45,8 @@ test('isSyntaxTarget accepts every ts file plus host documents', () => {
 	assert.equal(targets.isSyntaxTarget('app.ts'), true);
 
 	assert.equal(targets.isSyntaxTarget('Screen.tsx'), true);
+	assert.equal(targets.isSyntaxTarget('Screen.jsx'), true);
+	assert.equal(targets.isSyntaxTarget('app.cjs'), true);
 
 	assert.equal(targets.isSyntaxTarget('types.d.ts'), true);
 

@@ -11,10 +11,10 @@ export class OxcErrorDto {
 
 	static readonly #schema = z
 		.object({
-			message: z.string()
+			codeframe: z.string()
 				.optional()
 				.catch(undefined),
-			codeframe: z.string()
+			message: z.string()
 				.optional()
 				.catch(undefined),
 		})
@@ -44,13 +44,13 @@ export class OxcErrorDto {
 export class SourceUnparsable extends Error {
 	readonly _tag = 'SourceUnparsable';
 	readonly virtualName: string;
-	readonly errors: readonly OxcErrorDto[];
+	readonly errors: ReadonlyArray<OxcErrorDto>;
 
 	/**
 	 * @param virtualName - The filename supplied to the parser.
 	 * @param errors - The parser diagnostics, including messages and codeframes.
 	 */
-	constructor(virtualName: string, errors: readonly OxcError[]) {
+	constructor(virtualName: string, errors: ReadonlyArray<OxcError>) {
 		super(`cannot parse ${virtualName}`);
 
 		this.virtualName = virtualName;

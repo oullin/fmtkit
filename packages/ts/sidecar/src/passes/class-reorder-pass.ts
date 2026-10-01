@@ -8,9 +8,9 @@ import type { Node } from '#sidecar/syntax/node-schema';
 import type { SourceDocument } from '#sidecar/syntax/source-document';
 
 type MemberGroups = {
-	readonly properties: Node[];
-	readonly constructors: Node[];
-	readonly methods: Node[];
+	readonly constructors: Array<Node>;
+	readonly methods: Array<Node>;
+	readonly properties: Array<Node>;
 };
 
 /** Reorders class members into the formatter's stable class shape. */
@@ -28,7 +28,7 @@ export class ClassReorderPass implements FormattingPass {
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 * @param dependencies.members - Classifies members into their ordering group.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; members: ClassMemberPolicy }) {
+	constructor(dependencies: { ast: AstReader; members: ClassMemberPolicy; parser: SourceParser }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#members = dependencies.members;
@@ -40,7 +40,7 @@ export class ClassReorderPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Class-member ordering edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		const parsed = this.#parser.parse(document.virtualName, document.text);
 
 		if (isErr(parsed)) {
@@ -48,7 +48,7 @@ export class ClassReorderPass implements FormattingPass {
 		}
 
 		const source = document.text;
-		const edits: Edit[] = [];
+		const edits: Array<Edit> = [];
 
 		for (const body of this.#ast.collectClassBodies(parsed.value.program)) {
 			const edit = this.#computeClassReorderEdit(source, body);
@@ -103,14 +103,14 @@ export class ClassReorderPass implements FormattingPass {
 		const closing = source.slice(this.#ast.getEnd(lastOriginal), bodyEnd - 1);
 
 		return {
-			start: bodyStart + 1,
 			end: bodyEnd - 1,
 			replacement: `\n${indent}${memberSlices.join(`\n${indent}`)}${closing}`,
+			start: bodyStart + 1,
 		};
 	}
 
-	#groupMembers(members: Node[]): MemberGroups {
-		const groups: MemberGroups = { properties: [], constructors: [], methods: [] };
+	#groupMembers(members: Array<Node>): MemberGroups {
+		const groups: MemberGroups = { constructors: [], methods: [], properties: [] };
 
 		for (const member of members) {
 			const kind = this.#members.classify(member);
@@ -127,13 +127,13 @@ export class ClassReorderPass implements FormattingPass {
 		return groups;
 	}
 
-	#alreadyOrdered(members: Node[], desired: Node[]): boolean {
+	#alreadyOrdered(members: Array<Node>, desired: Array<Node>): boolean {
 		return desired.every((member, index) => {
 			return member === members[index];
 		});
 	}
 
-	#hasCommentsAroundMembers(source: string, body: Node, members: Node[]): boolean {
+	#hasCommentsAroundMembers(source: string, body: Node, members: Array<Node>): boolean {
 		const first = members[0];
 		const last = members.at(-1);
 

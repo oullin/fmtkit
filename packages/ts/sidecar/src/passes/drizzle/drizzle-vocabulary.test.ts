@@ -40,13 +40,13 @@ test('DrizzleVocabulary is frozen and self-contained per instance', () => {
 	assert.equal(Object.isFrozen(vocabulary), true);
 
 	const custom = new DrizzleVocabulary({
-		receivers: ['store'],
 		chainMethods: ['select'],
 		formatMethods: ['where'],
 		helpers: ['eq'],
 		multilineHelpers: ['and'],
-		setOperations: ['union'],
 		objectKeys: ['with'],
+		receivers: ['store'],
+		setOperations: ['union'],
 	});
 
 	assert.equal(custom.isConventionalReceiver('store'), true);

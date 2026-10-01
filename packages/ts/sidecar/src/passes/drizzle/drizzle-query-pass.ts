@@ -40,13 +40,13 @@ export class DrizzleQueryPass implements FormattingPass {
 	 * @param dependencies.targets - Classifies declaration files the pass skips.
 	 */
 	constructor(dependencies: {
-		parser: SourceParser;
 		ast: AstReader;
-		edits: EditApplier;
-		scanner: DrizzleImportScanner;
 		classifier: DrizzleCallClassifier;
-		writer: DrizzleArgumentWriter;
+		edits: EditApplier;
+		parser: SourceParser;
+		scanner: DrizzleImportScanner;
 		targets: FileTargetPolicy;
+		writer: DrizzleArgumentWriter;
 	}) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
@@ -63,7 +63,7 @@ export class DrizzleQueryPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Non-overlapping query-formatting edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		if (this.#targets.isDeclarationFile(document.virtualName)) {
 			return [];
 		}
@@ -80,7 +80,7 @@ export class DrizzleQueryPass implements FormattingPass {
 			return [];
 		}
 
-		const edits: Edit[] = [];
+		const edits: Array<Edit> = [];
 		const indentUnit = document.indentUnit();
 
 		this.#ast.visit(parsed.value.program, (node) => {

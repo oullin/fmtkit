@@ -40,7 +40,7 @@ exit "$1"
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -59,5 +59,5 @@ test('NodeProcessRunner carries executable spawn failures', async () => {
 
 	assert.equal(isErr(failed) && failed.error.code, null);
 
-	assert.ok(isErr(failed) && failed.error.cause instanceof Error);
+	assert.equal(isErr(failed) && Object.prototype.toString.call(failed.error.cause), '[object Error]');
 });

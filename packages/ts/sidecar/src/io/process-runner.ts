@@ -12,7 +12,7 @@ export type ProcessRunner = {
 	 * @param args - The arguments passed to oxfmt.
 	 * @returns Nothing, or a typed process failure.
 	 */
-	run(bin: string, args: string[]): Promise<Result<void, OxfmtRunFailed>>;
+	run(bin: string, args: Array<string>): Promise<Result<void, OxfmtRunFailed>>;
 };
 
 /** Runs oxfmt as a Node child process with inherited standard streams. */
@@ -24,7 +24,7 @@ export class NodeProcessRunner implements ProcessRunner {
 	 * @param args - The arguments passed to oxfmt.
 	 * @returns Nothing, or `OxfmtRunFailed` carrying its status or spawn cause.
 	 */
-	run(bin: string, args: string[]): Promise<Result<void, OxfmtRunFailed>> {
+	run(bin: string, args: Array<string>): Promise<Result<void, OxfmtRunFailed>> {
 		return new Promise((resolvePromise) => {
 			const child = spawn(
 				bin,

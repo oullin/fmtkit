@@ -51,7 +51,7 @@ test('AstReader traverses parsed fixtures and reads validated node fields', () =
 
 	assert.equal(classDeclaration && ast.sourceOf(source, classDeclaration).startsWith('class Example'), true);
 
-	const visited: string[] = [];
+	const visited: Array<string> = [];
 
 	ast.visit(parsed.value.program, (node) => {
 		visited.push(node.type);
@@ -70,7 +70,7 @@ test('AstReader traverses parsed fixtures and reads validated node fields', () =
 
 test('AstReader position and scalar accessors preserve their fallbacks', () => {
 	const ast = new AstReader();
-	const ranged = Node.schema.parse({ type: 'Identifier', range: [4, 9], name: 17, kind: false });
+	const ranged = Node.schema.parse({ kind: false, name: 17, range: [4, 9], type: 'Identifier' });
 
 	assert.equal(ast.getStart(ranged), 4);
 
@@ -102,7 +102,7 @@ test('AstReader.callParens locates argument parentheses and rejects non-calls', 
 	const callee = ast.unwrapChainExpression(ast.childNode(call, 'callee'));
 	const parens = ast.callParens(source, call, callee);
 
-	assert.deepEqual(parens, { open: source.indexOf('('), close: source.indexOf(')') });
+	assert.deepEqual(parens, { close: source.indexOf(')'), open: source.indexOf('(') });
 
 	assert.equal(ast.callParens(source, call, undefined), null);
 });
@@ -128,7 +128,7 @@ test('AstReader.callParens scans past a type-argument list holding a function ty
 
 	// The arrow type's own parenthesis comes first in the text; the argument
 	// list opens after the whole type-argument list closes.
-	assert.deepEqual(parens, { open: source.indexOf('(value'), close: source.lastIndexOf(')') });
+	assert.deepEqual(parens, { close: source.lastIndexOf(')'), open: source.indexOf('(value') });
 });
 
 test('AstReader.unwrapChainExpression returns the wrapped expression or the node itself', () => {

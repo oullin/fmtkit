@@ -58,6 +58,9 @@ sidecar_is_stale() {
 		"${REPO_ROOT}/packages/ts/sidecar/src" \
 		"${REPO_ROOT}/packages/ts/sidecar/package.json" \
 		"${REPO_ROOT}/packages/ts/sidecar/tsconfig.json" \
+		"${REPO_ROOT}/packages/ts/toolchain/stage-ts-assets.sh" \
+		"${REPO_ROOT}/package.json" \
+		"${REPO_ROOT}/pnpm-lock.yaml" \
 		"${REPO_ROOT}/.oxfmtrc.json" \
 		"${REPO_ROOT}/.oxlintrc.json" \
 		-newer "$sidecar" -print -quit 2>/dev/null)"

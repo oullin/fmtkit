@@ -12,8 +12,8 @@ import { SourceParser } from '#sidecar/syntax/source-parser';
 import { VueScript } from '#sidecar/hosts/vue-script';
 
 const editApplier = new EditApplier();
-const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() }) });
-const pass = new ExpandedCallPass({ parser: new SourceParser(), ast: new AstReader(), edits: editApplier, targets });
+const targets = new FileTargetPolicy({ embeddedBlocks: new EmbeddedBlockSplitter({ markdownFences: new MarkdownFences(), vueScript: new VueScript() }) });
+const pass = new ExpandedCallPass({ ast: new AstReader(), edits: editApplier, parser: new SourceParser(), targets });
 
 /** The source between the first and last backtick — a template's literal bytes. */
 function templateBody(source: string): string {

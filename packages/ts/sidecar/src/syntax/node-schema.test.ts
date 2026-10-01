@@ -7,8 +7,8 @@ import { SourceParser } from '#sidecar/syntax/source-parser';
 
 test('ParsedSourceDto accepts and freezes a valid parser envelope', () => {
 	const parsed = ParsedSourceDto.from({
-		program: { type: 'Program', start: 0, end: 0, body: [] },
-		comments: [{ type: 'Line', start: 0, end: 0, value: ' note' }],
+		comments: [{ end: 0, start: 0, type: 'Line', value: ' note' }],
+		program: { body: [], end: 0, start: 0, type: 'Program' },
 	});
 
 	assert.equal(parsed.success, true);
@@ -17,9 +17,9 @@ test('ParsedSourceDto accepts and freezes a valid parser envelope', () => {
 		return;
 	}
 
-	assert.ok(parsed.data.program instanceof Node);
+	assert.ok(Node.is(parsed.data.program));
 
-	assert.ok(parsed.data.comments[0] instanceof Node);
+	assert.ok(Node.is(parsed.data.comments[0]));
 
 	assert.equal(Object.isFrozen(parsed.data), true);
 
@@ -27,7 +27,7 @@ test('ParsedSourceDto accepts and freezes a valid parser envelope', () => {
 });
 
 test('ParsedSourceDto rejects malformed parser envelopes', () => {
-	const malformed = [null, {}, { program: {}, comments: [] }, { program: { type: 'Program' }, comments: {} }, { program: { type: 'Program' }, comments: [{}] }];
+	const malformed = [null, {}, { comments: [], program: {} }, { comments: {}, program: { type: 'Program' } }, { comments: [{}], program: { type: 'Program' } }];
 
 	for (const value of malformed) {
 		assert.equal(ParsedSourceDto.from(value).success, false);
@@ -36,8 +36,8 @@ test('ParsedSourceDto rejects malformed parser envelopes', () => {
 
 test('ParsedSourceDto.hasCommentBetween reports comments contained by a range', () => {
 	const parsed = ParsedSourceDto.from({
-		program: { type: 'Program', start: 0, end: 30, body: [] },
-		comments: [{ type: 'Line', start: 10, end: 20, value: ' note' }],
+		comments: [{ end: 20, start: 10, type: 'Line', value: ' note' }],
+		program: { body: [], end: 30, start: 0, type: 'Program' },
 	});
 
 	assert.equal(parsed.success, true);
@@ -68,7 +68,7 @@ test('SourceParser.parse maps a rejected parser envelope to SourceUnparsable', (
 
 		assert.ok(isErr(parsed));
 
-		assert.ok(isErr(parsed) && parsed.error instanceof SourceUnparsable);
+		assert.ok(isErr(parsed) && parsed.error.constructor === SourceUnparsable);
 
 		assert.deepEqual(isErr(parsed) ? parsed.error.errors : [], []);
 	} finally {

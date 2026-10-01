@@ -8,14 +8,14 @@ import type { Node } from '#sidecar/syntax/node-schema';
 import type { SourceDocument } from '#sidecar/syntax/source-document';
 
 type ChainLink = {
-	start: number;
 	end: number;
 	operator: '.' | '?.';
+	start: number;
 };
 
 type FluentChain = {
 	base: Node;
-	links: ChainLink[];
+	links: Array<ChainLink>;
 };
 
 /** Splits fluent-call chains so each link starts on its own line. */
@@ -31,7 +31,7 @@ export class FluentChainPass implements FormattingPass {
 	 * @param dependencies.parser - Parses source into a trustworthy tree.
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader }) {
+	constructor(dependencies: { ast: AstReader; parser: SourceParser }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 	}
@@ -42,7 +42,7 @@ export class FluentChainPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Fluent-chain edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		const parsed = this.#parser.parse(document.virtualName, document.text);
 
 		if (isErr(parsed)) {
@@ -79,9 +79,9 @@ export class FluentChainPass implements FormattingPass {
 				}
 
 				edits.set(`${link.start}:${link.end}`, {
-					start: link.start,
 					end: link.end,
 					replacement,
+					start: link.start,
 				});
 			}
 		});
@@ -120,16 +120,16 @@ export class FluentChainPass implements FormattingPass {
 		}
 
 		return {
-			start: objectEnd,
 			end: propertyStart,
 			operator,
+			start: objectEnd,
 		};
 	}
 
 	#collectFluentChain(document: SourceDocument, outer: Node, parsed: ParsedSourceDto): FluentChain | null {
 		let call: Node = outer;
 
-		const links: ChainLink[] = [];
+		const links: Array<ChainLink> = [];
 
 		while (call.type === 'CallExpression') {
 			const callee = this.#ast.unwrapChainExpression(this.#ast.childNode(call, 'callee'));

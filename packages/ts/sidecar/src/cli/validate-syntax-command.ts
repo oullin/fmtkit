@@ -24,7 +24,7 @@ export class ValidateSyntaxCommand implements CliCommand {
 	 * @param argv - Arguments after the executable and script path.
 	 * @returns `0` when validation succeeds, `1` when it reports a failure.
 	 */
-	async run(argv: readonly string[]): Promise<number> {
+	async run(argv: ReadonlyArray<string>): Promise<number> {
 		const options = SyntaxCliDto.parse(argv);
 		const files = [...options.files];
 

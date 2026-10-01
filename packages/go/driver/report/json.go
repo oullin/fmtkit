@@ -124,7 +124,5 @@ func toComplexityJSONReport(report projectedComplexityReport) *complexityJSONRep
 		return nil
 	}
 
-	out := complexityJSONReport(report)
-
-	return &out
+	return new(complexityJSONReport(report))
 }

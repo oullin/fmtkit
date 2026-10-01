@@ -173,9 +173,7 @@ func (i Invoker) runOxlintBatches(
 			return err
 		}
 
-		var exitError *exec.ExitError
-
-		if !errors.As(err, &exitError) {
+		if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 			return err
 		}
 

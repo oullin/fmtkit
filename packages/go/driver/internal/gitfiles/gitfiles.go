@@ -233,10 +233,9 @@ func (t Tree) runGit(ctx context.Context, args []string) ([]string, error) {
 		return nil, fmt.Errorf("git %s failed: %s: %w", args[0], reason, err)
 	}
 
-	parts := bytes.Split(out, []byte{0})
-	entries := make([]string, 0, len(parts))
+	entries := make([]string, 0, bytes.Count(out, []byte{0})+1)
 
-	for _, part := range parts {
+	for part := range bytes.SplitSeq(out, []byte{0}) {
 		if len(part) == 0 {
 			continue
 		}

@@ -223,11 +223,12 @@ func discoverVetTargets(ctx context.Context, root string, tc toolchain) ([]strin
 		return nil, wrapExitError(err, "resolve go vet targets")
 	}
 
-	lines := strings.Split(string(out), "\n")
-	targets := make([]string, 0, len(lines))
-	seen := make(map[string]struct{}, len(lines))
+	output := string(out)
+	count := strings.Count(output, "\n") + 1
+	targets := make([]string, 0, count)
+	seen := make(map[string]struct{}, count)
 
-	for _, line := range lines {
+	for line := range strings.SplitSeq(output, "\n") {
 		target := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
 
 		if target == "" {

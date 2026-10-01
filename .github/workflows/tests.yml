@@ -219,7 +219,7 @@ jobs:
                   name: driver-coverage
                   path: packages/go/driver
 
-            - uses: codecov/codecov-action@v5
+            - uses: codecov/codecov-action@v6
               name: Upload formatter coverage to Codecov
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
@@ -228,7 +228,7 @@ jobs:
                   override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
                   fail_ci_if_error: false
 
-            - uses: codecov/codecov-action@v5
+            - uses: codecov/codecov-action@v6
               name: Upload vet coverage to Codecov
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
@@ -237,7 +237,7 @@ jobs:
                   override_branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
                   fail_ci_if_error: false
 
-            - uses: codecov/codecov-action@v5
+            - uses: codecov/codecov-action@v6
               name: Upload driver coverage to Codecov
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}

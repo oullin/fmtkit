@@ -24,8 +24,10 @@ type Request struct {
 
 // Batch is a disjoint set of files that share one effective Oxlint config.
 type Batch struct {
-	ConfigPath string
-	Files      []string
+	ConfigPath       string
+	Files            []string
+	ProjectOxlint    bool
+	ProjectConfigDir string
 }
 
 type configChain struct {
@@ -42,7 +44,7 @@ type discoveredConfig struct {
 
 const explicitConfigName = "FMTKIT_OXLINTRC"
 
-var discoveredConfigNames = []string{".oxlintrc", ".oxlintrc.json", ".oxlintrc.jsonc"}
+var discoveredConfigNames = []string{".oxlintrc", ".oxlintrc.json", ".oxlintrc.jsonc", "oxlint.config.ts", "oxlint.config.mts"}
 
 // WithBatches prepares deterministic Oxlint batches, runs use, and removes all
 // generated entry configs before returning.
@@ -138,17 +140,37 @@ func WithBatches(req Request, use func([]Batch) error) (err error) {
 
 		configPath := base
 
+		projectOxlint := slicesContainsConfigModule(chain.overlays)
+		projectConfigDir := root
+
 		if len(chain.overlays) > 0 {
-			configPath, err = materialise(*chain)
+			if projectOxlint {
+				configPath, err = materialiseModule(root, *chain)
+			} else {
+				prepared, temporary, prepareErr := dedupeJSONPlugins(*chain)
+				generated = append(generated, temporary...)
+
+				if prepareErr != nil {
+					return prepareErr
+				}
+
+				configPath, err = materialise(prepared)
+			}
 
 			if err != nil {
 				return err
 			}
 
 			generated = append(generated, configPath)
+			projectConfigDir = filepath.Dir(chain.overlays[len(chain.overlays)-1])
 		}
 
-		batches = append(batches, Batch{ConfigPath: configPath, Files: append([]string(nil), chain.files...)})
+		batches = append(batches, Batch{
+			ConfigPath:       configPath,
+			Files:            append([]string(nil), chain.files...),
+			ProjectOxlint:    projectOxlint,
+			ProjectConfigDir: projectConfigDir,
+		})
 	}
 
 	return use(batches)

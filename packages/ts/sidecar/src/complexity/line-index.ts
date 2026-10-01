@@ -1,8 +1,8 @@
 /** Maps source offsets onto one-based line numbers for a single file. */
 export class LineIndex {
-	readonly #starts: readonly number[];
+	readonly #starts: ReadonlyArray<number>;
 
-	private constructor(starts: number[]) {
+	private constructor(starts: Array<number>) {
 		this.#starts = Object.freeze(starts);
 
 		Object.freeze(this);

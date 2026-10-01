@@ -117,8 +117,8 @@ export class CognitiveScorer {
 	 * one increment; changing the operator starts a new run.
 	 */
 	#logical(node: Node, nesting: number): number {
-		const operators: string[] = [];
-		const operands: Node[] = [];
+		const operators: Array<string> = [];
+		const operands: Array<Node> = [];
 
 		this.#flatten(node, operators, operands);
 
@@ -138,13 +138,13 @@ export class CognitiveScorer {
 	}
 
 	/** Flatten a logical tree into source-order operators and non-logical operands. */
-	#flatten(node: Node, operators: string[], operands: Node[]): void {
+	#flatten(node: Node, operators: Array<string>, operands: Array<Node>): void {
 		this.#side(childNode(node, 'left'), operators, operands);
 		operators.push(stringProperty(node, 'operator'));
 		this.#side(childNode(node, 'right'), operators, operands);
 	}
 
-	#side(node: Node | undefined, operators: string[], operands: Node[]): void {
+	#side(node: Node | undefined, operators: Array<string>, operands: Array<Node>): void {
 		if (!node) {
 			return;
 		}

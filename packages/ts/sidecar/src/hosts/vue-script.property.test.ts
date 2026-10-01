@@ -7,11 +7,11 @@ import type { VueScriptBlock } from '#sidecar/hosts/vue-script';
 const vueScript = new VueScript();
 
 type GeneratedBlock = {
-	readonly markup: string;
 	readonly content: string;
-	readonly script: boolean;
-	readonly lang: string | null;
 	readonly javaScriptOrTypeScript: boolean;
+	readonly lang: string | null;
+	readonly markup: string;
+	readonly script: boolean;
 };
 
 type AttributeCase = {
@@ -50,7 +50,7 @@ const scriptContentArbitrary = fc.constantFrom('const value = 1;\n', '\nexport d
 const scriptBlockArbitrary = fc.tuple(langAttributeArbitrary, typeAttributeArbitrary, scriptContentArbitrary).chain(([lang, type, content]) => {
 	const availableAttributes = [lang.source, type.source, 'setup', 'defer', 'data-sidecar="true"'].filter(Boolean);
 
-	return fc.shuffledSubarray(availableAttributes, { minLength: availableAttributes.length, maxLength: availableAttributes.length }).map((attributes) => {
+	return fc.shuffledSubarray(availableAttributes, { maxLength: availableAttributes.length, minLength: availableAttributes.length }).map((attributes) => {
 		const openTag = `<script${attributes.length > 0 ? ` ${attributes.join(' ')}` : ''}>`;
 		const supportedLangs = ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript'];
 
@@ -61,11 +61,11 @@ const scriptBlockArbitrary = fc.tuple(langAttributeArbitrary, typeAttributeArbit
 				: true;
 
 		return {
-			markup: `${openTag}${content}</script>`,
 			content,
-			script: true,
-			lang: lang.value,
 			javaScriptOrTypeScript,
+			lang: lang.value,
+			markup: `${openTag}${content}</script>`,
+			script: true,
 		};
 	});
 });
@@ -74,16 +74,16 @@ const nonScriptBlockArbitrary = fc
 	.tuple(fc.constantFrom('template', 'style'), fc.constantFrom('', ' scoped', ' module', ' data-layout="generated"'), fc.constantFrom('\n<div>fixture</div>\n', '\n.value { color: red; }\n'))
 	.map(([tag, attributes, content]): GeneratedBlock => {
 		return {
-			markup: `<${tag}${attributes}>${content}</${tag}>`,
 			content,
-			script: false,
-			lang: null,
 			javaScriptOrTypeScript: false,
+			lang: null,
+			markup: `<${tag}${attributes}>${content}</${tag}>`,
+			script: false,
 		};
 	});
 
 const documentArbitrary = fc
-	.array(fc.oneof(scriptBlockArbitrary, nonScriptBlockArbitrary), { minLength: 1, maxLength: 7 })
+	.array(fc.oneof(scriptBlockArbitrary, nonScriptBlockArbitrary), { maxLength: 7, minLength: 1 })
 	.filter((blocks) => {
 		return blocks.some((block) => block.script);
 	})

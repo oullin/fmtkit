@@ -11,7 +11,7 @@ function process(source: string, virtualName: string): string {
 }
 
 const identifierArbitrary = fc.constantFrom('alpha', 'beta', 'gamma', 'delta', 'epsilon');
-const integerArbitrary = fc.integer({ min: -10, max: 10 });
+const integerArbitrary = fc.integer({ max: 10, min: -10 });
 
 const singleLineConstArbitrary = fc.tuple(identifierArbitrary, integerArbitrary).map(([name, value]) => {
 	return `const ${name} = ${value};`;
@@ -40,7 +40,7 @@ const templateLiteralArbitrary = identifierArbitrary.map((name) => {
 const commentArbitrary = fc.constantFrom('// formatter note', '/* formatter block note */');
 const statementArbitrary = fc.oneof(singleLineConstArbitrary, multilineConstArbitrary, conditionalFunctionArbitrary, classArbitrary, importArbitrary, templateLiteralArbitrary, commentArbitrary);
 
-const sourceArbitrary = fc.array(statementArbitrary, { minLength: 1, maxLength: 8 }).map((statements) => {
+const sourceArbitrary = fc.array(statementArbitrary, { maxLength: 8, minLength: 1 }).map((statements) => {
 	return `${statements.join('\n')}\n`;
 });
 

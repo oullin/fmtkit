@@ -27,7 +27,7 @@ export class DrizzleArgumentWriter {
 	 * @param dependencies.vocabulary - The recognised Drizzle name vocabulary.
 	 * @param dependencies.classifier - Decides which structures may be formatted.
 	 */
-	constructor(dependencies: { ast: AstReader; vocabulary: DrizzleVocabulary; classifier: DrizzleCallClassifier }) {
+	constructor(dependencies: { ast: AstReader; classifier: DrizzleCallClassifier; vocabulary: DrizzleVocabulary }) {
 		this.#ast = dependencies.ast;
 		this.#vocabulary = dependencies.vocabulary;
 		this.#classifier = dependencies.classifier;
@@ -69,9 +69,9 @@ export class DrizzleArgumentWriter {
 		}
 
 		return {
-			start: parens.open,
 			end: parens.close + 1,
 			replacement,
+			start: parens.open,
 		};
 	}
 
@@ -93,7 +93,7 @@ export class DrizzleArgumentWriter {
 		return callee ? this.#ast.sourceOf(source, callee) : '';
 	}
 
-	#callParens(source: string, call: Node): { open: number; close: number } | null {
+	#callParens(source: string, call: Node): { close: number; open: number } | null {
 		return this.#ast.callParens(source, call, this.#ast.unwrapChainExpression(this.#ast.childNode(call, 'callee')));
 	}
 
@@ -111,7 +111,7 @@ export class DrizzleArgumentWriter {
 		const nextIndent = `${indent}${indentUnit}`;
 
 		const formatted = elements.map((element) => {
-			return element instanceof Node ? this.#formatNode(source, element, imports, parsed, nextIndent, indentUnit) : '';
+			return Node.is(element) ? this.#formatNode(source, element, imports, parsed, nextIndent, indentUnit) : '';
 		});
 
 		return `[\n${nextIndent}${formatted.join(`,\n${nextIndent}`)},\n${indent}]`;

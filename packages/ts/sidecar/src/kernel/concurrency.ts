@@ -10,7 +10,7 @@
  * @param operation - The async operation applied to each item.
  * @returns The operation results in input order.
  */
-export async function mapPool<T, R>(items: T[], limit: number, operation: (item: T) => Promise<R>): Promise<R[]> {
+export async function mapPool<T, R>(items: Array<T>, limit: number, operation: (item: T) => Promise<R>): Promise<Array<R>> {
 	const results = new Array<R>(items.length);
 
 	let nextIndex = 0;

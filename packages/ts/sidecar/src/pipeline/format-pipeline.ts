@@ -18,17 +18,17 @@ export type { ValidationFailure } from '#sidecar/pipeline/syntax-validator';
 
 /** The result of processing one file in a formatting pass. */
 export type PassOutcome = {
-	/** The formatting pass that produced the outcome. */
-	readonly label: string;
-
-	/** The requested source path. */
-	readonly file: string;
-
 	/** Whether the pass would change or did change the source. */
 	readonly changed: boolean;
 
 	/** The typed filesystem failure, or `null` when processing completed. */
 	readonly error: SourceFileError | null;
+
+	/** The requested source path. */
+	readonly file: string;
+
+	/** The formatting pass that produced the outcome. */
+	readonly label: string;
 };
 
 /** The options needed to invoke oxfmt over one pipeline stage. */
@@ -40,7 +40,7 @@ export type OxfmtOptions = {
 	readonly config: string | null;
 
 	/** The source paths passed to oxfmt. */
-	readonly files: string[];
+	readonly files: Array<string>;
 
 	/** Whether oxfmt checks source or writes changes. */
 	readonly mode: FormatMode;
@@ -72,7 +72,7 @@ export class FormatPipeline {
 	 * @param mode - Whether the pass checks or writes changes.
 	 * @returns One effect-free reporting outcome per input path.
 	 */
-	runPass(formatter: FileFormatter, files: string[], mode: FormatMode): Promise<PassOutcome[]> {
+	runPass(formatter: FileFormatter, files: Array<string>, mode: FormatMode): Promise<Array<PassOutcome>> {
 		return mapPool(
 			files,
 			availableParallelism(),
@@ -82,10 +82,10 @@ export class FormatPipeline {
 				});
 
 				if (isErr(outcome)) {
-					return { label: formatter.label, file, changed: false, error: outcome.error };
+					return { changed: false, error: outcome.error, file, label: formatter.label };
 				}
 
-				return { label: formatter.label, file, changed: outcome.value, error: null };
+				return { changed: outcome.value, error: null, file, label: formatter.label };
 			},
 		);
 	}
@@ -122,7 +122,7 @@ export class FormatPipeline {
 	 * @param files - The source paths to validate.
 	 * @returns Carried read and parse failures in deterministic input order.
 	 */
-	validate(files: string[]): Promise<ValidationFailure[]> {
+	validate(files: Array<string>): Promise<Array<ValidationFailure>> {
 		return this.#validator.validate(files);
 	}
 }

@@ -18,7 +18,7 @@ function makePass(): BlankLinePass {
 	const vue = new VueReactivityIdioms({ ast });
 	const spacing = new StatementSpacingPolicy({ ast, members, vue });
 
-	return new BlankLinePass({ parser: new SourceParser(), ast, spacing });
+	return new BlankLinePass({ ast, parser: new SourceParser(), spacing });
 }
 
 /**
@@ -26,7 +26,7 @@ function makePass(): BlankLinePass {
  * the BlankLinePass zero-width-insert adaptation must reproduce. It dedupes
  * positions, sorts them descending, and inserts one newline at each.
  */
-function referenceInsert(content: string, positions: number[]): string {
+function referenceInsert(content: string, positions: Array<number>): string {
 	const sorted = [...new Set(positions)].sort((a, b) => {
 		return b - a;
 	});
@@ -40,9 +40,9 @@ function referenceInsert(content: string, positions: number[]): string {
 	return out;
 }
 
-function zeroWidthInserts(positions: number[]): Edit[] {
+function zeroWidthInserts(positions: Array<number>): Array<Edit> {
 	return [...new Set(positions)].map((position) => {
-		return { start: position, end: position, replacement: '\n' };
+		return { end: position, replacement: '\n', start: position };
 	});
 }
 

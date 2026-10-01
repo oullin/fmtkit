@@ -27,7 +27,7 @@ export class CompositionRoot {
 	 * @param ports.sourceFiles - The filesystem port for reads and writes.
 	 * @param ports.processRunner - The process port for invoking oxfmt.
 	 */
-	private constructor(ports: { sourceFiles: SourceFiles; processRunner: ProcessRunner }) {
+	private constructor(ports: { processRunner: ProcessRunner; sourceFiles: SourceFiles }) {
 		this.#sourceFiles = ports.sourceFiles;
 		this.#factory = PipelineFactory.create();
 		this.#pipeline = new FormatPipeline({
@@ -44,8 +44,8 @@ export class CompositionRoot {
 	 */
 	static production(): CompositionRoot {
 		return new CompositionRoot({
-			sourceFiles: new NodeSourceFiles(),
 			processRunner: new NodeProcessRunner(),
+			sourceFiles: new NodeSourceFiles(),
 		});
 	}
 
@@ -56,10 +56,10 @@ export class CompositionRoot {
 	 */
 	formatAllCommand(): FormatAllCommand {
 		return new FormatAllCommand({
-			pipeline: this.#pipeline,
-			segmentFormatter: this.#factory.segmentFormatter(),
 			fluentFormatter: this.#factory.fluentFormatter(),
+			pipeline: this.#pipeline,
 			reporter: new PassReporter(),
+			segmentFormatter: this.#factory.segmentFormatter(),
 			syntaxReporter: new SyntaxReporter(),
 			targets: this.#factory.fileTargetPolicy(),
 		});
@@ -72,12 +72,12 @@ export class CompositionRoot {
 	 */
 	segmentPassCommand(): FormatPassCommand {
 		return new FormatPassCommand({
-			pipeline: this.#pipeline,
+			failureNoun: 'blank-line edits',
 			formatter: this.#factory.segmentFormatter(),
+			label: 'blank-lines',
+			pipeline: this.#pipeline,
 			reporter: new PassReporter(),
 			targets: this.#factory.fileTargetPolicy(),
-			label: 'blank-lines',
-			failureNoun: 'blank-line edits',
 		});
 	}
 
@@ -88,12 +88,12 @@ export class CompositionRoot {
 	 */
 	fluentPassCommand(): FormatPassCommand {
 		return new FormatPassCommand({
-			pipeline: this.#pipeline,
+			failureNoun: 'fluent-chain edits',
 			formatter: this.#factory.fluentFormatter(),
+			label: 'fluent-chains',
+			pipeline: this.#pipeline,
 			reporter: new PassReporter(),
 			targets: this.#factory.fileTargetPolicy(),
-			label: 'fluent-chains',
-			failureNoun: 'fluent-chain edits',
 		});
 	}
 
@@ -104,8 +104,8 @@ export class CompositionRoot {
 	 */
 	complexityCommand(): ComplexityCommand {
 		return new ComplexityCommand({
-			sourceFiles: this.#sourceFiles,
 			scanner: new ComplexityScanner(),
+			sourceFiles: this.#sourceFiles,
 		});
 	}
 

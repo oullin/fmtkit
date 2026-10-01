@@ -19,7 +19,7 @@ export class DeclarationReorderPass implements FormattingPass {
 	 * @param dependencies.parser - Parses source into a trustworthy tree.
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader }) {
+	constructor(dependencies: { ast: AstReader; parser: SourceParser }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 	}
@@ -30,7 +30,7 @@ export class DeclarationReorderPass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Safe declaration-ordering edits, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		const parsed = this.#parser.parse(document.virtualName, document.text);
 
 		if (isErr(parsed)) {
@@ -38,7 +38,7 @@ export class DeclarationReorderPass implements FormattingPass {
 		}
 
 		const lists = this.#ast.collectStatementLists(parsed.value.program);
-		const edits: Edit[] = [];
+		const edits: Array<Edit> = [];
 
 		for (const list of lists) {
 			const importGroups = this.#splitGroups(list, (node) => {
@@ -105,7 +105,7 @@ export class DeclarationReorderPass implements FormattingPass {
 							return true;
 						}
 
-						return element instanceof Node && this.#isSideEffectSafeExpression(element);
+						return Node.is(element) && this.#isSideEffectSafeExpression(element);
 					})
 				);
 			}
@@ -116,7 +116,7 @@ export class DeclarationReorderPass implements FormattingPass {
 				return (
 					Array.isArray(properties) &&
 					properties.every((property) => {
-						if (!(property instanceof Node)) {
+						if (!Node.is(property)) {
 							return false;
 						}
 
@@ -143,7 +143,7 @@ export class DeclarationReorderPass implements FormattingPass {
 				return (
 					Array.isArray(expressions) &&
 					expressions.every((expression) => {
-						return expression instanceof Node && this.#isSideEffectSafeExpression(expression);
+						return Node.is(expression) && this.#isSideEffectSafeExpression(expression);
 					})
 				);
 			}
@@ -168,7 +168,7 @@ export class DeclarationReorderPass implements FormattingPass {
 		);
 	}
 
-	#declaredNames(nodes: Node[]): Set<string> {
+	#declaredNames(nodes: Array<Node>): Set<string> {
 		const names = new Set<string>();
 
 		for (const node of nodes) {
@@ -203,7 +203,7 @@ export class DeclarationReorderPass implements FormattingPass {
 		return found;
 	}
 
-	#canReorderConstGroup(document: SourceDocument, group: Node[]): boolean {
+	#canReorderConstGroup(document: SourceDocument, group: Array<Node>): boolean {
 		if (
 			!group.every((node) => {
 				return this.#isSafeConstDeclaration(node);
@@ -233,10 +233,10 @@ export class DeclarationReorderPass implements FormattingPass {
 		return true;
 	}
 
-	#splitGroups(list: Node[], predicate: (node: Node) => boolean): Node[][] {
-		const groups: Node[][] = [];
+	#splitGroups(list: Array<Node>, predicate: (node: Node) => boolean): Array<Array<Node>> {
+		const groups: Array<Array<Node>> = [];
 
-		let current: Node[] = [];
+		let current: Array<Node> = [];
 
 		for (const node of list) {
 			if (!predicate(node)) {
@@ -258,7 +258,7 @@ export class DeclarationReorderPass implements FormattingPass {
 		return groups;
 	}
 
-	#groupEdit(document: SourceDocument, group: Node[], canReorder: boolean): Edit | null {
+	#groupEdit(document: SourceDocument, group: Array<Node>, canReorder: boolean): Edit | null {
 		// A group edit rewrites the whole span from the first declaration to the last
 		// out of node text alone, so anything living in the gaps between them — a
 		// comment above an inner declaration, or trailing one beside it — is not
@@ -320,13 +320,13 @@ export class DeclarationReorderPass implements FormattingPass {
 		}
 
 		return {
-			start,
 			end: lastEnd,
 			replacement,
+			start,
 		};
 	}
 
-	#hasCommentBetweenMembers(document: SourceDocument, group: Node[]): boolean {
+	#hasCommentBetweenMembers(document: SourceDocument, group: Array<Node>): boolean {
 		for (let i = 0; i < group.length - 1; i++) {
 			const current = group[i];
 			const following = group[i + 1];

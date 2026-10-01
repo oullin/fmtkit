@@ -44,7 +44,7 @@ class StubSourceFiles implements SourceFiles {
 }
 
 /** Run the command with stdout captured, returning its code and output. */
-async function run(files: ReadonlyMap<string, string>, argv: string[]): Promise<{ code: number; payload: string }> {
+async function run(files: ReadonlyMap<string, string>, argv: Array<string>): Promise<{ code: number; payload: string }> {
 	const original = process.stdout.write.bind(process.stdout);
 
 	let payload = '';
@@ -56,7 +56,7 @@ async function run(files: ReadonlyMap<string, string>, argv: string[]): Promise<
 	};
 
 	try {
-		const command = new ComplexityCommand({ sourceFiles: new StubSourceFiles(files), scanner: new ComplexityScanner() });
+		const command = new ComplexityCommand({ scanner: new ComplexityScanner(), sourceFiles: new StubSourceFiles(files) });
 
 		return { code: await command.run(argv), payload };
 	} finally {
@@ -74,8 +74,8 @@ test('the scan reports every scored function relative to the root', async () => 
 
 	assert.equal(code, 0);
 	assert.deepEqual(JSON.parse(payload), {
-		functions: [{ key: 'src/app.ts#read', file: 'src/app.ts', line: 1, name: 'read', cyclomatic: 2, cognitive: 1 }],
 		errors: [],
+		functions: [{ cognitive: 1, cyclomatic: 2, file: 'src/app.ts', key: 'src/app.ts#read', line: 1, name: 'read' }],
 	});
 });
 

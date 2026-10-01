@@ -220,12 +220,12 @@ export class StatementSpacingPolicy {
 			if (Array.isArray(value)) {
 				if (
 					value.some((child) => {
-						return child instanceof Node && this.#containsAwait(child);
+						return Node.is(child) && this.#containsAwait(child);
 					})
 				) {
 					return true;
 				}
-			} else if (value instanceof Node && this.#containsAwait(value)) {
+			} else if (Node.is(value) && this.#containsAwait(value)) {
 				return true;
 			}
 		}

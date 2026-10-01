@@ -33,10 +33,10 @@ test('parseArgs splits flags and file sections', () => {
 	assert.equal(isErr(options), false);
 
 	assert.deepEqual(!isErr(options) && options.value, {
+		formatFiles: ['a.ts', 'b.vue'],
 		mode: 'check',
 		oxfmtBin: '/bin/oxfmt',
 		oxfmtConfig: '/etc/oxfmtrc.json',
-		formatFiles: ['a.ts', 'b.vue'],
 		syntaxFiles: ['a.ts', 'types.d.ts'],
 	});
 });
@@ -124,21 +124,21 @@ test('runPass processes every file and skips missing ones', async () => {
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
 
 test('runOxfmt resolves without spawning when no binary or no files are given', async () => {
-	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: null, config: null, files: ['a.ts'] })), false);
+	assert.equal(isErr(await pipeline.runOxfmt({ bin: null, config: null, files: ['a.ts'], mode: 'write' })), false);
 
-	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: 'false', config: null, files: [] })), false);
+	assert.equal(isErr(await pipeline.runOxfmt({ bin: 'false', config: null, files: [], mode: 'write' })), false);
 });
 
 test('runOxfmt spawns with --check in check mode and surfaces failures', async () => {
-	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'check', bin: 'true', config: null, files: ['a.ts'] })), false);
+	assert.equal(isErr(await pipeline.runOxfmt({ bin: 'true', config: null, files: ['a.ts'], mode: 'check' })), false);
 
-	const failed = await pipeline.runOxfmt({ mode: 'check', bin: 'false', config: null, files: ['a.ts'] });
+	const failed = await pipeline.runOxfmt({ bin: 'false', config: null, files: ['a.ts'], mode: 'check' });
 
 	assert.ok(isErr(failed));
 
@@ -146,9 +146,9 @@ test('runOxfmt spawns with --check in check mode and surfaces failures', async (
 });
 
 test('runOxfmt surfaces the exit status of the spawned formatter', async () => {
-	assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin: 'true', config: null, files: ['a.ts'] })), false);
+	assert.equal(isErr(await pipeline.runOxfmt({ bin: 'true', config: null, files: ['a.ts'], mode: 'write' })), false);
 
-	const failed = await pipeline.runOxfmt({ mode: 'write', bin: 'false', config: null, files: ['a.ts'] });
+	const failed = await pipeline.runOxfmt({ bin: 'false', config: null, files: ['a.ts'], mode: 'write' });
 
 	assert.ok(isErr(failed));
 
@@ -180,13 +180,13 @@ printf '%s\\n' "$#" >> "${log}"
 
 		await chmod(bin, 0o755);
 
-		assert.equal(isErr(await pipeline.runOxfmt({ mode: 'write', bin, config: null, files })), false);
+		assert.equal(isErr(await pipeline.runOxfmt({ bin, config: null, files, mode: 'write' })), false);
 
 		assert.deepEqual((await readFile(log, 'utf8')).trim().split('\n'), ['102', '102', '7']);
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -221,7 +221,7 @@ test('format-all pipeline formats files and exits 0 end-to-end', async () => {
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -263,7 +263,7 @@ test('format-all pipeline reaches a fixed point in a single run', async () => {
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -292,7 +292,7 @@ test('format-all pipeline deduplicates repeated input paths', async () => {
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -327,7 +327,7 @@ test('format-all pipeline formats embedded blocks in html and markdown hosts', a
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -354,7 +354,7 @@ test('format-all pipeline tolerates syntactically broken markdown fences', async
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -378,7 +378,7 @@ test('format-all pipeline exits 1 for syntactically broken html script blocks', 
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -402,7 +402,7 @@ test('format-all pipeline exits 1 when validation finds syntax errors', async ()
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });

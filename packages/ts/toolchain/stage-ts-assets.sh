@@ -8,6 +8,7 @@ set -euo pipefail
 #   - oxc-parser.node    napi binding, loaded via NAPI_RS_NATIVE_LIBRARY_PATH
 #   - oxfmt.node         napi binding for the oxfmt CLI
 #   - oxlint.node        napi binding for the oxlint CLI
+#   - *-plugin.mjs       bundled JavaScript lint plugins
 #   - .oxfmtrc.json      repo-root config, the default for projects without one
 #   - .oxlintrc.json     repo-root config, the default for projects without one
 #
@@ -95,11 +96,16 @@ pin() {
 
 sidecar_package_json="${root}/packages/ts/sidecar/package.json"
 toolchain_package_json="${root}/packages/ts/toolchain/package.json"
+workspace_package_json="${root}/package.json"
 
 oxfmt_pin="$(pin "${sidecar_package_json}" oxfmt)"
 oxlint_pin="$(pin "${sidecar_package_json}" oxlint)"
 oxc_parser_pin="$(pin "${sidecar_package_json}" oxc-parser)"
 zod_pin="$(pin "${toolchain_package_json}" zod)"
+nkzw_pin="$(pin "${workspace_package_json}" @nkzw/eslint-plugin)"
+no_only_pin="$(pin "${workspace_package_json}" eslint-plugin-no-only-tests)"
+perfectionist_pin="$(pin "${workspace_package_json}" eslint-plugin-perfectionist)"
+jiti_pin="$(pin "${workspace_package_json}" jiti)"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT
@@ -131,8 +137,48 @@ cp "${root}/packages/ts/sidecar/tsconfig.json" "${workdir}/tsconfig.json"
 		"oxfmt@${oxfmt_pin}" \
 		"oxlint@${oxlint_pin}" \
 		"oxc-parser@${oxc_parser_pin}" \
-		"zod@${zod_pin}" >/dev/null
+		"zod@${zod_pin}" \
+		"@nkzw/eslint-plugin@${nkzw_pin}" \
+		"eslint-plugin-no-only-tests@${no_only_pin}" \
+		"eslint-plugin-perfectionist@${perfectionist_pin}" \
+		"jiti@${jiti_pin}" >/dev/null
 )
+
+# Oxlint dynamically imports JS plugins from the config file. Keep each one as
+# a real file beside the sidecar, with its npm dependencies bundled into it, so
+# users need no node_modules and config overlays can extend the bundled policy.
+for plugin in \
+	'@nkzw/eslint-plugin:nkzw-plugin.mjs' \
+	'eslint-plugin-no-only-tests:no-only-tests-plugin.mjs' \
+	'eslint-plugin-perfectionist:perfectionist-plugin.mjs'; do
+	package="${plugin%%:*}"
+	filename="${plugin#*:}"
+	entry="$(cd "${workdir}" && node -e "console.log(require.resolve(process.argv[1]))" "${package}")"
+
+	(
+		cd "${workdir}"
+
+		bun build --target node --outfile "${workdir}/${filename}" "${entry}" >/dev/null
+	)
+done
+
+# The repo's config uses npm specifiers for its own development lint. The
+# extracted config instead resolves the prebundled files in the same directory.
+node -e '
+const fs = require("node:fs");
+const config = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const filenames = {
+  "@nkzw/eslint-plugin": "./nkzw-plugin.mjs",
+  "eslint-plugin-no-only-tests": "./no-only-tests-plugin.mjs",
+  "eslint-plugin-perfectionist": "./perfectionist-plugin.mjs",
+};
+for (const plugin of config.jsPlugins) {
+  const filename = filenames[plugin.specifier];
+  if (!filename) throw new Error(`Unknown bundled JS plugin: ${plugin.specifier}`);
+  plugin.specifier = filename;
+}
+fs.writeFileSync(process.argv[2], JSON.stringify(config, null, "\t") + "\n");
+' "${root}/.oxlintrc.json" "${workdir}/.oxlintrc.json"
 
 # oxfmt formats embedded code (Vue <template>/<style>, markdown, HTML) through a
 # Tinypool child_process pool whose worker entry scripts do not survive
@@ -226,7 +272,10 @@ for target in "${targets[@]}"; do
 	# configs this repo formats itself with, and tsruntime extracts these
 	# copies as the fallback for projects that carry none.
 	install -m 0644 "${root}/.oxfmtrc.json" "${out}/.oxfmtrc.json"
-	install -m 0644 "${root}/.oxlintrc.json" "${out}/.oxlintrc.json"
+	install -m 0644 "${workdir}/.oxlintrc.json" "${out}/.oxlintrc.json"
+	for filename in nkzw-plugin.mjs no-only-tests-plugin.mjs perfectionist-plugin.mjs; do
+		install -m 0644 "${workdir}/${filename}" "${out}/${filename}"
+	done
 
 	printf '==> staged %s\n' "${out}" >&2
 done

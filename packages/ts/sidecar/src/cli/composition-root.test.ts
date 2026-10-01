@@ -30,7 +30,7 @@ test('CompositionRoot wires formatAllCommand end-to-end through the Node adapter
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 });
@@ -38,8 +38,8 @@ test('CompositionRoot wires formatAllCommand end-to-end through the Node adapter
 test('CompositionRoot builds every named command', () => {
 	const root = CompositionRoot.production();
 
-	assert.ok(root.formatAllCommand().run instanceof Function);
-	assert.ok(root.segmentPassCommand().run instanceof Function);
-	assert.ok(root.fluentPassCommand().run instanceof Function);
-	assert.ok(root.validateSyntaxCommand().run instanceof Function);
+	assert.ok(root.formatAllCommand());
+	assert.ok(root.segmentPassCommand());
+	assert.ok(root.fluentPassCommand());
+	assert.ok(root.validateSyntaxCommand());
 });

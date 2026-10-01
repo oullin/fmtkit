@@ -13,35 +13,35 @@ export class PassReporter {
 	 * @param failureNoun - The change description used in check-mode guidance.
 	 * @returns `true` when no outcome or pending change makes the pass fail.
 	 */
-	reportPass(label: string, files: readonly string[], mode: FormatMode, outcomes: PassOutcome[], failureNoun: string): boolean {
+	reportPass(label: string, files: ReadonlyArray<string>, mode: FormatMode, outcomes: Array<PassOutcome>, failureNoun: string): boolean {
 		let changedCount = 0;
 
 		for (const outcome of outcomes) {
 			if (outcome.error?._tag === 'SourceFileUnreadable' && outcome.error.isNotFound()) {
-				console.warn(`[${label}] path not found, skipping: ${outcome.file}`);
+				process.stderr.write(`[${label}] path not found, skipping: ${outcome.file}\n`);
 
 				continue;
 			}
 
 			if (outcome.error) {
-				console.error(outcome.error);
+				process.stderr.write(`${String(outcome.error)}\n`);
 
 				return false;
 			}
 
 			if (outcome.changed) {
 				changedCount++;
-				console.log(`[${label}] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}`);
+				process.stdout.write(`[${label}] ${mode === 'check' ? 'would change' : 'updated'} ${outcome.file}\n`);
 			}
 		}
 
 		if (mode === 'check' && changedCount > 0) {
-			console.error(`[${label}] ${changedCount} file(s) need ${failureNoun}. Run "pnpm format" to fix.`);
+			process.stderr.write(`[${label}] ${changedCount} file(s) need ${failureNoun}. Run "pnpm format" to fix.\n`);
 
 			return false;
 		}
 
-		console.log(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}`);
+		process.stdout.write(`[${label}] processed ${files.length} file(s) in ${process.cwd()}, ${changedCount} ${mode === 'check' ? 'would change' : 'changed'}\n`);
 
 		return true;
 	}
@@ -75,18 +75,18 @@ export class SyntaxReporter {
 	 * @param failures - The ordered read and parse failures.
 	 * @returns `true` when no reportable validation failure remains.
 	 */
-	report(files: readonly string[], failures: ValidationFailure[]): boolean {
-		const diagnostics: string[] = [];
+	report(files: ReadonlyArray<string>, failures: Array<ValidationFailure>): boolean {
+		const diagnostics: Array<string> = [];
 
 		for (const failure of failures) {
 			if (failure.error._tag === 'SourceFileUnreadable') {
 				if (failure.error.isNotFound()) {
-					console.warn(`[validate-syntax] path not found, skipping: ${failure.file}`);
+					process.stderr.write(`[validate-syntax] path not found, skipping: ${failure.file}\n`);
 
 					continue;
 				}
 
-				console.error(failure.error);
+				process.stderr.write(`${String(failure.error)}\n`);
 
 				return false;
 			}
@@ -97,13 +97,13 @@ export class SyntaxReporter {
 		}
 
 		if (diagnostics.length > 0) {
-			console.error(diagnostics.join('\n'));
-			console.error(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.`);
+			process.stderr.write(`${diagnostics.join('\n')}\n`);
+			process.stderr.write(`[validate-syntax] ${diagnostics.length} syntax error(s) found after formatting.\n`);
 
 			return false;
 		}
 
-		console.log(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}`);
+		process.stdout.write(`[validate-syntax] checked ${files.length} file(s) in ${process.cwd()}\n`);
 
 		return true;
 	}

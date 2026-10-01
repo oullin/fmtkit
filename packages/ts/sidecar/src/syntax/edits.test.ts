@@ -4,9 +4,9 @@ import { EditApplier } from '#sidecar/syntax/edits';
 
 test('EditApplier.nonOverlapping drops overlapping edits and sorts by start', () => {
 	const kept = new EditApplier().nonOverlapping([
-		{ start: 10, end: 20, replacement: 'b' },
-		{ start: 0, end: 5, replacement: 'a' },
-		{ start: 15, end: 25, replacement: 'c' },
+		{ end: 20, replacement: 'b', start: 10 },
+		{ end: 5, replacement: 'a', start: 0 },
+		{ end: 25, replacement: 'c', start: 15 },
 	]);
 
 	assert.deepEqual(

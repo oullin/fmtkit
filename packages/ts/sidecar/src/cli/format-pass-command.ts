@@ -23,7 +23,7 @@ export class FormatPassCommand implements CliCommand {
 	 * @param dependencies.label - The reporting label the pass emits.
 	 * @param dependencies.failureNoun - The change description used in check-mode guidance.
 	 */
-	constructor(dependencies: { pipeline: FormatPipeline; formatter: FileFormatter; reporter: PassReporter; targets: FileTargetPolicy; label: string; failureNoun: string }) {
+	constructor(dependencies: { failureNoun: string; formatter: FileFormatter; label: string; pipeline: FormatPipeline; reporter: PassReporter; targets: FileTargetPolicy }) {
 		this.#pipeline = dependencies.pipeline;
 		this.#formatter = dependencies.formatter;
 		this.#reporter = dependencies.reporter;
@@ -38,7 +38,7 @@ export class FormatPassCommand implements CliCommand {
 	 * @param argv - Arguments after the executable and script path.
 	 * @returns `0` when the pass succeeds, `1` when it reports a failure.
 	 */
-	async run(argv: readonly string[]): Promise<number> {
+	async run(argv: ReadonlyArray<string>): Promise<number> {
 		const options = PassCliDto.parse(argv, this.#targets);
 		const files = [...options.files];
 

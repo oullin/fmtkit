@@ -7,16 +7,16 @@ export class PassCliDto {
 	readonly mode: 'check' | 'write';
 
 	/** Files eligible for formatting. */
-	readonly files: readonly string[];
+	readonly files: ReadonlyArray<string>;
 
 	static readonly #argvSchema = z.array(z.string());
 
 	static readonly #schema = z.object({
-		mode: z.enum(['check', 'write']),
 		files: z.array(z.string()),
+		mode: z.enum(['check', 'write']),
 	});
 
-	private constructor(value: { mode: 'check' | 'write'; files: string[] }) {
+	private constructor(value: { files: Array<string>; mode: 'check' | 'write' }) {
 		this.mode = value.mode;
 		this.files = Object.freeze(value.files);
 
@@ -31,14 +31,14 @@ export class PassCliDto {
 	 * @param targets - The policy that classifies eligible target files.
 	 * @returns Immutable formatting pass options.
 	 */
-	static parse(input: readonly string[], targets: FileTargetPolicy): PassCliDto {
+	static parse(input: ReadonlyArray<string>, targets: FileTargetPolicy): PassCliDto {
 		const argv = PassCliDto.#argvSchema.parse(input);
 
 		const candidate = {
-			mode: argv.includes('--check') ? ('check' as const) : ('write' as const),
 			files: argv.filter((argument) => {
 				return argument !== '--check' && targets.isTargetFile(argument);
 			}),
+			mode: argv.includes('--check') ? ('check' as const) : ('write' as const),
 		};
 
 		return new PassCliDto(PassCliDto.#schema.parse(candidate));

@@ -8,23 +8,23 @@ import { isErr } from '#sidecar/kernel/result';
 
 /** One scored function, keyed the way the allow list and the findings key it. */
 export type ScoredFunction = {
-	/** The `<file>#<name>` key. */
-	readonly key: string;
+	/** SonarSource-shaped cognitive complexity. */
+	readonly cognitive: number;
+
+	/** ESLint-shaped cyclomatic complexity. */
+	readonly cyclomatic: number;
 
 	/** The repository-relative file. */
 	readonly file: string;
+
+	/** The `<file>#<name>` key. */
+	readonly key: string;
 
 	/** The one-based line the function starts on. */
 	readonly line: number;
 
 	/** The reporting name within the file. */
 	readonly name: string;
-
-	/** ESLint-shaped cyclomatic complexity. */
-	readonly cyclomatic: number;
-
-	/** SonarSource-shaped cognitive complexity. */
-	readonly cognitive: number;
 };
 
 /** A file the scan could not read or parse. */
@@ -38,19 +38,19 @@ export type ScanFailure = {
 
 /** The measurement of one file or of a whole run. */
 export type ScanResult = {
-	/** Every function the scan scored. */
-	readonly functions: ScoredFunction[];
-
 	/** Every file the scan could not measure. */
-	readonly errors: ScanFailure[];
+	readonly errors: Array<ScanFailure>;
+
+	/** Every function the scan scored. */
+	readonly functions: Array<ScoredFunction>;
 };
 
 /** Mutable accumulator for one reporting key while sites are folded into it. */
 type KeyDraft = {
+	cognitive: number;
+	cyclomatic: number;
 	line: number;
 	name: string;
-	cyclomatic: number;
-	cognitive: number;
 	named: boolean;
 };
 
@@ -79,7 +79,7 @@ export class ComplexityScanner {
 		const parsed = this.#parser.parse(file, text);
 
 		if (isErr(parsed)) {
-			return { functions: [], errors: [{ file, message: parsed.error.message }] };
+			return { errors: [{ file, message: parsed.error.message }], functions: [] };
 		}
 
 		const lines = LineIndex.of(text);
@@ -89,7 +89,7 @@ export class ComplexityScanner {
 			this.#fold(drafts, site, lines.lineAt(site.start));
 		}
 
-		return { functions: this.#render(file, drafts), errors: [] };
+		return { errors: [], functions: this.#render(file, drafts) };
 	}
 
 	#fold(drafts: Map<string, KeyDraft>, site: FunctionSite, line: number): void {
@@ -99,10 +99,10 @@ export class ComplexityScanner {
 
 		if (!draft) {
 			drafts.set(key, {
+				cognitive: site.named ? this.#cognitive.score(site.node) : 0,
+				cyclomatic,
 				line,
 				name: key,
-				cyclomatic,
-				cognitive: site.named ? this.#cognitive.score(site.node) : 0,
 				named: site.named,
 			});
 
@@ -126,17 +126,17 @@ export class ComplexityScanner {
 		return site.name;
 	}
 
-	#render(file: string, drafts: Map<string, KeyDraft>): ScoredFunction[] {
-		const functions: ScoredFunction[] = [];
+	#render(file: string, drafts: Map<string, KeyDraft>): Array<ScoredFunction> {
+		const functions: Array<ScoredFunction> = [];
 
 		for (const [name, draft] of drafts) {
 			functions.push({
-				key: `${file}#${name}`,
+				cognitive: draft.cognitive,
+				cyclomatic: draft.cyclomatic,
 				file,
+				key: `${file}#${name}`,
 				line: draft.line,
 				name,
-				cyclomatic: draft.cyclomatic,
-				cognitive: draft.cognitive,
 			});
 		}
 

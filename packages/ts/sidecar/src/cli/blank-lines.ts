@@ -13,8 +13,10 @@ async function main(): Promise<void> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-	main().catch((cause: unknown) => {
-		console.error(cause);
+	try {
+		await main();
+	} catch (cause) {
+		process.stderr.write(`${String(cause)}\n`);
 		process.exitCode = 1;
-	});
+	}
 }

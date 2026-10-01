@@ -127,12 +127,13 @@ func (i Invoker) RunLint(ctx context.Context, req Request) error {
 		GlobalOverlay: i.Env.OxlintConfig,
 		Files:         files,
 	}, func(batches []oxlintconfig.Batch) error {
-		return i.runOxlintBatches(ctx, bin, viaSidecar, batches, req)
+		return i.runOxlintBatches(ctx, cwd, bin, viaSidecar, batches, req)
 	})
 }
 
 func (i Invoker) runOxlintBatches(
 	ctx context.Context,
+	root string,
 	bin string,
 	viaSidecar bool,
 	batches []oxlintconfig.Batch,
@@ -141,14 +142,28 @@ func (i Invoker) runOxlintBatches(
 	var firstLintFailure error
 
 	for _, batch := range batches {
+		batchBin := bin
+		batchViaSidecar := viaSidecar
+
+		if batch.ProjectOxlint {
+			resolved, err := projectOxlintExecutable(root, batch.ProjectConfigDir, i.Env.OxlintBin)
+
+			if err != nil {
+				return err
+			}
+
+			batchBin = resolved
+			batchViaSidecar = false
+		}
+
 		command := proto.OxlintCommand{
-			ViaSidecar: viaSidecar,
+			ViaSidecar: batchViaSidecar,
 			Fix:        req.Fix,
 			Config:     batch.ConfigPath,
 			Files:      batch.Files,
 		}
 
-		err := i.spawn(ctx, bin, command.Argv(), req)
+		err := i.spawn(ctx, batchBin, command.Argv(), req)
 
 		if err == nil {
 			continue

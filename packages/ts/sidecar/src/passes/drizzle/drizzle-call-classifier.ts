@@ -175,7 +175,7 @@ export class DrizzleCallClassifier {
 	shouldFormatArrayExpression(node: Node): boolean {
 		const elements = Array.isArray(node.elements) ? node.elements : [];
 
-		return elements.length > 1 || elements.some((element) => element instanceof Node && (element.type === 'ObjectExpression' || element.type === 'CallExpression'));
+		return elements.length > 1 || elements.some((element) => Node.is(element) && (element.type === 'ObjectExpression' || element.type === 'CallExpression'));
 	}
 
 	/**

@@ -6,14 +6,14 @@ export const ANONYMOUS = '<anonymous>';
 
 /** One function-like node found in a file, with the key name it reports under. */
 export type FunctionSite = {
-	/** The function, arrow, or function-expression node. */
-	readonly node: Node;
-
 	/** The reporting name: this function's own, or its nearest named ancestor's. */
 	readonly name: string;
 
 	/** Whether the name belongs to this node rather than an ancestor. */
 	readonly named: boolean;
+
+	/** The function, arrow, or function-expression node. */
+	readonly node: Node;
 
 	/** The source offset the function starts at. */
 	readonly start: number;
@@ -21,14 +21,14 @@ export type FunctionSite = {
 
 /** The naming context a node inherits from the declaration that encloses it. */
 type NameContext = {
-	/** The name a function sitting at this exact position would take. */
-	readonly pending: string;
+	/** The enclosing class name, used to qualify its members. */
+	readonly className: string;
 
 	/** The nearest named function ancestor's reporting name. */
 	readonly owner: string;
 
-	/** The enclosing class name, used to qualify its members. */
-	readonly className: string;
+	/** The name a function sitting at this exact position would take. */
+	readonly pending: string;
 };
 
 /** Where a declaration keeps the function it names, and where it keeps the name. */
@@ -110,15 +110,15 @@ export class FunctionSiteCollector {
 	 * @param program - The parsed program root.
 	 * @returns Every function-like node, outermost first.
 	 */
-	collect(program: Node): FunctionSite[] {
-		const sites: FunctionSite[] = [];
+	collect(program: Node): Array<FunctionSite> {
+		const sites: Array<FunctionSite> = [];
 
-		this.#visit(program, { pending: '', owner: '', className: '' }, sites);
+		this.#visit(program, { className: '', owner: '', pending: '' }, sites);
 
 		return sites;
 	}
 
-	#visit(node: Node, context: NameContext, sites: FunctionSite[]): void {
+	#visit(node: Node, context: NameContext, sites: Array<FunctionSite>): void {
 		if (isFunctionNode(node)) {
 			this.#visitFunction(node, context, sites);
 
@@ -139,17 +139,17 @@ export class FunctionSiteCollector {
 		return nameText(declared) || context.pending;
 	}
 
-	#visitFunction(node: Node, context: NameContext, sites: FunctionSite[]): void {
+	#visitFunction(node: Node, context: NameContext, sites: Array<FunctionSite>): void {
 		const declared = childNode(node, 'id');
 		const own = nameText(declared) || context.pending;
 		const name = own || context.owner || ANONYMOUS;
 
-		sites.push({ node, name, named: own !== '', start: node.start ?? node.range?.[0] ?? 0 });
+		sites.push({ name, named: own !== '', node, start: node.start ?? node.range?.[0] ?? 0 });
 
-		this.#descend(node, { pending: '', owner: name, className: context.className }, sites);
+		this.#descend(node, { className: context.className, owner: name, pending: '' }, sites);
 	}
 
-	#descend(node: Node, context: NameContext, sites: FunctionSite[]): void {
+	#descend(node: Node, context: NameContext, sites: Array<FunctionSite>): void {
 		for (const entry of childEntries(node)) {
 			this.#visit(entry.child, { ...context, pending: this.#pendingFor(node, entry.key, context.className) }, sites);
 		}

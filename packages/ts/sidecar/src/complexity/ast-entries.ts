@@ -3,11 +3,11 @@ import { z } from 'zod';
 
 /** One AST child paired with the property it hangs off. */
 export type AstEntry = {
-	/** The parent property the child was read from. */
-	readonly key: string;
-
 	/** The child node. */
 	readonly child: Node;
+
+	/** The parent property the child was read from. */
+	readonly key: string;
 };
 
 /** The three node types that own a parameter list and a body. */
@@ -39,22 +39,22 @@ export function isFunctionNode(node: Node): boolean {
  * @param node - The parent node to enumerate.
  * @returns The child entries in the parser's own property order.
  */
-export function childEntries(node: Node): AstEntry[] {
-	const entries: AstEntry[] = [];
+export function childEntries(node: Node): Array<AstEntry> {
+	const entries: Array<AstEntry> = [];
 
 	for (const [key, value] of Object.entries(node)) {
 		if (Array.isArray(value)) {
 			for (const item of value) {
-				if (item instanceof Node) {
-					entries.push({ key, child: item });
+				if (Node.is(item)) {
+					entries.push({ child: item, key });
 				}
 			}
 
 			continue;
 		}
 
-		if (value instanceof Node) {
-			entries.push({ key, child: value });
+		if (Node.is(value)) {
+			entries.push({ child: value, key });
 		}
 	}
 
@@ -71,7 +71,7 @@ export function childEntries(node: Node): AstEntry[] {
 export function childNode(node: Node, key: string): Node | undefined {
 	const value = node[key];
 
-	return value instanceof Node ? value : undefined;
+	return Node.is(value) ? value : undefined;
 }
 
 /**

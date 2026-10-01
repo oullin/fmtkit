@@ -62,9 +62,9 @@ const here = dirname(process.execPath);
 
 const bindings = {
 	complexity: join(here, 'oxc-parser.node'),
-	pipeline: join(here, 'oxc-parser.node'),
 	oxfmt: join(here, 'oxfmt.node'),
 	oxlint: join(here, 'oxlint.node'),
+	pipeline: join(here, 'oxc-parser.node'),
 } satisfies Record<Mode, string>;
 
 const runtime = SidecarRuntimeDto.from({
@@ -125,6 +125,6 @@ switch (mode) {
 		break;
 
 	default:
-		console.error('usage: fmtkit-ts-sidecar <complexity|pipeline|oxfmt|oxlint> [args...]');
+		process.stderr.write('usage: fmtkit-ts-sidecar <complexity|pipeline|oxfmt|oxlint> [args...]\n');
 		process.exit(2);
 }

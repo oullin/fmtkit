@@ -53,7 +53,7 @@ func (r *jsonPluginRewriter) rewrite(path string) (string, error) {
 	}
 
 	if r.visiting[path] {
-		return "", fmt.Errorf("Oxlint config extends cycle at %q", path)
+		return "", fmt.Errorf("oxlint config extends cycle at %q", path)
 	}
 
 	if resolved, ok := r.resolved[path]; ok {

@@ -102,7 +102,7 @@ func appendModuleLayers(path string, layers *[]moduleLayer, visiting, added map[
 	}
 
 	if visiting[path] {
-		return fmt.Errorf("Oxlint config extends cycle at %q", path)
+		return fmt.Errorf("oxlint config extends cycle at %q", path)
 	}
 
 	if added[path] {
@@ -138,7 +138,7 @@ func appendModuleLayers(path string, layers *[]moduleLayer, visiting, added map[
 
 	for _, relative := range extended {
 		if !filepath.IsAbs(relative) && !strings.HasPrefix(relative, ".") {
-			return fmt.Errorf("Oxlint JSON config %q extends package %q; use a TypeScript config for package imports", path, relative)
+			return fmt.Errorf("oxlint JSON config %q extends package %q; use a TypeScript config for package imports", path, relative)
 		}
 
 		candidate := relative

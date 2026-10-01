@@ -107,6 +107,41 @@ test('leaves an already-spaced document unchanged', () => {
 	assert.deepEqual(pass.computeEdits(SourceDocument.of('fixture.ts', source)), []);
 });
 
+test('separates the first binding call from preceding code and keeps later bindings together', () => {
+	const pass = makePass();
+
+	const source = [
+		'function register(application: Application) {',
+		'\tthis.application = application;',
+		'\tapplication.bindings.singleton(Service, () => new Service());',
+		'\tapplication.bindings.instance(Config, config);',
+		'\tapplication.bindings.singletonIf(Cache, () => new Cache());',
+		'}',
+		'',
+	].join('\n');
+
+	const expected = source.replace('\tthis.application = application;\n', '\tthis.application = application;\n\n');
+	const output = editApplier.apply(source, pass.computeEdits(SourceDocument.of('fixture.ts', source)));
+
+	assert.equal(output, expected);
+	assert.deepEqual(pass.computeEdits(SourceDocument.of('fixture.ts', output)), []);
+});
+
+test('recognises direct bindings calls without separating a binding block', () => {
+	const pass = makePass();
+	const source = ['function register() {', '\tprepare();', '\tbindings.singleton(Service, makeService);', '\tbindings.instance(Config, config);', '}'].join('\n');
+	const output = editApplier.apply(source, pass.computeEdits(SourceDocument.of('fixture.js', source)));
+
+	assert.equal(output, source.replace('\tprepare();\n', '\tprepare();\n\n'));
+});
+
+test('does not separate calls through an unrelated member named singleton', () => {
+	const pass = makePass();
+	const source = ['function register() {', '\tprepare();', '\tservices.singleton(Service, makeService);', '}'].join('\n');
+
+	assert.deepEqual(pass.computeEdits(SourceDocument.of('fixture.ts', source)), []);
+});
+
 test('returns no edits for source with syntax errors', () => {
 	const pass = makePass();
 

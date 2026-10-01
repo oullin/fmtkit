@@ -117,6 +117,26 @@ const cases: Case[] = [
 		expected: ['function run() {', '\tlet value = 1;', '\tlet next = 2;', '', '\treturn value + next;', '}', ''].join('\n'),
 	},
 	{
+		name: 'binding calls start a spaced block',
+		input: [
+			'function register(application: Application) {',
+			'\tthis.application = application;',
+			'\tapplication.bindings.singleton(Service, makeService);',
+			'\tapplication.bindings.instance(Config, config);',
+			'}',
+			'',
+		].join('\n'),
+		expected: [
+			'function register(application: Application) {',
+			'\tthis.application = application;',
+			'',
+			'\tapplication.bindings.singleton(Service, makeService);',
+			'\tapplication.bindings.instance(Config, config);',
+			'}',
+			'',
+		].join('\n'),
+	},
+	{
 		name: 'multiline imports and consts move last in their groups',
 		input: ['import { z } from "z";', 'import {', '\ta,', '} from "a";', 'import { y } from "y";', 'const b = 1;', 'const a = {', '\tx: 1,', '};', 'const c = 2;', ''].join('\n'),
 		expected: ['import { z } from "z";', 'import { y } from "y";', '', 'import {', '\ta,', '} from "a";', '', 'const b = 1;', 'const c = 2;', '', 'const a = {', '\tx: 1,', '};', ''].join('\n'),

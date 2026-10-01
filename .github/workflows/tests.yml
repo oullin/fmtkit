@@ -19,7 +19,7 @@ env:
 
 jobs:
     lint:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         strategy:
             fail-fast: false
             matrix:
@@ -40,14 +40,14 @@ jobs:
                       packages/go/go.mod
                       packages/go/go.sum
 
-            - uses: golangci/golangci-lint-action@v8
+            - uses: golangci/golangci-lint-action@v9
               name: Lint ${{ matrix.module }}
               with:
                   version: v2.12.2
                   working-directory: packages/go/${{ matrix.module }}
 
     check:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
         strategy:
             fail-fast: false
             matrix:
@@ -89,7 +89,7 @@ jobs:
 
     test:
         needs: check
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
 
         steps:
             - uses: actions/checkout@v6
@@ -124,21 +124,21 @@ jobs:
             - name: Go - Run driver tests with race detector and coverage
               run: CGO_ENABLED=1 ./scripts/task.sh with-env go -C packages/go/driver test ./... -race -coverprofile=coverage.out -covermode=atomic -v
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               name: Upload formatter coverage artifact
               with:
                   name: formatter-coverage
                   path: packages/go/formatter/coverage.out
                   if-no-files-found: error
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               name: Upload vet coverage artifact
               with:
                   name: vet-coverage
                   path: packages/go/vet/coverage.out
                   if-no-files-found: error
 
-            - uses: actions/upload-artifact@v4
+            - uses: actions/upload-artifact@v7
               name: Upload driver coverage artifact
               with:
                   name: driver-coverage
@@ -146,7 +146,7 @@ jobs:
                   if-no-files-found: error
 
     binary:
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
 
         steps:
             - uses: actions/checkout@v6
@@ -173,7 +173,7 @@ jobs:
                       packages/go/go.mod
                       packages/go/go.sum
 
-            - uses: goreleaser/goreleaser-action@v6
+            - uses: goreleaser/goreleaser-action@v7
               name: Validate GoReleaser config
               with:
                   version: '~> v2'
@@ -195,25 +195,25 @@ jobs:
 
     coverage:
         needs: test
-        runs-on: ubuntu-latest
+        runs-on: ubuntu-24.04
 
         steps:
             - uses: actions/checkout@v6
               name: Checkout repository
 
-            - uses: actions/download-artifact@v4
+            - uses: actions/download-artifact@v7
               name: Download formatter coverage artifact
               with:
                   name: formatter-coverage
                   path: packages/go/formatter
 
-            - uses: actions/download-artifact@v4
+            - uses: actions/download-artifact@v7
               name: Download vet coverage artifact
               with:
                   name: vet-coverage
                   path: packages/go/vet
 
-            - uses: actions/download-artifact@v4
+            - uses: actions/download-artifact@v7
               name: Download driver coverage artifact
               with:
                   name: driver-coverage

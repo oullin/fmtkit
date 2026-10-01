@@ -16,7 +16,7 @@ FROM debian:trixie-slim
 ARG TARGETPLATFORM
 
 # Keep in sync with the go directive in packages/go/go.mod.
-ARG GO_VERSION=1.26.5
+ARG GO_VERSION=1.27.1
 
 # git: the binary's own file discovery (gitfiles) shells out to it.
 RUN apt-get update \

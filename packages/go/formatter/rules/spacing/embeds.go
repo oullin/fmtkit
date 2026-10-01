@@ -116,7 +116,7 @@ func (e *embedDirectiveRepairer) repair(filename string, src []byte) ([]byte, er
 			removeEnd++
 		}
 
-		groupLines := append([][]byte(nil), lines[groupStart:groupEnd]...)
+		groupLines := slices.Clone(lines[groupStart:groupEnd])
 		lines = append(lines[:groupStart], lines[removeEnd:]...)
 
 		if insertAt > groupStart {

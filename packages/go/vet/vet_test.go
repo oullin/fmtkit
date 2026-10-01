@@ -80,7 +80,7 @@ func TestParseGoEnvValuesPreservesOrderAndEmptyLines(t *testing.T) {
 }
 
 func TestRunSkipsWhenDisabled(t *testing.T) {
-	report := Run(context.Background(), t.TempDir(), Config{Enabled: false})
+	report := Run(t.Context(), t.TempDir(), Config{Enabled: false})
 
 	if report.Root != "" || report.ErrorCount() != 0 {
 		t.Fatalf("expected empty report, got %#v", report)
@@ -94,7 +94,7 @@ func TestRunSkipsWhenGoToolchainUnavailable(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), t.TempDir(), Config{Enabled: true}, tc)
+	report := run(t.Context(), t.TempDir(), Config{Enabled: true}, tc)
 
 	if !report.Skipped {
 		t.Fatalf("expected skipped report, got %#v", report)
@@ -112,7 +112,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 	workspaceFile := filepath.Join(workspaceRoot, "go.work")
 	moduleFile := filepath.Join(moduleRoot, "go.mod")
 
-	testutil.WriteFile(t, workspaceFile, "go 1.26.5\n")
+	testutil.WriteFile(t, workspaceFile, "go 1.27.1\n")
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
 	tc := fakeToolchain{
@@ -121,7 +121,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), workRoot, Config{Enabled: true}, tc)
+	report := run(t.Context(), workRoot, Config{Enabled: true}, tc)
 
 	if report.Root != workspaceRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -141,7 +141,7 @@ func TestRunFallsBackToModuleWhenWorkspaceUnset(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), workRoot, Config{Enabled: true}, tc)
+	report := run(t.Context(), workRoot, Config{Enabled: true}, tc)
 
 	if report.Root != moduleRoot {
 		t.Fatalf("unexpected report: %#v", report)
@@ -169,7 +169,7 @@ func run() {
 	println("ok")
 }
 `)
-	testutil.WriteGoWork(t, workspaceRoot, `go 1.26.5
+	testutil.WriteGoWork(t, workspaceRoot, `go 1.27.1
 
 use (
 	./module-a
@@ -177,7 +177,7 @@ use (
 )
 `)
 
-	report := Run(context.Background(), workspaceRoot, Config{Enabled: true})
+	report := Run(t.Context(), workspaceRoot, Config{Enabled: true})
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one vet error, got %#v", report)
@@ -199,7 +199,7 @@ func TestRunReportsGoEnvLookupError(t *testing.T) {
 		},
 	}
 
-	report := run(context.Background(), t.TempDir(), Config{Enabled: true}, tc)
+	report := run(t.Context(), t.TempDir(), Config{Enabled: true}, tc)
 
 	if report.ErrorCount() != 1 {
 		t.Fatalf("expected one error, got %#v", report)
@@ -211,7 +211,7 @@ func TestRunReportsGoEnvLookupError(t *testing.T) {
 }
 
 func TestRunSkipsOutsideModule(t *testing.T) {
-	report := Run(context.Background(), t.TempDir(), Config{Enabled: true})
+	report := Run(t.Context(), t.TempDir(), Config{Enabled: true})
 
 	if report.ErrorCount() != 0 {
 		t.Fatalf("expected empty report: %#v", report)
@@ -271,7 +271,7 @@ func TestGoEnvWrapsGenericErrors(t *testing.T) {
 		},
 	}
 
-	_, err := goEnv(context.Background(), t.TempDir(), tc, "GOWORK", "GOMOD")
+	_, err := goEnv(t.Context(), t.TempDir(), tc, "GOWORK", "GOMOD")
 
 	if err == nil {
 		t.Fatal("expected error")

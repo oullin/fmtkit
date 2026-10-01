@@ -49,7 +49,7 @@ git init --quiet .
 
 printf 'const  a = { x:1, s:"hi" }\nexport default a\n' > app.ts
 printf 'package p\n\nfunc f() {\n\tdefer println("d")\n\treturn\n}\n' > app.go
-printf 'module fixture\n\ngo 1.26.5\n' > go.mod
+printf 'module fixture\n\ngo 1.27.1\n' > go.mod
 
 docker run --rm -v "${fixture}:/work" fmtkit:smoke format .
 

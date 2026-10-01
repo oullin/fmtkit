@@ -28,14 +28,15 @@ jobs:
                     - sidecar
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7.0.1
 
-            - uses: voidzero-dev/setup-vp@v1
+            - uses: voidzero-dev/setup-vp@v1.21.1
               with:
-                  node-version: 25.9.0
+                  node-version-file: .nvmrc
+                  run-install: false
                   cache: true
 
-            - uses: actions/setup-go@v6
+            - uses: actions/setup-go@v7.0.0
               if: matrix.workspace != 'sidecar'
               with:
                   go-version-file: packages/go/go.mod
@@ -54,14 +55,15 @@ jobs:
         runs-on: ubuntu-24.04
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7.0.1
 
-            - uses: voidzero-dev/setup-vp@v1
+            - uses: voidzero-dev/setup-vp@v1.21.1
               with:
-                  node-version: 25.9.0
+                  node-version-file: .nvmrc
+                  run-install: false
                   cache: true
 
-            - uses: actions/setup-go@v6
+            - uses: actions/setup-go@v7.0.0
               with:
                   go-version-file: packages/go/go.mod
                   cache-dependency-path: |
@@ -85,7 +87,7 @@ jobs:
             tag: ${{ steps.version.outputs.new_tag }}
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7.0.1
               with:
                   fetch-depth: 0
 

@@ -1,7 +1,6 @@
 package sourcefiles
 
 import (
-	"context"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -22,7 +21,7 @@ func collectFormattable(t *testing.T, cwd string, includeDeclarations bool, sele
 		t.Fatalf("new collector: %v", err)
 	}
 
-	return collector.Formattable(context.Background(), scopes)
+	return collector.Formattable(t.Context(), scopes)
 }
 
 func collectLintable(t *testing.T, cwd string, includeDeclarations bool, selection gitfiles.Selection, scopes ...string) ([]string, []string, error) {
@@ -34,7 +33,7 @@ func collectLintable(t *testing.T, cwd string, includeDeclarations bool, selecti
 		t.Fatalf("new collector: %v", err)
 	}
 
-	return collector.Lintable(context.Background(), scopes)
+	return collector.Lintable(t.Context(), scopes)
 }
 
 func TestCollectFiltersSourceFiles(t *testing.T) {

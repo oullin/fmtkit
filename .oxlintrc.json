@@ -1,5 +1,5 @@
 {
-	"$schema": "https://cdn.jsdelivr.net/npm/oxlint@1.80.0/configuration_schema.json",
+	"$schema": "https://cdn.jsdelivr.net/npm/oxlint@1.86.0/configuration_schema.json",
 	"plugins": [
 		"typescript",
 		"oxc",

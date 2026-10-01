@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -21,11 +22,7 @@ func Load(cwd, explicitPath string) (Config, error) {
 
 	v := viper.New()
 
-	if explicitPath != "" {
-		v.SetConfigFile(explicitPath)
-	} else {
-		v.SetConfigFile(filepath.Join(cwd, DefaultFileName))
-	}
+	v.SetConfigFile(cmp.Or(explicitPath, filepath.Join(cwd, DefaultFileName)))
 
 	if err := v.ReadInConfig(); err != nil {
 		_, notFound := errors.AsType[viper.ConfigFileNotFoundError](err)

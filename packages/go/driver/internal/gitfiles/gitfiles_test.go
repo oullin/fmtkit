@@ -1,7 +1,6 @@
 package gitfiles
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -54,7 +53,7 @@ func TestFilesListsTrackedAndUntracked(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	entries, err := tree.Files(context.Background(), dir, SelectionAll)
+	entries, err := tree.Files(t.Context(), dir, SelectionAll)
 
 	if err != nil {
 		t.Fatalf("files: %v", err)
@@ -83,7 +82,7 @@ func TestFilesSurfacesGitErrorsOutsideARepo(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	if _, err := tree.Files(context.Background(), dir, SelectionAll); err == nil {
+	if _, err := tree.Files(t.Context(), dir, SelectionAll); err == nil {
 		t.Fatal("expected an error running git outside a work tree")
 	}
 }
@@ -104,7 +103,7 @@ func TestChangedPathsCoversOnlyTheWorkingTreesChanges(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	files, err := tree.ChangedPaths(context.Background(), nil)
+	files, err := tree.ChangedPaths(t.Context(), nil)
 
 	if err != nil {
 		t.Fatalf("changed paths: %v", err)
@@ -132,7 +131,7 @@ func TestChangedPathsIgnoresPrettierIgnore(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	files, err := tree.ChangedPaths(context.Background(), nil)
+	files, err := tree.ChangedPaths(t.Context(), nil)
 
 	if err != nil {
 		t.Fatalf("changed paths: %v", err)
@@ -161,7 +160,7 @@ func TestChangedPathsSkipsMissingScopes(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	files, err := tree.ChangedPaths(context.Background(), []string{"src", "missing"})
+	files, err := tree.ChangedPaths(t.Context(), []string{"src", "missing"})
 
 	if err != nil {
 		t.Fatalf("changed paths: %v", err)
@@ -192,7 +191,7 @@ func TestIntersectChangedKeepsOnlyOwnedAndChanged(t *testing.T) {
 		filepath.Join(dir, "vendored.go"),
 	}
 
-	files, err := tree.IntersectChanged(context.Background(), nil, owned)
+	files, err := tree.IntersectChanged(t.Context(), nil, owned)
 
 	if err != nil {
 		t.Fatalf("intersect changed: %v", err)
@@ -215,7 +214,7 @@ func TestIntersectChangedSurfacesGitErrors(t *testing.T) {
 		t.Fatalf("new tree: %v", err)
 	}
 
-	if _, err := tree.IntersectChanged(context.Background(), nil, []string{filepath.Join(dir, "a.go")}); err == nil {
+	if _, err := tree.IntersectChanged(t.Context(), nil, []string{filepath.Join(dir, "a.go")}); err == nil {
 		t.Fatal("expected an error running git outside a work tree")
 	}
 }

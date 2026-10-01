@@ -161,7 +161,7 @@ func (p ignorePattern) matches(rel string) bool {
 		return true
 	}
 
-	for i := 0; i < len(rel); i++ {
+	for i := range len(rel) {
 		if rel[i] == '/' && p.re.MatchString(rel[:i]) {
 			return true
 		}

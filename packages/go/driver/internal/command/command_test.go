@@ -42,7 +42,7 @@ func TestDispatchRoutesToCommand(t *testing.T) {
 
 	set := fixtureSet(2, &stderr, &ran)
 
-	if code := set.Dispatch(context.Background(), []string{"do", "a", "b"}); code != 2 {
+	if code := set.Dispatch(t.Context(), []string{"do", "a", "b"}); code != 2 {
 		t.Fatalf("Run should receive 2 args, got exit %d", code)
 	}
 
@@ -63,7 +63,7 @@ func TestDispatchMatchesAliases(t *testing.T) {
 
 		set := fixtureSet(1, &stderr, &ran)
 
-		if code := set.Dispatch(context.Background(), []string{alias}); code != 0 {
+		if code := set.Dispatch(t.Context(), []string{alias}); code != 0 {
 			t.Fatalf("alias %q: unexpected exit %d", alias, code)
 		}
 
@@ -80,7 +80,7 @@ func TestDispatchEmptyPrintsUsageAndErrExit(t *testing.T) {
 
 	set := fixtureSet(2, &stderr, &ran)
 
-	if code := set.Dispatch(context.Background(), nil); code != 2 {
+	if code := set.Dispatch(t.Context(), nil); code != 2 {
 		t.Fatalf("empty args exit = %d, want ErrExit 2", code)
 	}
 
@@ -98,7 +98,7 @@ func TestDispatchUnknownPrintsErrorThenUsage(t *testing.T) {
 
 	set := fixtureSet(1, &stderr, &ran)
 
-	if code := set.Dispatch(context.Background(), []string{"bogus"}); code != 1 {
+	if code := set.Dispatch(t.Context(), []string{"bogus"}); code != 1 {
 		t.Fatalf("unknown exit = %d, want ErrExit 1", code)
 	}
 
@@ -121,7 +121,7 @@ func TestDispatchHelpPrintsUsageAndExitsZero(t *testing.T) {
 
 		set := fixtureSet(2, &stderr, &ran)
 
-		if code := set.Dispatch(context.Background(), []string{arg}); code != 0 {
+		if code := set.Dispatch(t.Context(), []string{arg}); code != 0 {
 			t.Fatalf("help arg %q: exit = %d, want 0", arg, code)
 		}
 

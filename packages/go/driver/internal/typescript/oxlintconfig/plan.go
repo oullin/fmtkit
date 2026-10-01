@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -118,13 +119,7 @@ func WithBatches(req Request, use func([]Batch) error) (err error) {
 		chain.files = append(chain.files, absoluteFile)
 	}
 
-	keys := make([]string, 0, len(chains))
-
-	for key := range chains {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
+	keys := slices.Sorted(maps.Keys(chains))
 
 	batches := make([]Batch, 0, len(keys))
 	generated := make([]string, 0, len(keys))
@@ -136,7 +131,7 @@ func WithBatches(req Request, use func([]Batch) error) (err error) {
 	for _, key := range keys {
 		chain := chains[key]
 
-		sort.Strings(chain.files)
+		slices.Sort(chain.files)
 
 		configPath := base
 
@@ -167,7 +162,7 @@ func WithBatches(req Request, use func([]Batch) error) (err error) {
 
 		batches = append(batches, Batch{
 			ConfigPath:       configPath,
-			Files:            append([]string(nil), chain.files...),
+			Files:            slices.Clone(chain.files),
 			ProjectOxlint:    projectOxlint,
 			ProjectConfigDir: projectConfigDir,
 		})
@@ -456,10 +451,8 @@ func hasTrailingComma(value hujson.Value) bool {
 			return true
 		}
 
-		for _, element := range value.Elements {
-			if hasTrailingComma(element) {
-				return true
-			}
+		if slices.ContainsFunc(value.Elements, hasTrailingComma) {
+			return true
 		}
 	}
 

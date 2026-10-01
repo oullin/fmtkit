@@ -1,7 +1,6 @@
 package formatter_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +24,7 @@ func run() {
 }
 `)
 
-	report, err := formatter.Check(context.Background(), []string{root}, config.Default())
+	report, err := formatter.Check(t.Context(), []string{root}, config.Default())
 
 	if err != nil {
 		t.Fatalf("check: %v", err)
@@ -47,7 +46,7 @@ func run() {
 }
 `)
 
-	report, err := formatter.Format(context.Background(), []string{root}, config.Default())
+	report, err := formatter.Format(t.Context(), []string{root}, config.Default())
 
 	if err != nil {
 		t.Fatalf("format: %v", err)
@@ -93,7 +92,7 @@ func TestFormatRepairsGoEmbedDirectivePlacement(t *testing.T) {
 			path := filepath.Join(root, "sample.go")
 			testutil.WriteGoFile(t, path, "package sample\n\nimport \"embed\"\n\n"+tt.directive+"\n\ntype runtime struct{}\n\nvar rootTemplateFS embed.FS\n")
 
-			report, err := formatter.Format(context.Background(), []string{root}, config.Default())
+			report, err := formatter.Format(t.Context(), []string{root}, config.Default())
 
 			if err != nil {
 				t.Fatalf("format: %v", err)
@@ -143,7 +142,7 @@ func TestFormatPreservesImportsBeforeAnchoredDecls(t *testing.T) {
 			path := filepath.Join(root, "sample.go")
 			testutil.WriteGoFile(t, path, "package sample\n\n"+tt.directive+"\n\nimport \"embed\"\n\ntype runtime struct{}\n\nvar rootTemplateFS embed.FS\n")
 
-			report, err := formatter.Format(context.Background(), []string{root}, config.Default())
+			report, err := formatter.Format(t.Context(), []string{root}, config.Default())
 
 			if err != nil {
 				t.Fatalf("format: %v", err)
@@ -187,7 +186,7 @@ type runtime struct{}
 		t.Fatalf("read file: %v", err)
 	}
 
-	report, err := formatter.Format(context.Background(), []string{root}, config.Default())
+	report, err := formatter.Format(t.Context(), []string{root}, config.Default())
 
 	if err != nil {
 		t.Fatalf("format: %v", err)

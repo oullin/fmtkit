@@ -25,7 +25,7 @@ type ErrorResult struct {
 // Report summarizes the automatic go vet run.
 type Report struct {
 	Root    string        `json:"root,omitempty"`
-	Skipped bool          `json:"skipped,omitempty"`
+	Skipped bool          `json:"skipped,omitzero"`
 	Errors  []ErrorResult `json:"errors,omitempty"`
 }
 
@@ -187,7 +187,7 @@ func parseGoEnvValues(out []byte, count int) []string {
 
 	values := make([]string, count)
 
-	for i := 0; i < count && i < len(lines); i++ {
+	for i := range min(count, len(lines)) {
 		values[i] = strings.TrimSuffix(lines[i], "\r")
 	}
 
@@ -223,11 +223,12 @@ func discoverVetTargets(ctx context.Context, root string, tc toolchain) ([]strin
 		return nil, wrapExitError(err, "resolve go vet targets")
 	}
 
-	lines := strings.Split(string(out), "\n")
-	targets := make([]string, 0, len(lines))
-	seen := make(map[string]struct{}, len(lines))
+	output := string(out)
+	count := strings.Count(output, "\n") + 1
+	targets := make([]string, 0, count)
+	seen := make(map[string]struct{}, count)
 
-	for _, line := range lines {
+	for line := range strings.SplitSeq(output, "\n") {
 		target := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
 
 		if target == "" {

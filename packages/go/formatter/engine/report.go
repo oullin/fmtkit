@@ -11,7 +11,7 @@ type FileResult struct {
 	Applied    []string          `json:"applied,omitempty"`
 	Violations []rules.Violation `json:"violations,omitempty"`
 	Error      string            `json:"error,omitempty"`
-	Changed    bool              `json:"changed,omitempty"`
+	Changed    bool              `json:"changed,omitzero"`
 }
 
 // ErrorResult describes an engine error associated with a file or workspace.

@@ -39,7 +39,7 @@ type agentChange struct {
 type agentViolation struct {
 	File    string `json:"file"`
 	Rule    string `json:"rule"`
-	Line    int    `json:"line,omitempty"`
+	Line    int    `json:"line,omitzero"`
 	Message string `json:"message"`
 }
 

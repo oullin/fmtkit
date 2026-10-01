@@ -162,7 +162,7 @@ func (e *Engine) processFile(ctx context.Context, path string, write bool) FileR
 		return FileResult{File: path, Error: fmt.Sprintf("read file: %v", err)}
 	}
 
-	current := append([]byte(nil), original...)
+	current := bytes.Clone(original)
 	result := FileResult{File: path}
 
 	for _, rule := range e.rules {

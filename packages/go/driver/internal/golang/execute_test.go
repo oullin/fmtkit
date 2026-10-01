@@ -1,7 +1,6 @@
 package golang
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -20,7 +19,7 @@ func TestExecuteCheckReportsViolationWithoutRewriting(t *testing.T) {
 		t.Fatalf("write sample: %v", err)
 	}
 
-	outcome, err := Execute(context.Background(), Request{
+	outcome, err := Execute(t.Context(), Request{
 		Mode:   report.ModeCheck,
 		Paths:  []string{file},
 		Config: driverconfig.Default(),
@@ -56,7 +55,7 @@ func TestExecuteFormatRewritesFile(t *testing.T) {
 		t.Fatalf("write sample: %v", err)
 	}
 
-	outcome, err := Execute(context.Background(), Request{
+	outcome, err := Execute(t.Context(), Request{
 		Mode:   report.ModeFormat,
 		Paths:  []string{file},
 		Config: driverconfig.Default(),
@@ -92,7 +91,7 @@ func TestExecuteChangedScopeOutsideGitTreeErrors(t *testing.T) {
 
 	// A changed scope needs a git tree; a bare temp dir has none, so Execute must
 	// surface the error rather than silently formatting everything.
-	_, err := Execute(context.Background(), Request{
+	_, err := Execute(t.Context(), Request{
 		Mode:   report.ModeFormat,
 		Paths:  []string{file},
 		Config: driverconfig.Default(),

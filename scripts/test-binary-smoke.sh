@@ -38,7 +38,7 @@ git init --quiet .
 # rewrites it, while a dropped config leaves oxfmt on its double-quote default.
 printf 'const  a = { x:1, s:"hi" }\nexport default a\n' > app.ts
 printf 'package p\n\nfunc f() {\n\tdefer println("d")\n\treturn\n}\n' > app.go
-printf 'module fixture\n\ngo 1.26.5\n' > go.mod
+printf 'module fixture\n\ngo 1.27.1\n' > go.mod
 
 # The Vue SFC is the embedded-formatter probe: its <template> and <style> blocks
 # are formatted by oxfmt's external (prettier) formatter, the code path that a
@@ -200,7 +200,7 @@ mkdir -p "$import_fixture/nested"
 cd "$import_fixture"
 git init --quiet .
 printf '{"private":true,"name":"fmtkit-import-fixture","version":"0.0.0","type":"module"}\n' > package.json
-npm install --no-save --no-audit --no-fund --prefix . oxlint@1.80.0 @nkzw/oxlint-config@2.0.1 >/dev/null
+npm install --no-save --no-audit --no-fund --prefix . oxlint@1.86.0 @nkzw/oxlint-config@2.0.1 >/dev/null
 printf "import nkzw from '@nkzw/oxlint-config';\nimport { defineConfig } from 'oxlint';\nexport default defineConfig({ extends: [nkzw] });\n" > oxlint.config.ts
 printf 'const value = new Date();\nexport const bad = value instanceof Date;\n' > imported.ts
 printf '{"rules":{"@nkzw/no-instanceof":"off"}}\n' > nested/.oxlintrc.json

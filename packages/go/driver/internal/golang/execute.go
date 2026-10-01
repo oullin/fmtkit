@@ -66,9 +66,8 @@ func goComplexity(req Request) *complexity.Report {
 	}
 
 	scan := complexity.ScanGo(req.Root, req.Paths, req.Config.Formatter())
-	scored := complexity.Evaluate(req.Root, req.Config.ComplexityConfig(), []complexity.Scan{scan})
 
-	return &scored
+	return new(complexity.Evaluate(req.Root, req.Config.ComplexityConfig(), []complexity.Scan{scan}))
 }
 
 func runFormatter(ctx context.Context, req Request, cfg formatterconfig.Config) (formatterengine.Report, error) {

@@ -90,7 +90,7 @@ func ParseLintSummary(log string) LintSummary {
 	errors := 0
 	matches := 0
 
-	for _, line := range lines(log) {
+	for line := range strings.SplitSeq(log, "\n") {
 		parts := lintResultPattern.FindStringSubmatch(line)
 
 		if len(parts) == 0 {

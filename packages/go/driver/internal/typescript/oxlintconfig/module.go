@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -22,13 +23,7 @@ func isConfigModule(path string) bool {
 }
 
 func slicesContainsConfigModule(paths []string) bool {
-	for _, path := range paths {
-		if isConfigModule(path) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(paths, isConfigModule)
 }
 
 // materialiseModule composes a JS config from original source modules and

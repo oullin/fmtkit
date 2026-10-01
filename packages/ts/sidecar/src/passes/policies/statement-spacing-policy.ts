@@ -70,6 +70,10 @@ export class StatementSpacingPolicy {
 			return true;
 		}
 
+		if (this.#hasBindingBoundary(previous, next)) {
+			return true;
+		}
+
 		if (this.#isLoopStatement(next)) {
 			return !this.#isStructuredPreviousStatement(previous);
 		}
@@ -167,6 +171,40 @@ export class StatementSpacingPolicy {
 
 	#isLetDeclaration(node: Node): boolean {
 		return node.type === 'VariableDeclaration' && this.#ast.declarationKind(node) === 'let';
+	}
+
+	#hasBindingBoundary(previous: Node, next: Node): boolean {
+		return this.#isBindingCallStatement(next) && !this.#isBindingCallStatement(previous);
+	}
+
+	#isBindingCallStatement(node: Node): boolean {
+		const call = this.#ast.childNode(node, 'expression');
+
+		return node.type === 'ExpressionStatement' && call?.type === 'CallExpression' && this.#isBindingsMethod(this.#ast.childNode(call, 'callee'));
+	}
+
+	#isBindingsMethod(callee: Node | undefined): boolean {
+		if (callee?.type !== 'MemberExpression' || callee.computed) {
+			return false;
+		}
+
+		const method = this.#ast.childNode(callee, 'property');
+
+		return method?.type === 'Identifier' && this.#isBindingsReceiver(this.#ast.childNode(callee, 'object'));
+	}
+
+	#isBindingsReceiver(receiver: Node | undefined): boolean {
+		if (receiver?.type === 'Identifier') {
+			return this.#ast.nodeName(receiver) === 'bindings';
+		}
+
+		if (receiver?.type !== 'MemberExpression' || receiver.computed) {
+			return false;
+		}
+
+		const bindingProperty = this.#ast.childNode(receiver, 'property');
+
+		return bindingProperty?.type === 'Identifier' && this.#ast.nodeName(bindingProperty) === 'bindings';
 	}
 
 	#containsAwait(node: Node): boolean {

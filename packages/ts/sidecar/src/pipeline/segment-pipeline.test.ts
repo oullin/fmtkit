@@ -117,6 +117,26 @@ const cases: Array<Case> = [
 		name: 'consecutive lets stay tight',
 	},
 	{
+		expected: [
+			'function register(application: Application) {',
+			'\tthis.application = application;',
+			'',
+			'\tapplication.bindings.singleton(Service, makeService);',
+			'\tapplication.bindings.instance(Config, config);',
+			'}',
+			'',
+		].join('\n'),
+		input: [
+			'function register(application: Application) {',
+			'\tthis.application = application;',
+			'\tapplication.bindings.singleton(Service, makeService);',
+			'\tapplication.bindings.instance(Config, config);',
+			'}',
+			'',
+		].join('\n'),
+		name: 'binding calls start a spaced block',
+	},
+	{
 		expected: ['import { z } from "z";', 'import { y } from "y";', '', 'import {', '\ta,', '} from "a";', '', 'const b = 1;', 'const c = 2;', '', 'const a = {', '\tx: 1,', '};', ''].join('\n'),
 		input: ['import { z } from "z";', 'import {', '\ta,', '} from "a";', 'import { y } from "y";', 'const b = 1;', 'const a = {', '\tx: 1,', '};', 'const c = 2;', ''].join('\n'),
 		name: 'multiline imports and consts move last in their groups',

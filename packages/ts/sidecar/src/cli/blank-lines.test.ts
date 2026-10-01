@@ -13,7 +13,7 @@ const tsx = fileURLToPath(
 	import.meta.resolve('tsx'),
 );
 
-function run(command: string, args: string[], cwd: string): void {
+function run(command: string, args: Array<string>, cwd: string): void {
 	const result = spawnSync(
 		command,
 		args,
@@ -55,7 +55,7 @@ async function withFixture(files: Record<string, string>, fn: (dir: string) => P
 	} finally {
 		await rm(
 			dir,
-			{ recursive: true, force: true },
+			{ force: true, recursive: true },
 		);
 	}
 }
@@ -87,9 +87,9 @@ test('adds expected blank lines in Vue script blocks', async () => {
 				'utf8',
 			);
 
-			assert.match(output, /const hoveredItem = computed\(\(\) => \{\n    const id = hoveredId\.value;\n\n    if \(!id\) \{/);
-			assert.match(output, /return null;\n    \}\n\n    if \(id in systemLabels\) \{/);
-			assert.match(output, /shortcut: undefined \};\n    \}\n\n    return props\.items/);
+			assert.match(output, /const hoveredItem = computed\(\(\) => \{\n {4}const id = hoveredId\.value;\n\n {4}if \(!id\) \{/);
+			assert.match(output, /return null;\n {4}\}\n\n {4}if \(id in systemLabels\) \{/);
+			assert.match(output, /shortcut: undefined \};\n {4}\}\n\n {4}return props\.items/);
 		},
 	);
 });
@@ -138,8 +138,8 @@ test('ignores untracked ignored files and declaration files', async () => {
 	await withFixture(
 		{
 			'.gitignore': 'ignored.ts\n',
-			'tracked.ts': ['function run() {', '\tconst value = 1;', '\tif (value) return value;', '\treturn 0;', '}', ''].join('\n'),
 			'ignored.ts': ['function run() {', '\tconst value = 1;', '\tif (value) return value;', '}', ''].join('\n'),
+			'tracked.ts': ['function run() {', '\tconst value = 1;', '\tif (value) return value;', '\treturn 0;', '}', ''].join('\n'),
 			'types.d.ts': ['declare const value: string;', 'declare function run(): string;', ''].join('\n'),
 		},
 		async (dir) => {

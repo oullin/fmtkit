@@ -15,7 +15,7 @@ export class FileFormatter {
 	 * @param dependencies.splitter - Extracts and rewrites host embedded blocks.
 	 * @param dependencies.pipeline - The pass pipeline applied to each source unit.
 	 */
-	constructor(dependencies: { splitter: EmbeddedBlockSplitter; pipeline: PassPipeline }) {
+	constructor(dependencies: { pipeline: PassPipeline; splitter: EmbeddedBlockSplitter }) {
 		this.#splitter = dependencies.splitter;
 		this.#pipeline = dependencies.pipeline;
 		this.label = dependencies.pipeline.name;

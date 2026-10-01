@@ -6,26 +6,26 @@ import type { Edit } from '#sidecar/syntax/edits';
 
 const editApplier = new EditApplier();
 
-const editCaseArbitrary = fc.string({ minLength: 1, maxLength: 60 }).chain((source) => {
+const editCaseArbitrary = fc.string({ maxLength: 60, minLength: 1 }).chain((source) => {
 	return fc
 		.array(
 			fc.record({
-				start: fc.integer({ min: 0, max: source.length - 1 }),
-				length: fc.integer({ min: 1, max: source.length }),
+				length: fc.integer({ max: source.length, min: 1 }),
 				replacement: fc.string({ maxLength: 12 }),
+				start: fc.integer({ max: source.length - 1, min: 0 }),
 			}),
 			{ maxLength: 30 },
 		)
 		.map((rawEdits) => {
-			const edits: Edit[] = rawEdits.map((edit) => {
+			const edits: Array<Edit> = rawEdits.map((edit) => {
 				return {
-					start: edit.start,
 					end: Math.min(source.length, edit.start + edit.length),
 					replacement: edit.replacement,
+					start: edit.start,
 				};
 			});
 
-			return { source, edits };
+			return { edits, source };
 		});
 });
 
@@ -56,7 +56,7 @@ test('EditApplier.nonOverlapping returns a sorted non-overlapping input subset',
 
 test('EditApplier.apply matches applying accepted edits individually right-to-left', () => {
 	fc.assert(
-		fc.property(editCaseArbitrary, ({ source, edits }) => {
+		fc.property(editCaseArbitrary, ({ edits, source }) => {
 			const accepted = editApplier.nonOverlapping(edits);
 
 			let individually = source;

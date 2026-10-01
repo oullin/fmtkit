@@ -26,7 +26,7 @@ export class ComplexityCommand implements CliCommand {
 	 * @param dependencies.sourceFiles - Reads the sources to score.
 	 * @param dependencies.scanner - Scores one source file.
 	 */
-	constructor(dependencies: { sourceFiles: SourceFiles; scanner: ComplexityScanner }) {
+	constructor(dependencies: { scanner: ComplexityScanner; sourceFiles: SourceFiles }) {
 		this.#sourceFiles = dependencies.sourceFiles;
 		this.#scanner = dependencies.scanner;
 	}
@@ -37,39 +37,39 @@ export class ComplexityCommand implements CliCommand {
 	 * @param argv - Arguments after the executable and script path.
 	 * @returns `0` when every file was scored, `1` when any could not be.
 	 */
-	async run(argv: readonly string[]): Promise<number> {
+	async run(argv: ReadonlyArray<string>): Promise<number> {
 		const options = ComplexityCliDto.parse(argv);
 
 		const files = (await this.#targets(options)).filter((file) => {
 			return ComplexityCliDto.isScorable(file);
 		});
 
-		const functions: ScoredFunction[] = [];
-		const errors: ScanFailure[] = [];
+		const functions: Array<ScoredFunction> = [];
+		const errors: Array<ScanFailure> = [];
 
 		for (const result of await mapPool(files, SCAN_CONCURRENCY, (file) => this.#scanFile(file, options.root))) {
 			functions.push(...result.functions);
 			errors.push(...result.errors);
 		}
 
-		process.stdout.write(`${JSON.stringify({ functions, errors })}\n`);
+		process.stdout.write(`${JSON.stringify({ errors, functions })}\n`);
 
 		return errors.length > 0 ? 1 : 0;
 	}
 
-	async #scanFile(file: string, root: string): Promise<{ functions: ScoredFunction[]; errors: ScanFailure[] }> {
+	async #scanFile(file: string, root: string): Promise<{ errors: Array<ScanFailure>; functions: Array<ScoredFunction> }> {
 		const name = relative(root, file) || file;
 
 		const source = await this.#sourceFiles.readText(file);
 
 		if (isErr(source)) {
-			return { functions: [], errors: [{ file: name, message: source.error.message }] };
+			return { errors: [{ file: name, message: source.error.message }], functions: [] };
 		}
 
 		return this.#scanner.scan(name, source.value);
 	}
 
-	async #targets(options: ComplexityCliDto): Promise<string[]> {
+	async #targets(options: ComplexityCliDto): Promise<Array<string>> {
 		const files = [...options.files];
 
 		if (options.filesFrom === '') {

@@ -8,11 +8,11 @@ import type { SourceParser } from '#sidecar/syntax/source-parser';
 
 /** A source file that could not be read or parsed during validation. */
 export type ValidationFailure = {
-	/** The original source path reported to the user. */
-	readonly file: string;
-
 	/** The carried read or parse failure. */
 	readonly error: SourceFileUnreadable | SourceUnparsable;
+
+	/** The original source path reported to the user. */
+	readonly file: string;
 };
 
 /** Validates TypeScript files and the JavaScript-compatible blocks of host documents. */
@@ -31,7 +31,7 @@ export class SyntaxValidator {
 	 * @param dependencies.splitter - Extracts host embedded blocks.
 	 * @param dependencies.parser - Parses source and reports syntax failures.
 	 */
-	constructor(dependencies: { sourceFiles: SourceFiles; splitter: EmbeddedBlockSplitter; parser: SourceParser }) {
+	constructor(dependencies: { parser: SourceParser; sourceFiles: SourceFiles; splitter: EmbeddedBlockSplitter }) {
 		this.#sourceFiles = dependencies.sourceFiles;
 		this.#splitter = dependencies.splitter;
 		this.#parser = dependencies.parser;
@@ -43,31 +43,31 @@ export class SyntaxValidator {
 	 * @param files - The source paths to validate.
 	 * @returns Carried read and parse failures in deterministic input order.
 	 */
-	async validate(files: string[]): Promise<ValidationFailure[]> {
+	async validate(files: Array<string>): Promise<Array<ValidationFailure>> {
 		const failures = await mapPool(
 			files,
 			availableParallelism(),
-			async (file): Promise<ValidationFailure[]> => {
+			async (file): Promise<Array<ValidationFailure>> => {
 				const read = await this.#sourceFiles.readText(file);
 
 				if (isErr(read)) {
-					return [{ file, error: read.error }];
+					return [{ error: read.error, file }];
 				}
 
 				if (!this.#splitter.isHost(file)) {
 					const parsed = this.#parser.parse(file, read.value);
 
-					return isErr(parsed) ? [{ file, error: parsed.error }] : [];
+					return isErr(parsed) ? [{ error: parsed.error, file }] : [];
 				}
 
-				const hostFailures: ValidationFailure[] = [];
+				const hostFailures: Array<ValidationFailure> = [];
 
 				for (const block of this.#splitter.extract(file, read.value)) {
 					const virtualContent = SyntaxValidator.#scriptPrefix(read.value, block.start) + block.content;
 					const parsed = this.#parser.parse(`${file}.script.${block.extension}`, virtualContent);
 
 					if (isErr(parsed) && this.#splitter.hardValidated(file)) {
-						hostFailures.push({ file, error: parsed.error });
+						hostFailures.push({ error: parsed.error, file });
 					}
 				}
 

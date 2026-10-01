@@ -25,10 +25,10 @@ export class FormatAllCommand implements CliCommand {
 	 * @param dependencies.targets - Classifies the format and syntax target files.
 	 */
 	constructor(dependencies: {
-		pipeline: FormatPipeline;
-		segmentFormatter: FileFormatter;
 		fluentFormatter: FileFormatter;
+		pipeline: FormatPipeline;
 		reporter: PassReporter;
+		segmentFormatter: FileFormatter;
 		syntaxReporter: SyntaxReporter;
 		targets: FileTargetPolicy;
 	}) {
@@ -46,11 +46,11 @@ export class FormatAllCommand implements CliCommand {
 	 * @param argv - Arguments after the executable and script path.
 	 * @returns `0` when every stage succeeds, `1` at the first reported failure.
 	 */
-	async run(argv: readonly string[]): Promise<number> {
+	async run(argv: ReadonlyArray<string>): Promise<number> {
 		const parsed = CliOptionsDto.parse(argv);
 
 		if (isErr(parsed)) {
-			console.error(parsed.error);
+			process.stderr.write(`${String(parsed.error)}\n`);
 
 			return 1;
 		}
@@ -68,7 +68,7 @@ export class FormatAllCommand implements CliCommand {
 		const oxfmt = await this.#pipeline.runOxfmt({ bin: options.oxfmtBin, config: options.oxfmtConfig, files: formatTargets, mode: options.mode });
 
 		if (isErr(oxfmt)) {
-			console.error(oxfmt.error);
+			process.stderr.write(`${String(oxfmt.error)}\n`);
 
 			return 1;
 		}

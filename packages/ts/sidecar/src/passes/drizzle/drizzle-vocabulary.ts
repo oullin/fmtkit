@@ -27,13 +27,13 @@ export class DrizzleVocabulary {
 	 * @param vocabulary.objectKeys - The option-object keys whose values are formatted.
 	 */
 	constructor(vocabulary: {
-		receivers: Iterable<string>;
 		chainMethods: Iterable<string>;
 		formatMethods: Iterable<string>;
 		helpers: Iterable<string>;
 		multilineHelpers: Iterable<string>;
-		setOperations: Iterable<string>;
 		objectKeys: Iterable<string>;
+		receivers: Iterable<string>;
+		setOperations: Iterable<string>;
 	}) {
 		this.#receivers = new Set(vocabulary.receivers);
 		this.#chainMethods = new Set(vocabulary.chainMethods);
@@ -53,7 +53,6 @@ export class DrizzleVocabulary {
 	 */
 	static standard(): DrizzleVocabulary {
 		return new DrizzleVocabulary({
-			receivers: ['db', 'tx'],
 			chainMethods: [
 				'$count',
 				'$dynamic',
@@ -141,8 +140,9 @@ export class DrizzleVocabulary {
 				'sql',
 			],
 			multilineHelpers: ['and', 'or', 'not', 'exists', 'notExists'],
-			setOperations: ['except', 'intersect', 'union', 'unionAll'],
 			objectKeys: ['columns', 'extras', 'limit', 'offset', 'onUpdate', 'orderBy', 'set', 'target', 'targetWhere', 'where', 'with'],
+			receivers: ['db', 'tx'],
+			setOperations: ['except', 'intersect', 'union', 'unionAll'],
 		});
 	}
 

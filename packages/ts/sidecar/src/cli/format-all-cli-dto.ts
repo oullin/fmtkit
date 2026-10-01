@@ -6,11 +6,11 @@ import type { Result } from '#sidecar/kernel/result';
 
 /** Mutable draft of the pipeline options accumulated while scanning argv. */
 type CliOptionsDraft = {
+	formatFiles: Array<string>;
 	mode: FormatMode;
 	oxfmtBin: string | null;
 	oxfmtConfig: string | null;
-	formatFiles: string[];
-	syntaxFiles: string[];
+	syntaxFiles: Array<string>;
 };
 
 /** Immutable command-line options for the full formatting pipeline. */
@@ -25,18 +25,18 @@ export class CliOptionsDto {
 	readonly oxfmtConfig: string | null;
 
 	/** Files eligible for formatting passes. */
-	readonly formatFiles: readonly string[];
+	readonly formatFiles: ReadonlyArray<string>;
 
 	/** Files eligible for final syntax validation. */
-	readonly syntaxFiles: readonly string[];
+	readonly syntaxFiles: ReadonlyArray<string>;
 
 	static readonly #argvSchema = z.array(z.string());
 
 	static readonly #schema = z.object({
+		formatFiles: z.array(z.string()),
 		mode: z.enum(['check', 'write']),
 		oxfmtBin: z.string().nullable(),
 		oxfmtConfig: z.string().nullable(),
-		formatFiles: z.array(z.string()),
 		syntaxFiles: z.array(z.string()),
 	});
 
@@ -57,14 +57,14 @@ export class CliOptionsDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Parsed options, or the unexpected argument as a typed value.
 	 */
-	static parse(input: readonly string[]): Result<CliOptionsDto, UnexpectedCliArgument> {
+	static parse(input: ReadonlyArray<string>): Result<CliOptionsDto, UnexpectedCliArgument> {
 		const argv = CliOptionsDto.#argvSchema.parse(input);
 
 		const candidate: CliOptionsDraft = {
+			formatFiles: [],
 			mode: 'write',
 			oxfmtBin: null,
 			oxfmtConfig: null,
-			formatFiles: [],
 			syntaxFiles: [],
 		};
 

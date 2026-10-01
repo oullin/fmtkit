@@ -79,7 +79,7 @@ export class SourceDocument {
 	 * @returns The detected indent unit, or a tab when none can be inferred.
 	 */
 	indentUnit(): string {
-		const indents: string[] = [];
+		const indents: Array<string> = [];
 
 		for (const line of this.text.split('\n')) {
 			const match = line.match(/^([ \t]*)(\S)/);

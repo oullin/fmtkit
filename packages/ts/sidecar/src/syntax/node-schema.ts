@@ -6,20 +6,22 @@ export type AstRecord = {
 };
 
 /** A value carried by an eagerly validated node head or trusted descendant. */
-export type AstValue = AstRecord | AstValue[] | Node | RegExp | bigint | boolean | null | number | string | undefined;
+export type AstValue = AstRecord | Array<AstValue> | Node | RegExp | bigint | boolean | null | number | string | undefined;
 
 const NodeHeadSchema = z
 	.object({
-		type: z.string(),
-		start: z.number().optional(),
 		end: z.number().optional(),
-		range: z.tuple([z.number(), z.number()]).optional(),
-		name: z.string()
-			.optional()
-			.catch(undefined),
+		// oxlint-disable-next-line unicorn/prefer-top-level-await -- Zod catch handles parse failures, not Promise rejection.
 		kind: z.string()
 			.optional()
 			.catch(undefined),
+		// oxlint-disable-next-line unicorn/prefer-top-level-await -- Zod catch handles parse failures, not Promise rejection.
+		name: z.string()
+			.optional()
+			.catch(undefined),
+		range: z.tuple([z.number(), z.number()]).optional(),
+		start: z.number().optional(),
+		type: z.string(),
 	})
 	.passthrough();
 
@@ -70,8 +72,9 @@ export class Node {
 	 * @param value - The possible AST node.
 	 * @returns `true` when the value is an object carrying a node discriminator.
 	 */
-	static [Symbol.hasInstance](value: AstValue): boolean {
-		return value instanceof Object && 'type' in value;
+	static is(value: AstValue): value is Node {
+		// oxlint-disable-next-line anti-slop/no-runtime-typeof -- Oxc descendants are admitted at the parser boundary; traversal must distinguish nested node records.
+		return value !== null && typeof value === 'object' && 'type' in value;
 	}
 }
 
@@ -89,14 +92,14 @@ export class ParsedSourceDto {
 	readonly program: Node;
 
 	/** Parsed comments represented as traversable nodes. */
-	readonly comments: readonly Node[];
+	readonly comments: ReadonlyArray<Node>;
 
 	static readonly #schema = z.object({
-		program: Node.schema,
 		comments: z.array(Node.schema),
+		program: Node.schema,
 	});
 
-	private constructor(program: Node, comments: Node[]) {
+	private constructor(program: Node, comments: Array<Node>) {
 		this.program = program;
 		this.comments = Object.freeze(comments);
 
@@ -114,16 +117,16 @@ export class ParsedSourceDto {
 	 * @returns The validated DTO, or the Zod validation failure.
 	 */
 	// oxlint-disable-next-line anti-slop/no-unknown-parameters -- this DTO is the Zod boundary parser the rule routes callers toward; it must admit arbitrary payloads in order to reject them.
-	static from(value: unknown): { success: true; data: ParsedSourceDto } | { success: false; error: z.ZodError } {
+	static from(value: unknown): { data: ParsedSourceDto; success: true } | { error: z.ZodError; success: false } {
 		const parsed = ParsedSourceDto.#schema.safeParse(value);
 
 		if (!parsed.success) {
-			return { success: false, error: parsed.error };
+			return { error: parsed.error, success: false };
 		}
 
 		return {
-			success: true,
 			data: new ParsedSourceDto(parsed.data.program, parsed.data.comments),
+			success: true,
 		};
 	}
 

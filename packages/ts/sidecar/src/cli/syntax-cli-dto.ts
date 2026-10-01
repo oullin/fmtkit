@@ -4,7 +4,7 @@ import { ScriptExtensions } from '#sidecar/hosts/script-extensions';
 /** Immutable command-line options for standalone syntax validation. */
 export class SyntaxCliDto {
 	/** TypeScript and Vue files eligible for syntax validation. */
-	readonly files: readonly string[];
+	readonly files: ReadonlyArray<string>;
 
 	static readonly #argvSchema = z.array(z.string());
 
@@ -12,7 +12,7 @@ export class SyntaxCliDto {
 		files: z.array(z.string()),
 	});
 
-	private constructor(value: { files: string[] }) {
+	private constructor(value: { files: Array<string> }) {
 		this.files = Object.freeze(value.files);
 
 		Object.setPrototypeOf(this, Object.prototype);
@@ -25,7 +25,7 @@ export class SyntaxCliDto {
 	 * @param input - Arguments after the executable and script path.
 	 * @returns Immutable syntax-validation options.
 	 */
-	static parse(input: readonly string[]): SyntaxCliDto {
+	static parse(input: ReadonlyArray<string>): SyntaxCliDto {
 		const argv = SyntaxCliDto.#argvSchema.parse(input);
 
 		const files = argv.filter((file) => {

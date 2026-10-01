@@ -27,7 +27,7 @@ class AppendPass implements FormattingPass {
 		return this.#runs;
 	}
 
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		this.#runs++;
 
 		if (this.#runs > this.#maxRuns) {
@@ -36,7 +36,7 @@ class AppendPass implements FormattingPass {
 
 		const end = document.text.length;
 
-		return [{ start: end, end, replacement: this.#marker }];
+		return [{ end, replacement: this.#marker, start: end }];
 	}
 }
 
@@ -50,7 +50,7 @@ class NoopPass implements FormattingPass {
 		return this.#runs;
 	}
 
-	computeEdits(): Edit[] {
+	computeEdits(): Array<Edit> {
 		this.#runs++;
 
 		return [];

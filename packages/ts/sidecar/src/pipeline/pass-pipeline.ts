@@ -83,10 +83,10 @@ export class PassPipeline {
 	/** The reporting label for the pipeline as a whole. */
 	readonly name: string;
 
-	readonly #steps: readonly PipelineStep[];
+	readonly #steps: ReadonlyArray<PipelineStep>;
 	readonly #edits: EditApplier;
 
-	constructor(name: string, steps: PipelineStep[], edits: EditApplier) {
+	constructor(name: string, steps: Array<PipelineStep>, edits: EditApplier) {
 		this.name = name;
 		this.#steps = Object.freeze([...steps]);
 		this.#edits = edits;

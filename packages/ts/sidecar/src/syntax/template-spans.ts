@@ -7,9 +7,9 @@ type Span = readonly [number, number];
 export class TemplateSpans {
 	static readonly #ast = new AstReader();
 
-	readonly #spans: readonly Span[];
+	readonly #spans: ReadonlyArray<Span>;
 
-	private constructor(spans: Span[]) {
+	private constructor(spans: Array<Span>) {
 		this.#spans = Object.freeze(spans);
 
 		Object.freeze(this);
@@ -27,7 +27,7 @@ export class TemplateSpans {
 	 * @returns The literal spans, in depth-first traversal order.
 	 */
 	static collect(program: Node): TemplateSpans {
-		const spans: Span[] = [];
+		const spans: Array<Span> = [];
 
 		TemplateSpans.#ast.visit(program, (node) => {
 			if (node.type !== 'TemplateLiteral') {

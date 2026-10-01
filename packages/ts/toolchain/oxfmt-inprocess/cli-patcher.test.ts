@@ -190,7 +190,7 @@ test('patch() on an already-patched CLI reports CliAlreadyPatched instead of nes
 		patcher.patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliAlreadyPatched);
+	assert.ok(error.constructor === CliAlreadyPatched);
 	assert.equal(error._tag, 'CliAlreadyPatched');
 	assert.equal(error.path, CLI_PATH);
 });
@@ -202,7 +202,7 @@ test('patch() reports OxfmtFileUnreadable when cli.js cannot be read', () => {
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof OxfmtFileUnreadable);
+	assert.ok(error.constructor === OxfmtFileUnreadable);
 	assert.equal(error._tag, 'OxfmtFileUnreadable');
 	assert.equal(error.path, CLI_PATH);
 });
@@ -214,7 +214,7 @@ test('patch() reports OxfmtFileUnreadable when cli-worker.js cannot be read', ()
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof OxfmtFileUnreadable);
+	assert.ok(error.constructor === OxfmtFileUnreadable);
 	assert.equal(error._tag, 'OxfmtFileUnreadable');
 	assert.equal(error.path, WORKER_PATH);
 });
@@ -229,7 +229,7 @@ test('patch() reports WorkerImportUnrecognised when the worker entry has no API 
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof WorkerImportUnrecognised);
+	assert.ok(error.constructor === WorkerImportUnrecognised);
 	assert.equal(error._tag, 'WorkerImportUnrecognised');
 	assert.equal(error.path, WORKER_PATH);
 	assert.equal(error.detail, 'cannot find the API import');
@@ -247,7 +247,7 @@ test('patch() reports ApiExportMissing when the worker entry drops a function', 
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof ApiExportMissing);
+	assert.ok(error.constructor === ApiExportMissing);
 	assert.equal(error._tag, 'ApiExportMissing');
 	assert.equal(error.role, 'sortTailwindClasses');
 	assert.equal(error.path, WORKER_PATH);
@@ -262,7 +262,7 @@ test('patch() reports CliAnchorMissing when the Tinypool import is gone', () => 
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliAnchorMissing);
+	assert.ok(error.constructor === CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
 	assert.equal(error.anchor, TINYPOOL_IMPORT);
 	assert.equal(error.path, CLI_PATH);
@@ -277,7 +277,7 @@ test('patch() reports CliAnchorMissing when the worker-proxy region marker is go
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliAnchorMissing);
+	assert.ok(error.constructor === CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
 	assert.equal(error.anchor, REGION_MARKER);
 	assert.equal(error.path, CLI_PATH);
@@ -292,7 +292,7 @@ test('patch() reports CliAnchorMissing when the child_process runtime is gone', 
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliAnchorMissing);
+	assert.ok(error.constructor === CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
 	assert.equal(error.anchor, RUNTIME_ANCHOR);
 	assert.equal(error.path, CLI_PATH);
@@ -307,7 +307,7 @@ test('patch() reports CliAnchorMissing when the region never closes', () => {
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliAnchorMissing);
+	assert.ok(error.constructor === CliAnchorMissing);
 	assert.equal(error._tag, 'CliAnchorMissing');
 	assert.equal(error.anchor, 'the worker-proxy region');
 	assert.equal(error.path, CLI_PATH);
@@ -322,7 +322,7 @@ test('patch() reports CliPatchIncomplete when worker-pool code survives outside 
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof CliPatchIncomplete);
+	assert.ok(error.constructor === CliPatchIncomplete);
 	assert.equal(error._tag, 'CliPatchIncomplete');
 	assert.equal(error.residue, 'Tinypool');
 	assert.equal(error.path, CLI_PATH);
@@ -341,7 +341,7 @@ test('patch() reports OxfmtFileUnwritable when the rewritten CLI cannot be writt
 		new OxfmtCliPatcher(files).patch(DIST_DIR),
 	);
 
-	assert.ok(error instanceof OxfmtFileUnwritable);
+	assert.ok(error.constructor === OxfmtFileUnwritable);
 	assert.equal(error._tag, 'OxfmtFileUnwritable');
 	assert.equal(error.path, CLI_PATH);
 

@@ -50,9 +50,9 @@ printf '<script setup lang="ts">\nconst  a = { x:1, s:"hi" }\n</script>\n\n<temp
 XDG_CACHE_HOME="${tmp_root}/cache" "$bin" version
 XDG_CACHE_HOME="${tmp_root}/cache" "$bin" format .
 
-expected_ts=$'const a = { x: 1, s: \'hi\' };\n\nexport default a;\n'
+expected_ts=$'const a = { s: \'hi\', x: 1 };\n\nexport default a;\n'
 expected_go=$'package p\n\nfunc f() {\n\tdefer println("d")\n\n\treturn\n}\n'
-expected_vue=$'<script setup lang="ts">\nconst a = { x: 1, s: \'hi\' };\n</script>\n\n<template>\n\t<div>\n\t\t<p>{{ a.s }}</p>\n\t</div>\n</template>\n\n<style scoped>\n.box {\n\tcolor: red;\n\tpadding: 0;\n}\n</style>\n'
+expected_vue=$'<script setup lang="ts">\nconst a = { s: \'hi\', x: 1 };\n</script>\n\n<template>\n\t<div>\n\t\t<p>{{ a.s }}</p>\n\t</div>\n</template>\n\n<style scoped>\n.box {\n\tcolor: red;\n\tpadding: 0;\n}\n</style>\n'
 
 if ! diff <(printf '%s' "$expected_ts") app.ts; then
 	printf 'app.ts was not formatted as expected\n' >&2
@@ -107,7 +107,7 @@ cd "$lint_fixture"
 
 git init --quiet .
 
-printf '// Project exceptions overlay the bundled policy; they do not replace it.\n{\n\t"rules": {\n\t\t"require-await": "off"\n\t}\n}\n' > .oxlintrc.jsonc
+printf '// Project exceptions overlay the bundled policy; duplicate plugin aliases keep the embedded copy.\n{\n\t"jsPlugins": [{ "name": "@nkzw", "specifier": "./missing-because-bundled-wins.mjs" }],\n\t"rules": {\n\t\t"require-await": "off"\n\t}\n}\n' > .oxlintrc.jsonc
 
 printf 'export type Foo = { a: number };\n' > types.ts
 printf "import { Foo } from './types';\n\nexport const value: Foo = { a: 1 };\n" > uses.ts
@@ -140,6 +140,44 @@ for rule in 'typescript(consistent-type-imports)' 'oxc(erasing-op)' 'unicorn(pre
 	fi
 done
 
+# The shipped binary must load every JS plugin without Node or a project
+# node_modules. Restrict PATH to git, the only external executable lint needs.
+printf 'const value = new Date();\nexport const bad = value instanceof Date;\nexport const sorted = { zebra: 1, alpha: 2 };\ntest.only("focused", () => {});\n' > bundled-plugins.ts
+printf 'export const Button = () => <button>Save</button>;\n' > react.tsx
+node_free_path="${tmp_root}/node-free-path"
+mkdir -p "$node_free_path"
+ln -s "$(command -v git)" "${node_free_path}/git"
+plugin_log="${tmp_root}/plugins.log"
+
+if PATH="$node_free_path" XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint bundled-plugins.ts react.tsx > "$plugin_log" 2>&1; then
+	printf 'lint exited 0 on bundled plugin and React rule violations\n' >&2
+	cat "$plugin_log" >&2
+	exit 1
+fi
+
+for rule in '@nkzw(no-instanceof)' 'no-only-tests(no-only-tests)' 'perfectionist(sort-objects)' 'react(button-has-type)'; do
+	if ! grep -qF "$rule" "$plugin_log"; then
+		printf 'bundled policy did not report %s without Node\n' "$rule" >&2
+		cat "$plugin_log" >&2
+		exit 1
+	fi
+done
+
+mkdir -p missing-plugin
+printf '{"jsPlugins":[{"name":"missing","specifier":"./not-installed.mjs"}]}\n' > missing-plugin/.oxlintrc.json
+printf 'export const valid = 1;\n' > missing-plugin/app.ts
+
+if XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint missing-plugin/app.ts > "${tmp_root}/missing-plugin.log" 2>&1; then
+	printf 'lint silently accepted a JS plugin that could not be loaded\n' >&2
+	exit 1
+fi
+
+if ! grep -q 'Failed to load JS plugin' "${tmp_root}/missing-plugin.log"; then
+	printf 'missing JS plugin did not produce a visible load error\n' >&2
+	cat "${tmp_root}/missing-plugin.log" >&2
+	exit 1
+fi
+
 for rule in 'require-await' 'typescript(no-explicit-any)'; do
 	if grep -qF "$rule" "$lint_log"; then
 		printf 'the project oxlint overlay did not override %s\n' "$rule" >&2
@@ -153,6 +191,64 @@ if find . -name '.fmtkit-oxlint-*' -print -quit | grep -q .; then
 	find . -name '.fmtkit-oxlint-*' -print >&2
 	exit 1
 fi
+
+# An imported project preset uses the project's Node-based Oxlint. The bundled
+# default still applies, and duplicate JS plugin names are resolved in favour
+# of the later project config.
+import_fixture="${tmp_root}/import-fixture"
+mkdir -p "$import_fixture/nested"
+cd "$import_fixture"
+git init --quiet .
+printf '{"private":true,"name":"fmtkit-import-fixture","version":"0.0.0","type":"module"}\n' > package.json
+npm install --no-save --no-audit --no-fund --prefix . oxlint@1.80.0 @nkzw/oxlint-config@2.0.1 >/dev/null
+printf "import nkzw from '@nkzw/oxlint-config';\nimport { defineConfig } from 'oxlint';\nexport default defineConfig({ extends: [nkzw] });\n" > oxlint.config.ts
+printf 'const value = new Date();\nexport const bad = value instanceof Date;\n' > imported.ts
+printf '{"rules":{"@nkzw/no-instanceof":"off"}}\n' > nested/.oxlintrc.json
+cp imported.ts nested/imported.ts
+
+if XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint imported.ts > "${tmp_root}/imported.log" 2>&1; then
+	printf 'imported preset did not report its custom rule\n' >&2
+	exit 1
+fi
+
+if ! grep -qF '@nkzw(no-instanceof)' "${tmp_root}/imported.log"; then
+	printf 'imported preset failed to load or lost the bundled default\n' >&2
+	cat "${tmp_root}/imported.log" >&2
+	exit 1
+fi
+
+XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint nested/imported.ts
+
+if find . -name '.fmtkit-oxlint-*' -print -quit | grep -q .; then
+	printf 'imported lint left a composed config in the project\n' >&2
+	exit 1
+fi
+
+# Every JavaScript dialect gets the same lint-fix, oxfmt, structural-pass, and
+# syntax-validation schedule as TypeScript. Lint itself never writes.
+js_fixture="${tmp_root}/js-fixture"
+mkdir -p "$js_fixture"
+cd "$js_fixture"
+git init --quiet .
+printf 'export const result={zebra:1,alpha:2};\n' > app.js
+printf 'export const Widget=()=> <button type="button">Go</button>;\n' > Widget.jsx
+printf 'export const ready= true;\n' > module.mjs
+printf 'module.exports={zebra:1,alpha:2};\n' > legacy.cjs
+shasum app.js Widget.jsx module.mjs legacy.cjs > "${tmp_root}/js-before-lint"
+
+if XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint . > "${tmp_root}/js-lint.log" 2>&1; then
+	printf 'JavaScript lint missed unsorted objects\n' >&2
+	exit 1
+fi
+
+shasum app.js Widget.jsx module.mjs legacy.cjs > "${tmp_root}/js-after-lint"
+diff "${tmp_root}/js-before-lint" "${tmp_root}/js-after-lint"
+XDG_CACHE_HOME="${tmp_root}/cache" "$bin" format-all --ts > "${tmp_root}/js-format.log"
+XDG_CACHE_HOME="${tmp_root}/cache" "$bin" lint .
+shasum app.js Widget.jsx module.mjs legacy.cjs > "${tmp_root}/js-first-format"
+XDG_CACHE_HOME="${tmp_root}/cache" "$bin" format-all --ts > "${tmp_root}/js-second-format.log"
+shasum app.js Widget.jsx module.mjs legacy.cjs > "${tmp_root}/js-second-format"
+diff "${tmp_root}/js-first-format" "${tmp_root}/js-second-format"
 
 # `no-fallthrough` ships in the bundled config, and oxlint reports an empty
 # `case` label as a fallthrough once a blank line splits it from the label

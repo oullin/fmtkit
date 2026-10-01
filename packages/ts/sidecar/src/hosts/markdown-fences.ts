@@ -1,10 +1,10 @@
 /** A fenced code block embedded in a Markdown document. */
 export type MarkdownFenceBlock = {
-	/** The first token of the opening fence info string, or an empty string. */
-	readonly lang: string;
-
 	/** The source text of the fenced block body. */
 	readonly content: string;
+
+	/** The first token of the opening fence info string, or an empty string. */
+	readonly lang: string;
 
 	/** The source offset where `content` starts in the Markdown source. */
 	readonly start: number;
@@ -12,21 +12,21 @@ export type MarkdownFenceBlock = {
 
 /** A source line paired with its byte offsets. */
 type ScannedLine = {
-	/** The offset where the line begins. */
-	readonly start: number;
-
 	/** The offset immediately after the line terminator. */
 	readonly end: number;
+
+	/** The offset where the line begins. */
+	readonly start: number;
 
 	/** The line text without its trailing carriage return or newline. */
 	readonly text: string;
 };
 
 type OpeningFence = {
-	readonly line: ScannedLine;
 	readonly fenceChar: string;
 	readonly fenceLength: number;
 	readonly info: string;
+	readonly line: ScannedLine;
 };
 
 const OPEN_FENCE_REGEX = /^( {0,3})(`{3,}|~{3,})(.*)$/;
@@ -34,8 +34,8 @@ const JAVASCRIPT_LANGS = ['ts', 'tsx', 'js', 'jsx', 'typescript', 'javascript', 
 
 /** Inspects fenced code blocks embedded in CommonMark documents. */
 export class MarkdownFences {
-	#scanLines(content: string): ScannedLine[] {
-		const lines: ScannedLine[] = [];
+	#scanLines(content: string): Array<ScannedLine> {
+		const lines: Array<ScannedLine> = [];
 
 		let position = 0;
 
@@ -43,12 +43,12 @@ export class MarkdownFences {
 			const newline = content.indexOf('\n', position);
 
 			if (newline === -1) {
-				lines.push({ start: position, end: content.length, text: this.#stripCarriageReturn(content.slice(position)) });
+				lines.push({ end: content.length, start: position, text: this.#stripCarriageReturn(content.slice(position)) });
 
 				return lines;
 			}
 
-			lines.push({ start: position, end: newline + 1, text: this.#stripCarriageReturn(content.slice(position, newline)) });
+			lines.push({ end: newline + 1, start: position, text: this.#stripCarriageReturn(content.slice(position, newline)) });
 			position = newline + 1;
 		}
 	}
@@ -61,7 +61,7 @@ export class MarkdownFences {
 		return info.trim().split(/\s+/)[0] ?? '';
 	}
 
-	#findClose(lines: ScannedLine[], from: number, fenceChar: string, minLength: number): number {
+	#findClose(lines: Array<ScannedLine>, from: number, fenceChar: string, minLength: number): number {
 		const pattern = new RegExp(`^ {0,3}${fenceChar}{${minLength},}[ \\t]*$`);
 
 		for (let index = from; index < lines.length; index++) {
@@ -94,7 +94,7 @@ export class MarkdownFences {
 			return null;
 		}
 
-		return { line, fenceChar, fenceLength: fence.length, info };
+		return { fenceChar, fenceLength: fence.length, info, line };
 	}
 
 	/**
@@ -108,8 +108,8 @@ export class MarkdownFences {
 	 * @param content - The complete Markdown source text.
 	 * @returns The embedded fence blocks in source order.
 	 */
-	extractBlocks(content: string): MarkdownFenceBlock[] {
-		const blocks: MarkdownFenceBlock[] = [];
+	extractBlocks(content: string): Array<MarkdownFenceBlock> {
+		const blocks: Array<MarkdownFenceBlock> = [];
 		const lines = this.#scanLines(content);
 
 		let index = 0;
@@ -133,8 +133,8 @@ export class MarkdownFences {
 			const bodyEnd = lines[closeIndex]?.start ?? content.length;
 
 			blocks.push({
-				lang: this.#infoLanguage(opening.info),
 				content: content.slice(bodyStart, bodyEnd),
+				lang: this.#infoLanguage(opening.info),
 				start: bodyStart,
 			});
 

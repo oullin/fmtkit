@@ -26,7 +26,7 @@ export class SourceParser {
 			return err(new SourceUnparsable(virtualName, parsed.errors));
 		}
 
-		const validated = ParsedSourceDto.from({ program: parsed.program, comments: parsed.comments });
+		const validated = ParsedSourceDto.from({ comments: parsed.comments, program: parsed.program });
 
 		if (!validated.success) {
 			return err(new SourceUnparsable(virtualName, []));

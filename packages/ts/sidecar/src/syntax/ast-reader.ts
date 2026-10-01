@@ -4,11 +4,11 @@ import type { AstValue } from '#sidecar/syntax/node-schema';
 
 /** The opening and closing argument-parenthesis offsets of a call. */
 export type CallParens = {
-	/** The opening parenthesis offset. */
-	readonly open: number;
-
 	/** The closing parenthesis offset. */
 	readonly close: number;
+
+	/** The opening parenthesis offset. */
+	readonly open: number;
 };
 
 const STATEMENT_LIST_KEYS = new Map<string, 'body' | 'consequent'>([
@@ -33,7 +33,7 @@ export class AstReader {
 	childNode(node: Node, key: string): Node | undefined {
 		const value = node[key];
 
-		return value instanceof Node ? value : undefined;
+		return Node.is(value) ? value : undefined;
 	}
 
 	/**
@@ -43,12 +43,12 @@ export class AstReader {
 	 * @param key - The property to read.
 	 * @returns The property's node entries, or an empty array when it is not an array.
 	 */
-	childNodes(node: Node, key: string): Node[] {
+	childNodes(node: Node, key: string): Array<Node> {
 		const value = node[key];
 
 		return Array.isArray(value)
 			? value.filter((child): child is Node => {
-					return child instanceof Node;
+					return Node.is(child);
 				})
 			: [];
 	}
@@ -126,11 +126,11 @@ export class AstReader {
 		for (const value of Object.values(node)) {
 			if (Array.isArray(value)) {
 				for (const child of value) {
-					if (child instanceof Node) {
+					if (Node.is(child)) {
 						this.visit(child, visitor);
 					}
 				}
-			} else if (value instanceof Node) {
+			} else if (Node.is(value)) {
 				this.visit(value, visitor);
 			}
 		}
@@ -142,8 +142,8 @@ export class AstReader {
 	 * @param program - The program root to traverse.
 	 * @returns Statement lists in depth-first traversal order.
 	 */
-	collectStatementLists(program: Node): Node[][] {
-		const lists: Node[][] = [];
+	collectStatementLists(program: Node): Array<Array<Node>> {
+		const lists: Array<Array<Node>> = [];
 
 		this.visit(program, (node) => {
 			const key = STATEMENT_LIST_KEYS.get(node.type);
@@ -166,8 +166,8 @@ export class AstReader {
 	 * @param program - The program root to traverse.
 	 * @returns Class bodies in depth-first traversal order.
 	 */
-	collectClassBodies(program: Node): Node[] {
-		const bodies: Node[] = [];
+	collectClassBodies(program: Node): Array<Node> {
+		const bodies: Array<Node> = [];
 
 		this.visit(program, (node) => {
 			if (node.type === 'ClassBody') {
@@ -224,7 +224,7 @@ export class AstReader {
 			return null;
 		}
 
-		return { open, close };
+		return { close, open };
 	}
 
 	/**

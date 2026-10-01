@@ -35,20 +35,19 @@ func hasSuffix(path string, suffixes []string) bool {
 	})
 }
 
-// Formattable reports whether path is one the formatter owns: the TS and Vue
-// families plus the HTML and Markdown documents whose embedded scripts get
+// Formattable reports whether path is one the formatter owns: the TS, JS, and
+// Vue families plus the HTML and Markdown documents whose embedded scripts get
 // formatted.
 func (f Filter) Formattable(path string) bool {
-	if !hasSuffix(path, tsFamilySuffixes) && !hasSuffix(path, documentSuffixes) {
+	if !hasSuffix(path, tsFamilySuffixes) && !hasSuffix(path, scriptSuffixes) && !hasSuffix(path, documentSuffixes) {
 		return false
 	}
 
 	return f.IncludeDeclarations || !hasSuffix(path, declarationSuffixes)
 }
 
-// scriptSuffixes are the plain JavaScript extensions the complexity check
-// scores alongside the TS family. oxfmt and oxlint are not pointed at them
-// here, so they are kept out of Formattable and Lintable.
+// scriptSuffixes are the plain JavaScript extensions formatted and linted
+// alongside the TS family.
 var scriptSuffixes = []string{".js", ".jsx", ".mjs", ".cjs"}
 
 // testInfixes mark a script as a test rather than the source under test. The
@@ -79,10 +78,10 @@ func IsTestScript(path string) bool {
 	})
 }
 
-// Lintable reports whether oxlint can lint path: the TS family (minus
+// Lintable reports whether oxlint can lint path: the TS and JS families (minus
 // declarations unless IncludeDeclarations) and Vue, but not HTML or Markdown.
 func (f Filter) Lintable(path string) bool {
-	if !hasSuffix(path, tsFamilySuffixes) && !strings.HasSuffix(path, ".vue") {
+	if !hasSuffix(path, tsFamilySuffixes) && !hasSuffix(path, scriptSuffixes) && !strings.HasSuffix(path, ".vue") {
 		return false
 	}
 

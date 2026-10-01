@@ -8,7 +8,7 @@ import { SourceDocument } from '#sidecar/syntax/source-document';
 import { SourceParser } from '#sidecar/syntax/source-parser';
 
 const ast = new AstReader();
-const pass = new ClassReorderPass({ parser: new SourceParser(), ast, members: new ClassMemberPolicy({ ast }) });
+const pass = new ClassReorderPass({ ast, members: new ClassMemberPolicy({ ast }), parser: new SourceParser() });
 
 function computeEdits(source: string, virtualName: string) {
 	return pass.computeEdits(SourceDocument.of(virtualName, source));

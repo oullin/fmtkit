@@ -182,6 +182,9 @@ jobs:
             - name: Smoke test the self-contained binary
               run: ./scripts/test-binary-smoke.sh
 
+            - name: Check bundled Oxlint policy parity
+              run: node scripts/verify-oxlint-parity.mjs
+
             - name: Smoke test the Docker image
               run: ./scripts/test-docker-smoke.sh
 

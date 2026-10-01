@@ -12,11 +12,11 @@ One formatter for a Go + TypeScript repository. `fmtkit` enforces the layout rul
 A single self-contained binary that formats both halves of a full-stack repo:
 
 - **Go** — an AST-based spacing rule, then `gofmt` and `goimports`, plus an automatic `go vet ./...`.
-- **TypeScript / Vue** — `oxlint --fix`, then `oxfmt`, then structural passes for blank lines, class member order, and fluent chains. Also formats the embedded TS blocks in Markdown and HTML.
+- **TypeScript / JavaScript / Vue** — `oxlint --fix`, then `oxfmt`, then structural passes for blank lines, class member order, and fluent chains. JavaScript includes `.js`, `.jsx`, `.mjs`, and `.cjs`. The tool also formats embedded TS blocks in Markdown and HTML.
 
 Both halves also carry one non-formatting gate: `fmtkit complexity` scores every function's cyclomatic and cognitive complexity and reports the ones over your limits.
 
-The TS toolchain is compiled with Bun and embedded in the binary, so there is **no Node.js requirement** and nothing to `npm install`. One download, one command, both languages.
+The bundled toolchain is compiled with Bun and embedded in the binary, including Oxlint 1.80.0 and its three JS rule plugins. The default policy needs **no Node.js installation** or project `node_modules`. Projects that opt into an import-based Oxlint config need Node.js and a project-installed Oxlint; see [lint configuration](#tsjsvue-lint-oxlintrcjson).
 
 If you only want the Go half, `fmtkit-go` is a separate `go install`-able CLI, and the engine is importable as a library.
 
@@ -102,10 +102,10 @@ If it isn't on your `PATH` afterward: `export PATH="$(go env GOPATH)/bin:$PATH"`
 ```bash
 fmtkit format .          # everything you changed, both languages
 fmtkit format --go .     # Go only
-fmtkit format --ts .     # TS/Vue only
+fmtkit format --ts .     # TS/JS/Vue only
 fmtkit format-all        # the entire repository
 fmtkit check .           # report Go violations, write nothing
-fmtkit lint .            # report TS/Vue lint violations, write nothing
+fmtkit lint .            # report TS/JS/Vue lint violations, write nothing
 ```
 
 In CI, use `format-all` (or `check`) — see [`format` vs `format-all`](#format-vs-format-all) for why the scope matters.
@@ -163,9 +163,9 @@ The spacing rule in summary:
 
 Full catalogue with before/after for every variant: [docs/spacing.md](docs/spacing.md).
 
-### TypeScript / Vue
+### TypeScript / JavaScript / Vue
 
-The TS lane runs `oxlint --fix` for safe lint fixes, then `oxfmt`, then these structural passes:
+The TS/JS lane runs `oxlint --fix` for safe lint fixes, then `oxfmt`, then these structural passes. It covers `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs`, while retaining Vue and embedded-code handling:
 
 | Pass                     | What it does                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------ |
@@ -197,8 +197,8 @@ When given directories, the engine walks recursively and always skips:
 | ------------------------------------------- | ---------------------------------------------------- |
 | `format [--ts] [--go] [--quiet] [paths...]` | Format files changed vs `HEAD`, plus untracked ones. |
 | `format-all [--ts] [--go] [--quiet]`        | Format every non-ignored file in the repo.           |
-| `ts [paths...]`                             | TS/Vue formatting only.                              |
-| `lint [paths...]`                           | Report TS/Vue lint violations. Never writes.         |
+| `ts [paths...]`                             | TS/JS/Vue formatting only.                           |
+| `lint [paths...]`                           | Report TS/JS/Vue lint violations. Never writes.      |
 | `check [args...]`                           | Run the Go formatter in check mode.                  |
 | `complexity [--ts] [--go] [paths...]`       | Report functions over the complexity limits.         |
 | `go <check\|format\|sources\|version>`      | The Go formatter CLI.                                |
@@ -341,9 +341,9 @@ complexity:
 | `complexity.cognitive`  | int  | `20`                             | Max cognitive complexity per function; `0` turns it off.  |
 | `complexity.allow`      | list | empty                            | `{key, reason}` baseline entries; a stale entry fails.    |
 
-### TS/Vue lint (`.oxlintrc.json`)
+### TS/JS/Vue lint (`.oxlintrc.json`)
 
-The binary always starts with its bundled Oxlint policy. A repository can add exceptions or stricter rules without copying that policy into its own config:
+The binary always starts with its bundled Oxlint policy, including the rules, native React plugin, three JS plugins, environments, and generic TypeScript override from `@nkzw/oxlint-config` 2.0.1. Existing fmtkit rule settings win where they overlap. A repository can override an individual rule without copying the policy:
 
 ```jsonc
 // .oxlintrc.jsonc
@@ -358,13 +358,15 @@ The binary always starts with its bundled Oxlint policy. A repository can add ex
 Configuration layers apply from least to most specific:
 
 1. **The bundled policy.** This remains active for every linted file.
-2. **The repository-root config.** fmtkit recognises `.oxlintrc`, `.oxlintrc.json`, and `.oxlintrc.jsonc`.
+2. **The repository-root config.** fmtkit recognises `.oxlintrc`, `.oxlintrc.json`, `.oxlintrc.jsonc`, `oxlint.config.ts`, and `oxlint.config.mts`.
 3. **The nearest nested config.** A package can narrow the root policy without repeating it.
 4. **`FMTKIT_OXLINTRC`.** This optional explicit overlay applies to every file and wins over repository configs.
 
-Later layers override earlier rules through Oxlint's native `extends` semantics. Existing `extends` entries and paths relative to a config keep their original meaning. More than one recognised config in the same directory is an error. TypeScript configs such as `oxlint.config.ts` are not supported by fmtkit's standalone runtime.
+Later layers override earlier rules. Existing `extends` entries, imports, plugin paths, and globs resolve from the config that declares them. More than one recognised config in the same directory is an error. The same `.ts` and `.mts` formats work as an explicit `FMTKIT_OXLINTRC` overlay.
 
-fmtkit materialises each composed entry beside its most specific source config so Oxlint resolves relative paths correctly, then removes it when the command finishes. That directory must therefore be writable while `fmtkit lint`, `fmtkit format`, or `fmtkit format-all` runs.
+JSON/JSONC projects use the embedded runtime with no Node.js or project packages. An import-based config uses Node.js 24+ and `oxlint` 1.80.0+ installed in the project, along with whatever packages that config imports. If those are missing, lint fails with a setup error. fmtkit creates temporary composed configs beside their source configs and removes them when the command finishes; those directories must be writable.
+
+The bundled JS plugins enforce their rules in JS, JSX, TS, and TSX. Oxlint currently treats JS plugins as alpha and does not guarantee their behavior inside Vue single-file components.
 
 ### TS/Vue (`.oxfmtrc.json`)
 

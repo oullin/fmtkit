@@ -4,7 +4,7 @@ import { EmbeddedBlockSplitter } from '#sidecar/hosts/embedded-block-splitter';
 import { MarkdownFences } from '#sidecar/hosts/markdown-fences';
 import { VueScript } from '#sidecar/hosts/vue-script';
 
-const splitter = new EmbeddedBlockSplitter({ vueScript: new VueScript(), markdownFences: new MarkdownFences() });
+const splitter = new EmbeddedBlockSplitter({ markdownFences: new MarkdownFences(), vueScript: new VueScript() });
 
 test('EmbeddedBlockSplitter.isHost accepts every host extension and rejects others', () => {
 	for (const path of ['a.vue', 'b.html', 'c.htm', 'd.md', 'e.markdown']) {
@@ -69,7 +69,7 @@ test('EmbeddedBlockSplitter.extract returns nothing for non-host paths', () => {
 
 test('EmbeddedBlockSplitter.rewrite applies the transform per block and preserves surrounding bytes', () => {
 	const markdown = ['# Title', '', '```ts', 'const a = 1;', '```', '', '```ts', 'const b = 2;', '```', ''].join('\n');
-	const seen: string[] = [];
+	const seen: Array<string> = [];
 
 	const rewritten = splitter.rewrite('notes.md', markdown, (blockContent, virtualName) => {
 		seen.push(virtualName);

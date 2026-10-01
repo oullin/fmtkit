@@ -6,7 +6,7 @@ import { EditApplier } from '#sidecar/syntax/edits';
 import { SourceDocument } from '#sidecar/syntax/source-document';
 import { SourceParser } from '#sidecar/syntax/source-parser';
 
-const pass = new BodyWrapPass({ parser: new SourceParser(), ast: new AstReader() });
+const pass = new BodyWrapPass({ ast: new AstReader(), parser: new SourceParser() });
 const editApplier = new EditApplier();
 
 function computeEdits(source: string) {

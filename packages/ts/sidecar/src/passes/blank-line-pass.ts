@@ -21,7 +21,7 @@ export class BlankLinePass implements FormattingPass {
 	 * @param dependencies.ast - Traverses and reads validated node fields.
 	 * @param dependencies.spacing - Decides which statement pairs need a blank line.
 	 */
-	constructor(dependencies: { parser: SourceParser; ast: AstReader; spacing: StatementSpacingPolicy }) {
+	constructor(dependencies: { ast: AstReader; parser: SourceParser; spacing: StatementSpacingPolicy }) {
 		this.#parser = dependencies.parser;
 		this.#ast = dependencies.ast;
 		this.#spacing = dependencies.spacing;
@@ -38,7 +38,7 @@ export class BlankLinePass implements FormattingPass {
 	 * @param document - The document to inspect.
 	 * @returns Zero-width newline inserts, or none for invalid source.
 	 */
-	computeEdits(document: SourceDocument): Edit[] {
+	computeEdits(document: SourceDocument): Array<Edit> {
 		const parsed = this.#parser.parse(document.virtualName, document.text);
 
 		if (isErr(parsed)) {
@@ -84,7 +84,7 @@ export class BlankLinePass implements FormattingPass {
 		}
 
 		return [...positions].map((position) => {
-			return { start: position, end: position, replacement: '\n' };
+			return { end: position, replacement: '\n', start: position };
 		});
 	}
 

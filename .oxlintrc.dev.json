@@ -1,5 +1,5 @@
 {
-	"$schema": "https://cdn.jsdelivr.net/npm/oxlint@1.75.0/configuration_schema.json",
+	"$schema": "https://cdn.jsdelivr.net/npm/oxlint@1.80.0/configuration_schema.json",
 	"extends": ["./.oxlintrc.json"],
 	"plugins": ["typescript", "oxc", "unicorn", "import"],
 	"ignorePatterns": ["tools/oxlint/anti-slop/**"],
@@ -27,7 +27,7 @@
 		"object-shorthand": "error",
 		"prefer-arrow-callback": ["error", { "allowNamedFunctions": true }],
 		"import/no-namespace": "error",
-		"typescript/array-type": ["error", { "default": "array" }],
+		"typescript/array-type": ["error", { "default": "generic" }],
 		"unicorn/catch-error-name": ["error", { "name": "cause" }],
 		"unicorn/consistent-function-scoping": "error",
 		"unicorn/numeric-separators-style": "error",

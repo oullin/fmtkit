@@ -112,7 +112,7 @@ func TestRunPrefersWorkspace(t *testing.T) {
 	workspaceFile := filepath.Join(workspaceRoot, "go.work")
 	moduleFile := filepath.Join(moduleRoot, "go.mod")
 
-	testutil.WriteFile(t, workspaceFile, "go 1.26.5\n")
+	testutil.WriteFile(t, workspaceFile, "go 1.27.1\n")
 	testutil.WriteFile(t, moduleFile, "module example.com/test\n")
 
 	tc := fakeToolchain{
@@ -169,7 +169,7 @@ func run() {
 	println("ok")
 }
 `)
-	testutil.WriteGoWork(t, workspaceRoot, `go 1.26.5
+	testutil.WriteGoWork(t, workspaceRoot, `go 1.27.1
 
 use (
 	./module-a

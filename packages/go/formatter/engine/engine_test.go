@@ -147,6 +147,50 @@ func run() {
 	}
 }
 
+func TestFormatFilesSupportsGo127Syntax(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sample.go")
+	testutil.WriteGoFile(t, path, `package sample
+
+type holder struct{}
+
+func (holder) Echo[T any](value T) T {return value}
+
+type embedded struct {value string}
+type record struct {embedded}
+
+var _ = record{value:"hello"}
+`)
+
+	formatter := engine.New(config.Default(), defaultRules(), defaultFormatters())
+	report, err := formatter.FormatFiles(t.Context(), []string{path})
+
+	if err != nil {
+		t.Fatalf("format Go 1.27 syntax: %v", err)
+	}
+
+	if report.Result != "fixed" || report.ErrorCount() != 0 {
+		t.Fatalf("unexpected formatting report: %#v", report)
+	}
+
+	content, err := os.ReadFile(path)
+
+	if err != nil {
+		t.Fatalf("read formatted file: %v", err)
+	}
+
+	for _, syntax := range []string{"func (holder) Echo[T any](value T) T", `record{value: "hello"}`} {
+		if !strings.Contains(string(content), syntax) {
+			t.Fatalf("Go 1.27 syntax was not preserved: %s", content)
+		}
+	}
+
+	checked, err := formatter.CheckFiles(t.Context(), []string{path})
+
+	if err != nil || checked.Result != "pass" {
+		t.Fatalf("formatted Go 1.27 source is not stable: %#v, %v", checked, err)
+	}
+}
+
 func TestCollectGoFilesSkipsHiddenVendorAndGenerated(t *testing.T) {
 	root := t.TempDir()
 	testutil.WriteGoFile(t, filepath.Join(root, "root.go"), "package sample\n")
@@ -154,7 +198,7 @@ func TestCollectGoFilesSkipsHiddenVendorAndGenerated(t *testing.T) {
 	testutil.WriteGoFile(t, filepath.Join(root, "vendor", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, ".hidden", "skip.go"), "package sample\n")
 	testutil.WriteGoFile(t, filepath.Join(root, "generated.gen.go"), "package sample\n")
-	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.golang"), "FROM golang:1.26.5-bookworm\n")
+	testutil.WriteFile(t, filepath.Join(root, "docker", "Dockerfile.golang"), "FROM golang:1.27.1-bookworm\n")
 
 	files, err := engine.CollectGoFiles([]string{root}, config.Default())
 

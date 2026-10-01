@@ -11,10 +11,10 @@
 	"devDependencies": {
 		"@nkzw/eslint-plugin": "2.0.0",
 		"eslint-plugin-no-only-tests": "3.4.0",
-		"eslint-plugin-perfectionist": "5.10.1",
+		"eslint-plugin-perfectionist": "5.12.1",
 		"jiti": "2.7.0",
-		"oxlint": "1.80.0",
-		"vite-plus": "0.2.6"
+		"oxlint": "1.86.0",
+		"vite-plus": "1.0.0"
 	},
-	"packageManager": "pnpm@11.17.0"
+	"packageManager": "pnpm@12.8.1"
 }

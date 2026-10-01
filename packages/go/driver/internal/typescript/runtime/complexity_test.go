@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ func TestRunComplexityDecodesTheSidecarMeasurement(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	scan, err := NewInvoker(support).RunComplexity(context.Background(), Request{Stdout: &stdout, Stderr: &stderr})
+	scan, err := NewInvoker(support).RunComplexity(t.Context(), Request{Stdout: &stdout, Stderr: &stderr})
 
 	if err != nil {
 		t.Fatalf("RunComplexity: %v\nstderr: %s", err, stderr.String())
@@ -94,7 +93,7 @@ func TestRunComplexityRemovesItsListing(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if _, err := NewInvoker(support).RunComplexity(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if _, err := NewInvoker(support).RunComplexity(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunComplexity: %v", err)
 	}
 
@@ -119,7 +118,7 @@ func TestRunComplexitySkipsTheSidecarWithoutFiles(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	scan, err := NewInvoker(support).RunComplexity(context.Background(), Request{Stdout: &stdout, Stderr: &stderr})
+	scan, err := NewInvoker(support).RunComplexity(t.Context(), Request{Stdout: &stdout, Stderr: &stderr})
 
 	if err != nil {
 		t.Fatalf("RunComplexity: %v", err)
@@ -142,7 +141,7 @@ func TestRunComplexityReportsAnUndecodableMeasurement(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	_, err := NewInvoker(support).RunComplexity(context.Background(), Request{Stdout: &stdout, Stderr: &stderr})
+	_, err := NewInvoker(support).RunComplexity(t.Context(), Request{Stdout: &stdout, Stderr: &stderr})
 
 	if err == nil || !strings.Contains(err.Error(), "decode complexity scan") {
 		t.Fatalf("err = %v", err)
@@ -157,7 +156,7 @@ func TestRunComplexityWarnsAboutMissingScopes(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if _, err := NewInvoker(support).RunComplexity(context.Background(), Request{Scopes: []string{"missing"}, Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if _, err := NewInvoker(support).RunComplexity(t.Context(), Request{Scopes: []string{"missing"}, Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunComplexity: %v", err)
 	}
 

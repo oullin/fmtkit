@@ -2,7 +2,6 @@ package sourcefiles
 
 import (
 	"bytes"
-	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,7 +18,7 @@ func TestRunPrintsNULSeparatedFiles(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"--cwd", dir, "src"}, &stdout, &stderr)
+	code := Run(t.Context(), []string{"--cwd", dir, "src"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
@@ -50,7 +49,7 @@ func TestRunIncludesDeclarationsFlag(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"--cwd", dir, "--include-declarations"}, &stdout, &stderr)
+	code := Run(t.Context(), []string{"--cwd", dir, "--include-declarations"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
@@ -70,7 +69,7 @@ func TestRunWarnsOnMissingScopes(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := Run(context.Background(), []string{"--cwd", dir, "missing"}, &stdout, &stderr)
+	code := Run(t.Context(), []string{"--cwd", dir, "missing"}, &stdout, &stderr)
 
 	if code != 0 {
 		t.Fatalf("RunCLI exit = %d", code)
@@ -89,7 +88,7 @@ func TestRunDefaultsToWorkingDirectory(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if code := Run(context.Background(), nil, &stdout, &stderr); code != 0 {
+	if code := Run(t.Context(), nil, &stdout, &stderr); code != 0 {
 		t.Fatalf("RunCLI exit = %d, stderr: %s", code, stderr.String())
 	}
 
@@ -104,7 +103,7 @@ func TestRunDefaultsToWorkingDirectory(t *testing.T) {
 func TestRunReportsBadFlags(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 
-	if code := Run(context.Background(), []string{"--nope"}, &stdout, &stderr); code != 1 {
+	if code := Run(t.Context(), []string{"--nope"}, &stdout, &stderr); code != 1 {
 		t.Fatalf("expected exit 1 for an unknown flag, got %d", code)
 	}
 }

@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,7 +159,7 @@ func TestOxfmtConfigForDerivesFromPrettier(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	config := Invoker{Assets: support, Env: env}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	config := Invoker{Assets: support, Env: env}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 	if config == "" || existingFile(config) == "" {
 		t.Fatalf("expected a derived config path, got %q (stderr: %s)", config, stderr.String())
@@ -199,8 +198,8 @@ func TestOxfmtConfigForCachesDerivedConfig(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	first := Invoker{Assets: support, Env: env}.oxfmtConfigFor(context.Background(), cwd, &stderr)
-	second := Invoker{Assets: support, Env: env}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	first := Invoker{Assets: support, Env: env}.oxfmtConfigFor(t.Context(), cwd, &stderr)
+	second := Invoker{Assets: support, Env: env}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 	if first != second {
 		t.Fatalf("cache miss on second call: %q vs %q", first, second)
@@ -231,13 +230,13 @@ func TestOxfmtConfigForRemigratesWhenConfigChanges(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	Invoker{Assets: support, Env: env}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	Invoker{Assets: support, Env: env}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 	if err := os.WriteFile(prettier, []byte(`{"semi":true}`), 0o644); err != nil {
 		t.Fatalf("rewrite prettier config: %v", err)
 	}
 
-	Invoker{Assets: support, Env: env}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	Invoker{Assets: support, Env: env}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 	if got := migrateInvocations(t, filepath.Dir(oxfmt)); got != 2 {
 		t.Fatalf("migration ran %d times, want 2 (content hash should change)", got)
@@ -269,7 +268,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != "" {
+		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(t.Context(), cwd, &stderr); got != "" {
 			t.Fatalf("expected auto-discovery signal for project config, got %q", got)
 		}
 	})
@@ -283,7 +282,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+		got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 		if !strings.HasPrefix(got, filepath.Join(support.Dir, "prettier-derived")) {
 			t.Fatalf("expected derived config, got %q", got)
@@ -295,7 +294,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 
 		var stderr bytes.Buffer
 
-		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(context.Background(), cwd, &stderr); got != support.OxfmtConfig() {
+		if got := (Invoker{Assets: support, Env: proto.ReadOverrides()}).oxfmtConfigFor(t.Context(), cwd, &stderr); got != support.OxfmtConfig() {
 			t.Fatalf("expected bundled config %q, got %q", support.OxfmtConfig(), got)
 		}
 	})
@@ -316,7 +315,7 @@ func TestOxfmtConfigForPrecedence(t *testing.T) {
 		env := proto.ReadOverrides()
 		env.OxfmtConfig = override
 
-		if got := (Invoker{Assets: support, Env: env}).oxfmtConfigFor(context.Background(), cwd, &bytes.Buffer{}); got != override {
+		if got := (Invoker{Assets: support, Env: env}).oxfmtConfigFor(t.Context(), cwd, &bytes.Buffer{}); got != override {
 			t.Fatalf("expected override %q, got %q", override, got)
 		}
 	})
@@ -346,7 +345,7 @@ func TestOxfmtConfigForFallsBackWhenMigrationFails(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(context.Background(), cwd, &stderr)
+	got := Invoker{Assets: support, Env: proto.ReadOverrides()}.oxfmtConfigFor(t.Context(), cwd, &stderr)
 
 	if got != support.OxfmtConfig() {
 		t.Fatalf("expected bundled fallback %q, got %q", support.OxfmtConfig(), got)

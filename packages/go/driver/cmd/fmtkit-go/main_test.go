@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -491,7 +490,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stdout strings.Builder
 
 	var stderr strings.Builder
-	exitCode := app.GoCLI("dev", &stdout, &stderr).Dispatch(context.Background(), args)
+	exitCode := app.GoCLI("dev", &stdout, &stderr).Dispatch(t.Context(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

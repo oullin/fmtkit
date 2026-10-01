@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,7 +41,7 @@ func runCLI(t *testing.T, workdir string, args ...string) (int, string, string) 
 	var stderr strings.Builder
 
 	// "dev" mirrors the unstamped binary: no embedded TS assets.
-	exitCode := Umbrella("dev", &stdout, &stderr).Dispatch(context.Background(), args)
+	exitCode := Umbrella("dev", &stdout, &stderr).Dispatch(t.Context(), args)
 
 	return exitCode, stdout.String(), stderr.String()
 }

@@ -2,7 +2,6 @@ package golang
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +45,7 @@ func runInTempModulelessDir(t *testing.T, source string, mode report.Mode, extra
 
 	var out, errOut bytes.Buffer
 
-	code = Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), mode, append(extraArgs, file))
+	code = Runner{Stdout: &out, Stderr: &errOut}.Run(t.Context(), mode, append(extraArgs, file))
 
 	return code, out.String(), errOut.String(), file
 }
@@ -126,7 +125,7 @@ func TestRunnerRunRejectsUnknownFlag(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	if code := (Runner{Stdout: &out, Stderr: &errOut}).Run(context.Background(), report.ModeCheck, []string{"--bogus"}); code != 1 {
+	if code := (Runner{Stdout: &out, Stderr: &errOut}).Run(t.Context(), report.ModeCheck, []string{"--bogus"}); code != 1 {
 		t.Fatalf("exit = %d", code)
 	}
 }
@@ -144,7 +143,7 @@ func TestRunnerReportsConfigLoadError(t *testing.T) {
 
 	// An explicit --config path that does not exist makes config.Load fail, so
 	// the runner reports it on stderr and exits 1 before running the formatter.
-	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeCheck,
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(t.Context(), report.ModeCheck,
 		[]string{"--config", filepath.Join(dir, "missing.yml"), "sample.go"})
 
 	if code != 1 {
@@ -170,7 +169,7 @@ func TestRunnerHonorsReportRootFlag(t *testing.T) {
 
 	// --cwd points config discovery and report-relative paths at reportRoot while
 	// the process stays in work; a clean file still passes.
-	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeCheck,
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(t.Context(), report.ModeCheck,
 		[]string{"--cwd", reportRoot, "--format", "json", "sample.go"})
 
 	if code != 0 {
@@ -279,7 +278,7 @@ func TestScopedRunnerFormatsOnlyTheWorkingTreesChanges(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(context.Background(), report.ModeFormat, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(t.Context(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -303,7 +302,7 @@ func TestUnscopedRunnerFormatsEveryOwnedFile(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := Runner{Stdout: &out, Stderr: &errOut}.Run(context.Background(), report.ModeFormat, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut}.Run(t.Context(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())
@@ -340,7 +339,7 @@ func TestScopedRunnerOnACleanTreeFormatsNothing(t *testing.T) {
 
 	var out, errOut bytes.Buffer
 
-	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(context.Background(), report.ModeFormat, nil)
+	code := Runner{Stdout: &out, Stderr: &errOut, Scope: gitfiles.SelectionChanged}.Run(t.Context(), report.ModeFormat, nil)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0\n%s\n%s", code, out.String(), errOut.String())

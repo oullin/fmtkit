@@ -93,7 +93,7 @@ func runFormat(t *testing.T, stderr io.Writer, quiet bool, steps []Step) int {
 	printer.Section("Formatting target(s)")
 	printer.Detail("paths", ".")
 
-	code := Pipeline{Steps: steps, Quiet: quiet, Printer: printer, Stderr: stderr}.Run(context.Background())
+	code := Pipeline{Steps: steps, Quiet: quiet, Printer: printer, Stderr: stderr}.Run(t.Context())
 
 	if code == 0 {
 		printer.Section("Formatting complete")

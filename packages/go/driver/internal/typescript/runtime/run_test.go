@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -79,7 +78,7 @@ func TestRunPipelineInvokesSidecar(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	err := NewInvoker(support).RunPipeline(context.Background(), Request{Stdout: &stdout, Stderr: &stderr})
+	err := NewInvoker(support).RunPipeline(t.Context(), Request{Stdout: &stdout, Stderr: &stderr})
 
 	if err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
@@ -127,7 +126,7 @@ func TestRunPipelineSkipsBundledConfigWhenProjectHasOne(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunPipeline(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunPipeline(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunPipeline: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -145,7 +144,7 @@ func TestRunPipelineReportsMissingScopes(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	err := NewInvoker(support).RunPipeline(context.Background(), Request{
+	err := NewInvoker(support).RunPipeline(t.Context(), Request{
 		Scopes: []string{"missing-dir"},
 		Stdout: &stdout,
 		Stderr: &stderr,
@@ -175,7 +174,7 @@ func TestRunLintInvokesOxlintMode(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -211,7 +210,7 @@ func TestRunLintFixPassesFixFlag(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Fix: true, Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Fix: true, Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -251,7 +250,7 @@ func TestRunLintComposesBundledConfigWhenProjectHasOne(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -279,7 +278,7 @@ func TestRunLintSkipsSpawnWithoutFiles(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v", err)
 	}
 
@@ -303,7 +302,7 @@ func TestRunLintSkipsSpawnForFormatOnlyDocuments(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v", err)
 	}
 
@@ -330,7 +329,7 @@ func TestRunLintHonorsOxlintBinOverride(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	if err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
+	if err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: &stdout, Stderr: &stderr}); err != nil {
 		t.Fatalf("RunLint: %v\nstderr: %s", err, stderr.String())
 	}
 
@@ -372,7 +371,7 @@ func TestRunLintRunsEveryConfigBatchAfterViolations(t *testing.T) {
 
 	t.Setenv(proto.SourcesCwdEnv, repo)
 
-	err := NewInvoker(support).RunLint(context.Background(), Request{Stdout: io.Discard, Stderr: io.Discard})
+	err := NewInvoker(support).RunLint(t.Context(), Request{Stdout: io.Discard, Stderr: io.Discard})
 
 	if err == nil {
 		t.Fatal("RunLint returned nil after batch violations")

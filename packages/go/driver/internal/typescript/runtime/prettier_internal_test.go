@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,7 +85,7 @@ func TestDerivedConfigWarnsWhenCacheWriteFails(t *testing.T) {
 
 	var stderr strings.Builder
 
-	if got := migration.DerivedConfig(context.Background(), cwd, &stderr); got != "" {
+	if got := migration.DerivedConfig(t.Context(), cwd, &stderr); got != "" {
 		t.Fatalf("expected empty result on cache failure, got %q", got)
 	}
 
@@ -115,7 +114,7 @@ func TestDerivedConfigWarnsWhenMigrationWritesNoConfig(t *testing.T) {
 
 	var stderr strings.Builder
 
-	got := migration.DerivedConfig(context.Background(), cwd, &stderr)
+	got := migration.DerivedConfig(t.Context(), cwd, &stderr)
 
 	if got != "" {
 		t.Fatalf("expected empty result when no config is produced, got %q", got)

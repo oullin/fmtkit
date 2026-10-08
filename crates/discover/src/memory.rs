@@ -12,6 +12,10 @@
 //! `info/exclude`, global excludes file, or `core.ignoreCase` setting drops
 //! every listing.
 //!
+//! It also keeps the paths that differ between `HEAD` and the index, keyed by
+//! the `HEAD` tree and the index checksum. Both name content, so the result
+//! holds for as long as they are unchanged.
+//!
 //! A directory or ignore file modified within [`SETTLE`] of the run is never
 //! stored, since a coarse timestamp could miss a second change in the same
 //! tick. The store is one file, read once and rewritten atomically when a run
@@ -35,7 +39,7 @@ pub const SETTLE: Duration = Duration::from_secs(2);
 const BUDGET: usize = 100_000;
 
 /// Leads every store file; bump it when the layout changes.
-const MAGIC: &[u8; 8] = b"fmtkit\x03\x01";
+const MAGIC: &[u8; 8] = b"fmtkit\x03\x02";
 
 /// Directory listings kept between runs, in a file of their own.
 pub struct Memory {
@@ -44,6 +48,7 @@ pub struct Memory {
     settled: i64,
     stored: OnceLock<Stored>,
     fresh: Mutex<HashMap<String, Listing>>,
+    fresh_staged: OnceLock<Staged>,
     /// The rules this run's listings were filtered by, once the walk knows them.
     context: OnceLock<Context>,
     /// Whether this run's context matches the stored one.
@@ -83,10 +88,20 @@ pub(crate) struct Context {
     pub files: Vec<(PathBuf, Option<Stamp>)>,
 }
 
+/// The paths of the regular files that differ between a `HEAD` tree and an
+/// index, both named by their hashes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Staged {
+    pub tree: Vec<u8>,
+    pub index: Vec<u8>,
+    pub paths: Vec<String>,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct Stored {
     context: Context,
     listings: HashMap<String, Listing>,
+    staged: Option<Staged>,
     #[serde(skip)]
     used: HashMap<String, AtomicBool>,
 }
@@ -107,6 +122,7 @@ impl Memory {
             settled,
             stored: OnceLock::new(),
             fresh: Mutex::new(HashMap::new()),
+            fresh_staged: OnceLock::new(),
             context: OnceLock::new(),
             trusted: AtomicBool::new(false),
         }
@@ -158,13 +174,25 @@ impl Memory {
         }
     }
 
-    /// Write the store when this run listed something new, keeping the
+    /// The paths that differ between the tree and the index with these
+    /// hashes, when a run has compared them before.
+    pub(crate) fn staged(&self, tree: &[u8], index: &[u8]) -> Option<&[String]> {
+        self.stored().staged.as_ref().filter(|staged| staged.tree == tree && staged.index == index).map(|staged| staged.paths.as_slice())
+    }
+
+    /// Remember what comparing a tree with an index found.
+    pub(crate) fn remember_staged(&self, staged: Staged) {
+        let _ = self.fresh_staged.set(staged);
+    }
+
+    /// Write the store when this run found something new, keeping the
     /// listings still in use.
     pub fn save(self) -> io::Result<()> {
         let fresh = self.fresh.into_inner().unwrap_or_else(PoisonError::into_inner);
+        let fresh_staged = self.fresh_staged.into_inner();
         let trusted = self.trusted.into_inner();
 
-        let (Some(context), false) = (self.context.into_inner(), fresh.is_empty() && trusted) else {
+        let (Some(context), false) = (self.context.into_inner(), fresh.is_empty() && fresh_staged.is_none() && trusted) else {
             return Ok(());
         };
 
@@ -172,19 +200,19 @@ impl Memory {
             return Ok(());
         }
 
-        let mut listings = match (trusted, self.stored.into_inner()) {
-            (true, Some(stored)) if stored.listings.len() + fresh.len() > BUDGET => {
-                let Stored { listings, used, .. } = stored;
+        let Stored { listings, used, staged, .. } = self.stored.into_inner().unwrap_or_default();
 
+        let mut listings = match trusted {
+            true if listings.len() + fresh.len() > BUDGET => {
                 listings.into_iter().filter(|(rel, _)| used.get(rel).is_some_and(|used| used.load(Ordering::Relaxed))).collect()
             }
-            (true, Some(stored)) => stored.listings,
-            _ => HashMap::new(),
+            true => listings,
+            false => HashMap::new(),
         };
 
         listings.extend(fresh);
 
-        let stored = Stored { context, listings, used: HashMap::new() };
+        let stored = Stored { context, listings, staged: fresh_staged.or(staged), used: HashMap::new() };
         let mut bytes = MAGIC.to_vec();
 
         bytes.extend(postcard::to_stdvec(&stored).map_err(io::Error::other)?);

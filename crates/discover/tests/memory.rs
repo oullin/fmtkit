@@ -194,3 +194,22 @@ fn stat_leaves_links_and_intents_to_git() {
     assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
     assert_eq!(repo.rels(&Scope::default()), strings(&["intent.ts"]));
 }
+
+#[test]
+fn the_staged_set_follows_the_index_and_head() {
+    let repo = repo();
+    let store = repo.path(".git/fmtkit-test.dirs");
+
+    repo.write("src/b.ts", "export const b = 2;\n").write("staged.ts", "export {};\n");
+    repo.run(&["add", "src/b.ts", "staged.ts"]);
+    assert_matches_git(&repo, &store, "staging");
+
+    repo.run(&["reset", "-q", "staged.ts"]);
+    assert_matches_git(&repo, &store, "unstaging");
+
+    repo.commit("next");
+    assert_matches_git(&repo, &store, "a commit");
+
+    repo.run(&["reset", "-q", "--soft", "HEAD~1"]);
+    assert_matches_git(&repo, &store, "a soft reset");
+}

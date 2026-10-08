@@ -15,7 +15,7 @@ use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 use gix::status::tree_index::TrackRenames;
 
 use crate::filter::Filter;
-use crate::memory::Memory;
+use crate::memory::{Memory, Staged};
 use crate::walk::{self, Rules};
 use crate::{DiscoverError, SourceFile, Walked};
 
@@ -34,7 +34,7 @@ pub(crate) fn changed(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>
     let rules = rules(&repo, &tracked);
 
     let (staged, worktree, untracked) = thread::scope(|scope| {
-        let staged = scope.spawn(|| staged(&shared.to_thread_local(), &index, filter));
+        let staged = scope.spawn(|| staged(&shared.to_thread_local(), &index, filter, memory));
         let untracked = scope.spawn(|| walk::walk(root, filter, &rules, memory, |rel| !tracked.visit(rel)).map(|walked| walked.files));
         let worktree = worktree(&repo, &index, &patterns, filter);
 
@@ -168,23 +168,48 @@ fn push(files: &mut Vec<SourceFile>, filter: &Filter, rela_path: &BStr) {
     }
 }
 
-/// Entries added or modified in the index against `HEAD`.
-fn staged(repo: &gix::Repository, index: &gix::index::State, filter: &Filter) -> Result<Vec<SourceFile>, DiscoverError> {
+/// Entries added or modified in the index against `HEAD`. `memory` keeps the
+/// result for the next run with the same tree and index.
+fn staged(repo: &gix::Repository, index: &gix::index::File, filter: &Filter, memory: Option<&Memory>) -> Result<Vec<SourceFile>, DiscoverError> {
     let tree = repo.head_tree_id_or_empty().map_err(git)?.detach();
+    let key = memory.zip(index.checksum()).map(|(memory, checksum)| (memory, tree.as_bytes().to_vec(), checksum.as_bytes().to_vec()));
     let mut files = Vec::new();
+
+    if let Some(paths) = key.as_ref().and_then(|(memory, tree, index)| memory.staged(tree, index)) {
+        for path in paths {
+            push(&mut files, filter, path.as_bytes().as_bstr());
+        }
+
+        return Ok(files);
+    }
+
+    let mut paths = Vec::new();
 
     repo.tree_index_status(&tree, index, None, TrackRenames::Disabled, |change, _, _| {
         match change {
-            ChangeRef::Addition { location, entry_mode, .. } | ChangeRef::Modification { location, entry_mode, .. } if is_file(entry_mode) => {
-                push(&mut files, filter, location.as_ref());
+            ChangeRef::Addition { location, entry_mode, .. }
+            | ChangeRef::Modification { location, entry_mode, .. }
+            | ChangeRef::Rewrite { location, entry_mode, .. }
+                if is_file(entry_mode) =>
+            {
+                if let Ok(rel) = location.to_str() {
+                    paths.push(rel.to_owned());
+                }
             }
-            ChangeRef::Rewrite { location, entry_mode, .. } if is_file(entry_mode) => push(&mut files, filter, location.as_ref()),
             _ => {}
         }
 
         Ok(ControlFlow::Continue(()))
     })
     .map_err(git)?;
+
+    for path in &paths {
+        push(&mut files, filter, path.as_bytes().as_bstr());
+    }
+
+    if let Some((memory, tree, index)) = key {
+        memory.remember_staged(Staged { tree, index, paths });
+    }
 
     Ok(files)
 }

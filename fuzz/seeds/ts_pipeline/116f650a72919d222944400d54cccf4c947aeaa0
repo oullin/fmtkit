@@ -1,0 +1,1 @@
+const value = resolveConfig(prefix, buildOptions(env), { strict: true });

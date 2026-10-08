@@ -1,0 +1,3 @@
+function run() {
+	return outer(inner(deep(a, b)), tail);
+}

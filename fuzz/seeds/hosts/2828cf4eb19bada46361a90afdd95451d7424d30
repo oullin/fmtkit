@@ -1,0 +1,11 @@
+```ts
+const   a = BROKEN
+```
+
+```css
+a { color: red
+```
+
+```ts
+const   b = 1
+```

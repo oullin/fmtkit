@@ -1,0 +1,13 @@
+<style lang="stylus">
+.a
+  color  red
+</style>
+
+<style lang="sass">
+.a
+  color:  red
+</style>
+
+<style>
+.a { color: red
+</style>

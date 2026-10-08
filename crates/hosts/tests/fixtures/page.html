@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif}
+.card>h1{font-size:2rem}
+</style>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage"}</script>
+</head>
+<body>
+<div class="card"><h1>Title</h1><p style="color:red;margin:0">Some <b>bold</b> text.</p></div>
+<script>
+const items = ['a', 'b'];
+
+for (const item of items) {
+	console.log(item);
+}
+</script>
+<script type="module">
+import { start } from './app.js';
+
+start();
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+```css
+a{color:red}
+```
+
+```scss
+.a{.b{color:red}}
+```

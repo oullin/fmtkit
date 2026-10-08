@@ -1,0 +1,16 @@
+import { eq } from 'drizzle-orm';
+const users = await db.query.users.findMany(
+	{
+		with: {
+			posts: {
+				with: { comments: true },
+			},
+		},
+		where: {
+			OR: [
+				{ id: 1 },
+				{ id: 2 },
+			],
+		},
+	},
+);

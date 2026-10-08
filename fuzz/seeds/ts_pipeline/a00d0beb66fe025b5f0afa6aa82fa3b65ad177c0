@@ -1,0 +1,4 @@
+const config = createConfig(
+	{ hooks: [init(), done] },
+	[first(), second],
+);

@@ -1,0 +1,2 @@
+import { and, desc, eq, gt } from 'drizzle-orm';
+const rows = await db.select().from(sessions).where(and(eq(sessions.userId, userId), gt(sessions.expiresAt, now))).orderBy(desc(sessions.createdAt));

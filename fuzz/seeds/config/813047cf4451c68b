@@ -1,0 +1,23 @@
+
+jobs = 4
+
+[files]
+exclude = ["dist/"]
+
+[go]
+resolve_imports = true
+
+[ts.format]
+print_width = 120
+trailing_comma = "es5"
+
+[lint.rules]
+eqeqeq = ["error", "always"]
+curly = "off"
+
+[complexity]
+cyclomatic = 10
+
+[[complexity.allow]]
+key = "a.go#run"
+reason = "later"

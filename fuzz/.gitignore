@@ -1,0 +1,5 @@
+target/
+# libFuzzer grows corpus/ during runs; the committed starting points live in seeds/.
+corpus/
+artifacts/
+coverage/

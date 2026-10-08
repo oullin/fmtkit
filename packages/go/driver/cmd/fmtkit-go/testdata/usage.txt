@@ -1,6 +1,0 @@
-fmtkit check [paths...]
-
-fmtkit format [paths...]
-
-fmtkit sources [--include-declarations] [paths...]
-

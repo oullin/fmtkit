@@ -1,0 +1,2 @@
+import { and, eq } from 'drizzle-orm';
+await db.insert(users).values({ id: user.id, email: user.email }).onConflictDoUpdate({ target: users.id, set: { email: user.email, updatedAt: now }, where: and(eq(users.id, user.id), eq(users.active, true)) });

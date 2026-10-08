@@ -1,0 +1,12 @@
+<script type="module">
+a()
+</script>
+<script type="text/javascript">
+b()
+</script>
+<script type="application/ld+json">
+{"a":1}
+</script>
+<script type="text/template">
+<p>x</p>
+</script>

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 
-export APP="${APP:-fmtkit-go}"
-export CMD="${CMD:-./driver/cmd/fmtkit-go}"
-export CGO_ENABLED="${CGO_ENABLED:-0}"
+# Shared environment for the repository scripts. Every artifact they produce
+# lives under storage/; ensure_storage_layout asserts it.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export REPO_ROOT="${REPO_ROOT:-$(cd "${script_dir}/../.." && pwd -P)}"
-export GO_WORKDIR="${GO_WORKDIR:-${REPO_ROOT}/packages/go}"
-export VERSION="${VERSION:-$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo dev)}"
+
+# The version fmtkit reports (CARGO_PKG_VERSION), which the Go helper must be
+# stamped with for a release build's handshake to accept it.
+export VERSION="${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/ s/^version = "\(.*\)"$/\1/p' "${REPO_ROOT}/Cargo.toml")}"
+
 export STORAGE_DIR="${STORAGE_DIR:-${REPO_ROOT}/storage}"
 export CACHE_DIR="${CACHE_DIR:-${STORAGE_DIR}/.cache}"
-export BUILD_DIR="${BUILD_DIR:-storage/bin}"
-export BIN="${BIN:-${BUILD_DIR}/${APP}}"
-export DIST_DIR="${DIST_DIR:-storage/dist}"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${STORAGE_DIR}/target}"
+export GO_HELPER_DIR="${GO_HELPER_DIR:-storage/go-helper}"
 export DIST_TEST_DIR="${DIST_TEST_DIR:-storage/dist-test}"
 export GOCACHE="${GOCACHE:-${CACHE_DIR}/go-build}"
 export GOPATH="${GOPATH:-${CACHE_DIR}/gopath}"
@@ -67,7 +68,6 @@ assert_no_legacy_artifacts() {
 	for forbidden in \
 		"${REPO_ROOT}/.gocache" \
 		"${REPO_ROOT}/.gopath" \
-		"${REPO_ROOT}/.turbo" \
 		"${REPO_ROOT}/bin" \
 		"${REPO_ROOT}/dist" \
 		"${REPO_ROOT}/dist-test"; do
@@ -79,24 +79,13 @@ assert_no_legacy_artifacts() {
 }
 
 ensure_storage_layout() {
-	assert_under_storage "BUILD_DIR" "$BUILD_DIR"
-	assert_under_storage "BIN" "$BIN"
-	assert_under_storage "DIST_DIR" "$DIST_DIR"
-	assert_under_storage "DIST_TEST_DIR" "$DIST_TEST_DIR"
-	assert_under_storage "GOCACHE" "$GOCACHE"
-	assert_under_storage "GOPATH" "$GOPATH"
-	assert_under_storage "GOMODCACHE" "$GOMODCACHE"
+	local dir
 
-	mkdir -p \
-		"${STORAGE_DIR}" \
-		"${CACHE_DIR}" \
-		"$(canonical_path "$BUILD_DIR")" \
-		"$(canonical_path "$DIST_DIR")" \
-		"$(canonical_path "$DIST_TEST_DIR")" \
-		"$(canonical_path "$GOCACHE")" \
-		"$(canonical_path "$GOPATH")" \
-		"$(canonical_path "$GOMODCACHE")" \
-		"$(dirname "$(canonical_path "$BIN")")"
+	for dir in CARGO_TARGET_DIR GO_HELPER_DIR DIST_TEST_DIR GOCACHE GOPATH GOMODCACHE; do
+		assert_under_storage "$dir" "${!dir}"
+		mkdir -p "$(canonical_path "${!dir}")"
+	done
 
+	mkdir -p "${CACHE_DIR}"
 	assert_no_legacy_artifacts
 }

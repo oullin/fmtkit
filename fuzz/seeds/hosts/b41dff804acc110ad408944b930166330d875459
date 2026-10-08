@@ -1,0 +1,4 @@
+<script lang="coffee">
+f = ->
+  x  =  1
+</script>

@@ -1,0 +1,9 @@
+[
+	{ "key": "shapes.ts#ifChain", "line": 1, "cyclomatic": 4, "cognitive": 3 },
+	{ "key": "shapes.ts#elseIfLadder", "line": 17, "cyclomatic": 4, "cognitive": 4 },
+	{ "key": "shapes.ts#switchFour", "line": 29, "cyclomatic": 5, "cognitive": 1 },
+	{ "key": "shapes.ts#nestedClosure", "line": 44, "cyclomatic": 2, "cognitive": 2 },
+	{ "key": "shapes.ts#logicalRun", "line": 54, "cyclomatic": 4, "cognitive": 1 },
+	{ "key": "shapes.ts#mixedLogical", "line": 58, "cyclomatic": 3, "cognitive": 2 },
+	{ "key": "shapes.ts#loopWithIf", "line": 62, "cyclomatic": 3, "cognitive": 3 }
+]

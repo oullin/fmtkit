@@ -1,0 +1,15 @@
+# Spliced by cargo-dist into every build-local-artifacts job, before `dist
+# build` (see github-build-setup in dist-workspace.toml). It builds the Go
+# helper for the job's target into the path that `include` ships beside the
+# fmtkit binary, stamped with the same version so the handshake matches.
+- name: Install Go
+  uses: actions/setup-go@v7.0.0
+  with:
+      go-version-file: go/helper/go.mod
+      cache-dependency-path: go/helper/go.sum
+
+- name: Build the Go helper
+  shell: bash
+  env:
+      DIST_TARGETS: ${{ join(matrix.targets, ' ') }}
+  run: ./scripts/build-go-helper.sh "$DIST_TARGETS"

@@ -1,0 +1,4 @@
+export default defineConfig({
+    cacheDir: "../../storage/.cache",
+    test: { globals: true },
+});

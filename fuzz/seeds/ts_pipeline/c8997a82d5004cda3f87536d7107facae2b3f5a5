@@ -1,0 +1,7 @@
+const query = run(build(), {
+	sql: `
+		select 1
+   
+		from t
+	`,
+});

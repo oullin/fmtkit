@@ -1,0 +1,21 @@
+# Title
+
+```ts
+const a = 1
+```
+
+```tsx title="x.tsx" {1}
+const b = 2
+```
+
+```JavaScript
+const c = 3
+```
+
+```bash
+echo   hi
+```
+
+```
+plain   text
+```

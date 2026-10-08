@@ -1,0 +1,15 @@
+[package]
+name = "fmtkit-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fmtkit-core.workspace = true
+proptest.workspace = true
+similar.workspace = true

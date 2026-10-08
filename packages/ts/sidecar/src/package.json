@@ -1,7 +1,0 @@
-{
-	"type": "module",
-	"imports": {
-		"#sidecar/*.js": "./*.ts",
-		"#sidecar/*": "./*.ts"
-	}
-}

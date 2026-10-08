@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Single entrypoint for the repo-wide tasks: everything that spans both halves
-# of the pipeline lives here as a subcommand. Go-toolchain tasks scoped to a
-# single package live in packages/go/scripts/task.sh instead; the release tag
-# machinery is under scripts/release/.
+# Single entrypoint for the repository tasks. The release tag machinery lives
+# under scripts/release/.
 #
-# usage: task.sh <format|fmtkit|self-check|build|gofmt|coverage|with-env|help> [args...]
+# usage: task.sh <task> [args...]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/env.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/host-target.sh"
 
 usage() {
-	cat >&2 <<'EOF'
+	cat >&2 <<'EOF_USAGE'
 usage: task.sh <task> [args...]
 
+  build               build fmtkit (release profile) and the Go helper for
+                      this machine into storage/
+  fmtkit <cmd> ...    run any fmtkit command through the self-built binary
   format [paths...]   format the repository with fmtkit's own binary; paths
                       are resolved against the repo root, "." means all of it
-  fmtkit <cmd> ...    run any fmtkit command (format-all, check, version, ...)
-                      through the same self-built binary
-  self-check          assert the repo is fmtkit-formatted: format-all over a
+  self-check          assert the repo is fmtkit-formatted: format --all over a
                       clean tree and fail if anything moved
-  build               build the local fmtkit-go binary into storage/bin
-  gofmt               run gofmt -w over the Go module
-  coverage            enforce the Go and TS coverage gates
+  lint                rustfmt, clippy, gofmt and go vet, all read-only
+  test                the Rust workspace and Go helper test suites
+  coverage            enforce the Rust and Go coverage gates
   with-env <cmd> ...  run a command with the storage env and layout asserted
-EOF
+EOF_USAGE
 }
 
 # Runs a command with the storage layout in place, then asserts the command did
@@ -43,128 +41,57 @@ with_env() {
 	return "$status"
 }
 
-# The sidecar is stale once anything it is compiled from outdates it: the
-# support sources, the tool pins, or the configs staged alongside it.
-sidecar_is_stale() {
-	local sidecar="$1"
-	local newer
-
-	[[ -x "$sidecar" ]] || return 0
-
-	# -print -quit stops at the first match without a pipe: piping to `head`
-	# would hand find a SIGPIPE (exit 141) the moment head closes the pipe,
-	# and under pipefail + set -e that aborts the whole script.
-	newer="$(find \
-		"${REPO_ROOT}/packages/ts/sidecar/src" \
-		"${REPO_ROOT}/packages/ts/sidecar/package.json" \
-		"${REPO_ROOT}/packages/ts/sidecar/tsconfig.json" \
-		"${REPO_ROOT}/packages/ts/toolchain/stage-ts-assets.sh" \
-		"${REPO_ROOT}/package.json" \
-		"${REPO_ROOT}/pnpm-lock.yaml" \
-		"${REPO_ROOT}/.oxfmtrc.json" \
-		"${REPO_ROOT}/.oxlintrc.json" \
-		-newer "$sidecar" -print -quit 2>/dev/null)"
-
-	[[ -n "$newer" ]]
+run_build() {
+	ensure_storage_layout
+	cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit
+	"${REPO_ROOT}/scripts/build-go-helper.sh"
 }
 
-# Runs this repository through fmtkit's own binary — the same Go orchestrator
-# and bun-compiled TS sidecar a release carries. The host toolchain assets are
-# staged on demand and reused until their sources change. The repo root is not
-# inside the Go module, so the inner loop is an incremental build into storage/
-# rather than a `go run`; the embedded-asset path releases use is covered
-# separately by scripts/test-binary-smoke.sh.
+# Runs fmtkit from this checkout, rebuilt incrementally first, against the
+# helper built beside it.
 run_fmtkit() {
-	local support_dir sidecar bin
-
-	support_dir="${REPO_ROOT}/packages/go/driver/internal/typescript/embedded/bin/$(host_target)"
-	sidecar="${support_dir}/fmtkit-ts-sidecar"
-
-	if sidecar_is_stale "$sidecar"; then
-		"${REPO_ROOT}/packages/ts/toolchain/stage-ts-assets.sh" host
-	fi
-
-	ensure_storage_layout
-
-	bin="$(canonical_path "${BUILD_DIR}/fmtkit-dev")"
-
-	"${GO_BIN:-go}" -C "$GO_WORKDIR" build -o "$bin" ./driver/cmd/fmtkit
+	run_build >&2
 
 	cd "$REPO_ROOT"
 
-	FMTKIT_SUPPORT_DIR="$support_dir" exec "$bin" "$@"
+	FMTKIT_GO_HELPER="$(canonical_path "$GO_HELPER_DIR")/fmtkit-go-helper" exec "${CARGO_TARGET_DIR}/release/fmtkit" "$@"
 }
 
 # Formats the repository. Paths are resolved against the repository root rather
 # than the invoking directory, so `task.sh format .` means the whole repo no
 # matter where it is run from.
 run_format() {
-	local -a args=("$@")
-	local -a fmtkit_args=()
-	local raw_arg
+	local -a fmtkit_args=(--all)
+	local arg
 
-	if [[ "${args[0]:-}" == "--" ]]; then
-		args=("${args[@]:1}")
-	fi
-
-	if [[ ${#args[@]} -eq 0 ]]; then
-		args=(.)
-	fi
-
-	to_repo_path() {
-		local arg="$1"
-
+	for arg in "$@"; do
 		case "$arg" in
-			-*)
-				# A step or output flag (--ts, --go, --quiet): pass it through as-is.
-				printf '%s\n' "$arg"
-				;;
-			.)
-				printf '%s\n' "$REPO_ROOT"
-				;;
-			./*)
-				printf '%s\n' "$REPO_ROOT/${arg#./}"
-				;;
-			/*)
-				printf '%s\n' "$arg"
-				;;
-			*)
-				printf '%s\n' "$REPO_ROOT/$arg"
-				;;
+			--) ;;
+			-*) fmtkit_args+=("$arg") ;;
+			.) ;;
+			/*) fmtkit_args+=("$arg") ;;
+			*) fmtkit_args+=("${REPO_ROOT}/${arg#./}") ;;
 		esac
-	}
-
-	for raw_arg in "${args[@]}"; do
-		fmtkit_args+=("$(to_repo_path "$raw_arg")")
 	done
 
 	run_fmtkit format "${fmtkit_args[@]}"
 }
 
-# Asserts this repository is formatted the way fmtkit formats it — by running
-# fmtkit over it and failing if anything moved.
-#
-# This is the only honest way to check the tree. fmtkit's format is the
-# pipeline's output (blank-lines -> oxfmt -> fluent-chains), and the project
-# passes run *after* oxfmt and deliberately diverge from it: they expand calls
-# and chains that oxfmt, left to itself, would collapse back. So bare
-# `oxfmt --check` disagrees with correctly formatted source by design, and using
-# it here would be checking the tree against a tool that is not the formatter.
-#
-# The pipeline has no read-only mode for TS, so this formats and then diffs.
-# It is meant for CI and for a clean tree; it rewrites files in place.
+# Asserts this repository is formatted the way fmtkit formats it, by running
+# fmtkit over it and failing if anything moved. Unlike `fmtkit check`, this
+# also proves that a format run over the tree is a no-op end to end.
 # run_fmtkit ends in `exec`, so it runs in a subshell to keep this one alive for
 # the diff.
 run_self_check() {
 	cd "$REPO_ROOT"
 
 	if [[ -n "$(git status --porcelain)" ]]; then
-		printf 'self-check: the working tree is dirty; commit or stash first\n' >&2
+		printf 'self-check: the working tree is dirty; commit first\n' >&2
 		git status --short >&2
 		exit 1
 	fi
 
-	(run_fmtkit format-all)
+	(run_fmtkit format --all --no-cache)
 
 	if git diff --quiet; then
 		printf 'repository is fmtkit-formatted\n'
@@ -179,63 +106,74 @@ run_self_check() {
 	exit 1
 }
 
-run_build() {
-	local host_os host_arch build_dir_path bin_path
+run_lint() {
+	local unformatted
 
-	host_os="${HOST_OS:-$(go -C "$GO_WORKDIR" env GOOS)}"
-	host_arch="${HOST_ARCH:-$(go -C "$GO_WORKDIR" env GOARCH)}"
-	build_dir_path="$(canonical_path "$BUILD_DIR")"
-	bin_path="$(canonical_path "$BIN")"
+	with_env cargo fmt --manifest-path "${REPO_ROOT}/Cargo.toml" --all --check
+	with_env cargo clippy --manifest-path "${REPO_ROOT}/Cargo.toml" --workspace --all-targets --locked -- -D warnings
 
-	ensure_storage_layout
-	mkdir -p "$build_dir_path" "$(dirname "$bin_path")"
+	unformatted="$(gofmt -l "${REPO_ROOT}/go/helper")"
 
-	CGO_ENABLED="$CGO_ENABLED" GOOS="$host_os" GOARCH="$host_arch" \
-		go -C "$GO_WORKDIR" build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$bin_path" "$CMD"
-	chmod +x "$bin_path"
+	if [[ -n "$unformatted" ]]; then
+		printf 'gofmt: these files need formatting:\n%s\n' "$unformatted" >&2
+		exit 1
+	fi
+
+	with_env go -C "${REPO_ROOT}/go/helper" vet ./...
 }
 
+run_test() {
+	"${REPO_ROOT}/scripts/build-go-helper.sh"
+
+	FMTKIT_GO_HELPER="$(canonical_path "$GO_HELPER_DIR")/fmtkit-go-helper" \
+		with_env cargo test --manifest-path "${REPO_ROOT}/Cargo.toml" --workspace --locked
+
+	with_env go -C "${REPO_ROOT}/go/helper" test -race ./...
+}
+
+# Both gates hold at 90% of lines. cargo-llvm-cov must be installed
+# (`cargo install cargo-llvm-cov`).
 run_coverage() {
-	local go_coverage
+	local go_coverage profile
 
-	with_env go -C "$GO_WORKDIR" test ./... -coverprofile=coverage.out -covermode=atomic
+	"${REPO_ROOT}/scripts/build-go-helper.sh"
 
-	# The gate counts every package that can meaningfully carry unit coverage.
-	# Only the pure main() wrappers, the embedded-asset build-tag shim, and the
-	# shared test helpers are excluded — nothing else, so the number stays
-	# honest. The threshold is a ratchet: it holds at today's coverage and goes
-	# up as the under-tested packages (driver/config, internal/app,
-	# internal/typescript/sourcefiles) gain tests; it never goes down.
-	grep -vE '^go\.ollin\.sh/fmtkit/(driver/cmd/fmtkit/|driver/internal/typescript/embedded/|driver/testutil/)' \
-		"${GO_WORKDIR}/coverage.out" > "${GO_WORKDIR}/coverage.gate.out"
+	FMTKIT_GO_HELPER="$(canonical_path "$GO_HELPER_DIR")/fmtkit-go-helper" \
+		with_env cargo llvm-cov --manifest-path "${REPO_ROOT}/Cargo.toml" --workspace --locked \
+		--lcov --output-path "$(canonical_path "${CACHE_DIR}/lcov.info")" --fail-under-lines 90
 
-	go_coverage="$(go -C "$GO_WORKDIR" tool cover -func=coverage.gate.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')"
+	profile="$(canonical_path "${CACHE_DIR}/go-helper.cover.out")"
 
-	awk -v coverage="${go_coverage}" 'BEGIN { exit !(coverage >= 85) }'
+	with_env go -C "${REPO_ROOT}/go/helper" test ./... -coverprofile="$profile" -covermode=atomic
 
-	printf 'Go coverage (gated packages): %s%%\n' "${go_coverage}"
+	go_coverage="$(go -C "${REPO_ROOT}/go/helper" tool cover -func="$profile" | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')"
 
-	with_env pnpm --filter sidecar run test:coverage
+	printf 'Go helper coverage: %s%%\n' "${go_coverage}"
+
+	awk -v coverage="${go_coverage}" 'BEGIN { exit !(coverage >= 90) }'
 }
 
 task="${1:-help}"
 shift || true
 
 case "$task" in
-	format)
-		run_format "$@"
+	build)
+		run_build
 		;;
 	fmtkit)
 		run_fmtkit "$@"
 		;;
+	format)
+		run_format "$@"
+		;;
 	self-check)
 		run_self_check
 		;;
-	build)
-		run_build
+	lint)
+		run_lint
 		;;
-	gofmt)
-		exec gofmt -w "$GO_WORKDIR"
+	test)
+		run_test
 		;;
 	coverage)
 		run_coverage

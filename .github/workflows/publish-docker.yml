@@ -1,0 +1,80 @@
+name: Publish Docker Image
+
+# A cargo-dist custom publish job (publish-jobs in dist-workspace.toml): runs
+# after the release is hosted and pushes the multi-arch image built from its
+# linux archives to ghcr.io/oullin/fmtkit.
+on:
+    workflow_call:
+        inputs:
+            plan:
+                required: true
+                type: string
+
+permissions:
+    contents: read
+    packages: write
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+    image:
+        runs-on: ubuntu-24.04
+
+        steps:
+            - uses: actions/checkout@v7.0.1
+              with:
+                  persist-credentials: false
+
+            # The Dockerfile expects the prebuilt binaries under <os>/<arch>/.
+            - name: Assemble the build context from the release archives
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG: ${{ fromJson(inputs.plan).announcement_tag }}
+              run: |
+                  ctx="${RUNNER_TEMP}/ctx"
+
+                  for pair in amd64:x86_64-unknown-linux-gnu arm64:aarch64-unknown-linux-gnu; do
+                      arch="${pair%%:*}"
+                      triple="${pair#*:}"
+                      mkdir -p "${ctx}/linux/${arch}"
+                      gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "fmtkit-${triple}.tar.xz" --output - \
+                          | tar -xJ -C "${ctx}/linux/${arch}" --strip-components 1
+                  done
+
+                  cp Dockerfile "${ctx}/"
+                  echo "CONTEXT=${ctx}" >> "$GITHUB_ENV"
+                  echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+
+            # The image's RUN steps (apt-get, the Go toolchain download) still
+            # execute per platform, so the arm64 leg needs binfmt emulation.
+            - uses: docker/setup-qemu-action@v4.4.0
+              name: Set up QEMU for the arm64 image build
+
+            - uses: docker/setup-buildx-action@v4.4.1
+              name: Set up Docker buildx
+
+            - uses: docker/login-action@v4.6.0
+              name: Log in to GHCR
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            # buildx attestations render as "unknown/unknown" platforms in the
+            # GHCR UI; keep the manifest list to the two real platforms.
+            - name: Build and push the image
+              run: |
+                  docker buildx build "$CONTEXT" \
+                      --platform linux/amd64,linux/arm64 \
+                      --provenance=false --sbom=false \
+                      --tag "ghcr.io/oullin/fmtkit:v${VERSION}" \
+                      --tag ghcr.io/oullin/fmtkit:latest \
+                      --label org.opencontainers.image.title=fmtkit \
+                      --label "org.opencontainers.image.description=Formats and checks Go, TypeScript, JavaScript, Vue, HTML, and Markdown repositories" \
+                      --label org.opencontainers.image.source=https://github.com/oullin/fmtkit \
+                      --label org.opencontainers.image.licenses=MIT \
+                      --label "org.opencontainers.image.version=v${VERSION}" \
+                      --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+                      --annotation "index:org.opencontainers.image.source=https://github.com/oullin/fmtkit" \
+                      --push

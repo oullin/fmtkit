@@ -1,0 +1,6 @@
+const styled = create({
+    styles: css`
+        color: red;
+        margin: ${spacing}px;
+    `,
+});

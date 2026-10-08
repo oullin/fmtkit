@@ -1,0 +1,21 @@
+[package]
+name = "fmtkit-discover"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fmtkit-config.workspace = true
+fmtkit-core.workspace = true
+gix.workspace = true
+ignore.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

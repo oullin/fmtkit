@@ -1,0 +1,5 @@
+export function createAuth() {
+	return betterAuth(
+		buildAuthConfig(env, db, mailer, app, options),
+	) as unknown as SasuAuth;
+}

@@ -1,0 +1,2 @@
+import { union } from 'drizzle-orm';
+const rows = await union(db.select().from(users), db.select().from(admins)).limit(10);

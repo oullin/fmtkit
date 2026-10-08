@@ -618,7 +618,7 @@ Continuous integration runs these workflows:
 
 ### Releases
 
-The version in `Cargo.toml` is the release version. When a commit lands on `main` with a version that has no tag, `tag.yml` tags it `v<version>` and starts `release.yml`. The release builds the archives with cargo-dist, publishes the Homebrew formula, and publishes the Docker image. A version must be strict semver and must sort above the latest tag.
+The version in `Cargo.toml` is the release version. When a commit lands on `main` with a version that has no tag, `tag.yml` tags it `v<version>` and starts `release.yml`. The release builds the archives with cargo-dist, publishes the Homebrew formula, and publishes the Docker image. A version must be strict semver and must sort above the latest tag. Tagging runs only while the repository variable `RELEASES` is set to `enabled` (`gh variable set RELEASES --body enabled`); without it, merges release nothing.
 
 ## fmtkit formats itself
 

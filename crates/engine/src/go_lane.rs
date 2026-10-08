@@ -12,22 +12,45 @@ use crate::{Run, write};
 
 enum Pending<'f> {
     Done(Option<FileOutcome>),
+    Read { file: &'f SourceFile, fresh: Fresh },
     Waiting { file: &'f SourceFile, fresh: Fresh, ticket: Ticket },
 }
 
-/// Send every Go file to the helper, then collect the replies in order.
+/// Look every Go file up in the cache, send the misses to the helper, then
+/// collect the replies in order. The helper (found from `go_helper`) is
+/// started only when a file misses, so a run the cache answers never waits
+/// for it to start or stop.
 ///
 /// Reading and submitting run on the pool, but nothing there waits for a
 /// reply: this thread does the waiting, so script work never stalls behind
 /// the helper.
-pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayon::ThreadPool) -> Result<Vec<FileOutcome>, GoError> {
-    let pending: Vec<Pending<'_>> = pool.install(|| files.par_iter().map(|file| submit(run, helper, file)).collect::<Result<_, _>>())?;
+pub fn process(run: &Run<'_>, go_helper: Option<&Path>, files: &[SourceFile], pool: &rayon::ThreadPool) -> Result<Vec<FileOutcome>, GoError> {
+    let read: Vec<Pending<'_>> = pool.install(|| files.par_iter().map(|file| read(run, file)).collect());
+    let helper = read.iter().any(|item| matches!(item, Pending::Read { .. })).then(|| Helper::spawn(go_helper)).transpose()?;
+
+    let pending = match &helper {
+        Some(helper) => pool.install(|| read.into_par_iter().map(|item| submit(run, helper, item)).collect::<Result<_, _>>())?,
+        None => read,
+    };
+
+    let outcomes = collect(run, helper.as_ref(), pending)?;
+
+    if let Some(helper) = helper {
+        helper.shutdown()?;
+    }
+
+    Ok(outcomes)
+}
+
+/// Wait for each reply in turn. Only a run with misses has a `helper`.
+fn collect(run: &Run<'_>, helper: Option<&Helper>, pending: Vec<Pending<'_>>) -> Result<Vec<FileOutcome>, GoError> {
     let mut outcomes = Vec::with_capacity(pending.len());
     let mut rescores = Vec::new();
 
     for item in pending {
         let outcome = match item {
             Pending::Done(outcome) => outcome,
+            Pending::Read { .. } => None,
             Pending::Waiting { file, mut fresh, ticket } => {
                 let outcome = finish(run, file, &fresh, ticket.wait()?);
 
@@ -35,13 +58,14 @@ pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayo
                 // the helper scored the formatted text, whose lines moved. The
                 // outcome is stored once it is final.
                 if run.mode == Mode::Check && outcome.changed && outcome.error.is_none() {
-                    if outcome.complexity.is_empty() {
-                        run.cache.put_fresh(&fresh, &outcome);
-                    } else {
-                        let steps = Steps { complexity: true, ..Steps::default() };
-                        let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source: std::mem::take(&mut fresh.bytes), steps };
+                    match helper {
+                        Some(helper) if !outcome.complexity.is_empty() => {
+                            let steps = Steps { complexity: true, ..Steps::default() };
+                            let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source: std::mem::take(&mut fresh.bytes), steps };
 
-                        rescores.push((outcomes.len(), fresh, helper.submit(request)?));
+                            rescores.push((outcomes.len(), fresh, helper.submit(request)?));
+                        }
+                        _ => run.cache.put_fresh(&fresh, &outcome),
                     }
                 }
 
@@ -65,16 +89,24 @@ pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayo
     Ok(outcomes)
 }
 
-fn submit<'f>(run: &Run<'_>, helper: &Helper, file: &'f SourceFile) -> Result<Pending<'f>, GoError> {
+fn read<'f>(run: &Run<'_>, file: &'f SourceFile) -> Pending<'f> {
     let fresh = match run.cache.read(run.mode, &file.rel, &file.abs) {
-        Ok(Lookup::Hit(outcome)) => return Ok(Pending::Done(Some(outcome))),
+        Ok(Lookup::Hit(outcome)) => return Pending::Done(Some(outcome)),
         Ok(Lookup::Miss(fresh)) => fresh,
-        Err(e) => return Ok(Pending::Done(Some(FileOutcome::failed(&file.rel, Some(Lang::Go), format!("read: {e}"))))),
+        Err(e) => return Pending::Done(Some(FileOutcome::failed(&file.rel, Some(Lang::Go), format!("read: {e}")))),
     };
 
     if std::str::from_utf8(&fresh.bytes).is_ok_and(fmtkit_discover::is_generated) {
-        return Ok(Pending::Done(None));
+        return Pending::Done(None);
     }
+
+    Pending::Read { file, fresh }
+}
+
+fn submit<'f>(run: &Run<'_>, helper: &Helper, item: Pending<'f>) -> Result<Pending<'f>, GoError> {
+    let Pending::Read { file, fresh } = item else {
+        return Ok(item);
+    };
 
     let steps = steps(run.config, &file.abs);
     let ticket = helper.submit(Request { rel: file.rel.clone(), abs: file.abs.clone(), source: fresh.bytes.clone(), steps })?;

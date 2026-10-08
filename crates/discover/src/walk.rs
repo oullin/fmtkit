@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use ignore::{WalkBuilder, WalkState};
 
 use crate::filter::Filter;
+use crate::memory::Memory;
 use crate::{DiscoverError, Walked};
 
 /// Which ignore rules a walk follows.
@@ -24,15 +25,22 @@ pub(crate) enum Rules {
 /// Every file under `root` that `.gitignore` and `.ignore` files do not
 /// exclude, walked in parallel. Used outside git.
 pub(crate) fn all(root: &Path, filter: &Arc<Filter>) -> Result<Walked, DiscoverError> {
-    walk(root, filter, &Rules::Plain, |_| true)
+    walk(root, filter, &Rules::Plain, None, |_| true)
 }
 
 /// Walk `root` in parallel, recording every file that `rules` do not exclude
-/// and `keep` accepts. Directories the filter rejects are not entered.
-pub(crate) fn walk(root: &Path, filter: &Arc<Filter>, rules: &Rules, keep: impl Fn(&str) -> bool + Sync) -> Result<Walked, DiscoverError> {
+/// and `keep` accepts. Directories the filter rejects are not entered. Under
+/// git's rules, `memory` replays the listings of unchanged directories.
+pub(crate) fn walk(
+    root: &Path,
+    filter: &Arc<Filter>,
+    rules: &Rules,
+    memory: Option<&Memory>,
+    keep: impl Fn(&str) -> bool + Sync,
+) -> Result<Walked, DiscoverError> {
     match rules {
         Rules::Plain => plain(root, filter, keep),
-        Rules::Git { ignore_case, exclude } => git::walk(root, filter, *ignore_case, exclude, walkers(), &keep),
+        Rules::Git { ignore_case, exclude } => git::walk(root, filter, *ignore_case, exclude, memory, walkers(), &keep),
     }
 }
 

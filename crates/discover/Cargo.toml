@@ -14,7 +14,9 @@ fmtkit-config.workspace = true
 fmtkit-core.workspace = true
 gix.workspace = true
 ignore.workspace = true
+postcard.workspace = true
 rayon.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

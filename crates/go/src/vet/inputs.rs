@@ -13,10 +13,7 @@
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, SystemTime};
-
-use ignore::{WalkBuilder, WalkState};
 
 use super::{ModuleRun, skipped_dir};
 
@@ -120,69 +117,49 @@ fn is_local(target: &str) -> bool {
     target == "." || target == ".." || target.starts_with("./") || target.starts_with("../") || Path::new(target).is_absolute() || target.starts_with('\\')
 }
 
+/// Past this many files, their metadata is read on [`STATTERS`] threads.
+const PARALLEL: usize = 512;
+
+const STATTERS: usize = 4;
+
 /// Every file `go` could read under `dir`, with its metadata, sorted. `None`
-/// when the walk fails.
+/// when a directory cannot be listed.
 fn stamps(dir: &Path) -> Option<Vec<(PathBuf, fs::Metadata)>> {
-    let found = Mutex::new(Vec::new());
-    let failed = Mutex::new(false);
-    let base = dir.to_path_buf();
+    let mut rels = Vec::new();
+    let mut pending = vec![PathBuf::new()];
 
-    WalkBuilder::new(dir)
-        .standard_filters(false)
-        .follow_links(false)
-        .filter_entry(move |entry| {
-            if entry.depth() == 0 || !entry.file_type().is_some_and(|kind| kind.is_dir()) {
-                return true;
+    while let Some(rel) = pending.pop() {
+        for entry in fs::read_dir(dir.join(&rel)).ok()? {
+            let entry = entry.ok()?;
+            let child = rel.join(entry.file_name());
+
+            if !entry.file_type().ok()?.is_dir() {
+                rels.push(child);
+            } else if !skipped_dir(&entry.file_name().to_string_lossy()) && !dir.join(&child).join("go.mod").is_file() {
+                pending.push(child);
             }
-
-            let name = entry.file_name().to_string_lossy();
-
-            !skipped_dir(&name) && !entry.path().join("go.mod").is_file() && entry.path().starts_with(&base)
-        })
-        .build_parallel()
-        .run(|| {
-            let failed = &failed;
-            let mut sink = Drain { local: Vec::new(), found: &found };
-
-            Box::new(move |entry| {
-                let Ok(entry) = entry else {
-                    *failed.lock().unwrap_or_else(PoisonError::into_inner) = true;
-
-                    return WalkState::Quit;
-                };
-
-                if entry.file_type().is_some_and(|kind| !kind.is_dir())
-                    && let Ok(meta) = fs::metadata(entry.path())
-                    && let Ok(rel) = entry.path().strip_prefix(dir)
-                {
-                    sink.local.push((rel.to_path_buf(), meta));
-                }
-
-                WalkState::Continue
-            })
-        });
-
-    if failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
-        return None;
+        }
     }
 
-    let mut files = found.into_inner().unwrap_or_else(PoisonError::into_inner);
+    // A symbolic link is stamped as what it points to; a dangling one is
+    // left out, as `go` cannot read it.
+    let stat = |rels: &[PathBuf]| -> Vec<(PathBuf, fs::Metadata)> {
+        rels.iter().filter_map(|rel| fs::metadata(dir.join(rel)).ok().map(|meta| (rel.clone(), meta))).collect()
+    };
+
+    let mut files = if rels.len() > PARALLEL {
+        std::thread::scope(|scope| {
+            let parts: Vec<_> = rels.chunks(rels.len().div_ceil(STATTERS)).map(|part| scope.spawn(move || stat(part))).collect();
+
+            parts.into_iter().flat_map(|part| part.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))).collect()
+        })
+    } else {
+        stat(&rels)
+    };
 
     files.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
     Some(files)
-}
-
-/// One walker thread's files, handed over when its visitor is dropped.
-struct Drain<'a> {
-    local: Vec<(PathBuf, fs::Metadata)>,
-    found: &'a Mutex<Vec<(PathBuf, fs::Metadata)>>,
-}
-
-impl Drop for Drain<'_> {
-    fn drop(&mut self) {
-        self.found.lock().unwrap_or_else(PoisonError::into_inner).append(&mut self.local);
-    }
 }
 
 /// The variables `go` reads, sorted by name.

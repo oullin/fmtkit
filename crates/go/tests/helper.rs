@@ -280,10 +280,17 @@ fn dropping_the_helper_stops_it() {
 }
 
 /// Write an executable shell script standing in for the helper.
+///
+/// The executable is a copy that `cp` writes. A file this process wrote
+/// could fail to start with "Text file busy" on Linux: a child that another
+/// test thread forks while the file is open for writing keeps a writable
+/// handle on it until that child execs.
 fn fake_helper(dir: &Path, body: &str) -> PathBuf {
+    let source = dir.join("fake-helper.sh");
     let path = dir.join("fake-helper");
 
-    fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::write(&source, format!("#!/bin/sh\n{body}\n")).unwrap();
+    assert!(Command::new("cp").arg(&source).arg(&path).status().unwrap().success());
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
 
     path

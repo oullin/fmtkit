@@ -426,6 +426,23 @@ fn missing_helper_is_an_internal_error() {
     assert!(text(&output).contains("helper"), "{}", text(&output));
 }
 
+#[test]
+fn a_go_run_the_cache_answers_needs_no_helper() {
+    let fixture = Fixture::new(&[("fmtkit.toml", "[go]\nvet = false\n"), ("app.go", "package p\n")]);
+
+    assert_exit(&fixture.run(&["check", "--all", "--go"]), 0);
+
+    let output = Command::new(BIN)
+        .args(["check", "--all", "--go"])
+        .current_dir(fixture.path())
+        .env("FMTKIT_CACHE_DIR", fixture.cache.path())
+        .env("FMTKIT_GO_HELPER", fixture.path().join("no-such-helper"))
+        .output()
+        .unwrap();
+
+    assert_exit(&output, 0);
+}
+
 // `.- ` reaches an `unreachable!()` in oxc-css-parser 0.0.15 (docs/known-issues.md).
 // The panic must stay that file's error: the run finishes and formats the rest.
 // Once upstream fixes it, the file simply formats and only the exit code moves.

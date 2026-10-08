@@ -5,13 +5,13 @@ use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 use common::{Fixture, strings};
-use fmtkit_discover::{Memory, Scope, discover_with};
+use fmtkit_discover::{Memory, Repository, Scope, discover_with};
 
 /// Discover with the memory in `store`, as a run a minute from now would, so
 /// everything just written counts as settled and is stored.
 fn remembered(repo: &Fixture, store: &Path, scope: &Scope) -> Vec<String> {
     let mut memory = Memory::open_as_of(store, SystemTime::now() + Duration::from_secs(60));
-    let found = discover_with(repo.root(), scope, &fmtkit_config::Files::default(), Some(&memory)).unwrap();
+    let found = discover_with(repo.root(), scope, &fmtkit_config::Files::default(), Some(&memory), &mut Repository::default()).unwrap();
 
     memory.save().unwrap();
 
@@ -116,7 +116,7 @@ fn unsettled_directories_are_not_stored() {
     let store = repo.path(".git/fmtkit-test.dirs");
     let mut memory = Memory::open(&store);
 
-    discover_with(repo.root(), &Scope::default(), &fmtkit_config::Files::default(), Some(&memory)).unwrap();
+    discover_with(repo.root(), &Scope::default(), &fmtkit_config::Files::default(), Some(&memory), &mut Repository::default()).unwrap();
     memory.save().unwrap();
 
     // Everything was written within the settle window, so nothing was kept

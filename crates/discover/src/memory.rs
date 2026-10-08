@@ -242,7 +242,7 @@ impl Memory {
     }
 
     fn is_settled(&self, stamp: &Stamp) -> bool {
-        stamp.mtime < self.settled && stamp.ctime < self.settled
+        stamp.is_settled(self.settled)
     }
 }
 
@@ -302,10 +302,16 @@ impl Stamp {
     pub(crate) fn from_metadata(_meta: &fs::Metadata) -> Option<Self> {
         None
     }
+
+    /// Whether the file was last written and changed before `before`,
+    /// nanoseconds since the epoch.
+    pub(crate) fn is_settled(&self, before: i64) -> bool {
+        self.mtime < before && self.ctime < before
+    }
 }
 
 /// Nanoseconds since the epoch at [`SETTLE`] before `now`.
-fn settled_before(now: SystemTime) -> i64 {
+pub(crate) fn settled_before(now: SystemTime) -> i64 {
     now.checked_sub(SETTLE).map_or(0, nanos_since_epoch)
 }
 

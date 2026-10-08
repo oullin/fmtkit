@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::ops::ControlFlow;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::SystemTime;
 
 use gix::bstr::{BStr, BString, ByteSlice};
 use gix::diff::index::ChangeRef;
@@ -15,7 +16,7 @@ use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 use gix::status::tree_index::TrackRenames;
 
 use crate::filter::Filter;
-use crate::memory::{Memory, Staged};
+use crate::memory::{Memory, Staged, Stamp, settled_before};
 use crate::walk::{self, Rules};
 use crate::{DiscoverError, SourceFile, Walked};
 
@@ -25,17 +26,23 @@ use crate::{DiscoverError, SourceFile, Walked};
 ///
 /// The three comparisons (`HEAD` against the index, the index against the
 /// worktree, and the untracked walk) run on their own threads.
-pub(crate) fn changed(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Vec<SourceFile>, DiscoverError> {
-    let repo = open(root)?;
+pub(crate) fn changed(repository: &mut Repository, root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Vec<SourceFile>, DiscoverError> {
+    let repo = repository.open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
     let patterns = filter.pathspecs();
     let shared = repo.clone().into_sync();
-    let tracked = Tracked::new(&index, ignore_case(&repo));
-    let rules = rules(&repo, &tracked);
+    let ignore_case = ignore_case(&repo);
+    let rules = rules(&repo, ignore_case);
 
+    // The worktree comparison is the longest of the three; the tracked set
+    // only the walk needs is built on the walk's thread.
     let (staged, worktree, untracked) = thread::scope(|scope| {
         let staged = scope.spawn(|| staged(&shared.to_thread_local(), &index, filter, memory));
-        let untracked = scope.spawn(|| walk::walk(root, filter, &rules, memory, |rel| !tracked.visit(rel)).map(|walked| walked.files));
+        let untracked = scope.spawn(|| {
+            let tracked = Tracked::new(&index, ignore_case);
+
+            walk::walk(root, filter, &rules, memory, |rel| !tracked.visit(rel)).map(|walked| walked.files)
+        });
         let worktree = worktree(&repo, &index, &patterns, filter);
 
         (join(staged), worktree, join(untracked))
@@ -58,8 +65,8 @@ pub(crate) fn changed(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>
 /// does not reach (ignored ones, or ones under an ignored directory) are
 /// looked up one by one. When the scope names only tracked files, nothing is
 /// walked.
-pub(crate) fn all(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Walked, DiscoverError> {
-    let repo = open(root)?;
+pub(crate) fn all(repository: &mut Repository, root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Walked, DiscoverError> {
+    let repo = repository.open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
     let tracked = Tracked::new(&index, ignore_case(&repo));
 
@@ -71,7 +78,7 @@ pub(crate) fn all(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) ->
         return Ok(Walked { files, modules: Vec::new() });
     }
 
-    let mut walked = walk::walk(root, filter, &rules(&repo, &tracked), memory, |rel| {
+    let mut walked = walk::walk(root, filter, &rules(&repo, tracked.ignore_case), memory, |rel| {
         tracked.visit(rel);
 
         true
@@ -126,13 +133,104 @@ impl<'i> Tracked<'i> {
 }
 
 /// Git's ignore rules for this repository.
-fn rules(repo: &gix::Repository, tracked: &Tracked<'_>) -> Rules {
-    Rules::Git { ignore_case: tracked.ignore_case, exclude: repo.common_dir().join("info").join("exclude") }
+fn rules(repo: &gix::Repository, ignore_case: bool) -> Rules {
+    Rules::Git { ignore_case, exclude: repo.common_dir().join("info").join("exclude") }
 }
 
 /// Whether git compares paths case-insensitively here (`core.ignoreCase`).
 fn ignore_case(repo: &gix::Repository) -> bool {
     repo.filesystem_options().is_ok_and(|caps| caps.ignore_case)
+}
+
+/// A git repository kept open from one run to the next.
+///
+/// gix reads loose refs and objects as they are needed, but reads the
+/// configuration only when it opens the repository, and rereads the index
+/// and packed refs only once their modification time changes, which a
+/// coarse timestamp may not show. A kept repository is therefore reopened
+/// once any of those files changes, or a configuration file appears where
+/// git would read one. One whose files changed within
+/// [`SETTLE`](crate::SETTLE) of the run is not kept, since a coarse
+/// timestamp could miss a second change in the same tick.
+#[derive(Default)]
+pub struct Repository {
+    /// Nanoseconds since the epoch before which a stamp is settled; `None`
+    /// until [`Repository::next_run`], and nothing is kept until then.
+    settled: Option<i64>,
+    kept: Option<Kept>,
+}
+
+struct Kept {
+    root: PathBuf,
+    repo: gix::ThreadSafeRepository,
+    /// [`sources`], with their stamps when the repository was opened.
+    sources: Vec<(PathBuf, Option<Stamp>)>,
+}
+
+impl Repository {
+    /// Begin another run taking place at `now`, which decides what has
+    /// settled; the repository is kept for the runs after it.
+    pub fn next_run(&mut self, now: SystemTime) {
+        self.settled = Some(settled_before(now));
+    }
+
+    /// The repository at `root`: the kept one while its files are
+    /// unchanged, else a newly opened one.
+    fn open(&mut self, root: &Path) -> Result<gix::Repository, DiscoverError> {
+        if let Some(kept) = &self.kept
+            && kept.root == root
+            && kept.sources.iter().all(|(path, stamp)| Stamp::of(path) == *stamp)
+        {
+            return Ok(kept.repo.to_thread_local());
+        }
+
+        self.kept = None;
+
+        let repo = open(root)?;
+
+        // The stamps are taken after the configuration was read, and before
+        // the index is: a file that changed in between has not settled, so
+        // nothing stale is kept.
+        if let Some(settled) = self.settled
+            && cfg!(unix)
+        {
+            let sources: Vec<_> = sources(root, &repo).into_iter().map(|path| (Stamp::of(&path), path)).map(|(stamp, path)| (path, stamp)).collect();
+
+            if sources.iter().all(|(_, stamp)| stamp.is_none_or(|stamp| stamp.is_settled(settled))) {
+                self.kept = Some(Kept { root: root.to_path_buf(), repo: repo.clone().into_sync(), sources });
+            }
+        }
+
+        Ok(repo)
+    }
+}
+
+/// The files a kept `repo` depends on: the index and packed refs; the
+/// files its configuration was read from, and the ones it would be read from
+/// if they existed (the system, global, and repository files, and any file
+/// they include); `HEAD`, which an `includeIf "onbranch:"` follows; and a
+/// linked worktree's `.git` file. git replaces the index and packed refs by
+/// renaming a new file over them, so every write changes their stamp.
+fn sources(root: &Path, repo: &gix::Repository) -> Vec<PathBuf> {
+    let mut env = |name: &str| std::env::var_os(name);
+    let dot_git = root.join(".git");
+    let mut paths: Vec<PathBuf> = [gix::config::Source::System, gix::config::Source::Git, gix::config::Source::User]
+        .into_iter()
+        .filter_map(|source| source.storage_location(&mut env))
+        .chain([
+            repo.index_path(),
+            repo.common_dir().join("packed-refs"),
+            repo.common_dir().join("config"),
+            repo.git_dir().join("config.worktree"),
+            repo.git_dir().join("HEAD"),
+        ])
+        .chain(dot_git.is_file().then_some(dot_git))
+        .chain(repo.config_snapshot().plumbing().sections().filter_map(|section| section.meta().path.clone()))
+        .collect();
+
+    paths.sort_unstable();
+    paths.dedup();
+    paths
 }
 
 /// Open the repository at `root`. The index checksum is not verified, as

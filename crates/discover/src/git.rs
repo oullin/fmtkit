@@ -292,7 +292,8 @@ fn vouched(workdir: &Path, index: &gix::index::State, entry: &gix::index::Entry)
     };
 
     let stat = &entry.stat;
-    let executable = meta.mode() & 0o111 != 0;
+    // git reads only the owner's execute bit.
+    let executable = meta.mode() & 0o100 != 0;
 
     meta.is_file()
         && i64::from(stat.mtime.secs) < index.timestamp().unix_seconds()

@@ -195,6 +195,31 @@ fn stat_leaves_links_and_intents_to_git() {
     assert_eq!(repo.rels(&Scope::default()), strings(&["intent.ts"]));
 }
 
+/// git takes a file's executable bit from its owner alone, so execute
+/// permission for the group or others does not make it executable.
+#[cfg(unix)]
+#[test]
+fn stat_reads_the_executable_bit_as_git_does() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repo = settled_repo();
+
+    repo.write("tool.ts", "export {};\n");
+    fs::set_permissions(repo.path("tool.ts"), fs::Permissions::from_mode(0o755)).unwrap();
+    backdate(&repo, "tool.ts");
+    repo.commit("tool");
+
+    // Only the owner loses the bit; an index refresh that ignores modes
+    // takes the new stat but keeps the executable mode. git notices the
+    // change time only in a later second than the one it was added in.
+    std::thread::sleep(Duration::from_millis(1100));
+    fs::set_permissions(repo.path("tool.ts"), fs::Permissions::from_mode(0o655)).unwrap();
+    repo.run(&["-c", "core.fileMode=false", "update-index", "-q", "--refresh"]);
+
+    assert_eq!(repo.git_changed(), strings(&["tool.ts"]));
+    assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+}
+
 #[test]
 fn the_staged_set_follows_the_index_and_head() {
     let repo = repo();

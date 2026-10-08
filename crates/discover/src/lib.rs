@@ -35,10 +35,13 @@ pub struct Scope {
     pub all: bool,
     /// Lanes to keep; empty keeps both.
     pub lanes: Vec<Lane>,
-    /// Cover these paths (files or directories), relative to the current
-    /// directory or absolute, changed or not. Empty covers the changed set, or
-    /// the whole repository under `all`.
+    /// Cover these paths (files or directories), relative to `cwd` or
+    /// absolute, changed or not. Empty covers the changed set, or the whole
+    /// repository under `all`.
     pub paths: Vec<PathBuf>,
+    /// The directory relative `paths` name entries of; the process's current
+    /// directory when `None`.
+    pub cwd: Option<PathBuf>,
 }
 
 /// One file in scope.
@@ -109,7 +112,7 @@ pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Res
 /// is stored.
 pub fn discover_with(root: &Path, scope: &Scope, files: &fmtkit_config::Files, memory: Option<&Memory>) -> Result<Discovery, DiscoverError> {
     let git = root.join(".git").exists();
-    let (prefixes, missing) = resolve_paths(root, &scope.paths)?;
+    let (prefixes, missing) = resolve_paths(root, scope.cwd.as_deref(), &scope.paths)?;
 
     if prefixes.as_ref().is_some_and(Vec::is_empty) {
         return Ok(Discovery { files: Vec::new(), missing, modules: Vec::new(), git });
@@ -163,12 +166,15 @@ impl Walked {
 
 /// Turn scope paths into root-relative prefixes. `None` covers the whole root;
 /// `Some(empty)` means every given path was missing.
-fn resolve_paths(root: &Path, paths: &[PathBuf]) -> Result<(Option<Vec<String>>, Vec<String>), DiscoverError> {
+fn resolve_paths(root: &Path, cwd: Option<&Path>, paths: &[PathBuf]) -> Result<(Option<Vec<String>>, Vec<String>), DiscoverError> {
     if paths.is_empty() {
         return Ok((None, Vec::new()));
     }
 
-    let cwd = env::current_dir().map_err(|err| DiscoverError::Walk { path: PathBuf::from("."), message: err.to_string() })?;
+    let cwd = match cwd {
+        Some(cwd) => cwd.to_path_buf(),
+        None => env::current_dir().map_err(|err| DiscoverError::Walk { path: PathBuf::from("."), message: err.to_string() })?,
+    };
     let resolved_root = root.canonicalize().unwrap_or_else(|_| cwd.join(root));
     let mut prefixes = Vec::with_capacity(paths.len());
     let mut missing = Vec::new();

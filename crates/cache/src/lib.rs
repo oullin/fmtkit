@@ -18,14 +18,15 @@
 //! `$XDG_CACHE_HOME` or `~/.cache` on Linux). `FMTKIT_CACHE_DIR` replaces the
 //! whole `<cache dir>/fmtkit/v2` prefix. The file is read once, on first use,
 //! and rewritten atomically by [`Cache::flush`] when the run stored something
-//! new.
+//! new. A process that runs many times keeps one `Cache` and calls
+//! [`Cache::next_run`] before each run.
 
 mod wire;
 
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock, PoisonError, RwLock};
 use std::time::{Duration, SystemTime};
 
@@ -88,7 +89,7 @@ struct Store {
     path: PathBuf,
     config_hash: [u8; 32],
     /// Stamps modified at or after this many nanoseconds are not remembered.
-    settled: i64,
+    settled: AtomicI64,
     tables: OnceLock<Tables>,
     /// Whether a put added or replaced an entry since the store was read.
     dirty: AtomicBool,
@@ -127,12 +128,7 @@ impl Cache {
     /// Open the store for `root`. A disabled cache misses every lookup and
     /// stores nothing. With no usable cache directory the cache is disabled.
     pub fn open(root: &Path, config_hash: [u8; 32], enabled: bool) -> Self {
-        let dir = std::env::var_os(CACHE_DIR_ENV)
-            .filter(|dir| !dir.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| dirs::cache_dir().map(|dir| dir.join("fmtkit").join("v2")));
-
-        match dir {
+        match directory() {
             Some(dir) if enabled => Self::open_in(&dir, root, config_hash),
             _ => Self::disabled(),
         }
@@ -140,24 +136,28 @@ impl Cache {
 
     /// Open the store for `root` inside `dir`, ignoring the environment.
     pub fn open_in(dir: &Path, root: &Path, config_hash: [u8; 32]) -> Self {
-        let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-        let name = blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex();
-        let path = dir.join(format!("{name}.bin"));
+        let path = dir.join(format!("{}.bin", name(root)));
 
-        let settled = SystemTime::now().checked_sub(SETTLE).map_or(0, nanos_since_epoch);
+        let store =
+            Store { path, config_hash, settled: AtomicI64::new(settled_before(SystemTime::now())), tables: OnceLock::new(), dirty: AtomicBool::new(false) };
 
-        Self { store: Some(Store { path, config_hash, settled, tables: OnceLock::new(), dirty: AtomicBool::new(false) }) }
+        Self { store: Some(store) }
+    }
+
+    /// Begin another run with this cache: stamps from within [`SETTLE`] of
+    /// now are not remembered.
+    pub fn next_run(&self) {
+        if let Some(store) = &self.store {
+            store.settled.store(settled_before(SystemTime::now()), Ordering::Relaxed);
+        }
     }
 
     /// Read the store now rather than at the first lookup, so the read can
     /// overlap other work.
-    #[must_use]
-    pub fn loaded(self) -> Self {
+    pub fn load(&self) {
         if let Some(store) = &self.store {
             store.tables();
         }
-
-        self
     }
 
     /// A store that is never read or written.
@@ -260,7 +260,7 @@ impl Cache {
             return;
         };
 
-        if stamp.mtime >= store.settled {
+        if stamp.mtime >= store.settled.load(Ordering::Relaxed) {
             return;
         }
 
@@ -344,42 +344,31 @@ impl Cache {
         store.dirty.store(true, Ordering::Relaxed);
     }
 
-    /// Persist new entries, dropping entries not used by this run when the store
-    /// grows past its budget.
-    pub fn flush(self) -> io::Result<()> {
+    /// Persist what changed since the store was read or last flushed. When
+    /// the store has grown past its budget, the entries no run used since the
+    /// last flush are dropped, here and on disk.
+    pub fn flush(&self) -> io::Result<()> {
         self.flush_with_budget(BUDGET)
     }
 
-    fn flush_with_budget(self, budget: usize) -> io::Result<()> {
-        let Some(store) = self.store else {
+    fn flush_with_budget(&self, budget: usize) -> io::Result<()> {
+        let Some(store) = &self.store else {
             return Ok(());
         };
 
-        let (Some(tables), true) = (store.tables.into_inner(), store.dirty.into_inner()) else {
+        let (Some(tables), true) = (store.tables.get(), store.dirty.swap(false, Ordering::Relaxed)) else {
             return Ok(());
         };
 
-        let mut entries = tables.outcomes.into_vec();
+        tables.prune(budget);
 
-        if entries.len() > budget {
-            entries.retain(|(_, slot)| slot.used.load(Ordering::Relaxed));
+        let written = tables.encode().and_then(|bytes| write_atomic(&store.path, &bytes));
+
+        if written.is_err() {
+            store.dirty.store(true, Ordering::Relaxed);
         }
 
-        entries.sort_unstable_by_key(|entry| entry.0);
-
-        let kept = |key: &Key| entries.binary_search_by_key(&key.0, |entry| entry.0).is_ok();
-        let mut stamps: Vec<([u8; 32], Stamp, [u8; 32])> =
-            tables.stamps.into_vec().into_iter().filter(|(_, (_, key))| kept(key)).map(|(path_key, (stamp, key))| (path_key, stamp, key.0)).collect();
-
-        stamps.sort_unstable_by_key(|entry| entry.0);
-
-        let marks = tables.marks.into_inner().unwrap_or_else(PoisonError::into_inner);
-        let stored = Stored { version: fmtkit_core::VERSION, entries: entries.iter().map(|(key, slot)| (*key, &*slot.encoded)).collect(), stamps, marks };
-        let mut bytes = MAGIC.to_vec();
-
-        bytes.extend(postcard::to_stdvec(&stored).map_err(io::Error::other)?);
-
-        write_atomic(&store.path, &bytes)
+        written
     }
 }
 
@@ -402,6 +391,56 @@ impl Store {
 }
 
 impl Tables {
+    /// Past `budget` entries, drop the ones no run used since the last
+    /// flush, and the stamps that point at them. Every entry then starts
+    /// unused again.
+    fn prune(&self, budget: usize) {
+        let over = self.outcomes.0.iter().map(|shard| read(shard).len()).sum::<usize>() > budget;
+
+        for shard in &self.outcomes.0 {
+            let mut shard = shard.write().unwrap_or_else(PoisonError::into_inner);
+
+            if over {
+                shard.retain(|_, slot| slot.used.load(Ordering::Relaxed));
+            }
+
+            for slot in shard.values() {
+                slot.used.store(false, Ordering::Relaxed);
+            }
+        }
+
+        if over {
+            for shard in &self.stamps.0 {
+                shard.write().unwrap_or_else(PoisonError::into_inner).retain(|_, (_, key)| {
+                    let outcomes = read(self.outcomes.shard(key));
+
+                    outcomes.contains_key(&key.0)
+                });
+            }
+        }
+    }
+
+    /// The store file's bytes, sorted so equal stores encode equally.
+    fn encode(&self) -> io::Result<Vec<u8>> {
+        let outcomes: Vec<_> = self.outcomes.0.iter().map(read).collect();
+        let mut entries: Vec<([u8; 32], &[u8])> = outcomes.iter().flat_map(|shard| shard.iter().map(|(key, slot)| (*key, &*slot.encoded))).collect();
+
+        entries.sort_unstable_by_key(|entry| entry.0);
+
+        let mut stamps: Vec<([u8; 32], Stamp, [u8; 32])> =
+            self.stamps.0.iter().flat_map(|shard| read(shard).iter().map(|(path_key, (stamp, key))| (*path_key, *stamp, key.0)).collect::<Vec<_>>()).collect();
+
+        stamps.sort_unstable_by_key(|entry| entry.0);
+
+        let marks = self.marks.lock().unwrap_or_else(PoisonError::into_inner).clone();
+        let stored = Stored { version: fmtkit_core::VERSION, entries, stamps, marks };
+        let mut bytes = MAGIC.to_vec();
+
+        bytes.extend(postcard::to_stdvec(&stored).map_err(io::Error::other)?);
+
+        Ok(bytes)
+    }
+
     /// Read a store file. A missing, foreign, corrupt, or other-version file
     /// reads as empty.
     fn load(path: &Path) -> Self {
@@ -449,10 +488,6 @@ impl<V> Shards<V> {
     fn shard(&self, key: &Key) -> &RwLock<FxHashMap<[u8; 32], V>> {
         &self.0[index(key)]
     }
-
-    fn into_vec(self) -> Vec<([u8; 32], V)> {
-        self.0.into_iter().flat_map(|shard| shard.into_inner().unwrap_or_else(PoisonError::into_inner)).collect()
-    }
 }
 
 impl Stamp {
@@ -484,6 +519,34 @@ fn mode_byte(mode: Mode) -> u8 {
         Mode::Format => 0,
         Mode::Check => 1,
     }
+}
+
+fn read<V>(shard: &RwLock<V>) -> std::sync::RwLockReadGuard<'_, V> {
+    shard.read().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Nanoseconds since the epoch at [`SETTLE`] before `now`.
+/// The directory that holds the stores: `FMTKIT_CACHE_DIR`, else
+/// `<cache dir>/fmtkit/v2`.
+pub fn directory() -> Option<PathBuf> {
+    std::env::var_os(CACHE_DIR_ENV).filter(|dir| !dir.is_empty()).map(PathBuf::from).or_else(|| dirs::cache_dir().map(|dir| dir.join("fmtkit").join("v2")))
+}
+
+/// The socket a `fmtkit serve` for `root` listens on, beside its store. The
+/// name is short because a socket path is limited to about a hundred bytes.
+pub fn socket(root: &Path) -> Option<PathBuf> {
+    directory().map(|dir| dir.join(format!("{}.sock", &name(root)[..16])))
+}
+
+/// The store name for `root`: the hash of its canonical path, in hex.
+fn name(root: &Path) -> String {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+
+    blake3::hash(root.as_os_str().as_encoded_bytes()).to_hex().to_string()
+}
+
+fn settled_before(now: SystemTime) -> i64 {
+    now.checked_sub(SETTLE).map_or(0, nanos_since_epoch)
 }
 
 fn nanos_since_epoch(time: SystemTime) -> i64 {

@@ -242,12 +242,13 @@ fmtkit leaves these files and regions exactly as written:
 
 fmtkit has two working commands. `format` writes; `check` only reports.
 
-| Command          | What it does                                                        |
-| ---------------- | ------------------------------------------------------------------- |
-| `fmtkit format`  | Rewrite files in place, then report what is left to fix by hand.    |
-| `fmtkit check`   | Report what `format` would change and every finding. Write nothing. |
-| `fmtkit version` | Print the version, for example `fmtkit 2.0.0`.                      |
-| `fmtkit help`    | Print the help. `fmtkit <command> --help` prints a command's flags. |
+| Command          | What it does                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `fmtkit format`  | Rewrite files in place, then report what is left to fix by hand.                           |
+| `fmtkit check`   | Report what `format` would change and every finding. Write nothing.                        |
+| `fmtkit serve`   | Keep running for this repository, so `format` and `check` start warm; see [Serve](#serve). |
+| `fmtkit version` | Print the version, for example `fmtkit 2.0.0`.                                             |
+| `fmtkit help`    | Print the help. `fmtkit <command> --help` prints a command's flags.                        |
 
 Both `format` and `check` take the same flags:
 
@@ -306,6 +307,27 @@ A clean `go vet` run is cached per module. The entry depends on the `go` executa
 In a git repository, fmtkit also remembers how it listed each directory: the directory's size, inode, and modification and change times, its `.gitignore`, and the files and subdirectories git does not ignore. A later run lists again only the directories whose times changed, and reads the rest from memory. A changed `.gitignore` sends its directory and everything below it back to a full listing, and a changed `.git/info/exclude` or global excludes file, or a new fmtkit version, discards everything remembered. Directories and ignore files modified less than two seconds before a run are not remembered. Before asking git which tracked files changed, fmtkit compares each one's size, inode, and times with the index, and has git look closely only at the files that differ. It also remembers which files differ between `HEAD` and the index, and compares them again only after a commit, a checkout, or a change to the index.
 
 The cache lives in `<cache dir>/fmtkit/v2/`. The cache directory is `~/Library/Caches` on macOS and `$XDG_CACHE_HOME` or `~/.cache` on Linux. `FMTKIT_CACHE_DIR` replaces the whole `<cache dir>/fmtkit/v2` prefix. `--no-cache` bypasses the cache for one run.
+
+### Serve
+
+`fmtkit serve` keeps one repository's cache, directory memory, linter, and worker threads loaded between runs. Start it in the repository, in a terminal of its own; it runs until it is stopped. While it runs, `format` and `check` anywhere in that repository hand their runs to it and print what it answers, so they skip loading the cache and starting the workers. Without a server, or when it refuses a run, they run as usual.
+
+```sh
+fmtkit serve
+```
+
+```text
+fmtkit: serving /home/me/project on /home/me/.cache/fmtkit/v2/3f1a9c2e7b4d8a60.sock
+fmtkit: answered in 3.1 ms with exit 0
+```
+
+- **Same results.** The server reads `fmtkit.toml` for every run, and a run through the server reports exactly what a local run would.
+- **One run at a time.** A run that arrives while another is in progress waits for it.
+- **Refusals.** The server refuses a run from another fmtkit executable or version, or from a shell where any variable a run reads has another value: every `FMTKIT_*`, `GIT_*`, `GO*`, and `CGO_*` variable, the C toolchain variables, `HOME`, `PATH`, `XDG_CACHE_HOME`, and `XDG_CONFIG_HOME`. The refused command runs locally. Each run the server answers or refuses is logged on its standard error.
+- **Upgrades.** When its executable changes on disk, the server refuses the next run and stops.
+- **Local only.** `--no-cache` and `--stdin-filepath` always run locally.
+
+The server listens on a Unix socket beside the cache, readable and writable only by its owner. A second `fmtkit serve` for the same repository exits with code 2. A server that was killed leaves its socket behind; the next `fmtkit serve` replaces it. `serve` is not available on Windows.
 
 ### Environment variables
 
@@ -634,7 +656,7 @@ The workspace has twelve crates and one Go module. Only the engine reads and wri
 
 | Path              | Role                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------- |
-| `crates/cli`      | The `fmtkit` binary: argument parsing, exit codes, and the progress bar.              |
+| `crates/cli`      | The `fmtkit` binary: argument parsing, exit codes, the progress bar, and `serve`.     |
 | `crates/engine`   | The run: scope, lanes, the worker pool, complexity, `go vet`, and every file write.   |
 | `crates/discover` | The repository root, the changed set, ignore rules, and file classification.          |
 | `crates/config`   | `fmtkit.toml` and its validation.                                                     |

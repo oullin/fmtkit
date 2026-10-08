@@ -181,6 +181,17 @@ fn paths_relative_to_the_current_directory() {
 }
 
 #[test]
+fn paths_relative_to_a_given_directory() {
+    let repo = busy_repo();
+    let scope = Scope { all: true, paths: vec![PathBuf::from("src"), PathBuf::from("gone")], cwd: Some(repo.root().to_path_buf()), ..Scope::default() };
+    let found = repo.discover(&scope);
+
+    assert_eq!(repo.rels(&scope), strings(&["src/new.ts", "src/renamed.tsx"]));
+    // A missing path is reported as it was given.
+    assert_eq!(found.missing, ["gone"]);
+}
+
+#[test]
 fn the_root_as_a_path_covers_everything() {
     let repo = busy_repo();
     let scope = Scope { all: true, paths: vec![repo.root().to_path_buf()], ..Scope::default() };

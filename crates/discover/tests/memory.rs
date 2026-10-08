@@ -10,7 +10,7 @@ use fmtkit_discover::{Memory, Scope, discover_with};
 /// Discover with the memory in `store`, as a run a minute from now would, so
 /// everything just written counts as settled and is stored.
 fn remembered(repo: &Fixture, store: &Path, scope: &Scope) -> Vec<String> {
-    let memory = Memory::open_as_of(store, SystemTime::now() + Duration::from_secs(60));
+    let mut memory = Memory::open_as_of(store, SystemTime::now() + Duration::from_secs(60));
     let found = discover_with(repo.root(), scope, &fmtkit_config::Files::default(), Some(&memory)).unwrap();
 
     memory.save().unwrap();
@@ -114,7 +114,7 @@ fn an_unreadable_store_starts_over() {
 fn unsettled_directories_are_not_stored() {
     let repo = repo();
     let store = repo.path(".git/fmtkit-test.dirs");
-    let memory = Memory::open(&store);
+    let mut memory = Memory::open(&store);
 
     discover_with(repo.root(), &Scope::default(), &fmtkit_config::Files::default(), Some(&memory)).unwrap();
     memory.save().unwrap();

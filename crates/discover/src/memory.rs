@@ -19,7 +19,8 @@
 //! A directory or ignore file modified within [`SETTLE`] of the run is never
 //! stored, since a coarse timestamp could miss a second change in the same
 //! tick. The store is one file, read once and rewritten atomically when a run
-//! listed something new.
+//! listed something new. A process that runs many times keeps one `Memory`,
+//! calls [`Memory::next_run`] before each run and [`Memory::save`] after it.
 
 use std::collections::HashMap;
 use std::fs;
@@ -115,11 +116,9 @@ impl Memory {
     /// [`Memory::open`] for a run taking place at `now`, which decides what
     /// has settled. Tests use a later `now` to store what they just wrote.
     pub fn open_as_of(path: impl Into<PathBuf>, now: SystemTime) -> Self {
-        let settled = now.checked_sub(SETTLE).map_or(0, nanos_since_epoch);
-
         Self {
             path: path.into(),
-            settled,
+            settled: settled_before(now),
             stored: OnceLock::new(),
             fresh: Mutex::new(HashMap::new()),
             fresh_staged: OnceLock::new(),
@@ -132,6 +131,11 @@ impl Memory {
     /// overlap other work.
     pub fn load(&self) {
         self.stored();
+    }
+
+    /// Begin another run taking place at `now`.
+    pub fn next_run(&mut self, now: SystemTime) {
+        self.settled = settled_before(now);
     }
 
     /// Settle the rules this run filters by. Listings stored under other
@@ -185,22 +189,29 @@ impl Memory {
         let _ = self.fresh_staged.set(staged);
     }
 
-    /// Write the store when this run found something new, keeping the
-    /// listings still in use.
-    pub fn save(self) -> io::Result<()> {
-        let fresh = self.fresh.into_inner().unwrap_or_else(PoisonError::into_inner);
-        let fresh_staged = self.fresh_staged.into_inner();
-        let trusted = self.trusted.into_inner();
+    /// Fold this run's listings into the store, and write it when the run
+    /// found something new. Past the budget, only the listings this run used
+    /// are kept.
+    pub fn save(&mut self) -> io::Result<()> {
+        let fresh = std::mem::take(self.fresh.get_mut().unwrap_or_else(PoisonError::into_inner));
+        let fresh_staged = self.fresh_staged.take();
+        let trusted = std::mem::take(self.trusted.get_mut());
 
-        let (Some(context), false) = (self.context.into_inner(), fresh.is_empty() && fresh_staged.is_none() && trusted) else {
+        // A run that never walked under git's rules leaves the store as it was.
+        let Some(context) = self.context.take() else {
             return Ok(());
         };
 
+        // Rules files that changed too recently may change again unseen, so
+        // nothing filtered by them is kept, and the next run lists afresh.
         if context.files.iter().any(|(_, stamp)| stamp.is_some_and(|stamp| stamp.mtime >= self.settled)) {
+            self.stored = OnceLock::from(Stored::default());
+
             return Ok(());
         }
 
-        let Stored { listings, used, staged, .. } = self.stored.into_inner().unwrap_or_default();
+        let changed = !fresh.is_empty() || fresh_staged.is_some() || !trusted;
+        let Stored { listings, used, staged, .. } = self.stored.take().unwrap_or_default();
 
         let mut listings = match trusted {
             true if listings.len() + fresh.len() > BUDGET => {
@@ -212,19 +223,20 @@ impl Memory {
 
         listings.extend(fresh);
 
-        let stored = Stored { context, listings, staged: fresh_staged.or(staged), used: HashMap::new() };
-        let mut bytes = MAGIC.to_vec();
+        let mut stored = Stored { context, listings, staged: fresh_staged.or(staged), used: HashMap::new() };
+        let written = if changed { stored.encode().and_then(|bytes| write_atomic(&self.path, &bytes)) } else { Ok(()) };
 
-        bytes.extend(postcard::to_stdvec(&stored).map_err(io::Error::other)?);
+        stored.used = unused(&stored.listings);
+        self.stored = OnceLock::from(stored);
 
-        write_atomic(&self.path, &bytes)
+        written
     }
 
     fn stored(&self) -> &Stored {
         self.stored.get_or_init(|| {
             let mut stored = Stored::read(&self.path).unwrap_or_default();
 
-            stored.used = stored.listings.keys().map(|rel| (rel.clone(), AtomicBool::new(false))).collect();
+            stored.used = unused(&stored.listings);
             stored
         })
     }
@@ -241,6 +253,19 @@ impl Stored {
 
         postcard::from_bytes(body).ok()
     }
+
+    fn encode(&self) -> io::Result<Vec<u8>> {
+        let mut bytes = MAGIC.to_vec();
+
+        bytes.extend(postcard::to_stdvec(self).map_err(io::Error::other)?);
+
+        Ok(bytes)
+    }
+}
+
+/// A flag per listing, set when a run uses it.
+fn unused(listings: &HashMap<String, Listing>) -> HashMap<String, AtomicBool> {
+    listings.keys().map(|rel| (rel.clone(), AtomicBool::new(false))).collect()
 }
 
 impl Context {
@@ -277,6 +302,11 @@ impl Stamp {
     pub(crate) fn from_metadata(_meta: &fs::Metadata) -> Option<Self> {
         None
     }
+}
+
+/// Nanoseconds since the epoch at [`SETTLE`] before `now`.
+fn settled_before(now: SystemTime) -> i64 {
+    now.checked_sub(SETTLE).map_or(0, nanos_since_epoch)
 }
 
 fn nanos_since_epoch(time: SystemTime) -> i64 {

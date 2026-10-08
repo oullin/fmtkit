@@ -2,118 +2,12 @@
 //! `scripts/test-binary-smoke.sh`. Every fixture is a scratch git repository;
 //! the cache and the Go helper are pointed at per-test locations.
 
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::OnceLock;
+mod common;
 
-const BIN: &str = env!("CARGO_BIN_EXE_fmtkit");
+use std::path::PathBuf;
+use std::process::Command;
 
-struct Fixture {
-    dir: tempfile::TempDir,
-    cache: tempfile::TempDir,
-}
-
-impl Fixture {
-    fn new(files: &[(&str, &str)]) -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = tempfile::tempdir().unwrap();
-
-        git(dir.path(), &["init", "--quiet", "."]);
-
-        let fixture = Self { dir, cache };
-
-        for (path, content) in files {
-            fixture.write(path, content);
-        }
-
-        fixture
-    }
-
-    fn path(&self) -> &Path {
-        self.dir.path()
-    }
-
-    fn write(&self, path: &str, content: &str) {
-        let full = self.path().join(path);
-
-        fs::create_dir_all(full.parent().unwrap()).unwrap();
-        fs::write(full, content).unwrap();
-    }
-
-    fn read(&self, path: &str) -> String {
-        fs::read_to_string(self.path().join(path)).unwrap()
-    }
-
-    fn run(&self, args: &[&str]) -> Output {
-        let mut command = Command::new(BIN);
-
-        command.args(args).current_dir(self.path()).env("FMTKIT_CACHE_DIR", self.cache.path()).env_remove("FMTKIT_CONFIG").env_remove("FMTKIT_JOBS");
-
-        if let Some(helper) = go_helper() {
-            command.env("FMTKIT_GO_HELPER", helper);
-        }
-
-        command.output().unwrap()
-    }
-
-    fn snapshot(&self) -> Vec<(PathBuf, Vec<u8>)> {
-        let mut files: Vec<_> = walk(self.path()).into_iter().map(|p| (p.clone(), fs::read(&p).unwrap())).collect();
-
-        files.sort();
-
-        files
-    }
-}
-
-fn walk(dir: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-
-    for entry in fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-
-        if path.file_name().is_some_and(|n| n == ".git") {
-            continue;
-        }
-
-        if path.is_dir() {
-            out.extend(walk(&path));
-        } else {
-            out.push(path);
-        }
-    }
-
-    out
-}
-
-fn git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git").args(args).current_dir(dir).status().unwrap();
-
-    assert!(status.success(), "git {args:?} failed");
-}
-
-/// The Go helper, built once per test binary, or `None` when Go is not installed.
-fn go_helper() -> Option<&'static Path> {
-    static HELPER: OnceLock<Option<PathBuf>> = OnceLock::new();
-
-    HELPER
-        .get_or_init(|| {
-            let module = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../go/helper");
-            let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("fmtkit-go-helper");
-            let built = Command::new("go").arg("build").arg("-o").arg(&out).arg(".").current_dir(module).status().ok()?;
-
-            built.success().then_some(out)
-        })
-        .as_deref()
-}
-
-fn text(output: &Output) -> String {
-    format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr))
-}
-
-fn assert_exit(output: &Output, code: i32) {
-    assert_eq!(output.status.code(), Some(code), "unexpected exit status; output:\n{}", text(output));
-}
+use common::{BIN, Fixture, assert_exit, git, go_helper, text, walk};
 
 #[test]
 fn version_prints_the_release() {

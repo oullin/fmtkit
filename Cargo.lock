@@ -588,12 +588,15 @@ version = "2.0.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fmtkit-cache",
  "fmtkit-config",
  "fmtkit-core",
  "fmtkit-discover",
  "fmtkit-engine",
  "fmtkit-report",
  "mimalloc",
+ "postcard",
+ "serde",
  "serde_json",
  "tempfile",
 ]

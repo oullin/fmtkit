@@ -10,6 +10,7 @@ mod write;
 
 use std::path::{Path, PathBuf};
 use std::thread;
+use std::time::SystemTime;
 
 use rayon::prelude::*;
 
@@ -68,68 +69,159 @@ pub(crate) struct Run<'a> {
 
 /// Run fmtkit over the files `options.scope` selects.
 pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Report, EngineError> {
-    let lints = selected_lanes(&options.scope).contains(&Lane::Ts);
+    let mut session = Session::default();
+    let report = session.run(config, options, progress);
 
-    let cache = Cache::open(&options.root, config.hash(), options.cache);
+    session.persist();
 
-    // Directory listings are kept beside the outcomes, and only when they are.
-    let memory = cache.path().map(|path| Memory::open(path.with_extension("dirs")));
+    report
+}
 
-    // The stores and the linter do not depend on the file list, so they load
-    // while discovery opens the repository and walks the tree. A linter no
-    // file needs is dropped.
-    let (discovery, cache, linter) = thread::scope(|s| {
-        let cache = s.spawn(|| cache.loaded());
-        let linter = lints.then(|| s.spawn(|| Linter::new(&config.lint)));
+/// What a process that runs fmtkit many times keeps between runs: the
+/// outcome cache and directory memory of the last root, the linter for the
+/// last configuration, and the worker pool. A run with another root,
+/// configuration, or cache setting starts them over.
+#[derive(Default)]
+pub struct Session {
+    stores: Option<Stores>,
+    linter: Option<Linter>,
+    pool: Option<(usize, rayon::ThreadPool)>,
+}
 
-        if let Some(memory) = &memory {
-            s.spawn(|| memory.load());
+struct Stores {
+    root: PathBuf,
+    config_hash: [u8; 32],
+    enabled: bool,
+    cache: Cache,
+    /// Directory listings are kept beside the outcomes, and only when they are.
+    memory: Option<Memory>,
+}
+
+impl Session {
+    /// Run fmtkit over the files `options.scope` selects.
+    pub fn run(&mut self, config: &Config, options: &Options, progress: &Progress) -> Result<Report, EngineError> {
+        let config_hash = config.hash();
+        let lints = selected_lanes(&options.scope).contains(&Lane::Ts);
+
+        let stores = match self.stores.take() {
+            Some(stores) if (&stores.root, stores.config_hash, stores.enabled) == (&options.root, config_hash, options.cache) => self.stores.insert(stores),
+            other => {
+                if let Some(mut stores) = other {
+                    stores.persist();
+                }
+
+                self.linter = None;
+                self.stores.insert(Stores::open(&options.root, config_hash, options.cache))
+            }
+        };
+
+        stores.cache.next_run();
+
+        if let Some(memory) = &mut stores.memory {
+            memory.next_run(SystemTime::now());
         }
 
-        let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref());
+        let Stores { cache, memory, .. } = &*stores;
 
-        (discovery, join(cache), linter.map(join))
-    });
+        // The stores and the linter do not depend on the file list, so they
+        // load while discovery opens the repository and walks the tree.
+        let (discovery, built) = thread::scope(|s| {
+            s.spawn(|| cache.load());
 
-    let discovery = discovery?;
-    let (go_files, script_files): (Vec<SourceFile>, Vec<SourceFile>) = discovery.files.iter().cloned().partition(|f| f.lang == Lang::Go);
+            let linter = (lints && self.linter.is_none()).then(|| s.spawn(|| Linter::new(&config.lint)));
 
-    progress.start(discovery.files.len());
+            if let Some(memory) = memory {
+                s.spawn(|| memory.load());
+            }
 
-    let linter = match linter {
-        Some(linter) if script_files.iter().any(|f| f.lang.is_lintable()) => Some(linter?),
-        _ => None,
-    };
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(options.jobs.max(1)).build().map_err(|e| EngineError::Pool(e.to_string()))?;
-    let state = Run { config, mode: options.mode, cache: &cache, linter: linter.as_ref(), progress };
+            let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref());
 
-    let (scripts, go, vet) = thread::scope(|s| {
-        let vet = s.spawn(|| vet_for(config, options, &cache, &discovery, &go_files));
-        let go = (!go_files.is_empty()).then(|| s.spawn(|| go_lane::process(&state, options.go_helper.as_deref(), &go_files, &pool)));
-        let scripts: Vec<FileOutcome> = pool.install(|| script_files.par_iter().filter_map(|file| script_lane::process(&state, file)).collect());
+            (discovery, linter.map(join))
+        });
 
-        (scripts, go.map(join), join(vet))
-    });
+        let discovery = discovery?;
+        let (go_files, script_files): (Vec<SourceFile>, Vec<SourceFile>) = discovery.files.iter().cloned().partition(|f| f.lang == Lang::Go);
 
-    let go = go.transpose()?.unwrap_or_default();
+        progress.start(discovery.files.len());
 
-    let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).collect();
+        // A linter no file needs is kept for a later run; a failure to build
+        // one matters only to a run that needs it.
+        let failed = match built {
+            Some(Ok(linter)) => {
+                self.linter = Some(linter);
 
-    files.sort_unstable_by(|a, b| a.file.cmp(&b.file));
+                None
+            }
+            Some(Err(e)) => Some(e),
+            None => None,
+        };
 
-    let lanes = selected_lanes(&options.scope);
-    let complexity = complexity::evaluate(&options.root, &config.complexity, &lanes, &discovery.files, &files);
+        if script_files.iter().any(|f| f.lang.is_lintable()) && self.linter.is_none() {
+            self.linter = Some(match failed {
+                Some(e) => return Err(e.into()),
+                None => Linter::new(&config.lint)?,
+            });
+        }
 
-    // A failed flush only costs the next run its warm start.
-    let _ = cache.flush();
-    let _ = memory.map(Memory::save);
+        let jobs = options.jobs.max(1);
 
-    progress.finish();
+        let (_, pool) = match self.pool.take() {
+            Some((threads, pool)) if threads == jobs => self.pool.insert((threads, pool)),
+            _ => self.pool.insert((jobs, rayon::ThreadPoolBuilder::new().num_threads(jobs).build().map_err(|e| EngineError::Pool(e.to_string()))?)),
+        };
+        let pool = &*pool;
 
-    // A path the user named that does not exist fails the run, as it did in 0.x.
-    let result = if discovery.missing.is_empty() { verdict(options.mode, &files, complexity.is_empty(), &vet) } else { RunResult::Fail };
+        let linter = self.linter.as_ref().filter(|_| script_files.iter().any(|f| f.lang.is_lintable()));
+        let state = Run { config, mode: options.mode, cache, linter, progress };
 
-    Ok(Report { schema: REPORT_SCHEMA, mode: options.mode, result, files, complexity, vet, missing: discovery.missing })
+        let (scripts, go, vet) = thread::scope(|s| {
+            let vet = s.spawn(|| vet_for(config, options, cache, &discovery, &go_files));
+            let go = (!go_files.is_empty()).then(|| s.spawn(|| go_lane::process(&state, options.go_helper.as_deref(), &go_files, pool)));
+            let scripts: Vec<FileOutcome> = pool.install(|| script_files.par_iter().filter_map(|file| script_lane::process(&state, file)).collect());
+
+            (scripts, go.map(join), join(vet))
+        });
+
+        let go = go.transpose()?.unwrap_or_default();
+        let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).collect();
+
+        files.sort_unstable_by(|a, b| a.file.cmp(&b.file));
+
+        let lanes = selected_lanes(&options.scope);
+        let complexity = complexity::evaluate(&options.root, &config.complexity, &lanes, &discovery.files, &files);
+
+        progress.finish();
+
+        // A path the user named that does not exist fails the run, as it did in 0.x.
+        let result = if discovery.missing.is_empty() { verdict(options.mode, &files, complexity.is_empty(), &vet) } else { RunResult::Fail };
+
+        Ok(Report { schema: REPORT_SCHEMA, mode: options.mode, result, files, complexity, vet, missing: discovery.missing })
+    }
+
+    /// Write what the runs since the last call learned.
+    pub fn persist(&mut self) {
+        if let Some(stores) = &mut self.stores {
+            stores.persist();
+        }
+    }
+}
+
+impl Stores {
+    fn open(root: &Path, config_hash: [u8; 32], enabled: bool) -> Self {
+        let cache = Cache::open(root, config_hash, enabled);
+        let memory = cache.path().map(|path| Memory::open(path.with_extension("dirs")));
+
+        Self { root: root.to_path_buf(), config_hash, enabled, cache, memory }
+    }
+
+    /// A failed write only costs a later process its warm start.
+    fn persist(&mut self) {
+        let _ = self.cache.flush();
+
+        if let Some(memory) = &mut self.memory {
+            let _ = memory.save();
+        }
+    }
 }
 
 /// Format `source` as if it were the file at `path`, returning the new text.

@@ -23,12 +23,15 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+fmtkit-cache.workspace = true
 fmtkit-config.workspace = true
 fmtkit-core.workspace = true
 fmtkit-discover.workspace = true
 fmtkit-engine.workspace = true
 fmtkit-report.workspace = true
 mimalloc.workspace = true
+postcard.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

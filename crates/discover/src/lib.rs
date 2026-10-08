@@ -24,6 +24,7 @@ use std::{env, io};
 use fmtkit_core::{Lane, Lang};
 
 pub use generated::is_generated;
+pub use git::Repository;
 pub use memory::{Memory, SETTLE};
 
 use filter::Filter;
@@ -103,14 +104,21 @@ pub fn find_root(cwd: &Path) -> PathBuf {
 /// `root` is a git work tree when it holds a `.git` entry; anything else is
 /// walked as plain files.
 pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Result<Discovery, DiscoverError> {
-    discover_with(root, scope, files, None)
+    discover_with(root, scope, files, None, &mut Repository::default())
 }
 
 /// [`discover`], replaying the stored listings of directories that have not
 /// changed since `memory` saw them. Listing is the larger part of finding the
 /// changed set, and a run's scope and `[files] exclude` do not affect what
-/// is stored.
-pub fn discover_with(root: &Path, scope: &Scope, files: &fmtkit_config::Files, memory: Option<&Memory>) -> Result<Discovery, DiscoverError> {
+/// is stored. A git repository is opened through `repository`, which may
+/// keep it open for later runs.
+pub fn discover_with(
+    root: &Path,
+    scope: &Scope,
+    files: &fmtkit_config::Files,
+    memory: Option<&Memory>,
+    repository: &mut Repository,
+) -> Result<Discovery, DiscoverError> {
     let git = root.join(".git").exists();
     let (prefixes, missing) = resolve_paths(root, scope.cwd.as_deref(), &scope.paths)?;
 
@@ -124,8 +132,8 @@ pub fn discover_with(root: &Path, scope: &Scope, files: &fmtkit_config::Files, m
     let every = scope.all || !scope.paths.is_empty();
 
     let Walked { mut files, mut modules } = match (git, every) {
-        (true, false) => Walked { files: git::changed(root, &filter, memory)?, modules: Vec::new() },
-        (true, true) => git::all(root, &filter, memory)?,
+        (true, false) => Walked { files: git::changed(repository, root, &filter, memory)?, modules: Vec::new() },
+        (true, true) => git::all(repository, root, &filter, memory)?,
         (false, _) => walk::all(root, &filter)?,
     };
 

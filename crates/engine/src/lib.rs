@@ -17,7 +17,7 @@ use rayon::prelude::*;
 use fmtkit_cache::{Cache, Key};
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
-use fmtkit_discover::{Discovery, Memory, Scope, SourceFile};
+use fmtkit_discover::{Discovery, Memory, Repository, Scope, SourceFile};
 use fmtkit_go::{GoError, Helper, VetMemo, VetTargets};
 use fmtkit_lint::{LintError, Linter};
 
@@ -79,13 +79,14 @@ pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Re
 
 /// What a process that runs fmtkit many times keeps between runs: the
 /// outcome cache and directory memory of the last root, the linter for the
-/// last configuration, and the worker pool. A run with another root,
-/// configuration, or cache setting starts them over.
+/// last configuration, the worker pool, and the git repository. A run with
+/// another root, configuration, or cache setting starts them over.
 #[derive(Default)]
 pub struct Session {
     stores: Option<Stores>,
     linter: Option<Linter>,
     pool: Option<(usize, rayon::ThreadPool)>,
+    repository: Repository,
 }
 
 struct Stores {
@@ -117,9 +118,13 @@ impl Session {
 
         stores.cache.next_run();
 
+        let now = SystemTime::now();
+
         if let Some(memory) = &mut stores.memory {
-            memory.next_run(SystemTime::now());
+            memory.next_run(now);
         }
+
+        self.repository.next_run(now);
 
         let Stores { cache, memory, .. } = &*stores;
 
@@ -134,7 +139,7 @@ impl Session {
                 s.spawn(|| memory.load());
             }
 
-            let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref());
+            let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref(), &mut self.repository);
 
             (discovery, linter.map(join))
         });

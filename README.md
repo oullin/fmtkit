@@ -310,7 +310,7 @@ The cache lives in `<cache dir>/fmtkit/v2/`. The cache directory is `~/Library/C
 
 ### Serve
 
-`fmtkit serve` keeps one repository's cache, directory memory, linter, and worker threads loaded between runs. Start it in the repository, in a terminal of its own; it runs until it is stopped. While it runs, `format` and `check` anywhere in that repository hand their runs to it and print what it answers, so they skip loading the cache and starting the workers. Without a server, or when it refuses a run, they run as usual.
+`fmtkit serve` keeps one repository's cache, directory memory, linter, worker threads, and open git repository loaded between runs. Start it in the repository, in a terminal of its own; it runs until it is stopped. While it runs, `format` and `check` anywhere in that repository hand their runs to it and print what it answers, so they skip loading the cache, starting the workers, and opening the repository. Without a server, or when it refuses a run, they run as usual.
 
 ```sh
 fmtkit serve
@@ -321,7 +321,7 @@ fmtkit: serving /home/me/project on /home/me/.cache/fmtkit/v2/3f1a9c2e7b4d8a60.s
 fmtkit: answered in 3.1 ms with exit 0
 ```
 
-- **Same results.** The server reads `fmtkit.toml` for every run, and a run through the server reports exactly what a local run would.
+- **Same results.** The server reads `fmtkit.toml` for every run, and reopens the git repository once its index, packed refs, or any git configuration file changes. A run through the server reports exactly what a local run would.
 - **One run at a time.** A run that arrives while another is in progress waits for it.
 - **Refusals.** The server refuses a run from another fmtkit executable or version, or from a shell where any variable a run reads has another value: every `FMTKIT_*`, `GIT_*`, `GO*`, and `CGO_*` variable, the C toolchain variables, `HOME`, `PATH`, `XDG_CACHE_HOME`, and `XDG_CONFIG_HOME`. The refused command runs locally. Each run the server answers or refuses is logged on its standard error.
 - **Upgrades.** When its executable changes on disk, the server refuses the next run and stops.

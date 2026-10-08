@@ -148,7 +148,7 @@ func run(items []string) error {
 }
 ```
 
-After formatting, fmtkit runs `go vet` and reports its findings under the rule `go/vet`. With `--all` and no paths, it vets `./...` in every Go module of the repository. Otherwise it vets the packages of the Go files in scope. fmtkit skips `go vet` when `go` is not on `PATH`, when `[go] vet = false`, or when no Go file is in scope, and the report says why. `go vet` analyses whole packages, so it also reads Go files that `[files] exclude` hides from formatting.
+After formatting, fmtkit runs `go vet` and reports its findings under the rule `go/vet`. With `--all` and no paths, it vets `./...` in every Go module of the repository, except modules inside ignored or `[files] exclude` directories. Otherwise it vets the packages of the Go files in scope. fmtkit skips `go vet` when `go` is not on `PATH`, when `[go] vet = false`, under `--ts`, or when no Go file is in scope, and the report says why. `go vet` analyses whole packages, so it also reads Go files that `[files] exclude` hides from formatting.
 
 ### TypeScript and JavaScript
 
@@ -297,7 +297,11 @@ fmtkit takes the first of these that is set: `--jobs`, `FMTKIT_JOBS`, and `jobs`
 
 ### Cache
 
-fmtkit caches outcomes that need no write, so unchanged files are not formatted again. A cache entry depends on the file's bytes, its path, the fmtkit version, the configuration, and the mode.
+fmtkit caches outcomes so unchanged files are not processed again. `format` caches a file only when it had nothing to write. `check` writes nothing, so it also caches files that formatting would change. A cache entry depends on the file's bytes, its path, the fmtkit version, the configuration, and the mode.
+
+fmtkit also records each cached file's size, inode, and modification and change times. When those still match, it reuses the outcome without opening the file, as git does with its index. A file modified less than two seconds before a run is read in full, because some file systems record times only to the nearest two seconds.
+
+A clean `go vet` run is cached per module. The entry depends on the `go` executable, the environment that `go` reads (every `GO*` and `CGO_*` variable, the C toolchain variables, `HOME`, and the `go env -w` file), the packages vetted, and the size, inode, and modification and change times of every file in the module. That includes files git ignores. It leaves out the directories `go` skips (`testdata`, and names starting with `.` or `_`), `node_modules`, and nested modules. While none of these change, fmtkit skips `go vet` for that module and reports the earlier pass. A module that reads code from elsewhere on disk, through a `go.work` workspace or a `replace` with a local path, is always vetted. Failed runs are never cached, and neither is a run over a file modified less than two seconds earlier.
 
 The cache lives in `<cache dir>/fmtkit/v2/`. The cache directory is `~/Library/Caches` on macOS and `$XDG_CACHE_HOME` or `~/.cache` on Linux. `FMTKIT_CACHE_DIR` replaces the whole `<cache dir>/fmtkit/v2` prefix. `--no-cache` bypasses the cache for one run.
 

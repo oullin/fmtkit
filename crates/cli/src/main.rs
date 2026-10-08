@@ -174,10 +174,15 @@ fn run(mode: Mode, args: &RunArgs) -> ExitCode {
         return fail(EXIT_INTERNAL, &format!("write report: {e}"));
     }
 
-    match report.result {
+    let code = match report.result {
         RunResult::Pass | RunResult::Fixed => ExitCode::SUCCESS,
         RunResult::Fail => ExitCode::from(EXIT_FINDINGS),
-    }
+    };
+
+    // The process exits next; freeing every finding first only delays it.
+    std::mem::forget(report);
+
+    code
 }
 
 fn format_stdin(mode: Mode, config: &Config, root: &std::path::Path, path: &std::path::Path) -> ExitCode {

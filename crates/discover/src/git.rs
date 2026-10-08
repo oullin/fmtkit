@@ -1,14 +1,13 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::ops::ControlFlow;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 use gix::bstr::{BStr, ByteSlice};
 use gix::diff::index::ChangeRef;
-use gix::dir::EntryRef;
-use gix::dir::entry::{Kind, Status};
-use gix::dir::walk::{Action, Delegate, EmissionMode, ForDeletionMode};
 use gix::index::entry::Mode;
 use gix::status::UntrackedFiles;
 use gix::status::index_worktree::Item;
@@ -16,7 +15,8 @@ use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 use gix::status::tree_index::TrackRenames;
 
 use crate::filter::Filter;
-use crate::{DiscoverError, SourceFile};
+use crate::walk::{self, Rules};
+use crate::{DiscoverError, SourceFile, Walked};
 
 /// Tracked files that differ from `HEAD` in the index or the worktree, plus
 /// untracked files that are not ignored. Files deleted from the worktree are
@@ -24,15 +24,17 @@ use crate::{DiscoverError, SourceFile};
 ///
 /// The three comparisons (`HEAD` against the index, the index against the
 /// worktree, and the untracked walk) run on their own threads.
-pub(crate) fn changed(root: &Path, filter: &Filter) -> Result<Vec<SourceFile>, DiscoverError> {
+pub(crate) fn changed(root: &Path, filter: &Arc<Filter>) -> Result<Vec<SourceFile>, DiscoverError> {
     let repo = open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
     let patterns = filter.pathspecs();
     let shared = repo.clone().into_sync();
+    let tracked = Tracked::new(&index, ignore_case(&repo));
+    let rules = rules(&repo, &tracked);
 
     let (staged, worktree, untracked) = thread::scope(|scope| {
         let staged = scope.spawn(|| staged(&shared.to_thread_local(), &index, filter));
-        let untracked = scope.spawn(|| walk(&shared.to_thread_local(), &index, &patterns, filter, false));
+        let untracked = scope.spawn(|| walk::walk(root, filter, &rules, |rel| !tracked.visit(rel)).map(|walked| walked.files));
         let worktree = worktree(&repo, &index, &patterns, filter);
 
         (join(staged), worktree, join(untracked))
@@ -51,16 +53,92 @@ pub(crate) fn changed(root: &Path, filter: &Filter) -> Result<Vec<SourceFile>, D
 }
 
 /// Every tracked file present in the worktree plus every untracked file that
-/// is not ignored, from one directory walk.
-pub(crate) fn all(root: &Path, filter: &Filter) -> Result<Vec<SourceFile>, DiscoverError> {
+/// is not ignored, from one parallel directory walk. Tracked files the walk
+/// does not reach (ignored ones, or ones under an ignored directory) are
+/// looked up one by one. When the scope names only tracked files, nothing is
+/// walked.
+pub(crate) fn all(root: &Path, filter: &Arc<Filter>) -> Result<Walked, DiscoverError> {
     let repo = open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
+    let tracked = Tracked::new(&index, ignore_case(&repo));
 
-    walk(&repo, &index, &filter.pathspecs(), filter, true)
+    if let Some(prefixes) = filter.prefixes()
+        && prefixes.iter().all(|rel| tracked.contains(rel))
+    {
+        let files = prefixes.iter().filter_map(|rel| filter.source_file(rel)).filter(|file| is_regular(&file.abs)).collect();
+
+        return Ok(Walked { files, modules: Vec::new() });
+    }
+
+    let mut walked = walk::walk(root, filter, &rules(&repo, &tracked), |rel| {
+        tracked.visit(rel);
+
+        true
+    })?;
+
+    for rel in tracked.unvisited() {
+        if let Some(file) = filter.source_file(rel)
+            && is_regular(&file.abs)
+        {
+            walked.files.push(file);
+        }
+    }
+
+    Ok(walked)
 }
 
+/// The index's regular files, each flagged once a walk passes it.
+struct Tracked<'i> {
+    files: HashMap<String, (&'i str, AtomicBool)>,
+    ignore_case: bool,
+}
+
+impl<'i> Tracked<'i> {
+    fn new(index: &'i gix::index::State, ignore_case: bool) -> Self {
+        let files = index
+            .entries()
+            .iter()
+            .filter(|entry| is_file(entry.mode))
+            .filter_map(|entry| entry.path(index).to_str().ok())
+            .map(|rel| (if ignore_case { rel.to_ascii_lowercase() } else { rel.to_owned() }, (rel, AtomicBool::new(false))))
+            .collect();
+
+        Self { files, ignore_case }
+    }
+
+    /// Flag `rel` as passed; whether it is tracked.
+    fn visit(&self, rel: &str) -> bool {
+        self.get(rel).inspect(|(_, visited)| visited.store(true, Ordering::Relaxed)).is_some()
+    }
+
+    fn contains(&self, rel: &str) -> bool {
+        self.get(rel).is_some()
+    }
+
+    fn get(&self, rel: &str) -> Option<&(&'i str, AtomicBool)> {
+        if self.ignore_case { self.files.get(&rel.to_ascii_lowercase()) } else { self.files.get(rel) }
+    }
+
+    fn unvisited(&self) -> impl Iterator<Item = &'i str> {
+        self.files.values().filter(|(_, visited)| !visited.load(Ordering::Relaxed)).map(|(rel, _)| *rel)
+    }
+}
+
+/// Git's ignore rules for this repository.
+fn rules(repo: &gix::Repository, tracked: &Tracked<'_>) -> Rules {
+    Rules::Git { ignore_case: tracked.ignore_case, exclude: repo.common_dir().join("info").join("exclude") }
+}
+
+/// Whether git compares paths case-insensitively here (`core.ignoreCase`).
+fn ignore_case(repo: &gix::Repository) -> bool {
+    repo.filesystem_options().is_ok_and(|caps| caps.ignore_case)
+}
+
+/// Open the repository at `root`. The index checksum is not verified, as
+/// `git` itself verifies it only in `git fsck`; it is half the cost of
+/// reading the index.
 fn open(root: &Path) -> Result<gix::Repository, DiscoverError> {
-    gix::open(root).map_err(git)
+    gix::open_opts(root, gix::open::Options::default().config_overrides(["index.skipHash=true"])).map_err(git)
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -70,6 +148,11 @@ fn git(err: impl ToString) -> DiscoverError {
 
 fn join<T>(handle: thread::ScopedJoinHandle<'_, T>) -> T {
     handle.join().unwrap_or_else(|payload| std::panic::resume_unwind(payload))
+}
+
+/// Whether `path` is a regular file, not following a symbolic link.
+fn is_regular(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
 }
 
 fn is_file(mode: Mode) -> bool {
@@ -145,58 +228,4 @@ fn worktree(
     }
 
     Ok((files, removed))
-}
-
-/// Walk the worktree for untracked, non-ignored files, and tracked files too
-/// when `tracked` is set. Directories the filter rejects are not entered.
-fn walk(
-    repo: &gix::Repository,
-    index: &gix::index::State,
-    patterns: &[gix::bstr::BString],
-    filter: &Filter,
-    tracked: bool,
-) -> Result<Vec<SourceFile>, DiscoverError> {
-    let options = repo
-        .dirwalk_options()
-        .map_err(git)?
-        .emit_tracked(tracked)
-        .emit_untracked(EmissionMode::Matching)
-        .emit_ignored(None)
-        .emit_pruned(false)
-        .emit_empty_directories(false)
-        .recurse_repositories(false)
-        .empty_patterns_match_prefix(false);
-
-    let mut collect = Collect { filter, tracked, files: Vec::new() };
-
-    repo.dirwalk(index, patterns, &AtomicBool::new(false), options, &mut collect).map_err(git)?;
-
-    Ok(collect.files)
-}
-
-struct Collect<'a> {
-    filter: &'a Filter,
-    tracked: bool,
-    files: Vec<SourceFile>,
-}
-
-impl Delegate for Collect<'_> {
-    fn emit(&mut self, entry: EntryRef<'_>, _collapsed_directory_status: Option<Status>) -> Action {
-        let wanted = match entry.status {
-            Status::Untracked => true,
-            Status::Tracked => self.tracked,
-            Status::Pruned | Status::Ignored(_) => false,
-        };
-
-        if wanted && entry.disk_kind == Some(Kind::File) {
-            push(&mut self.files, self.filter, entry.rela_path.as_ref());
-        }
-
-        ControlFlow::Continue(())
-    }
-
-    fn can_recurse(&mut self, entry: EntryRef<'_>, for_deletion: Option<ForDeletionMode>, worktree_root_is_repository: bool) -> bool {
-        entry.status.can_recurse(entry.disk_kind, entry.pathspec_match, for_deletion, worktree_root_is_repository)
-            && entry.rela_path.to_str().is_ok_and(|rel| self.filter.enters(rel))
-    }
 }

@@ -26,6 +26,15 @@ impl Fixture {
         fixture
     }
 
+    /// A linked worktree of this repository, checked out in its own directory.
+    pub fn linked_worktree(&self) -> Self {
+        let linked = Self::plain();
+
+        self.run(&["worktree", "add", "-q", "--detach", &linked.root().to_string_lossy()]);
+
+        linked
+    }
+
     pub fn root(&self) -> &Path {
         self.dir.path()
     }

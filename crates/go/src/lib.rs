@@ -73,8 +73,9 @@ pub struct Reply {
 /// Which packages `go vet` checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VetTargets {
-    /// `./...` in every module under the root.
-    All,
+    /// `./...` in each of these modules: repository-relative directories
+    /// holding a `go.mod`, the root as the empty string.
+    Modules(Vec<String>),
     /// The packages (directories) holding these repository-relative Go files.
     Files(Vec<String>),
 }
@@ -82,11 +83,22 @@ pub enum VetTargets {
 /// Run `go vet` under `root`. Blocks; run it on its own thread.
 ///
 /// Every module (a directory holding `go.mod`, outside `vendor`, `testdata`,
-/// ignored, and `.`/`_` directories) is vetted from its own directory: with
-/// `./...` for [`VetTargets::All`], or with just the packages holding the
+/// and `.`/`_` directories) is vetted from its own directory: with `./...`
+/// for [`VetTargets::Modules`], or with just the packages holding the
 /// listed files. Findings become [`VET_RULE`] diagnostics with
 /// repository-relative paths. Vet is skipped, with the reason recorded, when
-/// `go` is not on `PATH` or nothing in scope belongs to a module.
-pub fn vet(root: &Path, targets: &VetTargets) -> VetOutcome {
-    vet::run(root, targets)
+/// `go` is not on `PATH` or nothing in scope belongs to a module. With a
+/// `memo`, a module whose inputs match a run that passed is not vetted again.
+pub fn vet(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> VetOutcome {
+    vet::run(root, targets, memo)
+}
+
+/// Remembers the `go vet` runs that passed, by the digest of everything the
+/// run read, so an identical run can be skipped.
+pub trait VetMemo: Sync {
+    /// Whether a run with these inputs passed before.
+    fn passed(&self, key: &[u8; 32]) -> bool;
+
+    /// Record that a run with these inputs passed.
+    fn pass(&self, key: [u8; 32]);
 }

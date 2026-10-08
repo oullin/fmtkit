@@ -64,6 +64,11 @@ impl Filter {
 
     /// Whether a walk should descend into the directory at `rel`, whose parents
     /// were all entered.
+    /// The root-relative paths the scope names, or `None` for the whole root.
+    pub(crate) fn prefixes(&self) -> Option<&[String]> {
+        self.prefixes.as_deref()
+    }
+
     pub(crate) fn enters(&self, rel: &str) -> bool {
         let name = rel.rsplit_once('/').map_or(rel, |(_, name)| name);
 

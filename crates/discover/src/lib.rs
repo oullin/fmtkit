@@ -54,6 +54,11 @@ pub struct Discovery {
     pub files: Vec<SourceFile>,
     /// Scope paths that do not exist, as given.
     pub missing: Vec<String>,
+    /// Directories holding a `go.mod` that the walk passed, root-relative with
+    /// forward slashes (empty for the root), sorted. Filled only when every
+    /// file is in scope (`all` without paths); excluded and ignored
+    /// directories are not entered, so their modules are not listed.
+    pub modules: Vec<String>,
     /// Whether the root is a git work tree.
     pub git: bool,
 }
@@ -97,7 +102,7 @@ pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Res
     let (prefixes, missing) = resolve_paths(root, &scope.paths)?;
 
     if prefixes.as_ref().is_some_and(Vec::is_empty) {
-        return Ok(Discovery { files: Vec::new(), missing, git });
+        return Ok(Discovery { files: Vec::new(), missing, modules: Vec::new(), git });
     }
 
     let filter = Arc::new(Filter::new(root, &files.exclude, &scope.lanes, prefixes)?);
@@ -105,8 +110,8 @@ pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Res
     // A named path is covered whether or not it changed, as `check` did in 0.x.
     let every = scope.all || !scope.paths.is_empty();
 
-    let mut files = match (git, every) {
-        (true, false) => git::changed(root, &filter)?,
+    let Walked { mut files, mut modules } = match (git, every) {
+        (true, false) => Walked { files: git::changed(root, &filter)?, modules: Vec::new() },
         (true, true) => git::all(root, &filter)?,
         (false, _) => walk::all(root, &filter)?,
     };
@@ -114,7 +119,36 @@ pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Res
     files.sort_unstable_by(|a, b| a.rel.cmp(&b.rel));
     files.dedup_by(|a, b| a.rel == b.rel);
 
-    Ok(Discovery { files, missing, git })
+    if !scope.all || !scope.paths.is_empty() {
+        modules.clear();
+    }
+
+    modules.sort_unstable();
+    modules.dedup();
+
+    Ok(Discovery { files, missing, modules, git })
+}
+
+/// What one walk found.
+#[derive(Default)]
+pub(crate) struct Walked {
+    files: Vec<SourceFile>,
+    modules: Vec<String>,
+}
+
+impl Walked {
+    /// Record the file at `rel` if it is in scope, and its directory if it is a `go.mod`.
+    fn see(&mut self, filter: &Filter, rel: &str) {
+        match rel.rsplit_once('/') {
+            Some((dir, "go.mod")) => self.modules.push(dir.to_owned()),
+            None if rel == "go.mod" => self.modules.push(String::new()),
+            _ => {}
+        }
+
+        if let Some(file) = filter.source_file(rel) {
+            self.files.push(file);
+        }
+    }
 }
 
 /// Turn scope paths into root-relative prefixes. `None` covers the whole root;

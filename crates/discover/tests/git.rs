@@ -155,6 +155,20 @@ fn paths_cover_unchanged_files_too() {
 }
 
 #[test]
+fn naming_only_tracked_files_matches_the_walk() {
+    let repo = busy_repo();
+    let named = ["a.ts", "clean.ts", "dist/forced.js", "vendor/lib/v.go", "notes.txt", "src/types.d.ts"];
+    let tracked = Scope { paths: named.iter().map(|rel| repo.path(rel)).collect(), ..Scope::default() };
+    let mut walked = tracked.clone();
+
+    // An untracked path makes discovery walk.
+    walked.paths.push(repo.path("src/new.ts"));
+
+    assert_eq!(repo.rels(&tracked), strings(&["a.ts", "clean.ts", "dist/forced.js"]));
+    assert_eq!(repo.rels(&walked), strings(&["a.ts", "clean.ts", "dist/forced.js", "src/new.ts"]));
+}
+
+#[test]
 fn paths_relative_to_the_current_directory() {
     let repo = busy_repo();
     let cwd = std::env::current_dir().unwrap().canonicalize().unwrap();
@@ -267,4 +281,109 @@ fn unstaged_renames_report_the_new_path() {
 
     assert_eq!(repo.rels(&Scope::default()), strings(&["new.ts"]));
     assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+}
+
+#[test]
+fn every_ignore_source_matches_the_git_cli() {
+    let repo = Fixture::git();
+
+    repo.write(".gitignore", "*.gen.ts\n**/build/\n!keep.gen.ts\n")
+        .write("src/.gitignore", "local.ts\n/anchored.ts\n")
+        .write("a.ts", "1\n")
+        .write("src/b.ts", "1\n")
+        .commit("init");
+
+    repo.write(".git/info/exclude", "excluded.ts\n")
+        .write("x.gen.ts", "1\n")
+        .write("keep.gen.ts", "1\n")
+        .write("deep/build/out.ts", "1\n")
+        .write("src/local.ts", "1\n")
+        .write("src/deeper/local.ts", "1\n")
+        .write("src/anchored.ts", "1\n")
+        .write("src/deeper/anchored.ts", "1\n")
+        .write("excluded.ts", "1\n")
+        .write("sub/excluded.ts", "1\n")
+        .write(".hidden/c.ts", "1\n");
+
+    let all = Scope { all: true, ..Scope::default() };
+
+    assert_eq!(repo.rels(&all), repo.git_all());
+    assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+    assert_eq!(repo.rels(&Scope::default()), strings(&[".hidden/c.ts", "keep.gen.ts", "src/deeper/anchored.ts"]));
+}
+
+#[test]
+fn deeper_ignore_files_decide_first() {
+    let repo = Fixture::git();
+
+    repo.write(".gitignore", "*.gen.ts\n").write("src/.gitignore", "!kept.gen.ts\nlocal.ts\n").write("a.ts", "1\n").commit("init");
+    repo.write("src/kept.gen.ts", "1\n").write("src/other.gen.ts", "1\n").write("local.ts", "1\n").write("src/local.ts", "1\n");
+
+    assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+    assert_eq!(repo.rels(&Scope::default()), strings(&["local.ts", "src/kept.gen.ts"]));
+}
+
+#[test]
+fn linked_worktrees_follow_the_shared_exclude_file() {
+    let repo = Fixture::git();
+
+    repo.write("a.ts", "1\n").commit("init");
+    repo.write(".git/info/exclude", "excluded.ts\n");
+
+    let linked = repo.linked_worktree();
+    let all = Scope { all: true, ..Scope::default() };
+
+    linked.write("excluded.ts", "1\n").write("kept.ts", "1\n");
+
+    assert_eq!(linked.rels(&Scope::default()), linked.git_changed());
+    assert_eq!(linked.rels(&Scope::default()), strings(&["kept.ts"]));
+    assert_eq!(linked.rels(&all), linked.git_all());
+    assert_eq!(linked.rels(&all), strings(&["a.ts", "kept.ts"]));
+}
+
+#[test]
+fn ignore_case_follows_the_repository_config() {
+    let repo = Fixture::git();
+
+    repo.write(".gitignore", "Ignored.ts\n").write("a.ts", "1\n").commit("init");
+    repo.write("ignored.ts", "1\n");
+    repo.run(&["config", "core.ignoreCase", "false"]);
+
+    assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+    assert_eq!(repo.rels(&Scope::default()), strings(&["ignored.ts"]));
+
+    repo.run(&["config", "core.ignoreCase", "true"]);
+
+    assert_eq!(repo.rels(&Scope::default()), repo.git_changed());
+    assert_eq!(repo.rels(&Scope::default()), Vec::<String>::new());
+}
+
+#[test]
+fn nested_repositories_are_not_untracked_changes() {
+    let repo = Fixture::git();
+
+    repo.write("a.ts", "1\n").commit("init");
+    repo.write("nested/b.ts", "1\n").write("loose.ts", "1\n");
+    repo.run(&["-C", "nested", "init", "-q"]);
+
+    assert_eq!(repo.rels(&Scope::default()), strings(&["loose.ts"]));
+}
+
+#[test]
+fn walking_everything_lists_go_modules() {
+    let repo = Fixture::git();
+
+    repo.write("go.mod", "module a\n")
+        .write("tools/go.mod", "module t\n")
+        .write("dist/go.mod", "module d\n")
+        .write(".gitignore", "dist/\n")
+        .write("main.go", "package main\n")
+        .commit("init");
+
+    let all = Scope { all: true, ..Scope::default() };
+    let some = Scope { all: true, paths: vec![repo.path("tools")], ..Scope::default() };
+
+    assert_eq!(repo.discover(&all).modules, strings(&["", "tools"]));
+    assert_eq!(repo.discover(&some).modules, Vec::<String>::new());
+    assert_eq!(repo.discover(&Scope::default()).modules, Vec::<String>::new());
 }

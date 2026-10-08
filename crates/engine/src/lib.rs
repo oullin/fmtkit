@@ -13,11 +13,11 @@ use std::thread;
 
 use rayon::prelude::*;
 
-use fmtkit_cache::Cache;
+use fmtkit_cache::{Cache, Key};
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
 use fmtkit_discover::{Discovery, Scope, SourceFile};
-use fmtkit_go::{GoError, Helper, VetTargets};
+use fmtkit_go::{GoError, Helper, VetMemo, VetTargets};
 use fmtkit_lint::{LintError, Linter};
 
 pub use progress::Progress;
@@ -68,36 +68,45 @@ pub(crate) struct Run<'a> {
 
 /// Run fmtkit over the files `options.scope` selects.
 pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Report, EngineError> {
-    let discovery = fmtkit_discover::discover(&options.root, &options.scope, &config.files)?;
+    let lints = selected_lanes(&options.scope).contains(&Lane::Ts);
+
+    // The store and the linter do not depend on the file list, so they load
+    // while discovery walks the tree. A linter no file needs is dropped.
+    let (discovery, cache, linter) = thread::scope(|s| {
+        let cache = s.spawn(|| Cache::open(&options.root, config.hash(), options.cache).loaded());
+        let linter = lints.then(|| s.spawn(|| Linter::new(&config.lint)));
+        let discovery = fmtkit_discover::discover(&options.root, &options.scope, &config.files);
+
+        (discovery, join(cache), linter.map(join))
+    });
+
+    let discovery = discovery?;
     let (go_files, script_files): (Vec<SourceFile>, Vec<SourceFile>) = discovery.files.iter().cloned().partition(|f| f.lang == Lang::Go);
 
     progress.start(discovery.files.len());
 
-    let linter = if script_files.iter().any(|f| f.lang.is_lintable()) { Some(Linter::new(&config.lint)?) } else { None };
+    let linter = match linter {
+        Some(linter) if script_files.iter().any(|f| f.lang.is_lintable()) => Some(linter?),
+        _ => None,
+    };
     let helper = if go_files.is_empty() { None } else { Some(Helper::spawn(options.go_helper.as_deref())?) };
-    let cache = Cache::open(&options.root, config.hash(), options.cache);
     let pool = rayon::ThreadPoolBuilder::new().num_threads(options.jobs.max(1)).build().map_err(|e| EngineError::Pool(e.to_string()))?;
     let state = Run { config, mode: options.mode, cache: &cache, linter: linter.as_ref(), progress };
 
     let (scripts, go, vet) = thread::scope(|s| {
-        let vet = s.spawn(|| vet_for(config, options, &discovery, &go_files));
+        let vet = s.spawn(|| vet_for(config, options, &cache, &discovery, &go_files));
         let go = helper.as_ref().map(|helper| s.spawn(|| go_lane::process(&state, helper, &go_files, &pool)));
         let scripts: Vec<FileOutcome> = pool.install(|| script_files.par_iter().filter_map(|file| script_lane::process(&state, file)).collect());
 
-        (scripts, go.map(thread::ScopedJoinHandle::join), vet.join())
+        (scripts, go.map(join), join(vet))
     });
 
-    let go = match go {
-        Some(Ok(result)) => result?,
-        Some(Err(panic)) => std::panic::resume_unwind(panic),
-        None => Vec::new(),
-    };
+    let go = go.transpose()?.unwrap_or_default();
 
     if let Some(helper) = helper {
         helper.shutdown()?;
     }
 
-    let vet = vet.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
     let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).collect();
 
     files.sort_unstable_by(|a, b| a.file.cmp(&b.file));
@@ -141,19 +150,45 @@ pub fn format_text(config: &Config, root: &Path, path: &Path, source: &str, go_h
     script_lane::format_text(config, linter.as_ref(), &rel, lang, source).map_err(|message| EngineError::File { path: display, message })
 }
 
-fn vet_for(config: &Config, options: &Options, discovery: &Discovery, go_files: &[SourceFile]) -> VetOutcome {
+fn vet_for(config: &Config, options: &Options, cache: &Cache, discovery: &Discovery, go_files: &[SourceFile]) -> VetOutcome {
     if !config.go.vet {
         return VetOutcome { skipped: Some("disabled by [go] vet".into()), ..VetOutcome::default() };
     }
 
-    if go_files.is_empty() && !(options.scope.all && discovery.git) {
+    if !selected_lanes(&options.scope).contains(&Lane::Go) {
+        return VetOutcome { skipped: Some("the Go lane is not selected".into()), ..VetOutcome::default() };
+    }
+
+    let every_module = options.scope.all && options.scope.paths.is_empty();
+
+    if go_files.is_empty() && !(every_module && discovery.git) {
         return VetOutcome { skipped: Some("no Go files in scope".into()), ..VetOutcome::default() };
     }
 
     let targets =
-        if options.scope.all && options.scope.paths.is_empty() { VetTargets::All } else { VetTargets::Files(go_files.iter().map(|f| f.rel.clone()).collect()) };
+        if every_module { VetTargets::Modules(discovery.modules.clone()) } else { VetTargets::Files(go_files.iter().map(|f| f.rel.clone()).collect()) };
 
-    fmtkit_go::vet(&options.root, &targets)
+    let memo = cache.is_enabled().then_some(Marks(cache));
+
+    fmtkit_go::vet(&options.root, &targets, memo.as_ref().map(|memo| memo as &dyn VetMemo))
+}
+
+/// Vet passes kept as cache marks.
+struct Marks<'a>(&'a Cache);
+
+impl VetMemo for Marks<'_> {
+    fn passed(&self, key: &[u8; 32]) -> bool {
+        self.0.marked(&Key(*key))
+    }
+
+    fn pass(&self, key: [u8; 32]) {
+        self.0.mark(Key(key));
+    }
+}
+
+/// Join a scoped thread, re-raising its panic here.
+fn join<T>(handle: thread::ScopedJoinHandle<'_, T>) -> T {
+    handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))
 }
 
 fn selected_lanes(scope: &Scope) -> Vec<Lane> {

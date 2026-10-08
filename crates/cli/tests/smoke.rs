@@ -189,6 +189,9 @@ fn check_reports_complexity_on_the_lines_on_disk() {
     // Formatting would move both functions down; check reports where they are now.
     assert!(report.contains("b.ts:2 complexity/cyclomatic b.ts#g"), "{report}");
     assert!(go_helper().is_none() || report.contains("a.go:3 complexity/cyclomatic a.go#f"), "{report}");
+
+    // A cached check outcome keeps the lines on disk.
+    assert_eq!(text(&fixture.run(&["check", "--all", "--format", "agent"])), report);
 }
 
 #[test]
@@ -200,6 +203,13 @@ fn check_writes_nothing_and_fails_on_changes() {
     assert_exit(&output, 1);
     assert_eq!(fixture.snapshot(), before);
     assert!(text(&output).contains("app.ts"), "check did not name the file:\n{}", text(&output));
+
+    // The second check answers from the cache, with the same report.
+    let again = fixture.run(&["check", "--all", "--format", "agent"]);
+
+    assert_exit(&again, 1);
+    assert_eq!(text(&again), text(&output));
+    assert_eq!(fixture.snapshot(), before);
 }
 
 #[test]
@@ -377,6 +387,28 @@ fn json_report_carries_schema_two() {
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
     assert_eq!(report["schema"], 2);
+}
+
+#[test]
+fn vet_follows_the_selected_lane_and_the_walked_modules() {
+    let fixture = Fixture::new(&[
+        ("go.mod", "module fixture\n\ngo 1.27.1\n"),
+        ("app.ts", "export const a = 1;\n"),
+        ("dist/go.mod", "module d\n"),
+        (".gitignore", "dist/\n"),
+    ]);
+    let vet = |args: &[&str]| -> serde_json::Value {
+        let output = fixture.run(&[&["check", "--format", "json"], args].concat());
+
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()["vet"].clone()
+    };
+
+    assert_eq!(vet(&["--all", "--ts"])["reason"], "the Go lane is not selected");
+
+    // The root module is vetted; the ignored one under dist/ is not.
+    if go_helper().is_some() {
+        assert_eq!(vet(&["--all"])["targets"], serde_json::json!(["./..."]));
+    }
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use std::any::Any;
-use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 
+use fmtkit_cache::Lookup;
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lang, Mode, is_declaration, is_test_file};
 use fmtkit_discover::SourceFile;
@@ -29,18 +29,13 @@ pub fn process(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
 }
 
 fn process_inner(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
-    let bytes = match fs::read(&file.abs) {
-        Ok(bytes) => bytes,
+    let mut fresh = match run.cache.read(run.mode, &file.rel, &file.abs) {
+        Ok(Lookup::Hit(outcome)) => return Some(outcome),
+        Ok(Lookup::Miss(fresh)) => fresh,
         Err(e) => return Some(FileOutcome::failed(&file.rel, Some(file.lang), format!("read: {e}"))),
     };
 
-    let key = run.cache.key(run.mode, &file.rel, &bytes);
-
-    if let Some(outcome) = run.cache.get(&key) {
-        return Some(outcome);
-    }
-
-    let Ok(source) = String::from_utf8(bytes) else {
+    let Ok(source) = String::from_utf8(std::mem::take(&mut fresh.bytes)) else {
         return Some(FileOutcome::failed(&file.rel, Some(file.lang), "not valid UTF-8"));
     };
 
@@ -59,24 +54,24 @@ fn process_inner(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
     outcome.changed = processed.output != source;
     outcome.applied = processed.applied;
 
-    if !outcome.changed {
-        run.cache.put(key, &outcome);
+    // Check mode writes nothing, so even a file formatting would change has
+    // its final outcome here.
+    if !outcome.changed || run.mode == Mode::Check {
+        run.cache.put_fresh(&fresh, &outcome);
 
         return Some(outcome);
     }
 
-    if run.mode == Mode::Format {
-        if let Err(e) = write::atomic(&file.abs, processed.output.as_bytes()) {
-            outcome.error = Some(format!("write: {e}"));
+    if let Err(e) = write::atomic(&file.abs, processed.output.as_bytes()) {
+        outcome.error = Some(format!("write: {e}"));
 
-            return Some(outcome);
-        }
-
-        // The rewritten file is clean: a later run over it can skip straight to this outcome.
-        let clean = FileOutcome { applied: Vec::new(), changed: false, ..outcome.clone() };
-
-        run.cache.put(run.cache.key(run.mode, &file.rel, processed.output.as_bytes()), &clean);
+        return Some(outcome);
     }
+
+    // The rewritten file is clean: a later run over it can skip straight to this outcome.
+    let clean = FileOutcome { applied: Vec::new(), changed: false, ..outcome.clone() };
+
+    run.cache.put(run.cache.key(run.mode, &file.rel, processed.output.as_bytes()), &clean);
 
     Some(outcome)
 }

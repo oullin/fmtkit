@@ -2,9 +2,13 @@
 //!
 //! Every module (a directory with `go.mod`) is vetted separately from its own
 //! directory, because `./...` stops at nested module boundaries. Under
-//! [`VetTargets::All`] each module gets `./...`; under [`VetTargets::Files`]
+//! [`VetTargets::Modules`] each module gets `./...`; under [`VetTargets::Files`]
 //! only the packages holding the listed files are named. Modules run in
-//! parallel; the output is parsed into `go/vet` diagnostics.
+//! parallel; the output is parsed into `go/vet` diagnostics. With a
+//! [`VetMemo`], a module whose inputs match a run that passed is not vetted
+//! again (see [`inputs`]).
+
+mod inputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -12,8 +16,8 @@ use std::process::{Command, Output, Stdio};
 
 use fmtkit_core::{Diagnostic, Severity, VetOutcome};
 
-use crate::VetTargets;
 use crate::locate::which;
+use crate::{VetMemo, VetTargets};
 
 /// The rule every vet diagnostic carries.
 pub const RULE: &str = "go/vet";
@@ -30,36 +34,40 @@ struct ModuleRun {
     outside_workspace: bool,
 }
 
-pub fn run(root: &Path, targets: &VetTargets) -> VetOutcome {
+pub fn run(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> VetOutcome {
     let Some(go) = which("go") else {
         return skipped("go is not on PATH");
     };
 
     let modules = match targets {
-        VetTargets::All => plan_all(root),
+        VetTargets::Modules(dirs) => plan_modules(root, dirs),
         VetTargets::Files(files) => plan_files(root, files),
     };
 
     if modules.is_empty() {
         return skipped(match targets {
-            VetTargets::All => "no Go module under the root",
+            VetTargets::Modules(_) => "no Go module under the root",
             VetTargets::Files(_) => "no Go package in scope belongs to a module",
         });
     }
 
     let gowork_set = std::env::var_os("GOWORK").is_some_and(|value| !value.is_empty());
 
-    let outputs: Vec<std::io::Result<Output>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = modules.iter().map(|module| scope.spawn(|| invoke(&go, module, gowork_set))).collect();
+    let found: Vec<Vec<Diagnostic>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = modules.iter().map(|module| scope.spawn(|| vet_module(&go, root, module, gowork_set, memo))).collect();
 
-        handles.into_iter().map(|handle| handle.join().unwrap_or_else(|_| Err(std::io::Error::other("go vet thread panicked")))).collect()
+        handles
+            .into_iter()
+            .zip(&modules)
+            .map(|(handle, module)| handle.join().unwrap_or_else(|_| diagnostics(root, &module.dir, Err(std::io::Error::other("go vet thread panicked")))))
+            .collect()
     });
 
     let mut outcome = VetOutcome::default();
 
-    for (module, output) in modules.iter().zip(outputs) {
+    for (module, errors) in modules.iter().zip(found) {
         outcome.targets.extend(module.packages.iter().map(|package| display_target(root, &module.dir, package)));
-        outcome.errors.extend(diagnostics(root, &module.dir, output));
+        outcome.errors.extend(errors);
     }
 
     outcome.errors.sort_by(|a, b| (&a.file, a.line, a.column, &a.message).cmp(&(&b.file, b.line, b.column, &b.message)));
@@ -70,6 +78,29 @@ pub fn run(root: &Path, targets: &VetTargets) -> VetOutcome {
 
 fn skipped(reason: &str) -> VetOutcome {
     VetOutcome { skipped: Some(reason.to_owned()), ..VetOutcome::default() }
+}
+
+/// Vet one module, unless `memo` holds a pass for exactly its inputs. A clean
+/// run over settled inputs is remembered.
+fn vet_module(go: &Path, root: &Path, module: &ModuleRun, gowork_set: bool, memo: Option<&dyn VetMemo>) -> Vec<Diagnostic> {
+    let inputs = memo.and_then(|memo| Some((memo, inputs::fingerprint(go, module)?)));
+
+    if let Some((memo, inputs)) = &inputs
+        && memo.passed(&inputs.key)
+    {
+        return Vec::new();
+    }
+
+    let output = invoke(go, module, gowork_set);
+
+    if let Some((memo, inputs)) = inputs
+        && inputs.settled
+        && output.as_ref().is_ok_and(|output| output.status.success())
+    {
+        memo.pass(inputs.key);
+    }
+
+    diagnostics(root, &module.dir, output)
 }
 
 fn invoke(go: &Path, module: &ModuleRun, gowork_set: bool) -> std::io::Result<Output> {
@@ -84,18 +115,14 @@ fn invoke(go: &Path, module: &ModuleRun, gowork_set: bool) -> std::io::Result<Ou
     command.output()
 }
 
-/// Every module under `root`, each vetted with `./...`. The walk honours
-/// ignore files and skips what `go` itself skips: `vendor`, `testdata`, and
-/// directories starting with `.` or `_`.
-fn plan_all(root: &Path) -> Vec<ModuleRun> {
-    let walker = ignore::WalkBuilder::new(root)
-        .filter_entry(|entry| entry.depth() == 0 || !entry.file_type().is_some_and(|t| t.is_dir()) || !skipped_dir(&entry.file_name().to_string_lossy()))
-        .build();
-
-    let mut dirs: Vec<PathBuf> = walker
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_name() == "go.mod" && entry.file_type().is_some_and(|t| t.is_file()))
-        .filter_map(|entry| entry.path().parent().map(Path::to_path_buf))
+/// The modules in `dirs` (repository-relative), each vetted with `./...`,
+/// leaving out what `go` itself skips: `vendor`, `testdata`, and directories
+/// starting with `.` or `_`.
+fn plan_modules(root: &Path, dirs: &[String]) -> Vec<ModuleRun> {
+    let mut dirs: Vec<PathBuf> = dirs
+        .iter()
+        .filter(|dir| !Path::new(dir.as_str()).components().any(|c| matches!(c, Component::Normal(name) if skipped_dir(&name.to_string_lossy()))))
+        .map(|dir| root.join(dir))
         .collect();
 
     dirs.sort();
@@ -360,8 +387,34 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use super::{ModuleRun, display_target, normalize, outside_workspace, parse, plan_all, plan_files, run, split_position, workspace_uses};
-    use crate::VetTargets;
+    use std::sync::Mutex;
+    use std::time::{Duration, SystemTime};
+
+    use super::{ModuleRun, display_target, normalize, outside_workspace, parse, plan_files, plan_modules, run, split_position, workspace_uses};
+    use crate::{VetMemo, VetTargets};
+
+    /// Remembers passes in memory; `everything` claims every run passed.
+    #[derive(Default)]
+    struct Memo {
+        passes: Mutex<Vec<[u8; 32]>>,
+        everything: bool,
+    }
+
+    impl VetMemo for Memo {
+        fn passed(&self, key: &[u8; 32]) -> bool {
+            self.everything || self.passes.lock().unwrap().contains(key)
+        }
+
+        fn pass(&self, key: [u8; 32]) {
+            self.passes.lock().unwrap().push(key);
+        }
+    }
+
+    /// Write a file old enough for its stamp to be trusted.
+    fn write_settled(path: &Path, text: &str) {
+        write(path, text);
+        fs::File::options().write(true).open(path).unwrap().set_modified(SystemTime::now() - Duration::from_secs(60)).unwrap();
+    }
 
     fn write(path: &Path, text: &str) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -391,10 +444,11 @@ mod tests {
     }
 
     #[test]
-    fn plans_every_module_for_all() {
+    fn plans_every_module_but_those_go_skips() {
         let dir = tree();
         let root = canonical(&dir);
-        let plan = plan_all(&root);
+        let modules = ["tools", "", "vendor/v", ".hidden", "_skip", "pkg/a/testdata", "tools"].map(String::from);
+        let plan = plan_modules(&root, &modules);
         let dirs: Vec<_> = plan.iter().map(|m| m.dir.strip_prefix(&root).unwrap().to_path_buf()).collect();
 
         assert_eq!(dirs, [PathBuf::new(), PathBuf::from("tools")]);
@@ -424,7 +478,7 @@ mod tests {
         write(&dir.path().join("loose.go"), "package loose\n");
 
         assert_eq!(plan_files(dir.path(), &["loose.go".to_owned()]), []);
-        assert_eq!(plan_all(dir.path()), []);
+        assert_eq!(plan_modules(dir.path(), &[]), []);
     }
 
     #[test]
@@ -502,7 +556,7 @@ mod tests {
         write(&root.join("bad/bad.go"), "package bad\n\nimport \"fmt\"\n\nfunc Run() {\n\tfmt.Printf(\"%d\", \"not-a-number\")\n}\n");
         write(&root.join("good/good.go"), "package good\n\nfunc Run() {}\n");
 
-        let all = run(&root, &VetTargets::All);
+        let all = run(&root, &VetTargets::Modules(vec![String::new()]), None);
 
         assert_eq!(all.skipped, None);
         assert_eq!(all.targets, ["./..."]);
@@ -510,14 +564,55 @@ mod tests {
         assert_eq!((all.errors[0].file.as_str(), all.errors[0].line), ("bad/bad.go", 6));
         assert!(all.errors[0].message.contains("wrong type"), "{}", all.errors[0].message);
 
-        let scoped = run(&root, &VetTargets::Files(vec!["good/good.go".into()]));
+        let scoped = run(&root, &VetTargets::Files(vec!["good/good.go".into()]), None);
 
         assert_eq!(scoped.targets, ["./good"]);
         assert!(scoped.errors.is_empty(), "{:?}", scoped.errors);
 
-        let nothing = run(&root, &VetTargets::Files(vec!["README.md".into()]));
+        let nothing = run(&root, &VetTargets::Files(vec!["README.md".into()]), None);
 
         assert!(nothing.skipped.is_some());
+    }
+
+    #[test]
+    fn skips_modules_whose_inputs_passed_before() {
+        if super::which("go").is_none() {
+            eprintln!("skipping: go is not on PATH");
+
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = canonical(&dir);
+        let modules = VetTargets::Modules(vec!["good".into(), "bad".into()]);
+
+        write_settled(&root.join("good/go.mod"), "module example.com/good\n\ngo 1.27\n");
+        write_settled(&root.join("good/good.go"), "package good\n\nfunc Run() {}\n");
+        write_settled(&root.join("bad/go.mod"), "module example.com/bad\n\ngo 1.27\n");
+        write_settled(&root.join("bad/bad.go"), "package bad\n\nimport \"fmt\"\n\nfunc Run() {\n\tfmt.Printf(\"%d\", \"x\")\n}\n");
+
+        let memo = Memo::default();
+
+        // Only the clean module is remembered.
+        assert_eq!(run(&root, &modules, Some(&memo)).errors.len(), 1);
+        assert_eq!(memo.passes.lock().unwrap().len(), 1);
+        assert_eq!(run(&root, &modules, Some(&memo)).errors.len(), 1);
+        assert_eq!(memo.passes.lock().unwrap().len(), 1);
+
+        // A remembered pass is answered without running vet.
+        let claims = Memo { everything: true, ..Memo::default() };
+        let skipped = run(&root, &modules, Some(&claims));
+
+        assert!(skipped.errors.is_empty(), "{:?}", skipped.errors);
+        assert_eq!(skipped.targets, ["./bad/...", "./good/..."]);
+
+        // A file written just now is not trusted yet.
+        write(&root.join("good/good.go"), "package good\n\nfunc Run() { _ = 1 }\n");
+
+        let fresh = Memo::default();
+
+        assert_eq!(run(&root, &VetTargets::Modules(vec!["good".into()]), Some(&fresh)).errors.len(), 0);
+        assert!(fresh.passes.lock().unwrap().is_empty());
     }
 
     #[test]
@@ -534,7 +629,7 @@ mod tests {
         write(&root.join("go.mod"), "this is not a go.mod\n");
         write(&root.join("a.go"), "package a\n");
 
-        let outcome = run(&root, &VetTargets::All);
+        let outcome = run(&root, &VetTargets::Modules(vec![String::new()]), None);
 
         assert_eq!(outcome.errors.len(), 1, "{:?}", outcome.errors);
         assert_eq!(outcome.errors[0].file, "go.mod");

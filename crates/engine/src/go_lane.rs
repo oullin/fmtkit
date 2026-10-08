@@ -1,9 +1,8 @@
-use std::fs;
 use std::path::Path;
 
 use rayon::prelude::*;
 
-use fmtkit_cache::Key;
+use fmtkit_cache::{Fresh, Lookup};
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lang, Mode, is_test_file};
 use fmtkit_discover::SourceFile;
@@ -13,7 +12,7 @@ use crate::{Run, write};
 
 enum Pending<'f> {
     Done(Option<FileOutcome>),
-    Waiting { file: &'f SourceFile, key: Key, source: Vec<u8>, ticket: Ticket },
+    Waiting { file: &'f SourceFile, fresh: Fresh, ticket: Ticket },
 }
 
 /// Send every Go file to the helper, then collect the replies in order.
@@ -29,16 +28,21 @@ pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayo
     for item in pending {
         let outcome = match item {
             Pending::Done(outcome) => outcome,
-            Pending::Waiting { file, key, source, ticket } => {
-                let outcome = finish(run, file, key, &source, ticket.wait()?);
+            Pending::Waiting { file, mut fresh, ticket } => {
+                let outcome = finish(run, file, &fresh, ticket.wait()?);
 
                 // Check mode reports against the text on disk, as lint does;
-                // the helper scored the formatted text, whose lines moved.
-                if run.mode == Mode::Check && outcome.changed && !outcome.complexity.is_empty() {
-                    let steps = Steps { complexity: true, ..Steps::default() };
-                    let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source, steps };
+                // the helper scored the formatted text, whose lines moved. The
+                // outcome is stored once it is final.
+                if run.mode == Mode::Check && outcome.changed && outcome.error.is_none() {
+                    if outcome.complexity.is_empty() {
+                        run.cache.put_fresh(&fresh, &outcome);
+                    } else {
+                        let steps = Steps { complexity: true, ..Steps::default() };
+                        let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source: std::mem::take(&mut fresh.bytes), steps };
 
-                    rescores.push((outcomes.len(), helper.submit(request)?));
+                        rescores.push((outcomes.len(), fresh, helper.submit(request)?));
+                    }
                 }
 
                 Some(outcome)
@@ -49,11 +53,12 @@ pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayo
         outcomes.extend(outcome);
     }
 
-    for (index, ticket) in rescores {
+    for (index, fresh, ticket) in rescores {
         let reply = ticket.wait()?;
 
         if reply.error.is_none() {
             outcomes[index].complexity = reply.complexity;
+            run.cache.put_fresh(&fresh, &outcomes[index]);
         }
     }
 
@@ -61,28 +66,23 @@ pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayo
 }
 
 fn submit<'f>(run: &Run<'_>, helper: &Helper, file: &'f SourceFile) -> Result<Pending<'f>, GoError> {
-    let source = match fs::read(&file.abs) {
-        Ok(source) => source,
+    let fresh = match run.cache.read(run.mode, &file.rel, &file.abs) {
+        Ok(Lookup::Hit(outcome)) => return Ok(Pending::Done(Some(outcome))),
+        Ok(Lookup::Miss(fresh)) => fresh,
         Err(e) => return Ok(Pending::Done(Some(FileOutcome::failed(&file.rel, Some(Lang::Go), format!("read: {e}"))))),
     };
 
-    let key = run.cache.key(run.mode, &file.rel, &source);
-
-    if let Some(outcome) = run.cache.get(&key) {
-        return Ok(Pending::Done(Some(outcome)));
-    }
-
-    if std::str::from_utf8(&source).is_ok_and(fmtkit_discover::is_generated) {
+    if std::str::from_utf8(&fresh.bytes).is_ok_and(fmtkit_discover::is_generated) {
         return Ok(Pending::Done(None));
     }
 
     let steps = steps(run.config, &file.abs);
-    let ticket = helper.submit(Request { rel: file.rel.clone(), abs: file.abs.clone(), source: source.clone(), steps })?;
+    let ticket = helper.submit(Request { rel: file.rel.clone(), abs: file.abs.clone(), source: fresh.bytes.clone(), steps })?;
 
-    Ok(Pending::Waiting { file, key, source, ticket })
+    Ok(Pending::Waiting { file, fresh, ticket })
 }
 
-fn finish(run: &Run<'_>, file: &SourceFile, key: Key, source: &[u8], reply: Reply) -> FileOutcome {
+fn finish(run: &Run<'_>, file: &SourceFile, fresh: &Fresh, reply: Reply) -> FileOutcome {
     let mut outcome = FileOutcome::new(&file.rel, Some(Lang::Go));
 
     if let Some(error) = reply.error {
@@ -91,13 +91,13 @@ fn finish(run: &Run<'_>, file: &SourceFile, key: Key, source: &[u8], reply: Repl
         return outcome;
     }
 
-    outcome.changed = reply.output != source;
+    outcome.changed = reply.output != fresh.bytes;
     outcome.applied = reply.applied;
     outcome.violations = reply.violations;
     outcome.complexity = reply.complexity;
 
     if !outcome.changed {
-        run.cache.put(key, &outcome);
+        run.cache.put_fresh(fresh, &outcome);
 
         return outcome;
     }

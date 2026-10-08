@@ -639,6 +639,7 @@ dependencies = [
  "fmtkit-core",
  "gix",
  "ignore",
+ "rayon",
  "tempfile",
  "thiserror",
 ]
@@ -666,7 +667,9 @@ dependencies = [
 name = "fmtkit-go"
 version = "2.0.0"
 dependencies = [
+ "blake3",
  "crossbeam-channel",
+ "dirs",
  "fmtkit-core",
  "ignore",
  "proptest",

@@ -80,14 +80,17 @@ struct Text {
 }
 
 impl Text {
-    fn paint(&self, style: &str, text: &str) -> String {
-        if self.color { format!("\x1b[{style}m{text}\x1b[0m") } else { text.to_owned() }
+    /// Push `text` in `style`.
+    fn paint(&mut self, style: &str, text: &str) {
+        if self.color {
+            let _ = write!(self.out, "\x1b[{style}m{text}\x1b[0m");
+        } else {
+            self.out.push_str(text);
+        }
     }
 
     fn line(&mut self, style: &str, text: &str) {
-        let painted = self.paint(style, text);
-
-        self.out.push_str(&painted);
+        self.paint(style, text);
         self.out.push('\n');
     }
 
@@ -95,9 +98,16 @@ impl Text {
         self.out.push('\n');
     }
 
-    /// Push `message`, indenting its continuation lines under the first.
+    /// Push `message` and a newline, indenting its continuation lines under the first.
     fn message(&mut self, message: &str) {
-        self.out.push_str(&message.replace('\n', "\n      "));
+        for (index, part) in message.split('\n').enumerate() {
+            if index > 0 {
+                self.out.push_str("\n      ");
+            }
+
+            self.out.push_str(part);
+        }
+
         self.out.push('\n');
     }
 
@@ -111,10 +121,9 @@ impl Text {
         }
 
         if let Some(error) = group.error {
-            let painted = self.paint(RED, &format!("    ! {error}"));
+            let painted = if self.color { format!("\x1b[{RED}m    ! {error}\x1b[0m") } else { format!("    ! {error}") };
 
-            self.out.push_str(&painted.replace('\n', "\n      "));
-            self.out.push('\n');
+            self.message(&painted);
         }
 
         if let Some(applied) = group.applied.filter(|_| show_applied) {
@@ -132,19 +141,25 @@ impl Text {
     }
 
     fn item(&mut self, item: &Item<'_>) {
-        let rule = self.paint(MAGENTA, &format!("[{}]", item.rule));
-        let location = match (item.line, item.column) {
-            (0, _) => String::new(),
-            (line, 0) => format!("line {line}: "),
-            (line, column) => format!("line {line}:{column}: "),
+        self.out.push_str("    ");
+
+        if self.color {
+            let _ = write!(self.out, "\x1b[{MAGENTA}m[{}]\x1b[0m ", item.rule);
+        } else {
+            let _ = write!(self.out, "[{}] ", item.rule);
+        }
+
+        let _ = match (item.line, item.column) {
+            (0, _) => Ok(()),
+            (line, 0) => write!(self.out, "line {line}: "),
+            (line, column) => write!(self.out, "line {line}:{column}: "),
         };
 
-        let warning = match item.severity {
-            Severity::Warning => format!("{}: ", self.paint(YELLOW, "warning")),
-            Severity::Error => String::new(),
-        };
+        if item.severity == Severity::Warning {
+            self.paint(YELLOW, "warning");
+            self.out.push_str(": ");
+        }
 
-        let _ = write!(self.out, "    {rule} {location}{warning}");
         self.message(item.message);
     }
 

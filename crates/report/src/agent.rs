@@ -18,18 +18,22 @@ pub(crate) fn render(report: &Report) -> String {
         let path = if group.file.is_empty() { "workspace" } else { group.file };
 
         for item in &group.items {
-            let location = match (item.line, item.column) {
-                (0, _) => path.to_owned(),
-                (line, 0) => format!("{path}:{line}"),
-                (line, column) => format!("{path}:{line}:{column}"),
+            let _ = match (item.line, item.column) {
+                (0, _) => write!(out, "{path}"),
+                (line, 0) => write!(out, "{path}:{line}"),
+                (line, column) => write!(out, "{path}:{line}:{column}"),
             };
 
             let warning = if item.severity == Severity::Warning { "warning: " } else { "" };
-            let _ = writeln!(out, "{location} {} {warning}{}", item.rule, one_line(item.message));
+            let _ = write!(out, " {} {warning}", item.rule);
+
+            one_line(&mut out, item.message);
         }
 
         if let Some(error) = group.error {
-            let _ = writeln!(out, "{path} error {}", one_line(error));
+            let _ = write!(out, "{path} error ");
+
+            one_line(&mut out, error);
         }
 
         if let Some(applied) = group.applied {
@@ -64,6 +68,16 @@ pub(crate) fn render(report: &Report) -> String {
     out
 }
 
-fn one_line(message: &str) -> String {
-    message.trim_end().replace('\r', "").replace('\n', "\\n")
+/// Push `message` and a newline, dropping carriage returns and escaping
+/// newlines as `\n`.
+fn one_line(out: &mut String, message: &str) {
+    for (index, part) in message.trim_end().split('\n').enumerate() {
+        if index > 0 {
+            out.push_str("\\n");
+        }
+
+        out.extend(part.chars().filter(|&c| c != '\r'));
+    }
+
+    out.push('\n');
 }

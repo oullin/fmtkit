@@ -18,6 +18,7 @@ use gix::status::tree_index::TrackRenames;
 use crate::filter::Filter;
 use crate::memory::{Memory, Staged, Stamp, settled_before};
 use crate::walk::{self, Rules};
+use crate::watch::{Baseline, Sight, Touched, Tracking, Watch};
 use crate::{DiscoverError, SourceFile, Walked};
 
 /// Tracked files that differ from `HEAD` in the index or the worktree, plus
@@ -33,6 +34,10 @@ pub(crate) fn changed(repository: &mut Repository, root: &Path, filter: &Arc<Fil
     let shared = repo.clone().into_sync();
     let ignore_case = ignore_case(&repo);
     let rules = rules(&repo, ignore_case);
+    let mut watch = repository.watched(root);
+    let (mut tracking, sight) = watch.as_deref_mut().map(Watch::split).unzip();
+    // A listing is replayed from memory only.
+    let sight = sight.filter(|_| memory.is_some());
 
     // The worktree comparison is the longest of the three; the tracked set
     // only the walk needs is built on the walk's thread.
@@ -41,12 +46,16 @@ pub(crate) fn changed(repository: &mut Repository, root: &Path, filter: &Arc<Fil
         let untracked = scope.spawn(|| {
             let tracked = Tracked::new(&index, ignore_case);
 
-            walk::walk(root, filter, &rules, memory, |rel| !tracked.visit(rel)).map(|walked| walked.files)
+            walk::walk(root, filter, &rules, memory, sight.as_ref(), |rel| !tracked.visit(rel)).map(|walked| walked.files)
         });
-        let worktree = worktree(&repo, &index, &patterns, filter);
+        let worktree = worktree(&repo, &index, &patterns, filter, tracking.as_mut());
 
         (join(staged), worktree, join(untracked))
     });
+
+    if let (Some(seen), Some(watch)) = (sight.map(Sight::into_seen), watch) {
+        watch.settle(root, seen);
+    }
 
     let (mut files, removed) = worktree?;
 
@@ -78,11 +87,18 @@ pub(crate) fn all(repository: &mut Repository, root: &Path, filter: &Arc<Filter>
         return Ok(Walked { files, modules: Vec::new() });
     }
 
-    let mut walked = walk::walk(root, filter, &rules(&repo, tracked.ignore_case), memory, |rel| {
+    let mut watch = repository.watched(root).filter(|_| memory.is_some());
+    let sight = watch.as_deref_mut().map(|watch| watch.split().1);
+
+    let mut walked = walk::walk(root, filter, &rules(&repo, tracked.ignore_case), memory, sight.as_ref(), |rel| {
         tracked.visit(rel);
 
         true
     })?;
+
+    if let (Some(seen), Some(watch)) = (sight.map(Sight::into_seen), watch) {
+        watch.settle(root, seen);
+    }
 
     for rel in tracked.unvisited() {
         if let Some(file) = filter.source_file(rel)
@@ -158,6 +174,11 @@ pub struct Repository {
     /// until [`Repository::next_run`], and nothing is kept until then.
     settled: Option<i64>,
     kept: Option<Kept>,
+    watching: bool,
+    /// The watch on the work tree at the path, while watching.
+    watch: Option<(PathBuf, Watch)>,
+    /// Why watching stopped, until asked.
+    failure: Option<String>,
 }
 
 struct Kept {
@@ -172,6 +193,69 @@ impl Repository {
     /// settled; the repository is kept for the runs after it.
     pub fn next_run(&mut self, now: SystemTime) {
         self.settled = Some(settled_before(now));
+    }
+
+    /// Watch the work tree from now on, so each run compares and lists only
+    /// what changed since the one before; see [`crate::watch`]. Where the
+    /// platform has no watcher, or the watch fails, runs look at everything
+    /// again, and [`Repository::watch_failure`] says why.
+    pub fn watch(&mut self) {
+        self.watching = true;
+    }
+
+    /// Why watching stopped, once.
+    pub fn watch_failure(&mut self) -> Option<String> {
+        self.stop_failed_watch();
+        self.failure.take()
+    }
+
+    fn stop_failed_watch(&mut self) {
+        if let Some((_, watch)) = &mut self.watch
+            && let Some(failure) = watch.failure.take()
+        {
+            self.stop_watching(failure);
+        }
+    }
+
+    fn stop_watching(&mut self, failure: String) {
+        self.watching = false;
+        self.watch = None;
+        self.failure = Some(failure);
+    }
+
+    /// The watch on the work tree at `root`, with what was reported since
+    /// the last run taken; `None` when not watching.
+    fn watched(&mut self, root: &Path) -> Option<&mut Watch> {
+        self.stop_failed_watch();
+
+        if !self.watching {
+            return None;
+        }
+
+        if self.watch.as_ref().is_some_and(|(watched, _)| watched != root) {
+            self.watch = None;
+        }
+
+        if self.watch.is_none() {
+            match Watch::new() {
+                Ok(watch) => self.watch = Some((root.to_path_buf(), watch)),
+                Err(err) => {
+                    self.stop_watching(err.to_string());
+
+                    return None;
+                }
+            }
+        }
+
+        let begun = self.watch.as_mut().map(|(_, watch)| watch.begin());
+
+        if let Some(Err(err)) = begun {
+            self.stop_watching(err.to_string());
+
+            return None;
+        }
+
+        self.watch.as_mut().map(|(_, watch)| watch)
     }
 
     /// The repository at `root`: the kept one while its files are
@@ -332,9 +416,10 @@ fn worktree(
     index: &gix::worktree::Index,
     patterns: &[BString],
     filter: &Filter,
+    tracking: Option<&mut Tracking<'_>>,
 ) -> Result<(Vec<SourceFile>, HashSet<String>), DiscoverError> {
     if patterns.is_empty()
-        && let Some(suspects) = repo.workdir().and_then(|workdir| suspects(workdir, index))
+        && let Some(suspects) = repo.workdir().and_then(|workdir| suspects(workdir, index, tracking))
         && suspects.len() <= SUSPECTS
     {
         if suspects.is_empty() {
@@ -351,20 +436,147 @@ fn worktree(
 
 /// The paths of the index entries whose worktree copy stat cannot vouch for,
 /// or `None` where the platform keeps no comparable stat data.
-fn suspects<'i>(workdir: &Path, index: &'i gix::index::State) -> Option<Vec<&'i BStr>> {
-    let entries = index.entries();
-    let chunk = entries.len().div_ceil(STATTERS).max(1);
+fn suspects<'i>(workdir: &Path, index: &'i gix::index::File, tracking: Option<&mut Tracking<'_>>) -> Option<Vec<&'i BStr>> {
+    if !cfg!(unix) {
+        return None;
+    }
 
-    let suspects = thread::scope(|scope| {
-        let parts: Vec<_> = entries
-            .chunks(chunk)
-            .map(|part| scope.spawn(move || part.iter().filter(|entry| !vouched(workdir, index, entry)).map(|entry| entry.path(index)).collect::<Vec<_>>()))
-            .collect();
+    if let Some(tracking) = tracking
+        && let Some(suspects) = watched_suspects(workdir, index, tracking)
+    {
+        return Some(suspects);
+    }
+
+    let entries: Vec<_> = index.entries().iter().collect();
+
+    Some(entries.iter().zip(vouch(workdir, index, &entries)).filter(|(_, vouched)| !vouched).map(|(entry, _)| entry.path(index)).collect())
+}
+
+/// [`suspects`] under a watch, which looks only at the entries the watch
+/// cannot vouch for: the ones the last run under the same index found
+/// suspect or could not watch, and the ones a change was reported for. Each
+/// entry looked at, and every directory above it, is watched before the
+/// look. `None` when the index has no checksum, or the watch failed.
+fn watched_suspects<'i>(workdir: &Path, index: &'i gix::index::File, tracking: &mut Tracking<'_>) -> Option<Vec<&'i BStr>> {
+    let touched = std::mem::take(tracking.touched);
+
+    let Some(key) = index_key(index) else {
+        *tracking.baseline = None;
+
+        return None;
+    };
+
+    let entries = index.entries();
+    let same = tracking.baseline.as_ref().is_some_and(|baseline| baseline.index == key);
+
+    let picked: Vec<usize> = match tracking.baseline.as_ref() {
+        Some(baseline) if same => {
+            let mut picked = baseline.recheck.clone();
+
+            picked.extend(reported(index, &touched));
+            picked.sort_unstable();
+            picked.dedup();
+            picked
+        }
+        _ => (0..entries.len()).filter(|&at| !exempt(&entries[at])).collect(),
+    };
+
+    let rels: Vec<&str> = picked.iter().filter_map(|&at| entries[at].path(index).to_str().ok()).collect();
+
+    if !tracking.watch_files(workdir, rels.iter().copied()) {
+        return None;
+    }
+
+    if !same {
+        tracking.keep_files(&rels.iter().copied().collect());
+    }
+
+    let looked: Vec<_> = picked.iter().map(|&at| &entries[at]).collect();
+    let vouched = vouch(workdir, index, &looked);
+    let mut suspects = Vec::new();
+    let mut recheck = Vec::new();
+
+    for ((&at, entry), vouched) in picked.iter().zip(looked).zip(vouched) {
+        let path = entry.path(index);
+
+        if !vouched {
+            suspects.push(path);
+        }
+
+        if !vouched || !path.to_str().is_ok_and(|rel| tracking.covers(rel)) {
+            recheck.push(at);
+        }
+    }
+
+    *tracking.baseline = Some(Baseline { index: key, recheck });
+
+    Some(suspects)
+}
+
+/// The positions of the entries a report may concern: the files reported,
+/// the files directly in a directory reported, and every file below a
+/// directory removed or renamed.
+fn reported(index: &gix::index::State, touched: &Touched) -> Vec<usize> {
+    let entries = index.entries();
+    let mut picked = Vec::new();
+
+    for path in &touched.paths {
+        if let Ok(at) = index.entry_index_by_path(path.as_bytes().as_bstr()) {
+            picked.push(at);
+        }
+
+        let prefix = if path.is_empty() { String::new() } else { format!("{path}/") };
+
+        if let Some(range) = index.prefixed_entries_range(prefix.as_bytes().as_bstr()) {
+            picked.extend(range.filter(|&at| !entries[at].path(index)[prefix.len()..].contains(&b'/')));
+        }
+    }
+
+    for subtree in &touched.subtrees {
+        let prefix = if subtree.is_empty() { String::new() } else { format!("{subtree}/") };
+
+        picked.extend(index.prefixed_entries_range(prefix.as_bytes().as_bstr()).into_iter().flatten());
+    }
+
+    picked
+}
+
+/// What names the index's content: its checksum, and its timestamp, which
+/// decides which entries are racy.
+fn index_key(index: &gix::index::File) -> Option<Vec<u8>> {
+    let checksum = index.checksum().filter(|checksum| !checksum.is_null())?;
+    let timestamp = index.timestamp();
+    let mut key = checksum.as_bytes().to_vec();
+
+    key.extend(timestamp.unix_seconds().to_le_bytes());
+    key.extend(timestamp.nanoseconds().to_le_bytes());
+
+    Some(key)
+}
+
+/// Whether `entries` are vouched for, compared on a few threads when there
+/// are many.
+fn vouch(workdir: &Path, index: &gix::index::State, entries: &[&gix::index::Entry]) -> Vec<bool> {
+    if entries.len() <= SUSPECTS {
+        return entries.iter().map(|entry| vouched(workdir, index, entry)).collect();
+    }
+
+    let chunk = entries.len().div_ceil(STATTERS);
+
+    thread::scope(|scope| {
+        let parts: Vec<_> =
+            entries.chunks(chunk).map(|part| scope.spawn(move || part.iter().map(|entry| vouched(workdir, index, entry)).collect::<Vec<_>>())).collect();
 
         parts.into_iter().flat_map(join).collect()
-    });
+    })
+}
 
-    cfg!(unix).then_some(suspects)
+/// Whether git never reports `entry` here: it is not a file, or git is told
+/// to leave its worktree copy alone.
+fn exempt(entry: &gix::index::Entry) -> bool {
+    use gix::index::entry::Flags;
+
+    !is_file(entry.mode) || entry.flags.intersects(Flags::SKIP_WORKTREE | Flags::ASSUME_VALID)
 }
 
 /// Whether `entry` needs no closer look: git does not report it here, or its
@@ -377,7 +589,7 @@ fn vouched(workdir: &Path, index: &gix::index::State, entry: &gix::index::Entry)
 
     use gix::index::entry::Flags;
 
-    if !is_file(entry.mode) || entry.flags.intersects(Flags::SKIP_WORKTREE | Flags::ASSUME_VALID) {
+    if exempt(entry) {
         return true;
     }
 
@@ -452,4 +664,72 @@ fn status(
     }
 
     Ok((files, removed))
+}
+
+#[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command;
+    use std::time::{Duration, SystemTime};
+
+    use super::Repository;
+    use crate::{Memory, Scope, discover_with};
+
+    fn git(root: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .args(["-c", "user.name=fmtkit", "-c", "user.email=fmtkit@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(root)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap();
+
+        assert!(status.success(), "git {args:?}");
+    }
+
+    #[test]
+    fn a_quiet_watched_run_looks_at_nothing() {
+        let repo = tempfile::tempdir().unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let root = repo.path();
+
+        git(root, &["init", "-q"]);
+
+        for rel in ["a.ts", "src/b.ts", "src/deep/c.ts"] {
+            fs::create_dir_all(root.join(rel).parent().unwrap()).unwrap();
+            fs::write(root.join(rel), "export {};\n").unwrap();
+            fs::File::options().write(true).open(root.join(rel)).unwrap().set_modified(SystemTime::now() - Duration::from_secs(3600)).unwrap();
+        }
+
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-q", "-m", "init"]);
+
+        let mut memory = Memory::open(store.path().join("dirs"));
+        let mut repository = Repository::default();
+
+        repository.watch();
+
+        for _ in 0..2 {
+            let later = SystemTime::now() + Duration::from_secs(60);
+
+            memory.next_run(later);
+            repository.next_run(later);
+
+            let found = discover_with(root, &Scope::default(), &fmtkit_config::Files::default(), Some(&memory), &mut repository).unwrap();
+
+            memory.save().unwrap();
+            assert_eq!(found.files, Vec::new());
+        }
+
+        let (_, watch) = repository.watch.as_ref().unwrap();
+        let mut clean: Vec<_> = watch.clean.keys().map(String::as_str).collect();
+
+        clean.sort_unstable();
+
+        assert_eq!(watch.baseline.as_ref().unwrap().recheck, Vec::<usize>::new());
+        assert_eq!(clean, ["", "src", "src/deep"]);
+        assert_eq!(repository.failure, None);
+    }
 }

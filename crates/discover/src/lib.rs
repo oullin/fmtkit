@@ -16,6 +16,7 @@ mod generated;
 mod git;
 mod memory;
 mod walk;
+mod watch;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

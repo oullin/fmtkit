@@ -327,6 +327,18 @@ fmtkit: answered in 3.1 ms with exit 0
 - **Upgrades.** When its executable changes on disk, the server refuses the next run and stops.
 - **Local only.** `--no-cache` and `--stdin-filepath` always run locally.
 
+#### Watching
+
+`fmtkit serve --watch` also has the kernel report every change to the repository between runs: kqueue on macOS, inotify on Linux. A run then compares only the files reported since the last run with the index, and lists only the directories reported, rather than checking every file and directory in the repository.
+
+```sh
+fmtkit serve --watch
+```
+
+- **Same results.** A watched run reports exactly what an unwatched one would. A change to the index, a flood of changes, or reports the kernel dropped make the next run look at everything again.
+- **Limits.** On macOS the server holds one open file per tracked file and directory, and raises its open file limit to fit. On Linux it holds one inotify watch per directory, within `fs.inotify.max_user_watches`. A server that cannot watch logs why, and goes on serving without the watch.
+- **Platforms.** Watching needs macOS or Linux.
+
 The server listens on a Unix socket beside the cache, readable and writable only by its owner. A second `fmtkit serve` for the same repository exits with code 2. A server that was killed leaves its socket behind; the next `fmtkit serve` replaces it. `serve` is not available on Windows.
 
 ### Environment variables

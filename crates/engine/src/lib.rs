@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use fmtkit_cache::{Cache, Key};
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
-use fmtkit_discover::{Discovery, Scope, SourceFile};
+use fmtkit_discover::{Discovery, Memory, Scope, SourceFile};
 use fmtkit_go::{GoError, Helper, VetMemo, VetTargets};
 use fmtkit_lint::{LintError, Linter};
 
@@ -70,12 +70,23 @@ pub(crate) struct Run<'a> {
 pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Report, EngineError> {
     let lints = selected_lanes(&options.scope).contains(&Lane::Ts);
 
-    // The store and the linter do not depend on the file list, so they load
-    // while discovery walks the tree. A linter no file needs is dropped.
+    let cache = Cache::open(&options.root, config.hash(), options.cache);
+
+    // Directory listings are kept beside the outcomes, and only when they are.
+    let memory = cache.path().map(|path| Memory::open(path.with_extension("dirs")));
+
+    // The stores and the linter do not depend on the file list, so they load
+    // while discovery opens the repository and walks the tree. A linter no
+    // file needs is dropped.
     let (discovery, cache, linter) = thread::scope(|s| {
-        let cache = s.spawn(|| Cache::open(&options.root, config.hash(), options.cache).loaded());
+        let cache = s.spawn(|| cache.loaded());
         let linter = lints.then(|| s.spawn(|| Linter::new(&config.lint)));
-        let discovery = fmtkit_discover::discover(&options.root, &options.scope, &config.files);
+
+        if let Some(memory) = &memory {
+            s.spawn(|| memory.load());
+        }
+
+        let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref());
 
         (discovery, join(cache), linter.map(join))
     });
@@ -116,6 +127,7 @@ pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Re
 
     // A failed flush only costs the next run its warm start.
     let _ = cache.flush();
+    let _ = memory.map(Memory::save);
 
     progress.finish();
 

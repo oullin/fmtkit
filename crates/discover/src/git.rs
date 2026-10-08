@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-use gix::bstr::{BStr, ByteSlice};
+use gix::bstr::{BStr, BString, ByteSlice};
 use gix::diff::index::ChangeRef;
 use gix::index::entry::Mode;
 use gix::status::UntrackedFiles;
@@ -15,6 +15,7 @@ use gix::status::plumbing::index_as_worktree::{Change, EntryStatus};
 use gix::status::tree_index::TrackRenames;
 
 use crate::filter::Filter;
+use crate::memory::Memory;
 use crate::walk::{self, Rules};
 use crate::{DiscoverError, SourceFile, Walked};
 
@@ -24,7 +25,7 @@ use crate::{DiscoverError, SourceFile, Walked};
 ///
 /// The three comparisons (`HEAD` against the index, the index against the
 /// worktree, and the untracked walk) run on their own threads.
-pub(crate) fn changed(root: &Path, filter: &Arc<Filter>) -> Result<Vec<SourceFile>, DiscoverError> {
+pub(crate) fn changed(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Vec<SourceFile>, DiscoverError> {
     let repo = open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
     let patterns = filter.pathspecs();
@@ -34,7 +35,7 @@ pub(crate) fn changed(root: &Path, filter: &Arc<Filter>) -> Result<Vec<SourceFil
 
     let (staged, worktree, untracked) = thread::scope(|scope| {
         let staged = scope.spawn(|| staged(&shared.to_thread_local(), &index, filter));
-        let untracked = scope.spawn(|| walk::walk(root, filter, &rules, |rel| !tracked.visit(rel)).map(|walked| walked.files));
+        let untracked = scope.spawn(|| walk::walk(root, filter, &rules, memory, |rel| !tracked.visit(rel)).map(|walked| walked.files));
         let worktree = worktree(&repo, &index, &patterns, filter);
 
         (join(staged), worktree, join(untracked))
@@ -57,7 +58,7 @@ pub(crate) fn changed(root: &Path, filter: &Arc<Filter>) -> Result<Vec<SourceFil
 /// does not reach (ignored ones, or ones under an ignored directory) are
 /// looked up one by one. When the scope names only tracked files, nothing is
 /// walked.
-pub(crate) fn all(root: &Path, filter: &Arc<Filter>) -> Result<Walked, DiscoverError> {
+pub(crate) fn all(root: &Path, filter: &Arc<Filter>, memory: Option<&Memory>) -> Result<Walked, DiscoverError> {
     let repo = open(root)?;
     let index = repo.index_or_empty().map_err(git)?;
     let tracked = Tracked::new(&index, ignore_case(&repo));
@@ -70,7 +71,7 @@ pub(crate) fn all(root: &Path, filter: &Arc<Filter>) -> Result<Walked, DiscoverE
         return Ok(Walked { files, modules: Vec::new() });
     }
 
-    let mut walked = walk::walk(root, filter, &rules(&repo, &tracked), |rel| {
+    let mut walked = walk::walk(root, filter, &rules(&repo, &tracked), memory, |rel| {
         tracked.visit(rel);
 
         true
@@ -188,12 +189,111 @@ fn staged(repo: &gix::Repository, index: &gix::index::State, filter: &Filter) ->
     Ok(files)
 }
 
+/// Past this many entries that stat alone cannot vouch for, gix checks the
+/// whole index rather than a pathspec per entry.
+const SUSPECTS: usize = 256;
+
+/// Threads comparing the index with the worktree; file status calls contend
+/// in the kernel past a handful.
+const STATTERS: usize = 4;
+
 /// Tracked files whose worktree copy differs from the index, and the paths
 /// that no longer exist as files in the worktree.
+///
+/// Every tracked file is first compared with its index entry by stat alone,
+/// in parallel. An entry whose stat matches exactly, and that was written
+/// before the index was, is clean, as git assumes; only the rest go to gix,
+/// which reads a file's content when its stat cannot decide.
 fn worktree(
     repo: &gix::Repository,
     index: &gix::worktree::Index,
-    patterns: &[gix::bstr::BString],
+    patterns: &[BString],
+    filter: &Filter,
+) -> Result<(Vec<SourceFile>, HashSet<String>), DiscoverError> {
+    if patterns.is_empty()
+        && let Some(suspects) = repo.workdir().and_then(|workdir| suspects(workdir, index))
+        && suspects.len() <= SUSPECTS
+    {
+        if suspects.is_empty() {
+            return Ok((Vec::new(), HashSet::new()));
+        }
+
+        let specs: Vec<BString> = suspects.into_iter().map(|path| [b":(top,literal)".as_slice(), path.as_ref()].concat().into()).collect();
+
+        return status(repo, index, &specs, filter);
+    }
+
+    status(repo, index, patterns, filter)
+}
+
+/// The paths of the index entries whose worktree copy stat cannot vouch for,
+/// or `None` where the platform keeps no comparable stat data.
+fn suspects<'i>(workdir: &Path, index: &'i gix::index::State) -> Option<Vec<&'i BStr>> {
+    let entries = index.entries();
+    let chunk = entries.len().div_ceil(STATTERS).max(1);
+
+    let suspects = thread::scope(|scope| {
+        let parts: Vec<_> = entries
+            .chunks(chunk)
+            .map(|part| scope.spawn(move || part.iter().filter(|entry| !vouched(workdir, index, entry)).map(|entry| entry.path(index)).collect::<Vec<_>>()))
+            .collect();
+
+        parts.into_iter().flat_map(join).collect()
+    });
+
+    cfg!(unix).then_some(suspects)
+}
+
+/// Whether `entry` needs no closer look: git does not report it here, or its
+/// file's stat matches the index exactly and the entry is not racy (written
+/// in the same second as the index, so a later change could share its
+/// timestamp).
+#[cfg(unix)]
+fn vouched(workdir: &Path, index: &gix::index::State, entry: &gix::index::Entry) -> bool {
+    use std::os::unix::fs::MetadataExt;
+
+    use gix::index::entry::Flags;
+
+    if !is_file(entry.mode) || entry.flags.intersects(Flags::SKIP_WORKTREE | Flags::ASSUME_VALID) {
+        return true;
+    }
+
+    if entry.stage_raw() != 0 || entry.flags.contains(Flags::INTENT_TO_ADD) {
+        return false;
+    }
+
+    let Some(meta) = gix::path::try_from_bstr(entry.path(index)).ok().and_then(|rel| fs::symlink_metadata(workdir.join(rel)).ok()) else {
+        return false;
+    };
+
+    let stat = &entry.stat;
+    let executable = meta.mode() & 0o111 != 0;
+
+    meta.is_file()
+        && i64::from(stat.mtime.secs) < index.timestamp().unix_seconds()
+        && (low(meta.mtime()), low(meta.mtime_nsec())) == (stat.mtime.secs, stat.mtime.nsecs)
+        && (low(meta.ctime()), low(meta.ctime_nsec())) == (stat.ctime.secs, stat.ctime.nsecs)
+        && (low(meta.size()), low(meta.ino()), meta.uid(), meta.gid()) == (stat.size, stat.ino, stat.uid, stat.gid)
+        && executable == (entry.mode == Mode::FILE_EXECUTABLE)
+}
+
+#[cfg(not(unix))]
+fn vouched(_workdir: &Path, _index: &gix::index::State, _entry: &gix::index::Entry) -> bool {
+    false
+}
+
+/// The low 32 bits, which is what the index keeps of times, sizes, and inodes.
+#[cfg(unix)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn low(value: impl Into<i128>) -> u32 {
+    value.into() as u32
+}
+
+/// gix's comparison of the index with the worktree, limited to `patterns`.
+fn status(
+    repo: &gix::Repository,
+    index: &gix::worktree::Index,
+    patterns: &[BString],
     filter: &Filter,
 ) -> Result<(Vec<SourceFile>, HashSet<String>), DiscoverError> {
     let iter = repo

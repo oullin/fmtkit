@@ -639,7 +639,9 @@ dependencies = [
  "fmtkit-core",
  "gix",
  "ignore",
+ "postcard",
  "rayon",
+ "serde",
  "tempfile",
  "thiserror",
 ]

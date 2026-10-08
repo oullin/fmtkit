@@ -673,7 +673,6 @@ dependencies = [
  "crossbeam-channel",
  "dirs",
  "fmtkit-core",
- "ignore",
  "proptest",
  "rustc-hash",
  "serde_json",

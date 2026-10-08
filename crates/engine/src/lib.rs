@@ -100,23 +100,18 @@ pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Re
         Some(linter) if script_files.iter().any(|f| f.lang.is_lintable()) => Some(linter?),
         _ => None,
     };
-    let helper = if go_files.is_empty() { None } else { Some(Helper::spawn(options.go_helper.as_deref())?) };
     let pool = rayon::ThreadPoolBuilder::new().num_threads(options.jobs.max(1)).build().map_err(|e| EngineError::Pool(e.to_string()))?;
     let state = Run { config, mode: options.mode, cache: &cache, linter: linter.as_ref(), progress };
 
     let (scripts, go, vet) = thread::scope(|s| {
         let vet = s.spawn(|| vet_for(config, options, &cache, &discovery, &go_files));
-        let go = helper.as_ref().map(|helper| s.spawn(|| go_lane::process(&state, helper, &go_files, &pool)));
+        let go = (!go_files.is_empty()).then(|| s.spawn(|| go_lane::process(&state, options.go_helper.as_deref(), &go_files, &pool)));
         let scripts: Vec<FileOutcome> = pool.install(|| script_files.par_iter().filter_map(|file| script_lane::process(&state, file)).collect());
 
         (scripts, go.map(join), join(vet))
     });
 
     let go = go.transpose()?.unwrap_or_default();
-
-    if let Some(helper) = helper {
-        helper.shutdown()?;
-    }
 
     let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).collect();
 

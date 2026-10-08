@@ -16,6 +16,9 @@ tap = "oullin/homebrew-fmtkit"
 formula = "fmtkit"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew", "./publish-docker"]
+# The Docker job checks out the repository and pushes to GHCR; a called
+# workflow may not ask for more than its caller grants.
+github-custom-job-permissions = { "publish-docker" = { contents = "read", packages = "write" } }
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
 # Ship the Go helper in every archive; the formula installs it to pkgshare,

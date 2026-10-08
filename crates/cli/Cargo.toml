@@ -4,7 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 publish.workspace = true
+description = "Formats and checks Go, TypeScript, JavaScript, Vue, HTML, and Markdown repositories."
+
+# The workspace is publish = false; this opts the binary into cargo-dist.
+[package.metadata.dist]
+dist = true
 
 [[bin]]
 name = "fmtkit"

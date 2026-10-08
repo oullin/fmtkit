@@ -4,18 +4,13 @@
 use oxc_ast::AstKind;
 use oxc_ast::ast::{Expression, ObjectPropertyKind};
 use oxc_semantic::AstNode;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::strip_parens;
 
 pub const NAME: &str = "anti-slop/no-conditional-empty-object-spread";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoConditionalEmptyObjectSpread))
-}
-
-struct NoConditionalEmptyObjectSpread;
+pub struct NoConditionalEmptyObjectSpread;
 
 impl Rule for NoConditionalEmptyObjectSpread {
     fn name(&self) -> &'static str {

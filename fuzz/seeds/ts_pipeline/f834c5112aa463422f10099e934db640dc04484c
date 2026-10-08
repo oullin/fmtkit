@@ -1,0 +1,2 @@
+import { and, eq, isNull } from 'drizzle-orm';
+const rows = await db.select().from(events).leftJoin(users, and(eq(events.userId, users.id), isNull(users.deletedAt)));

@@ -5,18 +5,13 @@ use oxc_ast::AstKind;
 use oxc_ast::ast::{TSType, TSTypeName};
 use oxc_semantic::AstNode;
 use oxc_span::{GetSpan, Span};
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::{comment_value, comments_before, is_js_space, parent};
 
 pub const NAME: &str = "anti-slop/require-safety-comment-for-type-assertion";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(RequireSafetyCommentForTypeAssertion))
-}
-
-struct RequireSafetyCommentForTypeAssertion;
+pub struct RequireSafetyCommentForTypeAssertion;
 
 impl Rule for RequireSafetyCommentForTypeAssertion {
     fn name(&self) -> &'static str {
@@ -73,7 +68,11 @@ fn has_safety_comment(ctx: &Context<'_, '_>, node: &AstNode<'_>, assertion: Span
 fn is_comment_owner(kind: AstKind<'_>) -> bool {
     matches!(
         kind,
-        AstKind::ExpressionStatement(_) | AstKind::PropertyDefinition(_) | AstKind::ReturnStatement(_) | AstKind::ThrowStatement(_) | AstKind::VariableDeclaration(_)
+        AstKind::ExpressionStatement(_)
+            | AstKind::PropertyDefinition(_)
+            | AstKind::ReturnStatement(_)
+            | AstKind::ThrowStatement(_)
+            | AstKind::VariableDeclaration(_)
     )
 }
 

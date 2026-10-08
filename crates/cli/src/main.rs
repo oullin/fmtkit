@@ -42,7 +42,7 @@ enum Command {
 #[derive(Args)]
 #[allow(clippy::struct_excessive_bools)]
 struct RunArgs {
-    /// Files or directories to cover. Defaults to the whole repository.
+    /// Files or directories to cover, changed or not. Without paths: the files changed against HEAD, or every file with --all.
     paths: Vec<PathBuf>,
 
     /// Cover every file, not only the ones changed against HEAD.
@@ -57,7 +57,7 @@ struct RunArgs {
     #[arg(long)]
     ts: bool,
 
-    /// Worker threads. Defaults to FMTKIT_JOBS, then `jobs` in fmtkit.toml, then one per CPU.
+    /// Worker threads; 0 means one per CPU. Defaults to FMTKIT_JOBS, then `jobs` in fmtkit.toml, then one per CPU.
     #[arg(long, short)]
     jobs: Option<usize>,
 
@@ -77,8 +77,9 @@ struct RunArgs {
     #[arg(long, value_enum, default_value_t = Color::Auto)]
     color: Color,
 
-    /// Read a source from stdin, format it as if it were at this path, and
-    /// print the result.
+    /// Read a source from stdin as if it were at this path. `format` prints
+    /// the formatted text; `check` prints nothing and exits 1 when formatting
+    /// would change it.
     #[arg(long, value_name = "PATH", conflicts_with_all = ["paths", "all"])]
     stdin_filepath: Option<PathBuf>,
 
@@ -130,7 +131,7 @@ fn run(mode: Mode, args: &RunArgs) -> ExitCode {
     config.go.resolve_imports |= args.resolve_imports;
 
     if let Some(path) = &args.stdin_filepath {
-        return format_stdin(&config, &root, &cwd.join(path));
+        return format_stdin(mode, &config, &root, &cwd.join(path));
     }
 
     let jobs = match config.resolve_jobs(args.jobs) {
@@ -167,10 +168,10 @@ fn run(mode: Mode, args: &RunArgs) -> ExitCode {
     let mut out = io::stdout().lock();
     let rendered = fmtkit_report::render(&report, fmtkit_report::Options { format, color, quiet: args.quiet }, &mut out).and_then(|()| out.flush());
 
-    if let Err(e) = rendered {
-        if e.kind() != io::ErrorKind::BrokenPipe {
-            return fail(EXIT_INTERNAL, &format!("write report: {e}"));
-        }
+    if let Err(e) = rendered
+        && e.kind() != io::ErrorKind::BrokenPipe
+    {
+        return fail(EXIT_INTERNAL, &format!("write report: {e}"));
     }
 
     match report.result {
@@ -179,7 +180,7 @@ fn run(mode: Mode, args: &RunArgs) -> ExitCode {
     }
 }
 
-fn format_stdin(config: &Config, root: &std::path::Path, path: &std::path::Path) -> ExitCode {
+fn format_stdin(mode: Mode, config: &Config, root: &std::path::Path, path: &std::path::Path) -> ExitCode {
     let mut source = String::new();
 
     if let Err(e) = io::stdin().read_to_string(&mut source) {
@@ -187,6 +188,13 @@ fn format_stdin(config: &Config, root: &std::path::Path, path: &std::path::Path)
     }
 
     match fmtkit_engine::format_text(config, root, path, &source, None) {
+        Ok(output) if mode == Mode::Check => {
+            if output == source {
+                ExitCode::SUCCESS
+            } else {
+                fail(EXIT_FINDINGS, &format!("{}: formatting would change it", path.display()))
+            }
+        }
         Ok(output) => {
             let mut out = io::stdout().lock();
 

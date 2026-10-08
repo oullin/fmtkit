@@ -1,120 +1,115 @@
 # fmtkit
 
-[![Go Reference](https://pkg.go.dev/badge/go.ollin.sh/fmtkit/driver.svg)](https://pkg.go.dev/go.ollin.sh/fmtkit/driver)
-[![Go 1.27.1](https://img.shields.io/badge/go-1.27.1-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/go1.27)
 [![Tests](https://github.com/oullin/fmtkit/actions/workflows/tests.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/tests.yml)
 [![Release](https://github.com/oullin/fmtkit/actions/workflows/release.yml/badge.svg)](https://github.com/oullin/fmtkit/actions/workflows/release.yml)
 
-One formatter for a Go + TypeScript repository. `fmtkit` enforces the layout rules `gofmt` and `oxfmt` leave alone, blank lines around control flow, declaration ordering, class member order; then hands off to the standard formatters for the final pass.
+fmtkit is one formatter and one gate for a repository that mixes Go with TypeScript, JavaScript, Vue, HTML, and Markdown. It runs the standard formatters, adds the layout rules they leave alone, lints, scores function complexity, and runs `go vet`. One command reports everything. One command fixes what can be fixed.
+
+This README describes fmtkit 2.0, a rewrite in Rust. Users of the 0.x releases should read [Migrating to 2.0](docs/migrating-to-2.0.md) first.
 
 ## What it is
 
-A single self-contained binary that formats both halves of a full-stack repo:
+fmtkit is a Rust binary, `fmtkit`, with one small companion, `fmtkit-go-helper`. The two ship together and must stay together.
 
-- **Go** — an AST-based spacing rule, then `gofmt` and `goimports`, plus an automatic `go vet ./...`.
-- **TypeScript / JavaScript / Vue** — `oxlint --fix`, then `oxfmt`, then structural passes for blank lines, class member order, and fluent chains. JavaScript includes `.js`, `.jsx`, `.mjs`, and `.cjs`. The tool also formats embedded TS blocks in Markdown and HTML.
+- **Go.** The helper applies fmtkit's spacing rule, then `gofmt`, then `goimports`, then scores complexity. fmtkit then runs `go vet`.
+- **Scripts.** TypeScript and JavaScript (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`) go through Oxlint fixes, the oxc formatter, and fmtkit's structural passes.
+- **Hosts.** Vue single-file components, HTML, and Markdown are formatted as whole documents. The scripts, styles, and code fences inside them are formatted too.
 
-Both halves also carry one non-formatting gate: `fmtkit complexity` scores every function's cyclomatic and cognitive complexity and reports the ones over your limits.
-
-The bundled toolchain is compiled with Bun and embedded in the binary, including Oxlint 1.86.0 and its three JS rule plugins. The default policy needs **no Node.js installation** or project `node_modules`. Projects that opt into an import-based Oxlint config need Node.js and a project-installed Oxlint; see [lint configuration](#tsjsvue-lint-oxlintrcjson).
-
-If you only want the Go half, `fmtkit-go` is a separate `go install`-able CLI, and the engine is importable as a library.
+The TypeScript side links oxc directly, pinned to `oxlint_v1.86.0` (Oxlint 1.86.0 and oxfmt 0.71.0). It needs no Node.js, no `node_modules`, and no network. The Go side needs no Go toolchain to format. It needs `go` on `PATH` only for `go vet` and for import resolution.
 
 ## Why
 
-`gofmt` is deliberately conservative: it normalizes indentation and alignment, but it will never tell you that a `return` should be preceded by a blank line, or that your `type` declarations belong at the top of the file. `oxfmt` is the same story on the TS side, they own whitespace within a statement, not the rhythm between statements.
+Standard formatters stop at token layout. They do not insert a blank line before a `return`, order class members, or keep imports grouped. Teams then enforce those rules in review, by hand, and inconsistently. fmtkit enforces them in the formatter, so review can discuss behaviour instead.
 
-That leaves a whole category of "style" that lives in review comments and team wikis, gets applied inconsistently, and produces diff noise when someone finally cleans it up. `fmtkit` moves those rules into the formatter, where they get applied the same way every time and stop being a thing people argue about.
+fmtkit also replaces a chain of tools with one command. Formatting, lint, complexity, and `go vet` share one file list, one cache, one report, and one exit code. CI and coding agents read one result.
 
-It is deliberately opinionated. There is one spacing rule with one shape, and the knobs are for turning things off, not for tuning them.
+## Who it is for
 
-## Who it's for
-
-- Teams with a **Go backend and a TS/Vue frontend in one repo** who are tired of running two toolchains with two config surfaces and two CI steps.
-- Anyone who wants **more structure than `gofmt` provides** and would rather not hand-maintain it.
-- **CI pipelines** that want a formatting gate with no daemon and no Node.js on the runner — a plain binary by default, or an image from GHCR if your CI is container-shaped.
-- **AI coding agents and scripts**, via the `json` and `agent` output modes.
-
-It is probably _not_ for you if you want a configurable style engine — fmtkit has opinions and only a few dials.
+fmtkit is for teams that keep Go and TypeScript in one repository and want one opinion about layout. It suits teams that accept fmtkit's defaults. It does not suit teams that need Prettier configuration parity or arbitrary ESLint plugins.
 
 ## Install
 
-Every route ships the same binary and produces identical output. Pick whichever fits.
+Install fmtkit with Homebrew, a release archive, or Docker. Every channel ships `fmtkit` and `fmtkit-go-helper` together.
 
-### Homebrew (recommended)
+### Homebrew
 
-```bash
-brew tap oullin/fmtkit
-brew install --cask fmtkit
-fmtkit format .
+The release workflow publishes a formula to the `oullin/homebrew-fmtkit` tap.
+
+```sh
+brew install oullin/fmtkit/fmtkit
 ```
 
-The binary embeds the TS toolchain (oxfmt, oxlint, oxc-parser and the support scripts) and extracts it to your user cache directory on first run.
+The formula installs the helper under the formula's `share/fmtkit` directory. fmtkit finds it there.
 
-### Linux / GitHub Releases
+### Release archives
 
-Homebrew casks are macOS-only. On Linux, grab the same binary directly:
+Each GitHub release carries one archive per target. The targets are `aarch64-apple-darwin`, `x86_64-apple-darwin`, `aarch64-unknown-linux-gnu`, and `x86_64-unknown-linux-gnu`. The archive is named `fmtkit-<target>.tar.xz`. It holds both binaries in one top-level directory.
 
-```bash
-tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/oullin/fmtkit/releases/latest | sed 's#.*/##')
-curl -fsSL "https://github.com/oullin/fmtkit/releases/download/${tag}/fmtkit_${tag#v}_linux_amd64.tar.gz" | tar -xz fmtkit
-sudo install -m 0755 fmtkit /usr/local/bin/fmtkit
-```
-
-Archives are published for `darwin`/`linux` × `amd64`/`arm64` with a `checksums.txt`; swap `linux_amd64` for your platform. The snippet resolves the [latest release](https://github.com/oullin/fmtkit/releases/latest) rather than naming a version, so it does not go stale. But **for CI, pin `tag` to a known release** so a new upstream version can't change your build.
+Place both binaries in the same directory on your `PATH`. fmtkit looks for the helper beside itself.
 
 ### Docker
 
-Every release also ships as a multi-arch image (`linux/amd64` + `linux/arm64`) at [ghcr.io/oullin/fmtkit](https://github.com/oullin/fmtkit/pkgs/container/fmtkit), for container-shaped CI and for machines where installing a binary is inconvenient:
+The release workflow publishes `ghcr.io/oullin/fmtkit` for `linux/amd64` and `linux/arm64`. Each release is tagged `v<version>` and `latest`. The image contains fmtkit, the helper, and Go 1.27.1 for `go vet`. It does not contain Git, and it does not need it: fmtkit reads the repository itself.
 
-```bash
-docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/work ghcr.io/oullin/fmtkit:latest format .
+```sh
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/oullin/fmtkit:latest check --all
 ```
 
-The container expects your repository bind-mounted at `/work`. `-u` keeps rewritten files owned by you rather than root. The image carries everything the pipeline needs — `git`, a Go toolchain (goimports and the automatic `go vet` pass need the `go` command), and the TS toolchain pre-extracted so there is no first-run cost. **For CI, pin a version tag** (`ghcr.io/oullin/fmtkit:vX.Y.Z`) instead of `latest`.
+The `-u` flag keeps written files owned by you. The working directory is `/work`. Without arguments, the image prints the help.
 
-#### Windows and WSL
+### From source
 
-There are no native Windows binaries; on Windows, the Docker image is the supported route.
+Building from source needs Rust 1.96 or newer and Go 1.27.1.
 
-- **WSL2** is a regular glibc Linux: use the [Linux install](#linux--github-releases) or the `docker run` command above unchanged. Keep the repository in the WSL filesystem (not `/mnt/c/...`) — bind mounts from the Windows drive are slow.
-- **Docker Desktop from PowerShell**: same image, Windows-shaped syntax — and skip `-u`, which is a Unix-ism that NTFS bind mounts don't need:
-
-    ```powershell
-    docker run --rm -v "${PWD}:/work" ghcr.io/oullin/fmtkit:latest format .
-    ```
-
-- **Line endings**: fmtkit writes LF (oxfmt's default; gofmt always does). A checkout made with `core.autocrlf=true` will show every line as changed on first format — set `core.autocrlf` to `false` (or `input`) and let `.gitattributes` own line endings.
-
-### Go install (Go-only CLI)
-
-```bash
-go install go.ollin.sh/fmtkit/driver/cmd/fmtkit-go@latest
-fmtkit-go check .
+```sh
+git clone https://github.com/oullin/fmtkit.git
+cd fmtkit
+make build
 ```
 
-This gives you `fmtkit-go`, the Go formatter alone; no TS/Vue support. Good for Go-only projects and for contributors.
+`make build` writes `storage/target/release/fmtkit` and `storage/go-helper/fmtkit-go-helper`. Copy both into one directory on your `PATH`.
 
-If it isn't on your `PATH` afterward: `export PATH="$(go env GOPATH)/bin:$PATH"`.
+### Finding the helper
+
+fmtkit stops with exit code 3 when it cannot find a compatible helper. It searches in this order:
+
+1. `FMTKIT_GO_HELPER`, when set. A path that is not an executable file is an error. There is no fallback.
+2. The directory of `fmtkit` as invoked.
+3. The directory of `fmtkit` after symlinks are resolved.
+4. `../share/fmtkit/` relative to the resolved `fmtkit`. This is the Homebrew layout.
+5. `PATH`.
+
+A helper is compatible when it speaks the same protocol and reports the same version. A helper built with the version `dev` passes the version check.
 
 ## Quickstart
 
-```bash
-fmtkit format .          # everything you changed, both languages
-fmtkit format --go .     # Go only
-fmtkit format --ts .     # TS/JS/Vue only
-fmtkit format-all        # the entire repository
-fmtkit check .           # report Go violations, write nothing
-fmtkit lint .            # report TS/JS/Vue lint violations, write nothing
+Run fmtkit from anywhere inside a Git repository. It works on the files you changed.
+
+```sh
+fmtkit check          # report on changed files; write nothing
+fmtkit format         # fix changed files in place, then report what is left
+fmtkit check --all    # report on every file in the repository
+fmtkit format --all   # fix every file in the repository
 ```
 
-In CI, use `format-all` (or `check`) — see [`format` vs `format-all`](#format-vs-format-all) for why the scope matters.
+A file counts as changed when it differs from `HEAD` in the work tree or the index, or when it is untracked and not ignored. A clean tree therefore checks nothing until you add `--all`.
+
+Use `check --all` in CI. It fails when any file would change and when any finding remains.
 
 ## What it does to your code
 
+fmtkit rewrites layout and applies safe lint fixes. It does not change behaviour on purpose. In scripts, every pass is checked: a file whose syntax tree changes in a way the pass did not intend is left untouched and reported as an error.
+
 ### Go
 
-Given this:
+Go files go through four steps, in this order:
+
+1. **Spacing.** fmtkit's own rule inserts blank lines around control flow, jump statements, block statements, standalone `var` declarations, and type declarations. It moves type declarations to the top of the file and repairs misplaced `//go:embed` directives. The [spacing rule reference](docs/spacing.md) lists every case with examples.
+2. **gofmt.** The standard Go formatter.
+3. **goimports.** By default it only groups and sorts imports. It does not add or remove them. Set `resolve_imports = true` under `[go]`, or pass `--resolve-imports`, to let it resolve imports. That mode reads the package directory and the module cache, and it is slow.
+4. **Complexity.** The helper scores every function after formatting. See [Complexity](#complexity).
+
+This is real input and output for the spacing rule:
 
 ```go
 func run(items []string) error {
@@ -127,11 +122,10 @@ func run(items []string) error {
 		return fmt.Errorf("empty")
 	}
 	r := result{n: total}
+	_ = r
 	return nil
 }
 ```
-
-`fmtkit format` produces:
 
 ```go
 func run(items []string) error {
@@ -148,409 +142,523 @@ func run(items []string) error {
 	}
 
 	r := result{n: total}
+	_ = r
 
 	return nil
 }
 ```
 
-The spacing rule in summary:
+After formatting, fmtkit runs `go vet` and reports its findings under the rule `go/vet`. With `--all` and no paths, it vets `./...` in every Go module of the repository. Otherwise it vets the packages of the Go files in scope. fmtkit skips `go vet` when `go` is not on `PATH`, when `[go] vet = false`, or when no Go file is in scope, and the report says why. `go vet` analyses whole packages, so it also reads Go files that `[files] exclude` hides from formatting.
 
-- Blank lines **before and after control flow** — `if`, `for`, `range`, `switch`, `select`, `defer`, `return`, `break`, `continue`, `goto`, `fallthrough`.
-- Separates standalone `var` declarations from surrounding statements when they aren't already grouped.
-- Blank lines around standalone stdlib `sort.*` / `slices.Sort*` and `rand.*` calls, and after `t.Helper()`.
-- Separates `type` declarations from their neighbors, and **hoists top-level `type` definitions** to the top of the file, after imports.
-- Blank line after anonymous-function assignments, and between top-level `routes.Add` / `routes.Group` calls.
+### TypeScript and JavaScript
 
-Full catalogue with before/after for every variant: [docs/spacing.md](docs/spacing.md).
+Scripts go through Oxlint, then a fixed schedule of passes:
 
-### TypeScript / JavaScript / Vue
+1. **Lint fixes.** Oxlint applies its safe fixes, in up to 10 rounds. The remaining findings are reported.
+2. **Body wrap.** Unbraced `if`, `else`, `with`, and loop bodies get braces. An `else if` stays as it is.
+3. **Class reorder.** Class members are ordered as properties, then constructors, then methods.
+4. **Declaration reorder.** In a run of consecutive imports or `const` declarations, single-line declarations come first. Multiline ones follow, separated by blank lines.
+5. **Blank lines.** Blank lines are inserted between statements where the statement-spacing policy requires them.
+6. **oxfmt.** The oxc formatter lays out the code with the options under `[ts.format]`.
+7. **Fluent chains.** A chain of two or more calls puts each link on its own line.
+8. **Drizzle queries.** In modules that import `drizzle-orm`, query arguments get a fixed layout.
+9. **Expanded calls.** A call with an argument that is itself a call, an object, or an array puts one argument on each line.
 
-The TS/JS lane runs `oxlint --fix` for safe lint fixes, then `oxfmt`, then these structural passes. It covers `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs`, while retaining Vue and embedded-code handling:
+The schedule repeats until the file stops changing. A file that still changes after three extra rounds is reported as an `idempotency` error and is left untouched.
 
-| Pass                     | What it does                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------ |
-| `BlankLinePass`          | The statement-spacing rules, mirroring the Go side.                            |
-| `ClassReorderPass`       | Reorders class members into a stable shape (properties, constructor, methods). |
-| `DeclarationReorderPass` | Reorders declarations, only where provably side-effect safe.                   |
-| `FluentChainPass`        | Splits fluent call chains so each link starts on its own line.                 |
-| `ExpandedCallPass`       | Expands structurally complex call arguments into stable multiline layouts.     |
-| `BodyWrapPass`           | Braces unbraced statement bodies.                                              |
+This is real input and output for a class:
 
-### What is never touched
+```diff
+ export class Store {
+-    load(id: string) { return id }
+-    private items: string[] = []
+-    constructor() {}
++	private items: Array<string> = [];
++
++	constructor() {}
++
++	load(id: string) {
++		return id;
++	}
+ }
+```
 
-When given directories, the engine walks recursively and always skips:
+The members were reordered, the body was expanded, and indentation changed to tabs. `string[]` became `Array<string>` through the bundled `typescript/array-type` fix.
 
-| Skipped                             | Reason                               |
-| ----------------------------------- | ------------------------------------ |
-| Hidden directories                  | Convention, not source code.         |
-| `.git/`, `vendor/`                  | Repository and dependency metadata.  |
-| `*.gen.go`                          | Generated code by convention.        |
-| Files starting `// Code generated`  | Go's standard generated-file marker. |
-| `.gitignore`d paths                 | Not yours to format.                 |
-| `exclude` / `not_path` / `not_name` | Your own exclusions (see below).     |
+This is real input and output for a chain and an unbraced body:
+
+```diff
+-const rows = await db.select().from(users).where(eq(users.id, id));
+-const limit = 10;
+-function pick(n: number) { if (n > limit) return rows; return [] }
++const rows = await db.select()
++	.from(users)
++	.where(eq(users.id, id));
++
++const limit = 10;
++
++function pick(n: number) {
++	if (n > limit) {
++		return rows;
++	}
++
++	return [];
++}
+```
+
+### Lint
+
+Oxlint runs on scripts and on Vue files with the bundled policy. The bundled policy enables 197 rules: core ESLint rules, rules from the `typescript`, `oxc`, `unicorn`, `import`, and `react` plugins, and fmtkit's native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. fmtkit also implements `anti-slop/*` rules. They are not in the bundled policy; enable them by name.
+
+A rule set to `error` fails the run. A rule set to `warn` is reported but does not fail it. Configure the policy under `[lint]`; see [Configuration](#configuration).
+
+### Vue, HTML, and Markdown
+
+Hosts are formatted as whole documents, close to Prettier's defaults.
+
+- Vue and HTML go through markup_fmt. The `<script>` blocks go through the full script pipeline. The `<style>` blocks go through the oxc CSS formatter.
+- Markdown goes through the oxc Markdown formatter. Prose is not rewrapped. Fences tagged `ts`, `typescript`, `tsx`, `mts`, `cts`, `js`, `javascript`, `jsx`, `mjs`, or `cjs` are formatted as scripts. Fences tagged `css`, `postcss`, `scss`, or `less` are formatted as CSS. Every other fence is kept as written.
+- Template literals that hold another language are formatted too, as oxc recognises them: `css`, `styled.x`, `gql`, `html`, and `md` tags, among others. A template that does not format is left as written. Angular templates are always left as written.
+- Line endings become `\n`, and a non-empty document ends with one.
+
+A host document repeats formatting until it stops changing, with three extra rounds at most.
+
+## What it never touches
+
+fmtkit leaves these files and regions exactly as written:
+
+- Files ignored by `.gitignore` or `.ignore`, and files matched by `[files] exclude`.
+- Anything under a `.git`, `node_modules`, or `vendor` directory, at any depth.
+- Symbolic links.
+- Declaration files: `.d.ts`, `.d.mts`, and `.d.cts`.
+- Generated Go files: `*.gen.go`, and any Go or script file with a `// Code generated ... DO NOT EDIT.` line before its first line of code.
+- File types it does not format, such as JSON, YAML, TOML, and standalone CSS.
+- Vue custom blocks, `<template lang="pug">`, and scripts or styles in Sass, Stylus, or CoffeeScript.
+- Markdown fences in languages other than scripts and CSS.
+- Tailwind class order.
+- Any file that fails to parse, fails a pass, or does not reach a fixed point. fmtkit reports the error and does not write the file.
 
 ## Commands
 
-### `fmtkit` (the full binary)
+fmtkit has two working commands. `format` writes; `check` only reports.
 
-| Command                                     | What it does                                         |
-| ------------------------------------------- | ---------------------------------------------------- |
-| `format [--ts] [--go] [--quiet] [paths...]` | Format files changed vs `HEAD`, plus untracked ones. |
-| `format-all [--ts] [--go] [--quiet]`        | Format every non-ignored file in the repo.           |
-| `ts [paths...]`                             | TS/JS/Vue formatting only.                           |
-| `lint [paths...]`                           | Report TS/JS/Vue lint violations. Never writes.      |
-| `check [args...]`                           | Run the Go formatter in check mode.                  |
-| `complexity [--ts] [--go] [paths...]`       | Report functions over the complexity limits.         |
-| `go <check\|format\|sources\|version>`      | The Go formatter CLI.                                |
-| `version`, `help`                           | The usual.                                           |
+| Command          | What it does                                                        |
+| ---------------- | ------------------------------------------------------------------- |
+| `fmtkit format`  | Rewrite files in place, then report what is left to fix by hand.    |
+| `fmtkit check`   | Report what `format` would change and every finding. Write nothing. |
+| `fmtkit version` | Print the version, for example `fmtkit 2.0.0`.                      |
+| `fmtkit help`    | Print the help. `fmtkit <command> --help` prints a command's flags. |
 
-No language flag means all lanes, TS before Go.
+Both `format` and `check` take the same flags:
 
-`format` applies oxlint's safe fixes first, then the formatting passes normalize whatever oxlint rewrote. Standalone `lint` only reports; it never edits your files.
+| Flag                      | Meaning                                                                                  |
+| ------------------------- | ---------------------------------------------------------------------------------------- |
+| `[PATHS]...`              | Files or directories to cover, changed or not.                                           |
+| `--all`                   | Cover every file, not only the changed ones.                                             |
+| `--go`                    | Only the Go lane.                                                                        |
+| `--ts`                    | Only the TypeScript lane: scripts, Vue, HTML, and Markdown.                              |
+| `-j`, `--jobs <N>`        | Worker threads; 0 means one per CPU.                                                     |
+| `--no-cache`              | Neither read nor update the cache.                                                       |
+| `--format <FORMAT>`       | `text` (the default), `json`, or `agent`.                                                |
+| `-q`, `--quiet`           | Print only findings and the summary line.                                                |
+| `--color <WHEN>`          | `auto` (the default), `always`, or `never`.                                              |
+| `--stdin-filepath <PATH>` | Read a source from stdin as if it were at `PATH`; see [Standard input](#standard-input). |
+| `--resolve-imports`       | Let goimports add and remove imports.                                                    |
 
-### `format` vs `format-all`
+### Scope
 
-**`format` covers what you changed; `format-all` covers everything.**
+The scope decides which files fmtkit reads.
 
-`format` covers files that diverge from `HEAD`, modified (staged or not) and untracked, so an everyday format stays proportional to your diff rather than your repo.
+- **Root.** The root is the enclosing Git work tree. Outside Git, the root is the current directory.
+- **Default.** Inside Git, the scope is the changed files. Outside Git, the scope is every file that `.gitignore` and `.ignore` do not exclude.
+- **`--all`.** Every tracked file and every untracked file that is not ignored.
+- **Paths.** Paths are relative to the current directory. A named file, or every file under a named directory, is covered whether or not it changed. `fmtkit check main.go` checks `main.go` even on a clean checkout.
+- **Lanes.** `--go` and `--ts` restrict the run to one lane. They cannot be combined.
 
-`format-all` covers every non-ignored file, and **is what a CI gate wants**: a changed-file scope would pass vacuously on a fresh checkout, where nothing is modified.
+A path outside the root is a usage error. A path that does not exist is reported under `missing` and fails the run.
 
-Both skip `.gitignore`d files, and both need a git working tree.
+### Standard input
 
-This applies to every step, with two wrinkles: the Go formatter keeps its own walk (so `config.yml`'s `exclude` / `not_path` / `not_name` and generated-file detection always apply) and `format` then narrows that to what git reports as changed; and `go vet` is unscoped either way, because it analyses whole packages, not files.
+`--stdin-filepath` formats one source for an editor. The path chooses the language. With `format`, the formatted text goes to stdout. With `check`, nothing goes to stdout, and the exit code is 1 when formatting would change the source. Standard input is formatted only: it is not scored for complexity, and lint findings that fixes cannot remove are not reported.
 
-### `fmtkit-go` (the Go-only CLI)
-
-| Command                                       | What it does                                                         |
-| --------------------------------------------- | -------------------------------------------------------------------- |
-| `check [paths...]`                            | Reports violations without writing.                                  |
-| `format [paths...]`                           | Rewrites files in place.                                             |
-| `sources [--include-declarations] [paths...]` | Prints the collected file list, NUL-separated. Plumbing for scripts. |
-
-Both `check` and `format` default to `.`, and both run `go vet ./...` automatically when the working directory is inside a Go module or workspace.
-
-| Flag       | Default | Description                                                              |
-| ---------- | ------- | ------------------------------------------------------------------------ |
-| `--config` | auto    | Path to a `config.yml`. Auto-detected if omitted.                        |
-| `--cwd`    | `.`     | Base path for config discovery and relative output paths.                |
-| `--format` | `text`  | Output mode: `text`, `json`, or `agent`.                                 |
-| `--jobs`   | `0`     | Max files in parallel; `0` uses `runtime.NumCPU()`. Reads `FMTKIT_JOBS`. |
-
-```bash
-fmtkit-go check .
-fmtkit-go format ./core ./demo/api
-fmtkit-go check --format json .
-fmtkit-go check ./packages/go/formatter/rules/spacing/spacing.go
+```sh
+printf 'const a = {b:1}\n' | fmtkit format --stdin-filepath web/x.ts
 ```
+
+```text
+const a = { b: 1 };
+```
+
+A syntax error or an unsupported file type exits with code 1.
+
+### Jobs
+
+fmtkit takes the first of these that is set: `--jobs`, `FMTKIT_JOBS`, and `jobs` in `fmtkit.toml`. A value of 0, or none at all, means one worker per CPU. `FMTKIT_JOBS` must be a whole number.
+
+### Cache
+
+fmtkit caches outcomes that need no write, so unchanged files are not formatted again. A cache entry depends on the file's bytes, its path, the fmtkit version, the configuration, and the mode.
+
+The cache lives in `<cache dir>/fmtkit/v2/`. The cache directory is `~/Library/Caches` on macOS and `$XDG_CACHE_HOME` or `~/.cache` on Linux. `FMTKIT_CACHE_DIR` replaces the whole `<cache dir>/fmtkit/v2` prefix. `--no-cache` bypasses the cache for one run.
+
+### Environment variables
+
+| Variable           | Effect                                                                        |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `FMTKIT_CONFIG`    | Path of the configuration file. A relative path is resolved against the root. |
+| `FMTKIT_JOBS`      | Worker threads, when `--jobs` is not given.                                   |
+| `FMTKIT_CACHE_DIR` | Directory of the cache.                                                       |
+| `FMTKIT_GO_HELPER` | Path of `fmtkit-go-helper`.                                                   |
+| `NO_COLOR`         | Disables colour when `--color` is `auto`.                                     |
 
 ## Complexity
 
-`fmtkit complexity` scores every function in both languages and reports the ones over your limits. It is report-only: it never writes source, and it exits `1` when anything breaches.
+fmtkit scores every function with two numbers and fails the run when either exceeds its limit. Cyclomatic complexity counts the paths through a function. Cognitive complexity weighs how hard the function is to read, and it charges more for nesting.
 
-```bash
-fmtkit complexity .              # both lanes
-fmtkit complexity --go ./infra   # one lane
-fmtkit complexity --format json .
+| Number     | Default limit | Go scorer      | Script scorer |
+| ---------- | ------------- | -------------- | ------------- |
+| Cyclomatic | 15            | gocyclo 0.6.0  | fmtkit        |
+| Cognitive  | 20            | gocognit 1.2.1 | fmtkit        |
+
+A function breaches a limit when its score is strictly greater than the limit. A limit of 0 disables that number.
+
+fmtkit scores `.go`, `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, and `.jsx` files. It does not score `.mjs`, `.cjs`, Vue, or test files. Test files are `*_test.go` and any file whose name contains `.test.` or `.spec.`.
+
+A finding names the function by its key and gives its line in the file on disk. After `format`, that is the formatted text; under `check`, it is the text as written, the same text that lint findings refer to:
+
+```text
+[complexity/cognitive] line 7: web/store.ts#grade scores 37 (limit 20)
+[complexity/cyclomatic] line 7: web/store.ts#grade scores 22 (limit 15)
 ```
 
-It also folds into `fmtkit check` (Go) and `fmtkit lint` (TS), so a repository with one lane keeps one command.
+### Function keys
 
-### The two numbers
+A key is the file path relative to the root, then `#`, then the function name.
 
-| Metric       | Measures                                          | How                                                              |
-| ------------ | ------------------------------------------------- | ---------------------------------------------------------------- |
-| `cyclomatic` | Independent paths — how many tests it takes.      | Go: `gocyclo`. TS: ESLint's `complexity` rule, to the increment. |
-| `cognitive`  | How hard it is to follow — nesting is what hurts. | Go: `gocognit`. TS: the SonarSource rules, to the increment.     |
-
-Where a construct exists in both languages the two lanes produce the same number, which a shared fixture asserts in both test suites.
-
-A function's key is `<repository-relative path>#<name>`. Go methods are receiver-qualified (`internal/envcfg/envcfg.go#(*Source).Read`); TypeScript members are class-qualified, accessors included (`src/store.ts#Store.get size`).
-
-An anonymous callback has no name of its own, so its **cognitive** cost folds into the nearest named declaration above it — a closure is part of what that declaration asks a reader to hold. Its **cyclomatic** number stays its own, and the key reports the worst of them, so neither metric can be hidden behind a callback.
-
-Test files are left out of both lanes (`*_test.go`, `*.test.*`, `*.spec.*`): a long table of cases is not the complexity this check is about.
+- A Go method includes its receiver: `store/store.go#(*Store).Get`.
+- A class method includes its class: `web/store.ts#Store.get size`.
+- A name that occurs more than once in a file gets its line: `web/handlers.ts#handler:6`.
+- An anonymous function adds its cognitive score to the named function around it. It keeps its own cyclomatic score. The key reports the worse of the two.
 
 ### The allow list
 
-An `allow` entry exempts one function from both limits. It is a baseline to shrink, not a suppression to sprinkle: an entry that matches no function is itself a finding, so the list cannot rot quietly.
+The allow list exempts named functions from both limits. Each entry needs a reason, so the exemption stays honest.
 
-```yaml
-complexity:
-    cyclomatic: 15
-    cognitive: 20
-    allow:
-        - key: 'infra/cli/internal/envcfg/envcfg.go#(*Source).Read'
-          reason: 'One err check per field; becomes a table in the next pass.'
+```toml
+[[complexity.allow]]
+key = "web/store.ts#grade"
+reason = "One branch per grade band; becomes a lookup table."
 ```
 
-fmtkit keeps its own baseline in the repository's `config.yml`, which is what makes `make check` green on a clean tree while the twenty functions it lists get rewritten.
+An entry that matches no function is reported under `complexity/allow` and fails the run:
 
-An entry is only judged by the lane that owns its extension, and only when the run could have matched it — its file was scanned, or its file is gone. A `--go` run therefore never trips over the TypeScript baseline, and a run scoped to one directory never trips over another's.
+```text
+[complexity/allow] allow entry "web/store.ts#gone" matches no function
+```
+
+fmtkit judges an entry only when its file is in scope or no longer exists. Treat the list as a baseline that only shrinks.
+
+The bundled lint policy also enables `eslint/complexity` with a maximum of 12. That rule is separate from fmtkit's limits. Turn it off with `"eslint/complexity" = "off"` under `[lint.rules]` if you want one source of truth.
 
 ## Configuration
 
-### Go (`config.yml`)
+fmtkit reads one file, `fmtkit.toml`, at the repository root. `FMTKIT_CONFIG` names another file. Every key is optional, and an unknown key is an error.
 
-`fmtkit` looks for `config.yml` in the working directory; without one, the defaults below apply. Point at a specific file with `--config`.
+This file sets every default and adds one lint rule and one allow entry:
 
-```yaml
-rules:
-    spacing:
-        enabled: true
+```toml
+jobs = 0
 
-vet:
-    enabled: true
+[files]
+exclude = ["node_modules/", "vendor/"]
 
-formatters:
-    gofmt: true
-    goimports: true
+[go]
+spacing = true
+gofmt = true
+goimports = true
+resolve_imports = false
+vet = true
 
-exclude:
-    - .git
-    - node_modules
-    - vendor
+[ts.format]
+use_tabs = true
+tab_width = 4
+print_width = 200
+single_quote = true
+semi = true
+trailing_comma = "all"
+arrow_parens = "always"
 
-not_path:
-    - third_party/generated
+[lint]
+bundled = true
+ignore = []
 
-not_name:
-    - '*.pb.go'
+[lint.rules]
+eqeqeq = ["error", "always"]
+"anti-slop/no-object-parameters" = "warn"
 
-concurrency: 0
+[complexity]
+cyclomatic = 15
+cognitive = 20
 
-complexity:
-    cyclomatic: 15
-    cognitive: 20
-    allow:
-        - key: 'internal/envcfg/envcfg.go#(*Source).Read'
-          reason: 'One err check per field; becomes a table in the next pass.'
+[[complexity.allow]]
+key = "web/store.ts#grade"
+reason = "One branch per grade band; becomes a lookup table."
 ```
 
-| Field                   | Type | Default                          | Description                                               |
-| ----------------------- | ---- | -------------------------------- | --------------------------------------------------------- |
-| `rules.spacing.enabled` | bool | `true`                           | Enables the spacing rule.                                 |
-| `vet.enabled`           | bool | `true`                           | Runs `go vet ./...` after formatting.                     |
-| `formatters.gofmt`      | bool | `true`                           | Runs `gofmt` after the rules.                             |
-| `formatters.goimports`  | bool | `true`                           | Runs `goimports` after `gofmt`.                           |
-| `exclude`               | list | `.git`, `node_modules`, `vendor` | Directory names skipped during traversal.                 |
-| `not_path`              | list | empty                            | Substrings matched against full file paths.               |
-| `not_name`              | list | empty                            | Globs matched against file names.                         |
-| `concurrency`           | int  | `0`                              | Max files in parallel (`0` = `NumCPU`).                   |
-| `complexity.cyclomatic` | int  | `15`                             | Max cyclomatic complexity per function; `0` turns it off. |
-| `complexity.cognitive`  | int  | `20`                             | Max cognitive complexity per function; `0` turns it off.  |
-| `complexity.allow`      | list | empty                            | `{key, reason}` baseline entries; a stale entry fails.    |
+### `jobs`
 
-### TS/JS/Vue lint (`.oxlintrc.json`)
+The number of worker threads. 0 means one per CPU.
 
-The binary always starts with its bundled Oxlint policy, including the rules, native React plugin, three JS plugins, environments, and generic TypeScript override from `@nkzw/oxlint-config` 2.0.1. Existing fmtkit rule settings win where they overlap. A repository can override an individual rule without copying the policy:
+### `[files]`
 
-```jsonc
-// .oxlintrc.jsonc
-{
-	"rules": {
-		"require-await": "off",
-		"max-params": ["error", { "max": 8 }],
-	},
-}
-```
+`exclude` lists gitignore-style patterns, relative to the root. They apply to both lanes, on top of `.gitignore`. A pattern without a slash matches at any depth. Setting `exclude` replaces the default list, so keep `node_modules/` and `vendor/` if you need them.
 
-Configuration layers apply from least to most specific:
+### `[go]`
 
-1. **The bundled policy.** This remains active for every linted file.
-2. **The repository-root config.** fmtkit recognises `.oxlintrc`, `.oxlintrc.json`, `.oxlintrc.jsonc`, `oxlint.config.ts`, and `oxlint.config.mts`.
-3. **The nearest nested config.** A package can narrow the root policy without repeating it.
-4. **`FMTKIT_OXLINTRC`.** This optional explicit overlay applies to every file and wins over repository configs.
+| Key               | Default | Effect                                |
+| ----------------- | ------- | ------------------------------------- |
+| `spacing`         | `true`  | Apply the spacing rule.               |
+| `gofmt`           | `true`  | Apply gofmt.                          |
+| `goimports`       | `true`  | Apply goimports.                      |
+| `resolve_imports` | `false` | Let goimports add and remove imports. |
+| `vet`             | `true`  | Run `go vet`.                         |
 
-Later layers override earlier rules. Existing `extends` entries, imports, plugin paths, and globs resolve from the config that declares them. More than one recognised config in the same directory is an error. The same `.ts` and `.mts` formats work as an explicit `FMTKIT_OXLINTRC` overlay.
+### `[ts.format]`
 
-JSON/JSONC projects use the embedded runtime with no Node.js or project packages. An import-based config uses Node.js 24+ and `oxlint` 1.80.0+ installed in the project, along with whatever packages that config imports. If those are missing, lint fails with a setup error. fmtkit creates temporary composed configs beside their source configs and removes them when the command finishes; those directories must be writable.
+These options drive the oxc formatter for scripts, Vue, HTML, Markdown, and CSS.
 
-The bundled JS plugins enforce their rules in JS, JSX, TS, and TSX. Oxlint currently treats JS plugins as alpha and does not guarantee their behavior inside Vue single-file components.
+| Key              | Default    | Values                     |
+| ---------------- | ---------- | -------------------------- |
+| `use_tabs`       | `true`     | `true` or `false`          |
+| `tab_width`      | `4`        | 1 or more                  |
+| `print_width`    | `200`      | 1 or more                  |
+| `single_quote`   | `true`     | `true` or `false`          |
+| `semi`           | `true`     | `true` or `false`          |
+| `trailing_comma` | `"all"`    | `"all"`, `"es5"`, `"none"` |
+| `arrow_parens`   | `"always"` | `"always"`, `"avoid"`      |
 
-### TS/Vue (`.oxfmtrc.json`)
+### `[lint]`
 
-The binary ships a bundled `.oxfmtrc.json` (tabs, single quotes, trailing commas, 200-column width) applied by default, so you get a consistent style with zero setup. Resolution is by precedence, first match wins:
+- `bundled` keeps the bundled policy. Set it to `false` to start from no rules.
+- `ignore` lists gitignore-style patterns of files that lint skips. fmtkit still formats those files.
+- `rules` maps a rule name to a setting.
 
-1. **`FMTKIT_OXFMTRC`** — an explicit path.
-2. **A project-local `.oxfmtrc.*`** (`.json`, `.jsonc`, `.ts`, `.js`, …) in the directory being formatted. The bundled default is skipped and oxfmt uses yours.
-3. **Your Prettier config.** If the directory has a Prettier config (`.prettierrc*`, `prettier.config.*`, or a `"prettier"` key in `package.json`) but no oxfmt config, fmtkit translates it via `oxfmt --migrate=prettier`, so a Prettier-configured project formats consistently with no extra setup. The translation is cached by the Prettier config's content hash, so it runs once and re-runs only when that config changes. If a config can't be translated (a JS config importing project-local modules, say), fmtkit warns on stderr and falls back to the bundled default rather than failing the run.
-4. **The bundled default.**
+A setting is a severity, or an array of a severity followed by the rule's options. The severities are `"off"` or `"allow"`, `"warn"`, and `"error"` or `"deny"`. A rule may be named with or without its plugin: `eqeqeq` and `eslint/eqeqeq` are the same rule. An unknown rule is a configuration error.
 
-To opt out of the Prettier-derived step, drop in your own `.oxfmtrc.*` — it takes precedence.
+A setting replaces the bundled setting completely, options included. `"typescript/array-type" = "warn"` drops the bundled `generic` option and falls back to the rule's own default. Repeat the options when you only want to change the severity.
 
-### Ignoring files (`.prettierignore`)
+### `[complexity]`
 
-`oxfmt` already honors `.prettierignore` and `.gitignore` in its own step. fmtkit extends that to the rest of the TS/Vue pipeline — the structural passes and `oxlint --fix` — by filtering ignored paths out of the file set it collects, so an ignored file is untouched by every lane.
-
-The matcher follows gitignore syntax: comments, negation, leading-`/` anchoring, trailing-`/` directories, and the `*`, `?`, `[…]`, and `**` wildcards. The Go formatter is unaffected — `.prettierignore` governs only the TS/Vue/HTML/Markdown lanes.
+`cyclomatic` and `cognitive` set the limits. `allow` holds the allow list. Each entry has a `key`, which must contain `#`, and a `reason`. Duplicate keys are an error. See [Complexity](#complexity).
 
 ## Output formats
 
-**`text`** — for humans:
+fmtkit prints one report in one of three formats. All three carry the same findings in the same order.
+
+### Text
+
+Text is the default. It groups findings by file. A progress bar appears on stderr only when stderr is a terminal and `--quiet` is not set.
 
 ```text
-Formatter
-
-  Checked 1 file(s).
+  Checked 2 file(s).
 
   main.go
     [spacing] line 7: missing blank line before type definition
+    [spacing] line 8: missing blank line before range loop
     [spacing] line 11: missing blank line before if statement
+    [spacing] line 14: missing blank line after if statement
+    [spacing] line 16: missing blank line before return statement
     ✓ would apply spacing
 
-  Result: fail. 1 changed, 2 violation(s), 0 error(s).
+  web/store.ts
+    [typescript/array-type] line 3:20: Array type using 'string[]' is forbidden. Use 'Array<string>' instead.
+    [complexity/cognitive] line 7: web/store.ts#grade scores 37 (limit 20)
+    [complexity/cyclomatic] line 7: web/store.ts#grade scores 22 (limit 15)
+    [eslint/complexity] line 7:8: function `grade` has a complexity of 22. Maximum allowed is 12.
+    [unicorn/catch-error-name] line 19:70: The catch parameter "e" should be named "cause"
+    [unicorn/prefer-optional-catch-binding] line 19:70: Prefer omitting the catch binding parameter if it is unused
+    [eslint/eqeqeq] line 23:38: Expected === and instead saw ==
+    ✓ would apply lint, class-reorder, blank-lines, oxfmt
 
-Vet
+  go vet passed on 1 target(s).
 
-  Result: ok. 0 error(s).
+  Result: fail. 2 file(s), 2 changed, 5 violation(s), 5 lint, 2 complexity, 0 vet, 0 error(s).
 ```
 
-**`json`** — for scripts. Emitted as a single line; shown here expanded:
+### JSON
+
+`--format json` prints one pretty-printed object with `"schema": 2`. The `files` array lists only files with something to report.
 
 ```json
 {
-	"result": "fail",
-	"formatter": {
-		"result": "fail",
-		"files": 1,
-		"changed": 1,
-		"results": [
-			{
-				"file": "main.go",
-				"applied": ["spacing"],
-				"violations": [{ "rule": "spacing", "line": 7, "message": "missing blank line before type definition" }],
-				"changed": true
-			}
-		]
-	},
-	"vet": { "status": "skipped" }
+  "schema": 2,
+  "mode": "check",
+  "result": "fail",
+  "summary": {
+    "files": 2,
+    "changed": 1,
+    "violations": 1,
+    "lint": 1,
+    "complexity": 0,
+    "vet": 0,
+    "errors": 0,
+    "missing": 0
+  },
+  "files": [
+    {
+      "file": "main.go",
+      "lang": "go",
+      "changed": true,
+      "applied": [
+        "spacing"
+      ],
+      "violations": [
+        {
+          "rule": "spacing",
+          "line": 5,
+          "message": "missing blank line before if statement",
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "file": "web/same.ts",
+      "lang": "ts",
+      "lint": [
+        {
+          "rule": "eslint/eqeqeq",
+          "line": 1,
+          "column": 47,
+          "message": "Expected === and instead saw ==",
+          "severity": "error"
+        }
+      ]
+    }
+  ],
+  "complexity": [],
+  "vet": {
+    "status": "pass",
+    "targets": [
+      "./..."
+    ],
+    "errors": []
+  },
+  "missing": []
 }
 ```
 
-**`agent`** — indented JSON, grouped for CI and AI tools:
+`result` is `pass`, `fixed`, or `fail`. `vet.status` is `pass`, `fail`, or `skipped`; a skipped run adds a `reason`.
 
-```json
-{
-	"result": "fail",
-	"formatter": {
-		"result": "fail",
-		"summary": { "files": 1, "changed": 1, "violations": 1 },
-		"changed": [{ "file": "main.go", "steps": ["spacing"] }],
-		"violations": [{ "file": "main.go", "rule": "spacing", "line": 7, "message": "missing blank line before type definition" }]
-	},
-	"vet": { "status": "skipped" }
-}
+### Agent
+
+`--format agent` prints one line per finding and a final summary line. It suits coding agents and `grep`. Each line is `path[:line[:column]] rule message`. Warnings carry a `warning:` prefix on the message.
+
+```text
+main.go:7 spacing missing blank line before type definition
+main.go:8 spacing missing blank line before range loop
+main.go:11 spacing missing blank line before if statement
+main.go:14 spacing missing blank line after if statement
+main.go:16 spacing missing blank line before return statement
+main.go format would apply spacing
+web/store.ts:3:20 typescript/array-type Array type using 'string[]' is forbidden. Use 'Array<string>' instead.
+web/store.ts:7 complexity/cognitive web/store.ts#grade scores 37 (limit 20)
+web/store.ts:7 complexity/cyclomatic web/store.ts#grade scores 22 (limit 15)
+web/store.ts:7:8 eslint/complexity function `grade` has a complexity of 22. Maximum allowed is 12.
+web/store.ts:19:70 unicorn/catch-error-name The catch parameter "e" should be named "cause"
+web/store.ts:19:70 unicorn/prefer-optional-catch-binding Prefer omitting the catch binding parameter if it is unused
+web/store.ts:23:38 eslint/eqeqeq Expected === and instead saw ==
+web/store.ts format would apply lint, class-reorder, blank-lines, oxfmt
+fmtkit schema=2 mode=check result=fail files=2 changed=2 violations=5 lint=5 complexity=2 vet=0 errors=0 missing=0
 ```
 
-The `json` and `agent` shapes are a public contract, pinned by golden tests.
+A `go vet` finding looks like this:
+
+```text
+vet.go:6:14 go/vet fmt.Printf format %d has arg "x" of wrong type string
+```
 
 ## Exit codes
 
-| Command      | Code | Meaning                                          |
-| ------------ | ---- | ------------------------------------------------ |
-| `check`      | `0`  | No violations found.                             |
-| `check`      | `1`  | Violations or errors detected.                   |
-| `format`     | `0`  | Formatting applied successfully.                 |
-| `format`     | `1`  | An error occurred during formatting.             |
-| `complexity` | `0`  | Every function is within its limits.             |
-| `complexity` | `1`  | A function breached, or an allow entry is stale. |
+The exit code tells CI what happened. Only 0 is a success.
 
-Note that `format` exits `0` when it _fixes_ violations — it only fails on a genuine error. Use `check` for gates.
+| Code | Meaning                                                                                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | Nothing to report, or `format` fixed everything it found.                                                                                       |
+| 1    | Findings remain: a file `check` would change, a lint finding, a violation, a complexity breach, a vet error, or a file error.                   |
+| 2    | Usage or configuration error: a bad flag, an invalid `fmtkit.toml`, an unknown lint rule, an invalid `FMTKIT_JOBS`, or a path outside the root. |
+| 3    | Internal error: the helper is missing, incompatible, or crashed, or the report could not be written.                                            |
+
+`format` exits 0 after it writes changes, as long as nothing remains to fix by hand. Lint warnings are reported but never change the exit code. A path that does not exist exits 1.
 
 ## Development
 
-You'll need Go 1.27.1+, [Bun](https://bun.com) (to compile the TS sidecar), and Vite+ (which manages the Node.js runtime and pnpm version the workspace declares).
+Development needs Rust 1.96 or newer, Go 1.27.1, and Bash. Every build artifact lives under `storage/`.
 
-```bash
-curl -fsSL https://vite.plus -o install-vp.sh
-sh install-vp.sh
-vp install
-```
+| Target            | What it does                                               |
+| ----------------- | ---------------------------------------------------------- |
+| `make build`      | Build fmtkit and the Go helper into `storage/`.            |
+| `make format`     | Format `ARGS`; the default `.` means the whole repository. |
+| `make format-all` | Format the whole repository.                               |
+| `make check`      | Check the whole repository, or `ARGS`, without writing.    |
+| `make lint`       | Run rustfmt, clippy, gofmt, and `go vet`, all read-only.   |
+| `make test`       | Run the Rust and Go test suites.                           |
+| `make version`    | Print the version the working tree builds as.              |
 
-Day-to-day tasks:
+`scripts/task.sh` backs every target. It also provides `self-check` and `coverage`. The coverage gate requires 90 percent line coverage for Rust and for Go.
 
-```bash
-vp run build         # build the local fmtkit-go binary into storage/bin
-vp run check         # package checks across the workspace
-vp run test          # all package tests
-vp run test-race     # tests with the race detector (forces CGO_ENABLED=1)
-vp run test:binary   # build the self-contained binary and smoke test it
-vp run vet           # go vet across the Go module packages
-vp run install-cli   # install fmtkit-go from the local source tree
-vp run release       # cross-platform binaries into storage/dist
-```
+Continuous integration runs these workflows:
 
-### fmtkit formats itself
+- `tests.yml` runs lint, tests on Ubuntu and macOS, coverage, a binary smoke test, a Docker smoke test, and the self-check.
+- `bench.yml` compares a pull request with its base on a large Go and TypeScript corpus. It fails when the pull request is more than 10 percent slower.
+- `fuzz.yml` runs every night. It fuzzes the edit set, the Go protocol, the configuration, the script pipeline, and the host formatters for 10 minutes each.
 
-fmtkit formats its own source with the binary it ships, so the development loop and the release exercise the same Go orchestrator and the same Bun-compiled sidecar. The `Makefile` is the shortest way in:
+### Releases
 
-```bash
-make format                # format the repo (ARGS defaults to ".")
-make format ARGS=--ts      # only the TS/Vue half
-make format-all            # the whole repository
-make check                 # Go formatter in check mode
-make version               # the version the working tree builds as
-```
+The version in `Cargo.toml` is the release version. When a commit lands on `main` with a version that has no tag, `tag.yml` tags it `v<version>` and starts `release.yml`. The release builds the archives with cargo-dist, publishes the Homebrew formula, and publishes the Docker image. A version must be strict semver and must sort above the latest tag.
 
-The first run stages the host TS toolchain into `packages/go/driver/internal/typescript/embedded/bin/<os>_<arch>/` (needs Bun, takes a few seconds). Later runs reuse it and re-stage only when the support scripts, the tool pins, or the `.oxfmtrc.json` / `.oxlintrc.json` configs change. The inner loop is then a plain incremental `go build`.
+## fmtkit formats itself
 
-That loop points `FMTKIT_SUPPORT_DIR` at the staged assets rather than embedding them, which keeps it fast. The embedded-asset path a release actually uses is covered by `vp run test:binary`.
+This repository is formatted and checked by the fmtkit it builds. `make format` and `make check` build fmtkit from the working tree and run it on the repository. The repository's own `fmtkit.toml` excludes the test inputs, because formatting them would change what the tests test.
 
-## How the code is organized
+CI runs `scripts/task.sh self-check`. It formats the clean tree with `--all --no-cache` and fails when any file moves.
 
-fmtkit is one binary with two halves:
+## How the code is organised
 
-- A **Go driver** (`packages/go`) that owns the CLI, finds files, formats Go, runs `go vet`, renders reports, and orchestrates the run.
-- A **TypeScript sidecar** (`packages/ts/sidecar`), compiled with Bun and embedded in the binary, that formats TS/Vue and the embedded blocks in Markdown/HTML.
+The workspace has twelve crates and one Go module. Only the engine reads and writes source files.
 
-The driver runs the sidecar as a child process. Everything crossing that boundary. The executable name, modes, flags, env vars, and the summary lines the driver reads back is defined once per side (`driver/internal/typescript/proto` in Go, the `cli/` DTOs in TS) and pinned by tests. **Change one side, and you change the other in the same PR.**
+| Path              | Role                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `crates/cli`      | The `fmtkit` binary: argument parsing, exit codes, and the progress bar.              |
+| `crates/engine`   | The run: scope, lanes, the worker pool, complexity, `go vet`, and every file write.   |
+| `crates/discover` | The repository root, the changed set, ignore rules, and file classification.          |
+| `crates/config`   | `fmtkit.toml` and its validation.                                                     |
+| `crates/core`     | Shared types: languages, findings, edits, and line indexes.                           |
+| `crates/ts`       | The script pipeline: the structural passes and the oxc formatter.                     |
+| `crates/hosts`    | Vue, HTML, and Markdown documents, and CSS inside them.                               |
+| `crates/lint`     | Oxlint, the bundled policy, and the native rules.                                     |
+| `crates/go`       | The helper process and `go vet`.                                                      |
+| `crates/cache`    | The outcome cache.                                                                    |
+| `crates/report`   | The text, JSON, and agent reports.                                                    |
+| `crates/testkit`  | Test support.                                                                         |
+| `go/helper`       | `fmtkit-go-helper`: spacing, gofmt, goimports, and complexity, over stdin and stdout. |
+| `fixtures`        | Shared test inputs, such as the complexity fixtures.                                  |
+| `fuzz`            | Fuzz targets, seeds, and dictionaries.                                                |
 
-### Go side (`packages/go`, module `go.ollin.sh/fmtkit`)
+The helper protocol is documented in `go/helper/proto/PROTOCOL.md`. The oxc pin and its upgrade checklist are in [Upgrading oxc](docs/oxc-upgrade.md). Known defects in upstream formatters are in [Known upstream issues](docs/known-issues.md).
 
-The importable library:
+## Ground rules
 
-| Package                   | What it does                                                                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `formatter`               | Public entry points: `Check`, `Format`, `CheckFiles`, `FormatFiles`.                                                                  |
-| `formatter/engine`        | Runs the formatters over files concurrently and builds the `Report`.                                                                  |
-| `formatter/config`        | Single source of truth for formatter settings and defaults.                                                                           |
-| `formatter/rules/spacing` | The spacing rule. Parses each file once, then three types do the work: blank-line insertion, type reordering, embed-directive repair. |
-| `vet`                     | Wraps `go vet` behind an injectable toolchain so tests can fake it.                                                                   |
-| `complexity`              | The complexity policy and the Go scorer: limits, the keyed allow list, findings, and the `gocyclo`/`gocognit` walk.                   |
-| `driver/config`           | CLI config. Embeds the formatter config and adds the vet toggle; the `config.yml` schema is a public contract.                        |
-| `driver/report`           | Typed output modes and the renderer; the JSON/agent shapes are a public contract.                                                     |
+The code follows a short list of Rust rules. Reviews enforce them, and the compiler enforces most of them.
 
-The CLI internals (`driver/internal/...`), one job each: `command` holds the dispatch table both binaries share; `app` wires things together, registering language lanes with `toolchain` — the registry that turns `--ts`/`--go` into an ordered set of lanes; `pipeline` runs generic steps whose summaries come from typed results (nothing scrapes rendered text); `console` owns terminal colors and printing; `gitfiles` owns git-backed file selection.
-
-Each language then owns its behavior in its own package. `golang` is the Go check/format use case (returning a typed `Outcome`) plus its format step. `typescript` builds the TS/Vue lint and format steps and splits its machinery across subpackages — `typescript/runtime` extracts and spawns the sidecar, `typescript/proto` is the frozen wire protocol, `typescript/filetypes` and `typescript/prettierignore` each own one kind of file selection composed by `typescript/sourcefiles`, and `typescript/embedded` holds the `go:embed` assets (its `bin/` folder is where staging writes — **do not move it**).
-
-### TS side (`packages/ts/sidecar/src`)
-
-| Directory     | What it does                                                                                                                                                     |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `kernel/`     | `Result` helpers, error types, the concurrency pool.                                                                                                             |
-| `complexity/` | Scores functions over the parsed AST: the cyclomatic and cognitive scorers and the naming that decides what a closure reports under.                             |
-| `syntax/`     | Parsing and editing: `SourceDocument` (an immutable file value), `SourceParser` (the Zod boundary), `AstReader`, `EditApplier`.                                  |
-| `hosts/`      | Pulls TS out of `.vue`/`.md`/`.html` files and puts it back.                                                                                                     |
-| `passes/`     | One class per formatting rule. Every pass implements the same small interface: `computeEdits(document)` returns edits. Policy classes hold the layout knowledge. |
-| `pipeline/`   | Runs passes in order. `PipelineFactory` is the only place a pass sequence is defined; loops and fixed points are declared there, not hidden inside passes.       |
-| `io/`         | File and process access behind ports, with Node adapters.                                                                                                        |
-| `cli/`        | The commands, the DTOs that parse argv, and `CompositionRoot` — the one place everything gets constructed. Entry files are just `main()` shims.                  |
-
-**Adding a TS pass:** write a class implementing `FormattingPass`, register it in `PipelineFactory`. Nothing else changes.
-**Adding a Go rule:** implement the `Rule` interface (`Name()`, `Apply()`) and register it before the engine is built.
-
-### Ground rules
-
-- **Logic lives on types.** Go logic belongs to structs with methods; free functions are for small stateless helpers only. TS code lives in classes with real instances and constructor-injected dependencies — the only exceptions are `main()` entry shims, the `Result` helpers, value types with factory statics (the Zod DTOs, `SourceDocument.of`), and error classes.
-- **Parse, don't validate.** Outside data enters through a Zod-backed DTO exactly once. No `typeof` checks in TS source.
-- **The wire is frozen.** The Go↔TS protocol values never change casually; golden tests on both sides fail loudly if they drift.
-- **The repo formats itself.** `make format-all` must leave the tree unchanged. Write class members in the formatter's order (properties, constructor, methods) or the self-check will reorder them for you.
-- **Golden are never regenerated to make a change pass.** Pipeline transcripts, report renders, CLI usage/exit codes, and the spacing corpus are pinned byte-for-byte; if a golden fails, the code is wrong.
-
-The Go pipeline runs `source → spacing rule → gofmt → goimports`, skipping any stage disabled in config.
+- **No unsafe code.** The workspace sets `unsafe_code = "forbid"`.
+- **No ignored results.** `unused_must_use` is denied.
+- **Pedantic clippy.** `clippy::pedantic` is denied, with a few documented exceptions.
+- **No panics on input.** Library code returns errors. `expect` appears only on invariants, constant patterns, and the bundled policy. Release builds abort on panic.
+- **Edits never overlap.** Passes describe changes as edits. Applying overlapping edits is an error. A pass that finds nested targets edits the outer one and leaves the inner one for the next round.
+- **One writer.** Only the engine touches source files. Writes go to a temporary file that is renamed into place, and they keep the file's permissions. The helper never writes files.
+- **Deterministic output.** Reports are sorted, so two runs over the same tree print the same report.
+- **Checked passes.** Every reparse is compared with the original syntax tree. A pass that changes meaning leaves the file untouched.
 
 ## License
 
-[MIT](LICENSE)
+fmtkit is released under the [MIT License](LICENSE).

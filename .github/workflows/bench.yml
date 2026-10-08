@@ -1,0 +1,75 @@
+name: Benchmark
+
+# Fails a pull request that makes fmtkit more than 10% slower than its base
+# branch on a pinned public corpus (scripts/bench.sh).
+on:
+    pull_request:
+        branches:
+            - main
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    CARGO_TERM_COLOR: always
+
+concurrency:
+    group: bench-${{ github.event.pull_request.number }}
+    cancel-in-progress: true
+
+jobs:
+    bench:
+        runs-on: ubuntu-24.04
+
+        steps:
+            - uses: actions/checkout@v7.0.1
+              name: Checkout repository
+              with:
+                  fetch-depth: 0
+
+            # rustup installs the version and components in rust-toolchain.toml.
+            - name: Install Rust
+              run: rustup toolchain install
+
+            - uses: Swatinem/rust-cache@v2
+              name: Cache Cargo
+
+            - uses: actions/setup-go@v7.0.0
+              name: Install Go
+              with:
+                  go-version-file: go/helper/go.mod
+                  cache-dependency-path: go/helper/go.sum
+
+            - uses: taiki-e/install-action@v2
+              name: Install hyperfine
+              with:
+                  tool: hyperfine
+
+            # Each side is built in its own checkout into storage/bench/<side>.
+            # A base that predates the Rust workspace has nothing to compare.
+            - name: Build base and head
+              id: build
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha }}
+              run: |
+                  build() {
+                      local checkout="$1" out="$2"
+
+                      "${checkout}/scripts/task.sh" build
+                      mkdir -p "$out"
+                      cp "${checkout}/storage/target/release/fmtkit" "${checkout}/storage/go-helper/fmtkit-go-helper" "$out/"
+                  }
+
+                  build "$PWD" "${PWD}/storage/bench/head"
+
+                  git worktree add --detach "${RUNNER_TEMP}/base" "$BASE_SHA"
+
+                  if [[ ! -f "${RUNNER_TEMP}/base/Cargo.toml" ]]; then
+                      echo 'base predates the Rust workspace; skipping the comparison'
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+
+                  build "${RUNNER_TEMP}/base" "${PWD}/storage/bench/base"
+
+            - name: Compare base and head
+              if: steps.build.outputs.skip != 'true'
+              run: ./scripts/bench.sh storage/bench/base storage/bench/head

@@ -3,7 +3,8 @@
 //! oxc_formatter_css. Embedded scripts go through [`fmtkit_ts::format_embedded`].
 //!
 //! The whole document is reformatted. Line endings are normalised to `\n`
-//! and a non-empty document always ends with one.
+//! and a non-empty document always ends with one. A document that changed is
+//! formatted again until it stops changing (see [`format_host`]).
 //!
 //! Failure policy, carried over from v1 (where Vue and HTML were hard
 //! validated and Markdown fences were best effort):
@@ -38,7 +39,14 @@ pub enum HostError {
     /// the 1-based line of the failure in the host document.
     #[error("embedded {lang:?} block at line {line}: {message}")]
     Embedded { lang: Lang, line: u32, message: String },
+    /// Formatting did not reach a fixed point; `step` is `idempotency`.
+    #[error("{step} failed: {message}")]
+    Invariant { step: &'static str, message: String },
 }
+
+/// The most rounds that may follow a round that changed the document before
+/// [`format_host`] gives up on reaching a fixed point.
+const EXTRA_ROUNDS: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Formatted {
@@ -52,7 +60,11 @@ pub struct Formatted {
 /// Formats one embedded script; [`fmtkit_ts::format_embedded`] outside tests.
 pub(crate) type ScriptFormatter<'f> = &'f dyn Fn(Lang, &str, &TsFormat) -> Result<String, TsError>;
 
-/// Format a whole host document.
+/// Format a whole host document. markup_fmt, oxc_formatter_markdown, and the
+/// embedded formatters do not always reach a fixed point in one round, so a
+/// document that changed is formatted again, at most [`EXTRA_ROUNDS`] more
+/// times, until a round leaves it as it is. A document that does not change
+/// costs one round. `applied` is the union of every round's steps in order.
 pub fn format_host(rel: &str, lang: Lang, source: &str, options: &TsFormat) -> Result<Formatted, HostError> {
     let _ = rel;
 
@@ -61,6 +73,33 @@ pub fn format_host(rel: &str, lang: Lang, source: &str, options: &TsFormat) -> R
 
 /// [`format_host`] with the embedded script formatter supplied by the caller.
 pub(crate) fn format_with(lang: Lang, source: &str, options: &TsFormat, scripts: ScriptFormatter<'_>) -> Result<Formatted, HostError> {
+    let mut formatted = round(lang, source, options, scripts)?;
+
+    if formatted.output == source {
+        return Ok(formatted);
+    }
+
+    for _ in 0..EXTRA_ROUNDS {
+        let next = round(lang, &formatted.output, options, scripts)?;
+
+        if next.output == formatted.output {
+            return Ok(formatted);
+        }
+
+        for step in next.applied {
+            if !formatted.applied.contains(&step) {
+                formatted.applied.push(step);
+            }
+        }
+
+        formatted.output = next.output;
+    }
+
+    Err(HostError::Invariant { step: "idempotency", message: format!("the document still changes after {EXTRA_ROUNDS} extra rounds") })
+}
+
+/// One formatting round over the whole document.
+fn round(lang: Lang, source: &str, options: &TsFormat, scripts: ScriptFormatter<'_>) -> Result<Formatted, HostError> {
     if !lang.is_host() {
         return Ok(Formatted { output: source.to_owned(), applied: Vec::new() });
     }

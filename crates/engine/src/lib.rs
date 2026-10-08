@@ -15,7 +15,7 @@ use rayon::prelude::*;
 
 use fmtkit_cache::Cache;
 use fmtkit_config::Config;
-use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, VetOutcome};
+use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
 use fmtkit_discover::{Discovery, Scope, SourceFile};
 use fmtkit_go::{GoError, Helper, VetTargets};
 use fmtkit_lint::{LintError, Linter};
@@ -110,7 +110,8 @@ pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Re
 
     progress.finish();
 
-    let result = verdict(options.mode, &files, complexity.is_empty(), &vet);
+    // A path the user named that does not exist fails the run, as it did in 0.x.
+    let result = if discovery.missing.is_empty() { verdict(options.mode, &files, complexity.is_empty(), &vet) } else { RunResult::Fail };
 
     Ok(Report { schema: REPORT_SCHEMA, mode: options.mode, result, files, complexity, vet, missing: discovery.missing })
 }
@@ -159,8 +160,11 @@ fn selected_lanes(scope: &Scope) -> Vec<Lane> {
     if scope.lanes.is_empty() { vec![Lane::Ts, Lane::Go] } else { scope.lanes.clone() }
 }
 
+/// Lint warnings are reported but never fail a run, as oxlint's own exit code
+/// treats them; only `error` rules do.
 fn verdict(mode: Mode, files: &[FileOutcome], complexity_clean: bool, vet: &VetOutcome) -> RunResult {
-    let unresolved = files.iter().any(|f| f.error.is_some() || !f.lint.is_empty() || (mode == Mode::Check && !f.violations.is_empty()));
+    let unresolved =
+        files.iter().any(|f| f.error.is_some() || f.lint.iter().any(|d| d.severity == Severity::Error) || (mode == Mode::Check && !f.violations.is_empty()));
 
     if unresolved || !complexity_clean || !vet.errors.is_empty() {
         return RunResult::Fail;
@@ -176,7 +180,7 @@ fn verdict(mode: Mode, files: &[FileOutcome], complexity_clean: bool, vet: &VetO
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fmtkit_core::{Diagnostic, Severity};
+    use fmtkit_core::Diagnostic;
 
     fn changed() -> FileOutcome {
         FileOutcome { changed: true, ..FileOutcome::new("a.ts", Some(Lang::Ts)) }
@@ -194,5 +198,18 @@ mod tests {
         assert_eq!(verdict(Mode::Format, std::slice::from_ref(&violating), true, &vet), RunResult::Fixed);
         assert_eq!(verdict(Mode::Check, &[violating], true, &vet), RunResult::Fail);
         assert_eq!(verdict(Mode::Format, &[], false, &vet), RunResult::Fail);
+    }
+
+    #[test]
+    fn only_lint_errors_fail_a_run() {
+        let vet = VetOutcome::default();
+        let lint = |severity| FileOutcome {
+            lint: vec![Diagnostic { rule: "eslint/eqeqeq".into(), file: "a.ts".into(), line: 1, column: 1, message: "m".into(), severity }],
+            ..FileOutcome::new("a.ts", Some(Lang::Ts))
+        };
+
+        assert_eq!(verdict(Mode::Check, &[lint(Severity::Warning)], true, &vet), RunResult::Pass);
+        assert_eq!(verdict(Mode::Check, &[lint(Severity::Error)], true, &vet), RunResult::Fail);
+        assert_eq!(verdict(Mode::Format, &[lint(Severity::Error)], true, &vet), RunResult::Fail);
     }
 }

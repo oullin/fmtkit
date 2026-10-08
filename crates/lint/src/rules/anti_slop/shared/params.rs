@@ -34,11 +34,7 @@ impl<'a> Signature<'a> {
 
     /// The parameters in ESTree order: `this`, the list, then the rest element.
     pub fn params(&self) -> impl Iterator<Item = Param<'a>> + '_ {
-        self.this_param
-            .map(Param::This)
-            .into_iter()
-            .chain(self.params.items.iter().map(Param::Formal))
-            .chain(self.params.rest.as_deref().map(Param::Rest))
+        self.this_param.map(Param::This).into_iter().chain(self.params.items.iter().map(Param::Formal)).chain(self.params.rest.as_deref().map(Param::Rest))
     }
 }
 

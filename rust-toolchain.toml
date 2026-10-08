@@ -1,0 +1,7 @@
+# The one Rust version for builds, CI and releases. Clippy runs with
+# pedantic lints denied, so a new stable release must not move the gate
+# silently: bump this in a pull request of its own and fix what it reports.
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

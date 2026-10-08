@@ -62,11 +62,7 @@ impl TypeEnvironment {
                         env.shadow(&local.name);
                     }
                 }
-                Statement::ExportNamedDeclaration(export) => {
-                    if let Some(declaration) = &export.declaration {
-                        env.declare(declaration);
-                    }
-                }
+                Statement::ExportDeclaration(export) => env.declare(&export.declaration),
                 Statement::ExportDefaultDeclaration(export) => match &export.declaration {
                     ExportDefaultDeclarationKind::FunctionDeclaration(function) if function.r#type == FunctionType::FunctionDeclaration => {
                         env.shadow_named(function.id.as_ref().map(|id| id.name.as_str()));
@@ -403,7 +399,11 @@ impl<'s, 'a> Types<'s, 'a> {
         };
 
         if let Some(substitution) = substitutions.get(name) {
-            return if is_unapplied_reference_to(substitution, name) { Vec::new() } else { self.dictionary_value_types(substitution, substitutions, resolving) };
+            return if is_unapplied_reference_to(substitution, name) {
+                Vec::new()
+            } else {
+                self.dictionary_value_types(substitution, substitutions, resolving)
+            };
         }
 
         let arguments = type_arguments(reference);

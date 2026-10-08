@@ -2,9 +2,10 @@
 //!
 //! Inside a git repository the default scope is the changed set: tracked files
 //! modified in the worktree or the index against `HEAD`, plus untracked files
-//! that are not ignored. `--all` widens it to every tracked and untracked,
-//! non-ignored file. Outside git every file under the root that `.gitignore`
-//! files and `[files] exclude` do not exclude is in scope, changed or not.
+//! that are not ignored. `--all`, or naming paths, widens it to every tracked
+//! and untracked, non-ignored file (under those paths). Outside git every file
+//! under the root that `.gitignore` files and `[files] exclude` do not exclude
+//! is in scope, changed or not.
 //!
 //! Whatever the source, `.git`, `node_modules`, and `vendor` directories are
 //! never entered, symbolic links are never followed or listed, and `.d.ts`
@@ -32,8 +33,9 @@ pub struct Scope {
     pub all: bool,
     /// Lanes to keep; empty keeps both.
     pub lanes: Vec<Lane>,
-    /// Restrict to these paths (files or directories), relative to the current
-    /// directory or absolute. Empty covers the whole repository.
+    /// Cover these paths (files or directories), relative to the current
+    /// directory or absolute, changed or not. Empty covers the changed set, or
+    /// the whole repository under `all`.
     pub paths: Vec<PathBuf>,
 }
 
@@ -100,7 +102,10 @@ pub fn discover(root: &Path, scope: &Scope, files: &fmtkit_config::Files) -> Res
 
     let filter = Arc::new(Filter::new(root, &files.exclude, &scope.lanes, prefixes)?);
 
-    let mut files = match (git, scope.all) {
+    // A named path is covered whether or not it changed, as `check` did in 0.x.
+    let every = scope.all || !scope.paths.is_empty();
+
+    let mut files = match (git, every) {
         (true, false) => git::changed(root, &filter)?,
         (true, true) => git::all(root, &filter)?,
         (false, _) => walk::all(root, &filter)?,

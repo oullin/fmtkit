@@ -1,0 +1,2 @@
+import { and, eq } from 'drizzle-orm';
+const rows = await builder.select().from(users).where(and(eq(users.id, id), eq(users.active, true)));

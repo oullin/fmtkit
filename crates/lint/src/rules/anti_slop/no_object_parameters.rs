@@ -5,7 +5,6 @@ use oxc_ast::ast::TSType;
 use oxc_semantic::AstNode;
 use oxc_span::GetSpan;
 use rustc_hash::FxHashSet;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::lexical::type_parameter_names;
@@ -15,11 +14,7 @@ use super::shared::types::{TypeEnvironment, Types, reference_name};
 
 pub const NAME: &str = "anti-slop/no-object-parameters";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoObjectParameters))
-}
-
-struct NoObjectParameters;
+pub struct NoObjectParameters;
 
 impl Rule for NoObjectParameters {
     fn name(&self) -> &'static str {
@@ -79,6 +74,7 @@ fn resolves_to_object<'a>(types: Types<'_, 'a>, ty: &'a TSType<'a>, shadowed: &F
             let resolved = resolves_to_object(types, &alias.type_annotation, shadowed, visited);
 
             visited.pop();
+
             resolved
         }
         _ => false,

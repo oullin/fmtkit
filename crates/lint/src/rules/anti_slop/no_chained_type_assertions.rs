@@ -5,18 +5,13 @@ use oxc_ast::AstKind;
 use oxc_ast::ast::{Expression, TSType, TSTypeName};
 use oxc_semantic::AstNode;
 use oxc_span::{GetSpan, Span};
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::{parent, strip_parens};
 
 pub const NAME: &str = "anti-slop/no-chained-type-assertions";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoChainedTypeAssertions))
-}
-
-struct NoChainedTypeAssertions;
+pub struct NoChainedTypeAssertions;
 
 impl Rule for NoChainedTypeAssertions {
     fn name(&self) -> &'static str {
@@ -31,13 +26,16 @@ impl Rule for NoChainedTypeAssertions {
         let outermost = assertion(parent(ctx.semantic.nodes(), node.id()).kind()).is_none_or(|(_, inner, _)| strip_parens(inner).span() != span);
 
         if outermost && is_forbidden_chain(node.kind()) {
-            ctx.report(span, "This assertion chain discards type evidence. Keep the original precise type, or parse untrusted input at its boundary before narrowing it.");
+            ctx.report(
+                span,
+                "This assertion chain discards type evidence. Keep the original precise type, or parse untrusted input at its boundary before narrowing it.",
+            );
         }
     }
 }
 
 /// The span, operand and target type of an `as` or angle-bracket assertion.
-fn assertion<'a>(kind: AstKind<'a>) -> Option<(Span, &'a Expression<'a>, &'a TSType<'a>)> {
+fn assertion(kind: AstKind<'_>) -> Option<(Span, &Expression<'_>, &TSType<'_>)> {
     match kind {
         AstKind::TSAsExpression(it) => Some((it.span, &it.expression, &it.type_annotation)),
         AstKind::TSTypeAssertion(it) => Some((it.span, &it.expression, &it.type_annotation)),

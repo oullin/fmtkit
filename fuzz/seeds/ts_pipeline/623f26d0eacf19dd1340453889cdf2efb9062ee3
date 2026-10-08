@@ -1,0 +1,1 @@
+const run = useCallback<(x: number) => void>(() => ({ a: 1 }), [a]);

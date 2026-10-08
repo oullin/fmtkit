@@ -42,7 +42,7 @@ pub fn type_parameter_names<'a>(nodes: &AstNodes<'a>, id: NodeId) -> FxHashSet<&
     names
 }
 
-fn type_parameters<'a>(kind: AstKind<'a>) -> Option<&'a TSTypeParameterDeclaration<'a>> {
+fn type_parameters(kind: AstKind<'_>) -> Option<&TSTypeParameterDeclaration<'_>> {
     match kind {
         AstKind::Function(it) => it.type_parameters.as_deref(),
         AstKind::ArrowFunctionExpression(it) => it.type_parameters.as_deref(),

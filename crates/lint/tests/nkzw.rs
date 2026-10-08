@@ -88,7 +88,8 @@ fn rules_take_no_options() {
 #[test]
 fn disable_directives_apply_to_native_rules() {
     let linter = only("@nkzw/no-instanceof", &[]);
-    let code = "// eslint-disable-next-line @nkzw/no-instanceof\na instanceof B;\na instanceof C; // eslint-disable-line\n/* eslint-disable */\na instanceof D;\n";
+    let code =
+        "// eslint-disable-next-line @nkzw/no-instanceof\na instanceof B;\na instanceof C; // eslint-disable-line\n/* eslint-disable */\na instanceof D;\n";
 
     assert_eq!(messages(&linter, "a.ts", code), Vec::<String>::new());
     assert_eq!(messages(&linter, "a.ts", "// eslint-disable-next-line eqeqeq\na instanceof B;\n").len(), 1);

@@ -158,5 +158,6 @@ pub(crate) fn formats_object(object: &ObjectExpression<'_>) -> bool {
 }
 
 pub(crate) fn formats_array(array: &ArrayExpression<'_>) -> bool {
-    array.elements.len() > 1 || array.elements.iter().any(|element| matches!(element, ArrayExpressionElement::ObjectExpression(_) | ArrayExpressionElement::CallExpression(_)))
+    array.elements.len() > 1
+        || array.elements.iter().any(|element| matches!(element, ArrayExpressionElement::ObjectExpression(_) | ArrayExpressionElement::CallExpression(_)))
 }

@@ -27,7 +27,7 @@ fn tidy(lang: Lang, code: &str, _: &TsFormat) -> Result<String, TsError> {
     Ok(out)
 }
 
-/// Runs [`tidy`] and records every call.
+/// Runs [`tidy`] and records every call of one formatting round.
 #[derive(Default)]
 struct Recorder {
     calls: RefCell<Vec<(Lang, String, bool)>>,
@@ -41,7 +41,7 @@ impl Recorder {
             tidy(lang, code, options)
         };
 
-        format_with(lang, source, &TsFormat::default(), &script)
+        round(lang, source, &TsFormat::default(), &script)
     }
 
     fn blocks(&self) -> Vec<(Lang, String)> {
@@ -279,8 +279,9 @@ fn markdown_fences_inside_containers_keep_their_prefix() {
 
 #[test]
 fn markdown_multiline_output_keeps_blank_lines_inside_containers() {
+    // The stand-in adds blank lines on every call, so only one round is run.
     let script = |_: Lang, code: &str, _: &TsFormat| Ok(code.replace(';', ";\n\n"));
-    let formatted = format_with(Lang::Markdown, "> ```ts\n> a;b;\n> ```\n", &TsFormat::default(), &script).unwrap();
+    let formatted = round(Lang::Markdown, "> ```ts\n> a;b;\n> ```\n", &TsFormat::default(), &script).unwrap();
 
     assert_eq!(formatted.output, "> ```ts\n> a;\n>\n> b;\n> ```\n");
 }
@@ -499,4 +500,96 @@ fn same_code_ignores_common_indent_and_blank_edges() {
     assert!(same_code("\nconst a = 1;\n", "const a = 1;\n"));
     assert!(!same_code("a {\n  b: c;\n}", "a {\n\tb: c;\n}"));
     assert!(!same_code("const a = 1", "const a = 1;"));
+}
+
+// Fixed point
+
+#[test]
+fn a_formatted_document_takes_one_round() {
+    let source = "<script setup lang=\"ts\">\nconst n = 1\n</script>\n\n<template>\n\t<p>{{ n }}</p>\n</template>\n";
+    let calls = RefCell::new(0);
+    let script = |lang: Lang, code: &str, options: &TsFormat| {
+        *calls.borrow_mut() += 1;
+
+        tidy(lang, code, options)
+    };
+    let formatted = format_with(Lang::Vue, source, &TsFormat::default(), &script).unwrap();
+
+    assert_eq!(formatted.output, source);
+    assert_eq!(formatted.applied, Vec::<&str>::new());
+    assert_eq!(*calls.borrow(), 2, "one script block and one expression, once each");
+}
+
+#[test]
+fn a_changed_document_is_formatted_until_it_settles() {
+    // Each round strips one leading `!`, so three rounds are needed.
+    let script = |_: Lang, code: &str, _: &TsFormat| Ok(code.replacen('!', "", 1));
+    let formatted = format_with(Lang::Vue, "<script>\n!!!a\n</script>\n", &TsFormat::default(), &script).unwrap();
+
+    assert_eq!(formatted.output, "<script>\na\n</script>\n");
+    assert_eq!(formatted.applied, ["embedded", "markup"]);
+}
+
+#[test]
+fn a_document_that_never_settles_is_an_idempotency_error() {
+    let script = |_: Lang, code: &str, _: &TsFormat| Ok(format!("{code}a\n"));
+    let error = format_with(Lang::Vue, "<script>\na\n</script>\n", &TsFormat::default(), &script).unwrap_err();
+
+    assert!(matches!(error, HostError::Invariant { step: "idempotency", .. }), "{error:?}");
+}
+
+// Fuzz findings of the `hosts` target, through the real pipeline
+
+fn format_real(lang: Lang, source: &str) -> Result<Formatted, HostError> {
+    format_host("fuzz", lang, source, &TsFormat::default())
+}
+
+fn assert_settles(lang: Lang, source: &str) -> String {
+    let once = format_real(lang, source).unwrap_or_else(|error| panic!("{error}\n{source:?}"));
+    let twice = format_real(lang, &once.output).unwrap_or_else(|error| panic!("{error}\n{:?}", once.output));
+
+    assert_eq!(twice.output, once.output, "{lang:?} {source:?}");
+    assert!(twice.applied.is_empty(), "{lang:?} {source:?}: {:?}", twice.applied);
+
+    once.output
+}
+
+#[test]
+fn fuzz_findings_that_settle_within_the_round_budget() {
+    assert_eq!(assert_settles(Lang::Html, "<style>a\n \na</style>"), "<style>\n\ta\n\n\ta\n</style>\n");
+    assert_eq!(assert_settles(Lang::Vue, "{{a\n \n=}"), "{{\n\ta\n\n\t=\n}}\n");
+
+    for source in ["$$$\n$$", "a\u{c}\r\u{c}", "a\n\n\u{c}", "- `a\r|-\n`", "- a\n  >a\na", ">`a\n--\n`"] {
+        assert_settles(Lang::Markdown, source);
+    }
+}
+
+/// Upstream bugs that never settle; `docs/known-issues.md` lists them. A
+/// failure here means the formatter was fixed: update the document.
+#[test]
+fn fuzz_findings_that_never_settle_are_refused() {
+    for (lang, source) in [
+        (Lang::Vue, "{{`\n`\n\0}"),
+        (Lang::Vue, "{{a\n`\n}}"),
+        (Lang::Vue, "{{{;}\n`\n`}"),
+        (Lang::Html, "<style>s\n`\nd</style>"),
+        (Lang::Markdown, "- a\n\n  {{\n}}"),
+        (Lang::Markdown, "- d\n  >`d\n`"),
+        (Lang::Markdown, "- ;\n<e>\n\t\t\u{b}"),
+        (Lang::Markdown, "- `\n\t\t`\n<m>\n"),
+        (Lang::Markdown, "```css\n{r:(}"),
+    ] {
+        let result = format_real(lang, source);
+
+        assert!(matches!(result, Err(HostError::Invariant { step: "idempotency", .. })), "{lang:?} {source:?}: {result:?}");
+    }
+}
+
+/// oxc-css-parser 0.0.15 reaches an `unreachable!` on a hyphen that neither
+/// starts an identifier nor ends the input; see `docs/known-issues.md`. A
+/// failure here means the parser was fixed: update the document.
+#[test]
+#[should_panic(expected = "entered unreachable code")]
+fn a_hyphen_before_a_space_in_a_style_fence_panics_upstream() {
+    let _ = format_real(Lang::Markdown, "```css\n.- o");
 }

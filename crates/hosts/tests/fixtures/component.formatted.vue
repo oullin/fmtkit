@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 
 const props = defineProps<{ label: string }>();
+
 const count = ref(0);
 
 const doubled = computed(() => {
@@ -10,11 +11,11 @@ const doubled = computed(() => {
 </script>
 
 <template>
-	<section class="counter" :class="{ active:count>0 }">
+	<section class="counter" :class="{ active: count > 0 }">
 		<h2>{{ props.label }}</h2>
 		<button type="button" @click="count++">Clicked {{ count }} times</button>
-		<p v-if="doubled>10" style="color: red; font-weight: bold">Big</p>
-		<ul><li v-for="item in [1,2,3]" :key="item">{{ item }}</li></ul>
+		<p v-if="doubled > 10" style="color: red; font-weight: bold">Big</p>
+		<ul><li v-for="item in [1, 2, 3]" :key="item">{{ item }}</li></ul>
 	</section>
 </template>
 

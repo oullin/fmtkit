@@ -24,26 +24,29 @@ mod require_safety_comment_for_type_assertion;
 mod require_suppression_reason;
 
 #[cfg(test)]
+#[allow(clippy::too_many_lines, reason = "the generated tables keep one test per v1 group")]
 mod tests;
 
 use super::Factory;
 
+/// Every v1 rule, by full name. Only `no-runtime-typeof` takes options; the
+/// others ignore any they are given, as v1 did.
 pub const RULES: &[(&str, Factory)] = &[
-    (no_ambient_nondeterminism::NAME, no_ambient_nondeterminism::build),
-    (no_chained_type_assertions::NAME, no_chained_type_assertions::build),
-    (no_conditional_empty_object_spread::NAME, no_conditional_empty_object_spread::build),
-    (no_known_value_widening::NAME, no_known_value_widening::build),
-    (no_module_mocking::NAME, no_module_mocking::build),
-    (no_object_parameters::NAME, no_object_parameters::build),
-    (no_reflect_apply::NAME, no_reflect_apply::build),
-    (no_reflect_get::NAME, no_reflect_get::build),
+    (no_ambient_nondeterminism::NAME, |_| Ok(Box::new(no_ambient_nondeterminism::NoAmbientNondeterminism))),
+    (no_chained_type_assertions::NAME, |_| Ok(Box::new(no_chained_type_assertions::NoChainedTypeAssertions))),
+    (no_conditional_empty_object_spread::NAME, |_| Ok(Box::new(no_conditional_empty_object_spread::NoConditionalEmptyObjectSpread))),
+    (no_known_value_widening::NAME, |_| Ok(Box::new(no_known_value_widening::NoKnownValueWidening))),
+    (no_module_mocking::NAME, |_| Ok(Box::new(no_module_mocking::NoModuleMocking))),
+    (no_object_parameters::NAME, |_| Ok(Box::new(no_object_parameters::NoObjectParameters))),
+    (no_reflect_apply::NAME, |_| Ok(Box::new(no_reflect_apply::NoReflectApply))),
+    (no_reflect_get::NAME, |_| Ok(Box::new(no_reflect_get::NoReflectGet))),
     (no_runtime_typeof::NAME, no_runtime_typeof::build),
-    (no_shape_in_symbol_names::NAME, no_shape_in_symbol_names::build),
-    (no_unknown_parameters::NAME, no_unknown_parameters::build),
-    (no_unknown_returns::NAME, no_unknown_returns::build),
-    (no_unknown_type_aliases::NAME, no_unknown_type_aliases::build),
-    (no_unsafe_dictionary_type::NAME, no_unsafe_dictionary_type::build),
-    (no_widen_then_assert::NAME, no_widen_then_assert::build),
-    (require_safety_comment_for_type_assertion::NAME, require_safety_comment_for_type_assertion::build),
-    (require_suppression_reason::NAME, require_suppression_reason::build),
+    (no_shape_in_symbol_names::NAME, |_| Ok(Box::new(no_shape_in_symbol_names::NoShapeInSymbolNames))),
+    (no_unknown_parameters::NAME, |_| Ok(Box::new(no_unknown_parameters::NoUnknownParameters))),
+    (no_unknown_returns::NAME, |_| Ok(Box::new(no_unknown_returns::NoUnknownReturns))),
+    (no_unknown_type_aliases::NAME, |_| Ok(Box::new(no_unknown_type_aliases::NoUnknownTypeAliases))),
+    (no_unsafe_dictionary_type::NAME, |_| Ok(Box::new(no_unsafe_dictionary_type::NoUnsafeDictionaryType))),
+    (no_widen_then_assert::NAME, |_| Ok(Box::new(no_widen_then_assert::NoWidenThenAssert))),
+    (require_safety_comment_for_type_assertion::NAME, |_| Ok(Box::new(require_safety_comment_for_type_assertion::RequireSafetyCommentForTypeAssertion))),
+    (require_suppression_reason::NAME, |_| Ok(Box::new(require_suppression_reason::RequireSuppressionReason))),
 ];

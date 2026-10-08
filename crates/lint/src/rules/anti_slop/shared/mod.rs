@@ -57,8 +57,13 @@ pub fn enclosing_function<'s, 'a>(nodes: &'s AstNodes<'a>, id: NodeId, bodyless:
     })
 }
 
-/// Whether `expression` is the identifier `name` with no declaration of that
-/// name in scope, type-only declarations included, as v1's `isGlobalNamed`.
+/// The globals of oxlint's default `builtin` environment that the rules name.
+/// A value reference to one of them skips type-only declarations of the name.
+const BUILTIN_GLOBALS: [&str; 3] = ["Date", "Math", "Reflect"];
+
+/// Whether `expression` is the identifier `name` naming the global, as v1's
+/// `isGlobalNamed`: a value reference to a builtin global, or a name with no
+/// declaration in scope, type-only declarations included.
 pub fn is_global(ctx: &Context<'_, '_>, expression: &Expression<'_>, name: &str) -> bool {
     let Expression::Identifier(identifier) = strip_parens(expression) else {
         return false;
@@ -68,9 +73,15 @@ pub fn is_global(ctx: &Context<'_, '_>, expression: &Expression<'_>, name: &str)
         return false;
     }
 
+    let scoping = ctx.semantic.scoping();
+
+    if BUILTIN_GLOBALS.contains(&name) && identifier.reference_id.get().is_none_or(|reference| scoping.get_reference(reference).symbol_id().is_none()) {
+        return true;
+    }
+
     let scope = ctx.semantic.nodes().get_node(identifier.node_id.get()).scope_id();
 
-    ctx.semantic.scoping().find_binding(scope, identifier.name).is_none()
+    scoping.find_binding(scope, identifier.name).is_none()
 }
 
 /// The object and the statically known property name of a member access:
@@ -95,7 +106,8 @@ pub fn is_global_member(ctx: &Context<'_, '_>, callee: &Expression<'_>, owner: &
 pub fn is_js_space(c: char) -> bool {
     matches!(
         c,
-        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}'
+        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+            ..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}'
     )
 }
 

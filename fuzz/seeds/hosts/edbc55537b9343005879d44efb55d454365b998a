@@ -1,0 +1,7 @@
+<style lang="scss">
+.a{.b{color:red}}
+</style>
+
+<style lang="less">
+.a{.b{color:red}}
+</style>

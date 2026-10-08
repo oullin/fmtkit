@@ -43,7 +43,7 @@ fn valid() {
 
 #[test]
 fn invalid() {
-    let cases: &[(Value, &str, &str, Option<&str>)] = &[
+    assert_invalid(&[
         (Value::Null, r#"describe.only("Some describe block", function() {});"#, "describe.only not permitted", None),
         (Value::Null, r#"it.only("Some assertion", function() {});"#, "it.only not permitted", None),
         (Value::Null, r#"context.only("Some context", function() {});"#, "context.only not permitted", None),
@@ -51,46 +51,109 @@ fn invalid() {
         (Value::Null, r#"tape.only("A tape", function() {});"#, "tape.only not permitted", None),
         (Value::Null, r#"fixture.only("A fixture", function() {});"#, "fixture.only not permitted", None),
         (Value::Null, r#"serial.only("A serial test", function() {});"#, "serial.only not permitted", None),
-        (json!({ "block": ["obscureTestBlock"] }), r#"obscureTestBlock.only("An obscure testing library test", function() {});"#, "obscureTestBlock.only not permitted", None),
+        (
+            json!({ "block": ["obscureTestBlock"] }),
+            r#"obscureTestBlock.only("An obscure testing library test", function() {});"#,
+            "obscureTestBlock.only not permitted",
+            None,
+        ),
         (json!({ "block": ["ava.default"] }), r#"ava.default.only("Block with dot", function() {});"#, "ava.default.only not permitted", None),
         (Value::Null, r#"it.default.before(console.log).only("Some describe block", function() {});"#, "it.default.before.only not permitted", None),
         (json!({ "focus": ["focus"] }), r#"test.focus("An alternative focus function", function() {});"#, "test.focus not permitted", None),
-        (json!({ "fix": true }), r#"describe.only("Some describe block", function() {});"#, "describe.only not permitted", Some(r#"describe("Some describe block", function() {});"#)),
+        (json!({ "block": ["test*"] }), r#"testResource.only("A test resource block", function() {});"#, "testResource.only not permitted", None),
+        (json!({ "functions": ["fit", "xit"] }), r#"xit("No skipped tests", function() {});"#, "xit not permitted", None),
+        // ESTree shapes oxc represents differently.
+        (Value::Null, r#"(describe).only("parenthesized", function() {});"#, "describe.only not permitted", None),
+        (Value::Null, r#"describe?.only("optional", function() {});"#, "describe.only not permitted", None),
+        (json!({ "block": ["*"] }), r#"describe[only]("computed", function() {});"#, " not permitted", None),
+    ]);
+}
+
+#[test]
+fn invalid_with_fix() {
+    assert_invalid(&[
+        (
+            json!({ "fix": true }),
+            r#"describe.only("Some describe block", function() {});"#,
+            "describe.only not permitted",
+            Some(r#"describe("Some describe block", function() {});"#),
+        ),
         (json!({ "fix": true }), r#"it.only("Some assertion", function() {});"#, "it.only not permitted", Some(r#"it("Some assertion", function() {});"#)),
-        (json!({ "fix": true }), r#"context.only("Some context", function() {});"#, "context.only not permitted", Some(r#"context("Some context", function() {});"#)),
+        (
+            json!({ "fix": true }),
+            r#"context.only("Some context", function() {});"#,
+            "context.only not permitted",
+            Some(r#"context("Some context", function() {});"#),
+        ),
         (json!({ "fix": true }), r#"test.only("Some test", function() {});"#, "test.only not permitted", Some(r#"test("Some test", function() {});"#)),
         (json!({ "fix": true }), r#"tape.only("A tape", function() {});"#, "tape.only not permitted", Some(r#"tape("A tape", function() {});"#)),
         (json!({ "fix": true }), r#"fixture.only("A fixture", function() {});"#, "fixture.only not permitted", Some(r#"fixture("A fixture", function() {});"#)),
-        (json!({ "fix": true }), r#"serial.only("A serial test", function() {});"#, "serial.only not permitted", Some(r#"serial("A serial test", function() {});"#)),
+        (
+            json!({ "fix": true }),
+            r#"serial.only("A serial test", function() {});"#,
+            "serial.only not permitted",
+            Some(r#"serial("A serial test", function() {});"#),
+        ),
         (
             json!({ "block": ["obscureTestBlock"], "fix": true }),
             r#"obscureTestBlock.only("An obscure testing library test", function() {});"#,
             "obscureTestBlock.only not permitted",
             Some(r#"obscureTestBlock("An obscure testing library test", function() {});"#),
         ),
-        (json!({ "block": ["ava.default"], "fix": true }), r#"ava.default.only("Block with dot", function() {});"#, "ava.default.only not permitted", Some(r#"ava.default("Block with dot", function() {});"#)),
+        (
+            json!({ "block": ["ava.default"], "fix": true }),
+            r#"ava.default.only("Block with dot", function() {});"#,
+            "ava.default.only not permitted",
+            Some(r#"ava.default("Block with dot", function() {});"#),
+        ),
         (
             json!({ "fix": true }),
             r#"it.default.before(console.log).only("Some describe block", function() {});"#,
             "it.default.before.only not permitted",
             Some(r#"it.default.before(console.log)("Some describe block", function() {});"#),
         ),
-        (json!({ "focus": ["focus"], "fix": true }), r#"test.focus("An alternative focus function", function() {});"#, "test.focus not permitted", Some(r#"test("An alternative focus function", function() {});"#)),
-        (json!({ "block": ["test*"] }), r#"testResource.only("A test resource block", function() {});"#, "testResource.only not permitted", None),
-        (json!({ "fix": true }), r#"Feature.only("Some Feature", function() {});"#, "Feature.only not permitted", Some(r#"Feature("Some Feature", function() {});"#)),
-        (json!({ "fix": true }), r#"Scenario.only("Some Scenario", function() {});"#, "Scenario.only not permitted", Some(r#"Scenario("Some Scenario", function() {});"#)),
-        (json!({ "fix": true }), r#"Given.only("Some assertion", function() {});"#, "Given.only not permitted", Some(r#"Given("Some assertion", function() {});"#)),
+        (
+            json!({ "focus": ["focus"], "fix": true }),
+            r#"test.focus("An alternative focus function", function() {});"#,
+            "test.focus not permitted",
+            Some(r#"test("An alternative focus function", function() {});"#),
+        ),
+        (
+            json!({ "fix": true }),
+            r#"Feature.only("Some Feature", function() {});"#,
+            "Feature.only not permitted",
+            Some(r#"Feature("Some Feature", function() {});"#),
+        ),
+        (
+            json!({ "fix": true }),
+            r#"Scenario.only("Some Scenario", function() {});"#,
+            "Scenario.only not permitted",
+            Some(r#"Scenario("Some Scenario", function() {});"#),
+        ),
+        (
+            json!({ "fix": true }),
+            r#"Given.only("Some assertion", function() {});"#,
+            "Given.only not permitted",
+            Some(r#"Given("Some assertion", function() {});"#),
+        ),
         (json!({ "fix": true }), r#"And.only("Some assertion", function() {});"#, "And.only not permitted", Some(r#"And("Some assertion", function() {});"#)),
-        (json!({ "fix": true }), r#"When.only("Some assertion", function() {});"#, "When.only not permitted", Some(r#"When("Some assertion", function() {});"#)),
-        (json!({ "fix": true }), r#"Then.only("Some assertion", function() {});"#, "Then.only not permitted", Some(r#"Then("Some assertion", function() {});"#)),
-        (json!({ "functions": ["fit", "xit"] }), r#"xit("No skipped tests", function() {});"#, "xit not permitted", None),
+        (
+            json!({ "fix": true }),
+            r#"When.only("Some assertion", function() {});"#,
+            "When.only not permitted",
+            Some(r#"When("Some assertion", function() {});"#),
+        ),
+        (
+            json!({ "fix": true }),
+            r#"Then.only("Some assertion", function() {});"#,
+            "Then.only not permitted",
+            Some(r#"Then("Some assertion", function() {});"#),
+        ),
         (json!({ "functions": ["fit", "xit"], "fix": true }), r#"xit("No skipped tests", function() {});"#, "xit not permitted", None),
-        // ESTree shapes oxc represents differently.
-        (Value::Null, r#"(describe).only("parenthesized", function() {});"#, "describe.only not permitted", None),
-        (Value::Null, r#"describe?.only("optional", function() {});"#, "describe.only not permitted", None),
-        (json!({ "block": ["*"] }), r#"describe[only]("computed", function() {});"#, " not permitted", None),
-    ];
+    ]);
+}
 
+fn assert_invalid(cases: &[(Value, &str, &str, Option<&str>)]) {
     for (opts, code, message, fixed) in cases {
         let linter = only(RULE, &options(opts));
 

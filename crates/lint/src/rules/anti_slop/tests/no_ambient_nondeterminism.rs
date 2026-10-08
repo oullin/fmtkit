@@ -43,25 +43,41 @@ fn v1() {
                 name: "Math.random",
                 path: "case.ts",
                 code: "export function pick(): number {\n\treturn Math.random();\n}\n",
-                expected: &[(41, 54, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    41,
+                    54,
+                    "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
             Case {
                 name: "computed Math access",
                 path: "case.ts",
                 code: "export function pick(): number {\n\treturn Math[\"random\"]();\n}\n",
-                expected: &[(41, 57, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    41,
+                    57,
+                    "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
             Case {
                 name: "performance.now",
                 path: "case.ts",
                 code: "export function elapsed(): number {\n\treturn performance.now();\n}\n",
-                expected: &[(44, 61, "`performance.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    44,
+                    61,
+                    "`performance.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
             Case {
                 name: "crypto.randomUUID",
                 path: "case.ts",
                 code: "export function id(): string {\n\treturn crypto.randomUUID();\n}\n",
-                expected: &[(39, 58, "`crypto.randomUUID()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    39,
+                    58,
+                    "`crypto.randomUUID()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
         ],
     );
@@ -77,7 +93,14 @@ fn edges() {
                 name: "getRandomValues and hrtime",
                 path: "case.ts",
                 code: "crypto.getRandomValues(new Uint8Array(4));\nprocess.hrtime();\n",
-                expected: &[(0, 41, "`crypto.getRandomValues()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."), (43, 59, "`process.hrtime()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[
+                    (
+                        0,
+                        41,
+                        "`crypto.getRandomValues()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                    ),
+                    (43, 59, "`process.hrtime()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                ],
             },
             Case {
                 name: "new Date without parentheses",
@@ -89,20 +112,22 @@ fn edges() {
                 name: "parenthesized owner and callee",
                 path: "case.ts",
                 code: "export const a = (Math).random();\nexport const b = (Date.now)();\nexport const c = new (Date)();\n",
-                expected: &[(17, 32, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."), (51, 63, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."), (82, 94, "`new Date()` without an argument reads the ambient clock. Take the instant as a parameter so the caller owns it.")],
+                expected: &[
+                    (17, 32, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    (51, 63, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    (82, 94, "`new Date()` without an argument reads the ambient clock. Take the instant as a parameter so the caller owns it."),
+                ],
             },
             Case {
                 name: "optional chains",
                 path: "case.ts",
                 code: "export const a = Math?.random();\nexport const b = Date.now?.();\n",
-                expected: &[(17, 31, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."), (50, 62, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[
+                    (17, 31, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    (50, 62, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                ],
             },
-            Case {
-                name: "computed template key is not matched",
-                path: "case.ts",
-                code: "export const a = Math[`random`]();\n",
-                expected: &[],
-            },
+            Case { name: "computed template key is not matched", path: "case.ts", code: "export const a = Math[`random`]();\n", expected: &[] },
             Case {
                 name: "shadowed by a parameter",
                 path: "case.ts",
@@ -113,13 +138,21 @@ fn edges() {
                 name: "shadowed by a type only",
                 path: "case.ts",
                 code: "type Math = { random(): number };\n\nexport const a = Math.random();\n",
-                expected: &[(52, 65, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    52,
+                    65,
+                    "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
             Case {
                 name: "shadowed inside a nested scope only",
                 path: "case.ts",
                 code: "function f() {\n\tconst Math = { random: () => 1 };\n\treturn Math.random();\n}\nexport const a = Math.random() + f();\n",
-                expected: &[(92, 105, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[(
+                    92,
+                    105,
+                    "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
             },
             Case {
                 name: "unrelated members",
@@ -137,14 +170,12 @@ fn edges() {
                 name: "nested calls report each",
                 path: "case.ts",
                 code: "export const a = String(Math.random() + Date.now());\n",
-                expected: &[(24, 37, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."), (40, 50, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+                expected: &[
+                    (24, 37, "`Math.random()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    (40, 50, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                ],
             },
-            Case {
-                name: "globalThis access is not matched",
-                path: "case.ts",
-                code: "export const a = globalThis.Math.random();\n",
-                expected: &[],
-            },
+            Case { name: "globalThis access is not matched", path: "case.ts", code: "export const a = globalThis.Math.random();\n", expected: &[] },
             Case {
                 name: "new Date with arguments in tsx",
                 path: "case.tsx",

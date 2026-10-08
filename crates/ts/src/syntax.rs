@@ -6,7 +6,7 @@ use std::path::Path;
 
 use fmtkit_core::{Lang, is_declaration};
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Argument, CallExpression, ChainElement, Comment, Expression, MemberExpression, Program, TSNonNullExpression};
+use oxc_ast::ast::{CallExpression, ChainElement, Comment, Expression, MemberExpression, Program, TSNonNullExpression};
 use oxc_parser::{ParseOptions, Parser};
 use oxc_span::{GetSpan, SourceType, Span};
 
@@ -45,7 +45,7 @@ pub(crate) fn parse<'a>(allocator: &'a Allocator, text: &'a str, source_type: So
     let parsed = Parser::new(allocator, text, source_type).with_options(ParseOptions::default()).parse();
 
     if let Some(diagnostic) = parsed.diagnostics.first() {
-        let offset = diagnostic.labels.first().map_or(0, |label| u32::try_from(label.offset()).unwrap_or(u32::MAX));
+        let offset = diagnostic.labels.first().map_or(0, oxc_span::LabeledSpan::offset);
 
         return Err(ParseFailure { offset, message: diagnostic.message.to_string() });
     }
@@ -154,13 +154,6 @@ impl<'a> Chained<'a> {
             Self::Other(expression) => expression.span(),
         }
     }
-
-    pub(crate) fn identifier_name(self) -> Option<&'a str> {
-        match self {
-            Self::Other(Expression::Identifier(identifier)) => Some(identifier.name.as_str()),
-            _ => None,
-        }
-    }
 }
 
 /// An expression with chain, parenthesis, and TypeScript assertion wrappers
@@ -196,11 +189,6 @@ pub(crate) fn property_span(member: &MemberExpression<'_>) -> Span {
         MemberExpression::ComputedMemberExpression(member) => member.expression.span(),
         MemberExpression::PrivateFieldExpression(member) => member.field.span,
     }
-}
-
-/// The argument as an expression, `None` for a spread.
-pub(crate) fn argument_expression<'a>(argument: &'a Argument<'a>) -> Option<&'a Expression<'a>> {
-    argument.as_expression()
 }
 
 pub(crate) fn to_u32(value: usize) -> u32 {

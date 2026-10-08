@@ -1,4 +1,6 @@
+use std::any::Any;
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
 
 use fmtkit_config::Config;
 use fmtkit_core::{FileOutcome, Lang, Mode, is_declaration, is_test_file};
@@ -15,9 +17,11 @@ struct Processed {
 }
 
 /// Process one TypeScript, JavaScript, or host file. `None` leaves the file out
-/// of the report (a generated file).
+/// of the report (a generated file). A panic inside a parser or formatter
+/// becomes this file's error, so one hostile input cannot abort the run.
 pub fn process(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
-    let outcome = process_inner(run, file);
+    let outcome = panic::catch_unwind(AssertUnwindSafe(|| process_inner(run, file)))
+        .unwrap_or_else(|payload| Some(FileOutcome::failed(&file.rel, Some(file.lang), internal_error(payload.as_ref()))));
 
     run.progress.tick();
 
@@ -45,7 +49,7 @@ fn process_inner(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
     }
 
     let score = file.lang.is_scorable() && !is_test_file(&file.abs) && !is_declaration(&file.abs);
-    let processed = match transform(run.config, run.linter, &file.rel, file.lang, &source, score) {
+    let processed = match transform(run.config, run.linter, run.mode, &file.rel, file.lang, &source, score) {
         Ok(processed) => processed,
         Err(message) => return Some(FileOutcome::failed(&file.rel, Some(file.lang), message)),
     };
@@ -77,9 +81,10 @@ fn process_inner(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
     Some(outcome)
 }
 
-/// Lint fixes, then the lane's formatter, then lint diagnostics against the
-/// final text.
-fn transform(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, source: &str, score: bool) -> Result<Processed, String> {
+/// Lint fixes, then the lane's formatter, then lint diagnostics: in format
+/// mode what is left in the final text, in check mode every finding in the
+/// text on disk, fixable ones included, since nothing gets fixed.
+fn transform(config: &Config, linter: Option<&Linter>, mode: Mode, rel: &str, lang: Lang, source: &str, score: bool) -> Result<Processed, String> {
     let linter = linter.filter(|l| lang.is_lintable() && !l.ignores(rel));
     let mut applied = Vec::new();
     let mut outcome = FileOutcome::new(rel, Some(lang));
@@ -101,14 +106,27 @@ fn transform(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, so
         let formatted = fmtkit_ts::format_source(rel, lang, input, &config.ts.format, score).map_err(|e| e.to_string())?;
 
         applied.extend(formatted.applied.iter().map(|s| (*s).to_owned()));
-        outcome.complexity = formatted.complexity;
+
+        // Check mode reports against the text on disk, as lint does; scores
+        // from the formatted text would point at lines it moved.
+        outcome.complexity = if score && mode == Mode::Check && formatted.output != source {
+            fmtkit_ts::score(rel, lang, source).map_err(|e| e.to_string())?
+        } else {
+            formatted.complexity
+        };
 
         formatted.output
     };
 
     if let (Some(linter), Some(linted)) = (linter, linted) {
-        // Positions only need refreshing when something is left to report and the formatter moved it.
-        outcome.lint = if linted.diagnostics.is_empty() || output == input { linted.diagnostics } else { linter.lint(rel, lang, &output, false).diagnostics };
+        outcome.lint = if mode == Mode::Check && fixed.is_some() {
+            linter.lint(rel, lang, source, false).diagnostics
+        } else if linted.diagnostics.is_empty() || output == input {
+            linted.diagnostics
+        } else {
+            // The formatter moved what is left to report.
+            linter.lint(rel, lang, &output, false).diagnostics
+        };
     }
 
     Ok(Processed { output, applied, outcome })
@@ -116,5 +134,12 @@ fn transform(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, so
 
 /// [`transform`] for `--stdin-filepath`: the formatted text, or the reason it failed.
 pub fn format_text(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, source: &str) -> Result<String, String> {
-    transform(config, linter, rel, lang, source, false).map(|p| p.output)
+    panic::catch_unwind(AssertUnwindSafe(|| transform(config, linter, Mode::Format, rel, lang, source, false).map(|p| p.output)))
+        .unwrap_or_else(|payload| Err(internal_error(payload.as_ref())))
+}
+
+fn internal_error(payload: &(dyn Any + Send)) -> String {
+    let message = payload.downcast_ref::<&str>().copied().or_else(|| payload.downcast_ref::<String>().map(String::as_str)).unwrap_or("unknown panic");
+
+    format!("internal error, please report it: {message}")
 }

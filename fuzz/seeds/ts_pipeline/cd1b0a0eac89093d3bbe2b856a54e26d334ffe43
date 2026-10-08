@@ -1,0 +1,4 @@
+const store = create<StoreShape>(
+	{ a: 1 },
+	[b],
+);

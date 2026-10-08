@@ -2,7 +2,9 @@
 //! multiline helpers, and set operations.
 
 use fmtkit_core::Edit;
-use oxc_ast::ast::{Argument, ArrayExpression, ArrayExpressionElement, CallExpression, Comment, Expression, ObjectExpression, ObjectPropertyKind, PropertyKind};
+use oxc_ast::ast::{
+    Argument, ArrayExpression, ArrayExpressionElement, CallExpression, Comment, Expression, ObjectExpression, ObjectPropertyKind, PropertyKind,
+};
 use oxc_span::{GetSpan, Span};
 
 use super::classifier::{Classifier, formats_array, formats_object};
@@ -113,7 +115,9 @@ impl<'a> Writer<'_, 'a> {
         let next = format!("{indent}{}", self.unit);
         let properties = object.properties.iter().map(|property| match property {
             // Accessors keep their text: `key: value` would turn `get x() {}` into invalid code.
-            ObjectPropertyKind::ObjectProperty(property) if !property.computed && !property.method && !property.shorthand && property.kind == PropertyKind::Init => {
+            ObjectPropertyKind::ObjectProperty(property)
+                if !property.computed && !property.method && !property.shorthand && property.kind == PropertyKind::Init =>
+            {
                 format!("{}: {}", self.slice(property.key.span()), self.node(&property.value, &next))
             }
             property => self.slice(property.span()).to_owned(),

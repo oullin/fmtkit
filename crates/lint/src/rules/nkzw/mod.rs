@@ -82,7 +82,9 @@ impl Rule for EnsureRelayTypes {
         }
 
         let tracked = imported_names(ctx, call.span.start, "react-relay/hooks.js", |specifier| {
-            imported_identifier(specifier).filter(|(imported, _)| matches!(*imported, "useMutation" | "usePaginationFragment")).map(|(_, local)| local.to_owned())
+            imported_identifier(specifier)
+                .filter(|(imported, _)| matches!(*imported, "useMutation" | "usePaginationFragment"))
+                .map(|(_, local)| local.to_owned())
         });
 
         if tracked.iter().any(|local| local == name) {
@@ -146,10 +148,12 @@ impl Rule for RequireUseEffectArguments {
                     Expression::Identifier(object) => format!("{}.{}", object.name, member.property.name),
                     _ => return,
                 },
-                Some(MemberExpression::ComputedMemberExpression(member)) => match (member.object.without_parentheses(), member.expression.without_parentheses()) {
-                    (Expression::Identifier(object), Expression::Identifier(property)) => format!("{}.{}", object.name, property.name),
-                    _ => return,
-                },
+                Some(MemberExpression::ComputedMemberExpression(member)) => {
+                    match (member.object.without_parentheses(), member.expression.without_parentheses()) {
+                        (Expression::Identifier(object), Expression::Identifier(property)) => format!("{}.{}", object.name, property.name),
+                        _ => return,
+                    }
+                }
                 _ => return,
             },
         };

@@ -1,9 +1,10 @@
 //! Which sibling pairs need a blank line between them, and how class members
 //! group for reordering. Type names in comments are the ESTree ones v1 used.
 
+use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    AccessorPropertyType, ArrowFunctionExpression, AwaitExpression, ClassElement, Declaration, Expression, ExportDefaultDeclarationKind, Function, FunctionType,
-    MethodDefinitionKind, Statement, VariableDeclarationKind,
+    AccessorPropertyType, ArrowFunctionExpression, AwaitExpression, ClassElement, Declaration, ExportDefaultDeclarationKind, Expression, Function,
+    FunctionType, MethodDefinitionKind, Statement, VariableDeclarationKind,
 };
 use oxc_ast_visit::Visit;
 use oxc_ast_visit::walk::walk_await_expression;
@@ -53,6 +54,20 @@ pub(crate) fn classify(member: &ClassElement<'_>) -> MemberKind {
         ClassElement::MethodDefinition(method) if method.kind == MethodDefinitionKind::Constructor => MemberKind::Constructor,
         _ => MemberKind::Method,
     }
+}
+
+/// [`classify`] for a class element seen as an AST node; `None` for any
+/// other node.
+pub(crate) fn classify_kind(kind: AstKind<'_>) -> Option<MemberKind> {
+    let kind = match kind {
+        AstKind::PropertyDefinition(_) | AstKind::TSIndexSignature(_) | AstKind::StaticBlock(_) => MemberKind::Property,
+        AstKind::AccessorProperty(accessor) if accessor.r#type == AccessorPropertyType::AccessorProperty => MemberKind::Property,
+        AstKind::MethodDefinition(method) if method.kind == MethodDefinitionKind::Constructor => MemberKind::Constructor,
+        AstKind::AccessorProperty(_) | AstKind::MethodDefinition(_) => MemberKind::Method,
+        _ => return None,
+    };
+
+    Some(kind)
 }
 
 /// `PropertyDefinition`, `TSAbstractPropertyDefinition`, `AccessorProperty`,
@@ -188,7 +203,13 @@ fn is_type_declaration(previous: Item<'_>) -> bool {
 fn is_loop(item: Item<'_>) -> bool {
     matches!(
         item.statement(),
-        Some(Statement::ForStatement(_) | Statement::ForInStatement(_) | Statement::ForOfStatement(_) | Statement::WhileStatement(_) | Statement::DoWhileStatement(_))
+        Some(
+            Statement::ForStatement(_)
+                | Statement::ForInStatement(_)
+                | Statement::ForOfStatement(_)
+                | Statement::WhileStatement(_)
+                | Statement::DoWhileStatement(_)
+        )
     )
 }
 

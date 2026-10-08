@@ -8,6 +8,7 @@ edition = "2024"
 rust-version = "1.96"
 license = "MIT"
 repository = "https://github.com/oullin/fmtkit"
+homepage = "https://github.com/oullin/fmtkit"
 publish = false
 
 [workspace.lints.rust]
@@ -53,6 +54,9 @@ oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0
 oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
 oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
 oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_graphql = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_json = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_yaml = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
 
 anyhow = "1"
 blake3 = "1"
@@ -89,8 +93,15 @@ oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.8
 [profile.release]
 lto = "thin"
 codegen-units = 16
-panic = "abort"
+# Unwind, not abort: a panic inside a third-party parser or formatter on one
+# file becomes that file's error instead of killing the run
+# (crates/engine/src/script_lane.rs).
+panic = "unwind"
 strip = "symbols"
+
+# cargo-dist builds release archives with this profile.
+[profile.dist]
+inherits = "release"
 
 [profile.dev.package."*"]
 # Dependencies are compiled with optimisations so debug builds of the

@@ -1,0 +1,4 @@
+const continueByFrame = useMemo<Readonly<Record<AddMemberFrame, () => void>>>(
+	() => ({ type: () => {}, details: () => {} }),
+	[a, b],
+);

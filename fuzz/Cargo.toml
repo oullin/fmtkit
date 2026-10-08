@@ -1,0 +1,65 @@
+[package]
+name = "fmtkit-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# The fuzz crate is its own workspace so the root `members = ["crates/*"]`
+# never builds it and it never needs nightly-only flags there.
+[workspace]
+
+[dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+libfuzzer-sys = "0.4"
+toml = "1"
+fmtkit-config = { path = "../crates/config" }
+fmtkit-core = { path = "../crates/core" }
+fmtkit-go = { path = "../crates/go" }
+fmtkit-hosts = { path = "../crates/hosts" }
+fmtkit-ts = { path = "../crates/ts" }
+
+# Copied from the root Cargo.toml: a patch only applies from the workspace
+# being built. Keep the tag in step with the root's oxc pin.
+[patch.crates-io]
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "edit_set"
+path = "fuzz_targets/edit_set.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "go_protocol"
+path = "fuzz_targets/go_protocol.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "config"
+path = "fuzz_targets/config.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ts_pipeline"
+path = "fuzz_targets/ts_pipeline.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hosts"
+path = "fuzz_targets/hosts.rs"
+test = false
+doc = false
+bench = false

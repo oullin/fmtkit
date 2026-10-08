@@ -16,11 +16,11 @@ pub(crate) fn edits<'a>(text: &'a str, program: &'a Program<'a>) -> EditSet {
     let mut edits = EditSet::new();
 
     for_each_list(program, |items| {
-        for group in runs(items, |item| item.is_import()) {
+        for group in runs(items, Item::is_import) {
             edits.extend(group_edit(text, group, true));
         }
 
-        for group in runs(items, |item| item.is_const()) {
+        for group in runs(items, Item::is_const) {
             edits.extend(group_edit(text, group, can_reorder_consts(text, group)));
         }
     });
@@ -31,7 +31,7 @@ pub(crate) fn edits<'a>(text: &'a str, program: &'a Program<'a>) -> EditSet {
 }
 
 /// Maximal runs of two or more consecutive items matching `matches`.
-fn runs<'l, 'a>(items: &'l [Item<'a>], matches: impl Fn(Item<'a>) -> bool + 'l) -> impl Iterator<Item = &'l [Item<'a>]> + 'l {
+fn runs<'l, 'a>(items: &'l [Item<'a>], matches: impl Fn(Item<'a>) -> bool + Copy + 'l) -> impl Iterator<Item = &'l [Item<'a>]> + 'l {
     items.chunk_by(move |a, b| matches(*a) == matches(*b)).filter(move |run| run.len() > 1 && matches(run[0]))
 }
 

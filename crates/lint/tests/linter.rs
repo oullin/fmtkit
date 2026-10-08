@@ -84,7 +84,7 @@ fn safe_fixes_are_applied_and_relinted() {
     let linted = linter.lint("a.mjs", Lang::Mjs, "import fs from 'fs';\nimport path from 'path';\nfs, path;\n", true);
 
     assert_eq!(linted.fixed.as_deref(), Some("import fs from 'node:fs';\nimport path from 'node:path';\nfs, path;\n"));
-    assert!(linted.diagnostics.is_empty());
+    assert_eq!(linted.diagnostics, []);
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn syntax_errors_are_reported_and_stop_linting() {
     let linted = linter.lint("a.js", Lang::Js, "if (a == 1) {\n", true);
 
     assert!(linted.fixed.is_none());
-    assert!(!linted.diagnostics.is_empty());
+    assert_ne!(linted.diagnostics.len(), 0);
     assert!(linted.diagnostics.iter().all(|d| d.rule == SYNTAX_RULE && d.severity == Severity::Error));
 }
 

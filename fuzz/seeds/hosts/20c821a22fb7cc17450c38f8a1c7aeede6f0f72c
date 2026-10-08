@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+			body {
+				margin: 0;
+			}
+		</style>
+	</head>
+	<body>
+		<p style="color: red; margin: 0">hi</p>
+		<script>
+			const x = 1
+		</script>
+	</body>
+</html>

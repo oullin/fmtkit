@@ -2,7 +2,7 @@
 //! lists, class bodies, and switch cases, in ESTree terms.
 
 use oxc_ast::AstKind;
-use oxc_ast::ast::{ClassElement, Directive, FunctionBody, Program, Statement, SwitchCase, VariableDeclarationKind};
+use oxc_ast::ast::{ClassElement, Directive, Program, Statement, SwitchCase, VariableDeclarationKind};
 use oxc_ast_visit::Visit;
 use oxc_span::{GetSpan, Span};
 
@@ -50,7 +50,7 @@ impl<'a> Item<'a> {
 
 /// Call `visit` with every sibling list below `program`, outermost first.
 pub(crate) fn for_each_list<'a>(program: &'a Program<'a>, visit: impl FnMut(&[Item<'a>])) {
-    let mut lists = Lists { visit, items: Vec::new(), expression_bodies: Vec::new() };
+    let mut lists = Lists { visit, items: Vec::new() };
 
     lists.visit_program(program);
 }
@@ -58,7 +58,6 @@ pub(crate) fn for_each_list<'a>(program: &'a Program<'a>, visit: impl FnMut(&[It
 struct Lists<'a, F> {
     visit: F,
     items: Vec<Item<'a>>,
-    expression_bodies: Vec<&'a FunctionBody<'a>>,
 }
 
 impl<'a, F: FnMut(&[Item<'a>])> Lists<'a, F> {
@@ -78,13 +77,8 @@ impl<'a, F: FnMut(&[Item<'a>])> Visit<'a> for Lists<'a, F> {
             AstKind::SwitchCase(case) => self.emit(case.consequent.iter().map(Item::Statement)),
             AstKind::SwitchStatement(switch) => self.emit(switch.cases.iter().map(Item::Case)),
             AstKind::ClassBody(body) => self.emit(body.body.iter().map(Item::Member)),
-            AstKind::ArrowFunctionExpression(arrow) if arrow.expression => self.expression_bodies.push(&arrow.body),
-            AstKind::FunctionBody(body) => {
-                // An expression-bodied arrow has no statement list in ESTree.
-                if !self.expression_bodies.iter().any(|expression| std::ptr::eq(*expression, body)) {
-                    self.emit(body.directives.iter().map(Item::Directive).chain(body.statements.iter().map(Item::Statement)));
-                }
-            }
+            // An expression-bodied arrow has no `FunctionBody`, as in ESTree.
+            AstKind::FunctionBody(body) => self.emit(body.directives.iter().map(Item::Directive).chain(body.statements.iter().map(Item::Statement))),
             _ => {}
         }
     }

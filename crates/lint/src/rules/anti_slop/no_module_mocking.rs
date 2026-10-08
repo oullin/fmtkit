@@ -4,7 +4,6 @@
 use oxc_ast::AstKind;
 use oxc_ast::ast::Expression;
 use oxc_semantic::AstNode;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::{member, strip_parens};
@@ -13,11 +12,7 @@ pub const NAME: &str = "anti-slop/no-module-mocking";
 
 const MOCK_METHODS: [&str; 3] = ["doMock", "mock", "unstable_mockModule"];
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoModuleMocking))
-}
-
-struct NoModuleMocking;
+pub struct NoModuleMocking;
 
 impl Rule for NoModuleMocking {
     fn name(&self) -> &'static str {
@@ -30,10 +25,7 @@ impl Rule for NoModuleMocking {
         };
 
         if member(&call.callee).is_some_and(|(object, method)| MOCK_METHODS.contains(&method) && is_test_framework_object(ctx, object)) {
-            ctx.report(
-                call.span,
-                "Replace module mocking with dependency injection through a real interface, service layer, or faithful test implementation.",
-            );
+            ctx.report(call.span, "Replace module mocking with dependency injection through a real interface, service layer, or faithful test implementation.");
         }
     }
 }
@@ -58,7 +50,8 @@ fn is_test_framework_object(ctx: &Context<'_, '_>, expression: &Expression<'_>) 
 
     let imported = specifier.imported.name();
 
-    nodes.ancestor_kinds(declaration).find_map(|kind| if let AstKind::ImportDeclaration(import) = kind { Some(import.source.value.as_str()) } else { None }).is_some_and(
-        |source| (source == "vitest" && imported == "vi") || (source == "@jest/globals" && imported == "jest"),
-    )
+    nodes
+        .ancestor_kinds(declaration)
+        .find_map(|kind| if let AstKind::ImportDeclaration(import) = kind { Some(import.source.value.as_str()) } else { None })
+        .is_some_and(|source| (source == "vitest" && imported == "vi") || (source == "@jest/globals" && imported == "jest"))
 }

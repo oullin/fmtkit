@@ -9,18 +9,8 @@ fn v1() {
         "anti-slop/no-reflect-apply",
         "[]",
         &[
-            Case {
-                name: "direct call",
-                path: "case.ts",
-                code: "export const value = ((a: number): number => a)(1);\n",
-                expected: &[],
-            },
-            Case {
-                name: "unrelated member call",
-                path: "case.ts",
-                code: "export const value = Math.max(1, 2);\n",
-                expected: &[],
-            },
+            Case { name: "direct call", path: "case.ts", code: "export const value = ((a: number): number => a)(1);\n", expected: &[] },
+            Case { name: "unrelated member call", path: "case.ts", code: "export const value = Math.max(1, 2);\n", expected: &[] },
             Case {
                 name: "local Reflect binding",
                 path: "case.ts",
@@ -49,24 +39,18 @@ fn edges() {
         "anti-slop/no-reflect-apply",
         "[]",
         &[
-            Case {
-                name: "other Reflect methods",
-                path: "case.ts",
-                code: "Reflect.get({}, \"a\");\nReflect.has({}, \"a\");\n",
-                expected: &[],
-            },
+            Case { name: "other Reflect methods", path: "case.ts", code: "Reflect.get({}, \"a\");\nReflect.has({}, \"a\");\n", expected: &[] },
             Case {
                 name: "optional and parenthesized",
                 path: "case.ts",
                 code: "declare const fn: () => void;\nReflect?.apply(fn, undefined, []);\n(Reflect).apply(fn, undefined, []);\n(Reflect.apply)(fn, undefined, []);\n",
-                expected: &[(30, 63, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface."), (65, 99, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface."), (101, 135, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface.")],
+                expected: &[
+                    (30, 63, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface."),
+                    (65, 99, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface."),
+                    (101, 135, "Replace `Reflect.apply` with a typed function call. Model dynamic dispatch behind a named interface."),
+                ],
             },
-            Case {
-                name: "not called",
-                path: "case.ts",
-                code: "export const apply = Reflect.apply;\n",
-                expected: &[],
-            },
+            Case { name: "not called", path: "case.ts", code: "export const apply = Reflect.apply;\n", expected: &[] },
             Case {
                 name: "super calls are ignored",
                 path: "case.ts",

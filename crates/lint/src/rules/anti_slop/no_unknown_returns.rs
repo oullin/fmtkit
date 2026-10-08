@@ -5,7 +5,6 @@ use oxc_ast::ast::TSType;
 use oxc_semantic::AstNode;
 use oxc_span::GetSpan;
 use rustc_hash::FxHashSet;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::lexical::type_parameter_names;
@@ -15,11 +14,7 @@ use super::shared::types::{TypeEnvironment, Types, reference_name, type_argument
 
 pub const NAME: &str = "anti-slop/no-unknown-returns";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoUnknownReturns))
-}
-
-struct NoUnknownReturns;
+pub struct NoUnknownReturns;
 
 impl Rule for NoUnknownReturns {
     fn name(&self) -> &'static str {
@@ -74,5 +69,6 @@ fn resolves_to_unknown<'a>(types: Types<'_, 'a>, ty: &'a TSType<'a>, shadowed: &
     let resolved = resolves_to_unknown(types, &alias.type_annotation, shadowed, visited);
 
     visited.pop();
+
     resolved
 }

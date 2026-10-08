@@ -1,14 +1,12 @@
 /fmt
-*.bun-build
 
-# TS toolchain assets staged per platform by stage-ts-assets.sh, next to the
-# package that embeds them.
-/packages/go/driver/internal/typescript/embedded/bin/
-/storage/bin*/
-/storage/dist/
+/storage/go-helper/
 /storage/dist-test/
 /storage/.cache/
 /storage/target*/
+# Plain `cargo` runs and cargo-dist build here; scripts/lib/env.sh points
+# scripted runs at storage/target instead.
+/target/
 *.exe
 *.exe~
 *.dll
@@ -16,7 +14,6 @@
 *.dylib
 *.test
 *.out
-node_modules/
 
 # IDE
 .idea/
@@ -28,12 +25,6 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
-
-# Runtime config. The repository root's own config.yml is committed: it is
-# where fmtkit's complexity baseline lives, and it is what makes `make check`
-# green on a clean tree.
-config.yml
-!/config.yml
 
 .claude/*
 !.claude/.gitkeep

@@ -19,13 +19,21 @@ fn v1() {
                 name: "conditional empty spread",
                 path: "case.ts",
                 code: "declare const flag: boolean;\ndeclare const extra: { id: string };\n\nexport const record = { ...(flag ? extra : {}) };\n",
-                expected: &[(91, 113, "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.")],
+                expected: &[(
+                    91,
+                    113,
+                    "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
+                )],
             },
             Case {
                 name: "conditional empty spread on the left",
                 path: "case.ts",
                 code: "declare const flag: boolean;\ndeclare const extra: { id: string };\n\nexport const record = { ...(flag ? {} : extra) };\n",
-                expected: &[(91, 113, "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.")],
+                expected: &[(
+                    91,
+                    113,
+                    "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
+                )],
             },
         ],
     );
@@ -41,13 +49,21 @@ fn edges() {
                 name: "unparenthesized conditional",
                 path: "case.ts",
                 code: "declare const flag: boolean;\nexport const a = { ...flag ? { id: 1 } : {} };\n",
-                expected: &[(48, 72, "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.")],
+                expected: &[(
+                    48,
+                    72,
+                    "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
+                )],
             },
             Case {
                 name: "parenthesized empty branch",
                 path: "case.ts",
                 code: "declare const flag: boolean;\nexport const a = { ...(flag ? ({}) : { id: 1 }) };\n",
-                expected: &[(48, 76, "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.")],
+                expected: &[(
+                    48,
+                    76,
+                    "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
+                )],
             },
             Case {
                 name: "non-empty branches",
@@ -77,7 +93,11 @@ fn edges() {
                 name: "nested object spread",
                 path: "case.ts",
                 code: "declare const flag: boolean;\nexport const a = { b: { ...(flag ? {} : { id: 1 }) } };\n",
-                expected: &[(53, 79, "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.")],
+                expected: &[(
+                    53,
+                    79,
+                    "This conditional spread hides property omission behind an empty object. Build the object in separate statements and add the property only when present.",
+                )],
             },
             Case {
                 name: "object pattern rest is not a spread element",

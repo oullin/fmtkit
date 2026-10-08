@@ -65,8 +65,7 @@ impl Chains<'_> {
         let mut call = outer;
         let mut links = Vec::new();
 
-        loop {
-            let Chained::Member(member) = Chained::of(&call.callee) else { break };
+        while let Chained::Member(member) = Chained::of(&call.callee) {
             let Chained::Call(object) = Chained::of(member.object()) else { break };
 
             links.push(self.link(member, object)?);

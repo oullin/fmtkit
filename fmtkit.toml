@@ -1,0 +1,23 @@
+# fmtkit's own configuration, which is also how it eats its own cooking.
+
+[files]
+# Formatter and lint inputs are kept exactly as written: they are what the
+# tests feed fmtkit, so formatting them would change what the tests test.
+exclude = [
+	"node_modules/",
+	"vendor/",
+	"fixtures/",
+	"crates/*/tests/fixtures/",
+	"go/helper/**/testdata/",
+	"fuzz/seeds/",
+]
+
+[complexity]
+cyclomatic = 15
+cognitive = 20
+
+# The allow list is a baseline, not a licence: it holds the functions that
+# already breached the limits when 2.0 landed, so that `fmtkit check` is green
+# on a clean tree while they get rewritten one at a time. It only ever
+# shrinks. Never add an entry.
+allow = []

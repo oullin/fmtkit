@@ -26,5 +26,6 @@ fn a_subdirectory_cwd_still_covers_the_whole_repository() {
     let parent = Scope { paths: vec![PathBuf::from("../other")], ..Scope::default() };
 
     assert_eq!(repo.rels(&here), strings(&["sub/inner.ts"]));
-    assert_eq!(repo.rels(&parent), strings(&["other/new.go"]));
+    // A named path covers its unchanged files too.
+    assert_eq!(repo.rels(&parent), strings(&["other/new.go", "other/x.go"]));
 }

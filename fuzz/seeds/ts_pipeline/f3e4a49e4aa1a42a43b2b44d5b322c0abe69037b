@@ -1,0 +1,9 @@
+import { and, eq } from 'drizzle-orm';
+function load() {
+    const rows = db.select().from(users).where(
+        and(
+            eq(users.id, id),
+            eq(users.active, true),
+        ),
+    );
+}

@@ -1,0 +1,63 @@
+name: Fuzz
+
+on:
+    schedule:
+        # Nightly, off the top of the hour.
+        - cron: '37 3 * * *'
+    workflow_dispatch:
+
+env:
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    CARGO_TERM_COLOR: always
+
+jobs:
+    fuzz:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - target: edit_set
+                      args: ''
+                    - target: go_protocol
+                      args: ''
+                    - target: config
+                      args: ''
+                    - target: ts_pipeline
+                      args: -dict=fuzz/dict/ts.dict
+                    - target: hosts
+                      args: -dict=fuzz/dict/hosts.dict
+        runs-on: ubuntu-24.04
+        name: fuzz (${{ matrix.target }})
+
+        steps:
+            - uses: actions/checkout@v7.0.1
+              name: Checkout repository
+
+            - uses: dtolnay/rust-toolchain@nightly
+              name: Install Rust nightly
+
+            - uses: Swatinem/rust-cache@v2
+              name: Cache Cargo
+              with:
+                  workspaces: fuzz
+
+            - uses: taiki-e/install-action@v2
+              name: Install cargo-fuzz
+              with:
+                  tool: cargo-fuzz
+
+            # New inputs land in fuzz/corpus (first directory); the committed
+            # seeds are read but never rewritten.
+            - name: Fuzz ${{ matrix.target }} for ten minutes
+              run: |
+                  mkdir -p fuzz/corpus/${{ matrix.target }}
+                  cargo +nightly fuzz run ${{ matrix.target }} fuzz/corpus/${{ matrix.target }} fuzz/seeds/${{ matrix.target }} \
+                      -- -max_total_time=600 -timeout=20 -rss_limit_mb=4096 ${{ matrix.args }}
+
+            - uses: actions/upload-artifact@v7
+              name: Upload crashing inputs
+              if: ${{ failure() }}
+              with:
+                  name: fuzz-artifacts-${{ matrix.target }}
+                  path: fuzz/artifacts
+                  if-no-files-found: ignore

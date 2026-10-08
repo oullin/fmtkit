@@ -6,9 +6,18 @@
 //! Lint fixes are applied by the caller before this pipeline runs.
 
 pub mod complexity;
+mod embed;
+mod fingerprint;
+mod format;
+mod passes;
+mod pipeline;
+mod syntax;
 
 use fmtkit_config::TsFormat;
 use fmtkit_core::{ComplexityScore, Lang};
+use oxc_allocator::Allocator;
+use oxc_ast::ast::Program;
+use oxc_span::SourceType;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TsError {
@@ -16,7 +25,8 @@ pub enum TsError {
     #[error("{line}:{column}: {message}")]
     Syntax { line: u32, column: u32, message: String },
     /// A step produced text that does not parse or that parses to a different
-    /// program; the file is left untouched.
+    /// program, or (with `step` `idempotency`) the output never stopped
+    /// changing; the file is left untouched.
     #[error("{step} produced invalid output: {message}")]
     Invariant { step: &'static str, message: String },
 }
@@ -32,10 +42,13 @@ pub struct Formatted {
 
 /// Format one script. `rel` is the repository-relative path used in
 /// complexity keys; `score` asks for complexity scores of the output.
+///
+/// `applied` is empty when the output equals the input. The output is a
+/// fixed point: when it differs from the input, the pipeline runs again on it
+/// until it stops changing. A declaration file (`.d.ts`) is validated and
+/// scored but never rewritten.
 pub fn format_source(rel: &str, lang: Lang, source: &str, options: &TsFormat, score: bool) -> Result<Formatted, TsError> {
-    let _ = (rel, lang, options, score);
-
-    Ok(Formatted { output: source.to_owned(), ..Formatted::default() })
+    pipeline::run(rel, source_type(lang, rel)?, source, options, score, &pipeline::FULL)
 }
 
 /// Format a script embedded in a host document (a Vue `<script>`, an HTML
@@ -46,7 +59,24 @@ pub fn format_embedded(lang: Lang, source: &str, options: &TsFormat) -> Result<S
 
 /// Complexity scores for every function in `source` without formatting it.
 pub fn score(rel: &str, lang: Lang, source: &str) -> Result<Vec<ComplexityScore>, TsError> {
-    let _ = (rel, lang, source);
-
-    Ok(Vec::new())
+    with_program(rel, lang, source, |program| complexity::score_program(rel, program, source))
 }
+
+/// Check that `source` parses, as v1's `validate-syntax` did.
+pub fn validate(rel: &str, lang: Lang, source: &str) -> Result<(), TsError> {
+    with_program(rel, lang, source, |_| ())
+}
+
+fn with_program<T>(rel: &str, lang: Lang, source: &str, f: impl FnOnce(&Program<'_>) -> T) -> Result<T, TsError> {
+    let allocator = Allocator::default();
+    let program = syntax::parse(&allocator, source, source_type(lang, rel)?).map_err(|failure| pipeline::syntax_error(source, failure))?;
+
+    Ok(f(program))
+}
+
+fn source_type(lang: Lang, rel: &str) -> Result<SourceType, TsError> {
+    syntax::source_type(lang, rel).ok_or_else(|| TsError::Invariant { step: "parse", message: format!("{lang:?} is not a script language") })
+}
+
+#[cfg(test)]
+mod tests;

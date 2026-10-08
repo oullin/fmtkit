@@ -27,8 +27,8 @@ use fmtkit_core::{Diagnostic, Edit, Lang, LineIndex, Severity};
 use crate::LintError;
 use crate::rules::{self, Factory, Rule};
 
-/// The bundled policy: the repository's `.oxlintrc.json` without `jsPlugins`
-/// (those rules are native here) and without `ignorePatterns`.
+/// The bundled policy: v1's `.oxlintrc.json` without `jsPlugins` (those rules
+/// are native here) and without `ignorePatterns`.
 pub const POLICY: &str = include_str!("../policy/oxlintrc.json");
 
 /// The rule name used for parse and semantic errors, which stop a file from being linted.
@@ -178,9 +178,7 @@ fn known_oxc_rule(key: &str) -> bool {
         other => other,
     };
 
-    oxc_linter::rules::RULES
-        .iter()
-        .any(|r| r.name() == rule && (r.plugin_name() == internal || (internal == "typescript" && r.plugin_name() == "eslint")))
+    oxc_linter::rules::RULES.iter().any(|r| r.name() == rule && (r.plugin_name() == internal || (internal == "typescript" && r.plugin_name() == "eslint")))
 }
 
 fn build_store(rc: &Map<String, Value>) -> Result<ConfigStore, String> {
@@ -372,6 +370,13 @@ fn push_syntax_errors(out: &mut Vec<Diagnostic>, rel: &str, index: &LineIndex, o
         let start = error.labels.first().map_or(0, LabeledSpan::offset);
         let (line, column) = index.line_col(start + offset);
 
-        out.push(Diagnostic { rule: SYNTAX_RULE.to_owned(), file: rel.to_owned(), line, column, message: error.message.to_string(), severity: Severity::Error });
+        out.push(Diagnostic {
+            rule: SYNTAX_RULE.to_owned(),
+            file: rel.to_owned(),
+            line,
+            column,
+            message: error.message.to_string(),
+            severity: Severity::Error,
+        });
     }
 }

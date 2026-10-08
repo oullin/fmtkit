@@ -21,12 +21,12 @@ u32 length | u8 kind | u32 id | payload
 - `id` pairs a reply with its request. fmtkit numbers requests from 1 and
   wraps, skipping 0; `Hello` and `Shutdown` use id 0.
 
-| kind | name     | direction        | payload          |
-|------|----------|------------------|------------------|
-| 1    | Hello    | both, first      | `Hello`          |
-| 2    | Process  | fmtkit → helper  | `ProcessRequest` |
-| 3    | Reply    | helper → fmtkit  | `ProcessReply`   |
-| 4    | Shutdown | fmtkit → helper  | empty            |
+| kind | name     | direction       | payload          |
+| ---- | -------- | --------------- | ---------------- |
+| 1    | Hello    | both, first     | `Hello`          |
+| 2    | Process  | fmtkit → helper | `ProcessRequest` |
+| 3    | Reply    | helper → fmtkit | `ProcessReply`   |
+| 4    | Shutdown | fmtkit → helper | empty            |
 
 ## Payload encoding
 
@@ -125,10 +125,10 @@ byte, then decode the files back. Regenerate with
 `go test ./proto -run TestGoldenFrames -update` and update the Rust values to
 match.
 
-| file              | kind     | id         | contents                                         |
-|-------------------|----------|------------|--------------------------------------------------|
-| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                         |
-| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity         |
-| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores    |
-| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                   |
-| `shutdown.bin`    | Shutdown | 0          | empty                                            |
+| file              | kind     | id         | contents                                      |
+| ----------------- | -------- | ---------- | --------------------------------------------- |
+| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                      |
+| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity      |
+| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores |
+| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                |
+| `shutdown.bin`    | Shutdown | 0          | empty                                         |

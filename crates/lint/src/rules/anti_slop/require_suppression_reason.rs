@@ -2,7 +2,6 @@
 //! rules and says why after `--`; directives for other linters are rejected.
 
 use oxc_ast::ast::Comment;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::{comment_value, is_js_space};
@@ -15,11 +14,7 @@ const REASON_SEPARATOR: &str = " -- ";
 /// A word or two is a placeholder, not a justification. In UTF-16 units.
 const MINIMUM_REASON_LENGTH: usize = 16;
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(RequireSuppressionReason))
-}
-
-struct RequireSuppressionReason;
+pub struct RequireSuppressionReason;
 
 impl Rule for RequireSuppressionReason {
     fn name(&self) -> &'static str {
@@ -52,7 +47,11 @@ fn fault(source: &str, comment: &Comment) -> Option<&'static str> {
     let no_rules = "This suppression names no rule, so it silences every future diagnostic on its target. Name the rules it is meant to silence.";
 
     let Some((rules, reason)) = body.split_once(REASON_SEPARATOR) else {
-        return Some(if trim(body).is_empty() { no_rules } else { "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe." });
+        return Some(if trim(body).is_empty() {
+            no_rules
+        } else {
+            "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe."
+        });
     };
 
     if trim(rules).is_empty() {
@@ -66,7 +65,9 @@ fn fault(source: &str, comment: &Comment) -> Option<&'static str> {
 /// `/^\s*(eslint|biome|tslint|prettier)-(disable|ignore)\b/u`, after the leading space.
 fn is_foreign(value: &str) -> bool {
     ["eslint-", "biome-", "tslint-", "prettier-"].iter().any(|engine| {
-        value.strip_prefix(engine).is_some_and(|rest| ["disable", "ignore"].iter().any(|verb| rest.strip_prefix(verb).is_some_and(|rest| !starts_with_word(rest))))
+        value
+            .strip_prefix(engine)
+            .is_some_and(|rest| ["disable", "ignore"].iter().any(|verb| rest.strip_prefix(verb).is_some_and(|rest| !starts_with_word(rest))))
     })
 }
 

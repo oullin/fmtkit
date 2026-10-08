@@ -4,7 +4,6 @@
 use oxc_ast::ast::TSType;
 use oxc_semantic::AstNode;
 use oxc_span::GetSpan;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::params::Signature;
@@ -12,11 +11,7 @@ use super::shared::strip_type_parens;
 
 pub const NAME: &str = "anti-slop/no-unknown-parameters";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoUnknownParameters))
-}
-
-struct NoUnknownParameters;
+pub struct NoUnknownParameters;
 
 impl Rule for NoUnknownParameters {
     fn name(&self) -> &'static str {

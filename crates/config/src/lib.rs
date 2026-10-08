@@ -27,7 +27,7 @@ pub enum ConfigError {
     Parse { path: PathBuf, source: Box<toml::de::Error> },
     #[error("{path}: {message}")]
     Invalid { path: PathBuf, message: String },
-    #[error("{JOBS_ENV}={value} is not a positive integer")]
+    #[error("{JOBS_ENV}={value} is not a whole number (0 means one worker per CPU)")]
     Jobs { value: String },
 }
 
@@ -258,16 +258,19 @@ impl Config {
         Ok(())
     }
 
-    /// The worker count: the CLI flag, then `FMTKIT_JOBS`, then `jobs`, then one per CPU.
+    /// The worker count from the first setting given: the CLI flag, then
+    /// `FMTKIT_JOBS`, then `jobs`. 0 at any level means one worker per CPU, as
+    /// it did in 0.x.
     pub fn resolve_jobs(&self, flag: Option<usize>) -> Result<usize, ConfigError> {
         let from_env = match env::var(JOBS_ENV) {
-            Ok(value) if !value.is_empty() => Some(value.parse::<usize>().ok().filter(|&n| n > 0).ok_or(ConfigError::Jobs { value })?),
+            Ok(value) if !value.is_empty() => Some(value.trim().parse::<usize>().map_err(|_| ConfigError::Jobs { value })?),
             _ => None,
         };
 
-        let jobs = flag.filter(|&n| n > 0).or(from_env).or((self.jobs > 0).then_some(self.jobs));
-
-        Ok(jobs.unwrap_or_else(|| std::thread::available_parallelism().map_or(1, std::num::NonZero::get)))
+        match flag.or(from_env).unwrap_or(self.jobs) {
+            0 => Ok(std::thread::available_parallelism().map_or(1, std::num::NonZero::get)),
+            jobs => Ok(jobs),
+        }
     }
 
     /// A stable digest of every setting that can change a file's outcome. `jobs`
@@ -371,6 +374,14 @@ reason = "later"
         let config = Config { jobs: 3, ..Config::default() };
 
         assert_eq!(config.resolve_jobs(Some(7)).unwrap(), 7);
+    }
+
+    #[test]
+    fn an_explicit_zero_means_one_worker_per_cpu() {
+        let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let config = Config { jobs: 3, ..Config::default() };
+
+        assert_eq!(config.resolve_jobs(Some(0)).unwrap(), cpus);
     }
 
     #[test]

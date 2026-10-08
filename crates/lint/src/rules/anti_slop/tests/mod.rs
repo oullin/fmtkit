@@ -2,7 +2,8 @@
 //!
 //! Every table holds v1's own test cases plus edge cases, with the findings
 //! the v1 plugin produced for them under oxlint 1.86: byte spans and exact
-//! messages. Like v1's rule tester, each case runs one rule alone.
+//! messages. Like v1's rule tester, each case runs one rule alone, and the
+//! snippet's own `oxlint-disable` directives apply.
 
 mod no_ambient_nondeterminism;
 mod no_chained_type_assertions;
@@ -24,9 +25,11 @@ mod require_suppression_reason;
 
 use std::fmt::Write as _;
 use std::path::Path;
+use std::sync::Arc;
 
 use oxc_allocator::Allocator;
-use oxc_parser::Parser;
+use oxc_linter::{ContextSubHost, ContextSubHostOptions, ModuleRecord};
+use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 use serde_json::Value;
@@ -45,15 +48,17 @@ pub struct Case {
 /// Run `rule`, configured with the JSON array `options`, over every case and
 /// fail with every mismatch at once.
 pub fn check(rule: &str, options: &str, cases: &[Case]) {
-    let options: Vec<Value> = serde_json::from_str(options).expect("options are a JSON array");
-    let factory = RULES.iter().find(|(name, _)| *name == rule).map(|(_, factory)| *factory).unwrap_or_else(|| panic!("{rule} is not registered"));
+    let rule_options: Vec<Value> = serde_json::from_str(options).expect("options are a JSON array");
+    let factory = RULES.iter().find(|(name, _)| *name == rule).map_or_else(|| panic!("{rule} is not registered"), |(_, factory)| *factory);
     let mut failures = String::new();
 
     for case in cases {
-        let rules = vec![factory(&options).unwrap_or_else(|error| panic!("{rule} rejects {options:?}: {error}"))];
+        let rules = vec![factory(&rule_options).unwrap_or_else(|error| panic!("{rule} rejects {rule_options:?}: {error}"))];
         let allocator = Allocator::default();
         let source_type = SourceType::from_path(case.path).expect("a TypeScript path");
-        let parsed = Parser::new(&allocator, case.code, source_type).parse();
+        // The options oxlint parses with.
+        let options = ParseOptions { parse_regular_expression: true, allow_return_outside_function: true, ..ParseOptions::default() };
+        let parsed = Parser::new(&allocator, case.code, source_type).with_options(options).parse();
 
         assert!(parsed.diagnostics.is_empty(), "{}: parse errors {:?}", case.name, parsed.diagnostics);
 
@@ -61,8 +66,14 @@ pub fn check(rule: &str, options: &str, cases: &[Case]) {
 
         assert!(built.diagnostics.is_empty(), "{}: semantic errors {:?}", case.name, built.diagnostics);
 
-        let mut actual: Vec<(u32, u32, String)> =
-            run_all(&rules, &built.semantic, case.path).into_iter().map(|finding| (finding.span.start, finding.span.end, finding.message)).collect();
+        // Like the bridge, and like oxlint for v1, honor the file's own suppression directives.
+        let record = Arc::new(ModuleRecord::new(Path::new(case.path), &parsed.module_record, &built.semantic));
+        let host = ContextSubHost::new(built.semantic, record, 0, ContextSubHostOptions::default());
+        let mut actual: Vec<(u32, u32, String)> = run_all(&rules, host.semantic(), case.path)
+            .into_iter()
+            .filter(|finding| !host.disable_directives().contains(finding.rule, finding.span))
+            .map(|finding| (finding.span.start, finding.span.end, finding.message))
+            .collect();
 
         actual.sort();
 

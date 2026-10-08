@@ -4,7 +4,6 @@
 use oxc_ast::AstKind;
 use oxc_ast::ast::Expression;
 use oxc_semantic::AstNode;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::{is_global, is_global_member};
@@ -21,11 +20,7 @@ const AMBIENT_MEMBERS: [(&str, &str, &str); 6] = [
     ("process", "hrtime", "process.hrtime()"),
 ];
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoAmbientNondeterminism))
-}
-
-struct NoAmbientNondeterminism;
+pub struct NoAmbientNondeterminism;
 
 impl Rule for NoAmbientNondeterminism {
     fn name(&self) -> &'static str {
@@ -40,7 +35,10 @@ impl Rule for NoAmbientNondeterminism {
                 }
 
                 if let Some((_, _, source)) = AMBIENT_MEMBERS.iter().find(|(owner, property, _)| is_global_member(ctx, &call.callee, owner, property)) {
-                    ctx.report(call.span, format!("`{source}` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."));
+                    ctx.report(
+                        call.span,
+                        format!("`{source}` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    );
                 }
             }
             AstKind::NewExpression(new) if new.arguments.is_empty() && is_global(ctx, &new.callee, "Date") => {

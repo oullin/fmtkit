@@ -147,11 +147,11 @@ fn paths_narrow_the_scope_and_report_missing_ones() {
 }
 
 #[test]
-fn paths_apply_to_the_changed_set() {
+fn paths_cover_unchanged_files_too() {
     let repo = busy_repo();
     let scope = Scope { paths: vec![repo.path("src"), repo.path("clean.ts")], ..Scope::default() };
 
-    assert_eq!(repo.rels(&scope), strings(&["src/new.ts", "src/renamed.tsx"]));
+    assert_eq!(repo.rels(&scope), strings(&["clean.ts", "src/new.ts", "src/renamed.tsx"]));
 }
 
 #[test]

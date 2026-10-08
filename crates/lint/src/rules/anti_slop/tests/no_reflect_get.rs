@@ -49,12 +49,7 @@ fn edges() {
                 code: "export function f(Reflect: Map<string, number>): number | undefined {\n\treturn Reflect.get(\"a\");\n}\nexport const b = Reflect.get({}, \"a\");\n",
                 expected: &[(115, 135, "Replace `Reflect.get` with typed property access. Parse dynamic input into a named domain type before reading it.")],
             },
-            Case {
-                name: "other methods",
-                path: "case.ts",
-                code: "Reflect.apply(() => 1, undefined, []);\nReflect.getPrototypeOf({});\n",
-                expected: &[],
-            },
+            Case { name: "other methods", path: "case.ts", code: "Reflect.apply(() => 1, undefined, []);\nReflect.getPrototypeOf({});\n", expected: &[] },
         ],
     );
 }

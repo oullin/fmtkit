@@ -4,7 +4,6 @@
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
 use oxc_span::Span;
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::ancestors;
@@ -12,11 +11,7 @@ use super::shared::types::{TypeEnvironment, Types, UnsafeValue, reference_name};
 
 pub const NAME: &str = "anti-slop/no-unsafe-dictionary-type";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoUnsafeDictionaryType))
-}
-
-struct NoUnsafeDictionaryType;
+pub struct NoUnsafeDictionaryType;
 
 impl Rule for NoUnsafeDictionaryType {
     fn name(&self) -> &'static str {

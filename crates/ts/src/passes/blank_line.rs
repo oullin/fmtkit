@@ -8,8 +8,14 @@ use super::lists::for_each_list;
 use super::spacing::needs_blank_line;
 use crate::syntax::to_u32;
 
-/// One zero-width `\n` insert at the start of each following sibling's line.
-/// Positions are deduplicated, so siblings sharing a line add one newline.
+/// One zero-width line-break insert at the start of each following sibling's
+/// line. Positions are deduplicated, so siblings sharing a line add one break.
+///
+/// Lines are read as ECMAScript reads them: `\n`, `\r\n`, a lone `\r`,
+/// U+2028, and U+2029 each end one. Only the gap between the two siblings is
+/// searched for the break, so the insert can never land inside a template
+/// literal or a string of the previous sibling; a sibling that shares its
+/// line with the previous one gets its blank line after oxfmt has split them.
 pub(crate) fn edits<'a>(text: &'a str, program: &'a Program<'a>) -> EditSet {
     let mut seen = FxHashSet::default();
     let mut edits = EditSet::new();
@@ -25,21 +31,47 @@ pub(crate) fn edits<'a>(text: &'a str, program: &'a Program<'a>) -> EditSet {
             let previous_end = previous.span().end as usize;
             let next_start = next.span().start as usize;
 
-            if next_start <= previous_end || text.as_bytes()[previous_end..next_start].iter().filter(|b| **b == b'\n').count() >= 2 {
+            if next_start <= previous_end {
                 continue;
             }
 
-            if let Some(newline) = text[..next_start].rfind('\n') {
-                let position = to_u32(newline + 1);
+            let gap = &text[previous_end..next_start];
+            let mut breaks = line_breaks(gap);
+            let Some(last) = breaks.next_back() else {
+                continue;
+            };
 
-                if seen.insert(position) {
-                    edits.push(Edit::insert(position, "\n"));
-                }
+            if breaks.next_back().is_some() {
+                continue;
+            }
+
+            let position = to_u32(previous_end + last.end);
+
+            if seen.insert(position) {
+                // After a lone `\r`, a `\n` would only turn it into one `\r\n`.
+                edits.push(Edit::insert(position, if last.terminator == "\r" { "\r" } else { "\n" }));
             }
         }
     });
 
     edits
+}
+
+/// A line terminator in a text: its end offset and the terminator itself.
+struct LineBreak<'t> {
+    end: usize,
+    terminator: &'t str,
+}
+
+/// The ECMAScript line terminators of `text`, with `\r\n` as one.
+fn line_breaks(text: &str) -> impl DoubleEndedIterator<Item = LineBreak<'_>> {
+    text.match_indices(['\n', '\r', '\u{2028}', '\u{2029}']).filter(|(start, terminator)| !(*terminator == "\n" && text[..*start].ends_with('\r'))).map(
+        |(start, terminator)| {
+            let terminator = if terminator == "\r" && text[start + 1..].starts_with('\n') { "\r\n" } else { terminator };
+
+            LineBreak { end: start + terminator.len(), terminator }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -164,6 +196,29 @@ mod tests {
         let source = "function register() {\n\tprepare();\n\tservices.singleton(Service, makeService);\n}";
 
         assert!(compute(Pass::BlankLine, "fixture.ts", source).is_empty());
+    }
+
+    #[test]
+    fn reads_every_ecmascript_line_terminator_as_one_line_break() {
+        for terminator in ["\n", "\r\n", "\r", "\u{2028}", "\u{2029}"] {
+            let source = format!("import {{ foo }} from 'foo';{terminator}export function bar() {{}}{terminator}");
+            let blank = if terminator == "\r" { "\r\r" } else { &format!("{terminator}\n") };
+
+            assert_eq!(apply_once(Pass::BlankLine, "fixture.ts", &source), source.replacen(terminator, blank, 1), "{terminator:?}");
+
+            let spaced = source.replacen(terminator, &terminator.repeat(2), 1);
+
+            assert!(compute(Pass::BlankLine, "fixture.ts", &spaced).is_empty(), "{terminator:?}");
+        }
+    }
+
+    /// Fuzz finding `blank-lines-lone-cr`: the break before `a` is a lone
+    /// `\r`, and the last `\n` before it is inside the template literal.
+    #[test]
+    fn never_inserts_into_a_template_literal_before_the_gap() {
+        assert_eq!(apply_once(Pass::BlankLine, "fixture.ts", "const a=`\n`\ra"), "const a=`\n`\r\ra");
+        assert!(compute(Pass::BlankLine, "fixture.ts", "const a=`\n`; a").is_empty());
+        assert_eq!(compute(Pass::BlankLine, "fixture.ts", "const a=`\n`\u{2028}a").len(), 1);
     }
 
     #[test]

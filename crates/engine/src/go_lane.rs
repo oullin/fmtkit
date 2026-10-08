@@ -24,15 +24,37 @@ enum Pending<'f> {
 pub fn process(run: &Run<'_>, helper: &Helper, files: &[SourceFile], pool: &rayon::ThreadPool) -> Result<Vec<FileOutcome>, GoError> {
     let pending: Vec<Pending<'_>> = pool.install(|| files.par_iter().map(|file| submit(run, helper, file)).collect::<Result<_, _>>())?;
     let mut outcomes = Vec::with_capacity(pending.len());
+    let mut rescores = Vec::new();
 
     for item in pending {
         let outcome = match item {
             Pending::Done(outcome) => outcome,
-            Pending::Waiting { file, key, source, ticket } => Some(finish(run, file, key, &source, ticket.wait()?)),
+            Pending::Waiting { file, key, source, ticket } => {
+                let outcome = finish(run, file, key, &source, ticket.wait()?);
+
+                // Check mode reports against the text on disk, as lint does;
+                // the helper scored the formatted text, whose lines moved.
+                if run.mode == Mode::Check && outcome.changed && !outcome.complexity.is_empty() {
+                    let steps = Steps { complexity: true, ..Steps::default() };
+                    let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source, steps };
+
+                    rescores.push((outcomes.len(), helper.submit(request)?));
+                }
+
+                Some(outcome)
+            }
         };
 
         run.progress.tick();
         outcomes.extend(outcome);
+    }
+
+    for (index, ticket) in rescores {
+        let reply = ticket.wait()?;
+
+        if reply.error.is_none() {
+            outcomes[index].complexity = reply.complexity;
+        }
     }
 
     Ok(outcomes)

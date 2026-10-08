@@ -25,7 +25,11 @@ fn v1() {
                 name: "blanket disable",
                 path: "case.ts",
                 code: "// oxlint-disable\nexport const size = 1;\n",
-                expected: &[(0, 17, "This suppression names no rule, so it silences every future diagnostic on its target. Name the rules it is meant to silence.")],
+                expected: &[(
+                    0,
+                    17,
+                    "This suppression names no rule, so it silences every future diagnostic on its target. Name the rules it is meant to silence.",
+                )],
             },
             Case {
                 name: "named rule without a reason",
@@ -59,20 +63,25 @@ fn edges() {
                 name: "directive forms",
                 path: "case.ts",
                 code: "// oxlint-disable-next-line\nexport const a = 1;\n// oxlint-disable-line\nexport const b = 1; // oxlint-disable-line no-console\n/* oxlint-disable */\n/* oxlint-disable no-console -- this is long enough to count */\n/*oxlint-disable no-console*/\n// oxlint-enable\n// oxlint-disabled\n// oxlint-disable -- reason without rules here\n// oxlint-disable no-console --short\n// oxlint-disable no-console --  exactly sixteen!\n// oxlint-disable no-console -- fifteen chars!!\n",
-                expected: &[(0, 27, "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe."), (91, 124, "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe."), (276, 322, "This suppression names no rule, so it silences every future diagnostic on its target. Name the rules it is meant to silence.")],
+                expected: &[
+                    (0, 27, "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe."),
+                    (91, 124, "This suppression has no justification. Append `-- <reason>` explaining the invariant that makes it safe."),
+                    (276, 322, "This suppression names no rule, so it silences every future diagnostic on its target. Name the rules it is meant to silence."),
+                ],
             },
             Case {
                 name: "foreign directives",
                 path: "case.ts",
                 code: "// prettier-ignore\nexport const a = 1;\n/* biome-ignore lint: x */\n// tslint:disable\n// tslint-disable\n// eslint-disable\n// eslint-enable\n// eslint-disabled\n//eslint-ignore\n",
-                expected: &[(0, 18, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."), (39, 65, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."), (84, 101, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."), (102, 119, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."), (156, 171, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it.")],
+                expected: &[
+                    (0, 18, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."),
+                    (39, 65, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."),
+                    (84, 101, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."),
+                    (102, 119, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."),
+                    (156, 171, "This directive targets another linter. Write `oxlint-disable-next-line <rule> -- <reason>`, or delete it."),
+                ],
             },
-            Case {
-                name: "leading text is not a directive",
-                path: "case.ts",
-                code: "// see oxlint-disable docs\n// text eslint-disable\n",
-                expected: &[],
-            },
+            Case { name: "leading text is not a directive", path: "case.ts", code: "// see oxlint-disable docs\n// text eslint-disable\n", expected: &[] },
             Case {
                 name: "unicode reason length counts utf-16 units",
                 path: "case.ts",

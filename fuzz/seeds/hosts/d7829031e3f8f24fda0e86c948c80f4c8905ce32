@@ -1,0 +1,7 @@
+<script lang="coffee">
+x  =  1
+</script>
+
+<i18n lang="json">
+{"a":  1}
+</i18n>

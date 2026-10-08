@@ -2,7 +2,6 @@
 //! to `unknown`, which must stay visible where it is allowed.
 
 use oxc_ast::ast::{Declaration, Statement, TSType};
-use serde_json::Value;
 
 use super::super::{Context, Rule};
 use super::shared::strip_type_parens;
@@ -10,11 +9,7 @@ use super::shared::types::{TypeEnvironment, Types, reference_name, type_argument
 
 pub const NAME: &str = "anti-slop/no-unknown-type-aliases";
 
-pub fn build(_options: &[Value]) -> Result<Box<dyn Rule>, String> {
-    Ok(Box::new(NoUnknownTypeAliases))
-}
-
-struct NoUnknownTypeAliases;
+pub struct NoUnknownTypeAliases;
 
 impl Rule for NoUnknownTypeAliases {
     fn name(&self) -> &'static str {
@@ -28,7 +23,7 @@ impl Rule for NoUnknownTypeAliases {
 
         for statement in &semantic.nodes().program().body {
             let declaration = match statement {
-                Statement::ExportNamedDeclaration(export) => export.declaration.as_ref(),
+                Statement::ExportDeclaration(export) => Some(&export.declaration),
                 _ => statement.as_declaration(),
             };
 
@@ -75,5 +70,6 @@ fn resolves_to_unknown<'a>(types: Types<'_, 'a>, ty: &'a TSType<'a>, visited: &m
     let resolved = resolves_to_unknown(types, &alias.type_annotation, visited);
 
     visited.pop();
+
     resolved
 }

@@ -1,0 +1,98 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2024"
+rust-version = "1.96"
+license = "MIT"
+repository = "https://github.com/oullin/fmtkit"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[workspace.dependencies]
+# Internal crates. Folders are unprefixed; package names keep the `fmtkit-`
+# prefix so `core` never shadows the built-in crate.
+fmtkit-cache = { path = "crates/cache" }
+fmtkit-config = { path = "crates/config" }
+fmtkit-core = { path = "crates/core" }
+fmtkit-discover = { path = "crates/discover" }
+fmtkit-engine = { path = "crates/engine" }
+fmtkit-go = { path = "crates/go" }
+fmtkit-hosts = { path = "crates/hosts" }
+fmtkit-lint = { path = "crates/lint" }
+fmtkit-report = { path = "crates/report" }
+fmtkit-testkit = { path = "crates/testkit" }
+fmtkit-ts = { path = "crates/ts" }
+
+# oxc: every crate pinned to the one release tag that shipped oxlint 1.86.0 and
+# oxfmt 0.71.0. oxc_linter and the formatters are not published to crates.io.
+# Upgrade all of them together; see docs/oxc-upgrade.md.
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_ast = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_ast_visit = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_diagnostics = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_core = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_css = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_formatter_markdown = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_linter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+
+anyhow = "1"
+blake3 = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+postcard = { version = "1", default-features = false, features = ["use-std"] }
+similar = "2"
+globset = "0.4"
+crossbeam-channel = "0.5"
+gix = { version = "0", default-features = false, features = ["index", "dirwalk", "status", "excludes", "sha1", "parallel"] }
+ignore = "0.4"
+markup_fmt = "0.27"
+# The parser behind oxc_formatter_markdown, for walking fenced code blocks.
+oxc-markdown-parser = "0.0.2"
+mimalloc = { version = "0", default-features = false }
+proptest = "1"
+rayon = "1"
+rustc-hash = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+toml = "1"
+# perfectionist rules: `localeCompare` collation and ECMAScript regex options.
+icu_collator = "2"
+icu_locale_core = "2"
+regress = "0.12"
+
+# oxc-markdown-parser (crates.io) depends on oxc_allocator from crates.io; route
+# it to the pinned git copy so there is one allocator type, as oxc itself does.
+[patch.crates-io]
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+panic = "abort"
+strip = "symbols"
+
+[profile.dev.package."*"]
+# Dependencies are compiled with optimisations so debug builds of the
+# formatter stay usable on real repositories.
+opt-level = 2

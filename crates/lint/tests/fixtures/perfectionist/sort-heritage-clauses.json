@@ -1,0 +1,4508 @@
+{
+  "rule": "sort-heritage-clauses",
+  "source": "eslint-plugin-perfectionist@5.12.1 test/rules/sort-heritage-clauses.test.ts",
+  "cases": [
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts sorted heritage clauses",
+      "line": 26,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts sorted heritage clauses",
+      "line": 37,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts simple heritage clauses",
+      "line": 48,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  c,\n  b {\n}",
+      "output": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts namespaced heritage clauses",
+      "line": 74,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  A.a,\n  C.c,\n  B.b {\n}",
+      "output": "interface Interface extends\n  A.a,\n  B.b,\n  C.c {\n}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > preserves comments when sorting heritage clauses",
+      "line": 100,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  /**\n   * Comment B\n   */\n  b,\n  /**\n   * Comment A\n   */\n  a,\n  // Comment D\n  d,\n  /* Comment C */\n  c {\n}",
+      "output": "interface Interface extends\n  /**\n   * Comment A\n   */\n  a,\n  /**\n   * Comment B\n   */\n  b,\n  /* Comment C */\n  c,\n  // Comment D\n  d {\n}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "c",
+            "left": "d"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > keeps trailing comments attached when elements are reordered",
+      "line": 148,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B, /* b */\n  A /* a */ {}",
+      "output": "interface Interface extends\n  A, /* a */\n  B /* b */ {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > keeps trailing comments attached when elements are reordered",
+      "line": 168,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B, // b\n  A {}",
+      "output": "interface Interface extends\n  A,\n  B // b\n {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts heritage clauses with inline comments",
+      "line": 191,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  b // Comment B\n  , a // Comment A\n  {\n}",
+      "output": "interface Interface extends\n  a // Comment A\n  , b // Comment B\n  {\n}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > allows overriding options in groups",
+      "line": 217,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n    a,\n    b {}",
+      "output": "interface Interface extends\n    b,\n\n    a {}",
+      "options": [
+        {
+          "groups": [
+            {
+              "type": "alphabetical",
+              "newlinesInside": 1,
+              "group": "unknown",
+              "order": "desc"
+            }
+          ],
+          "type": "unsorted"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        },
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports regex patterns in custom groups for heritage clauses",
+      "line": 256,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n    iHaveFooInMyName,\n    meTooIHaveFoo,\n    a,\n    b {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^(?!.*Foo).*$",
+              "groupName": "elementsWithoutFoo"
+            }
+          ],
+          "groups": [
+            "unknown",
+            "elementsWithoutFoo"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > trims special characters in heritage clauses",
+      "line": 281,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  _a,\n  b,\n  _c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "specialCharacters": "trim"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes special characters in heritage clauses",
+      "line": 299,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  ab,\n  a_c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "specialCharacters": "remove"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts heritage clauses according to locale-specific rules",
+      "line": 316,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  你好,\n  世界,\n  a,\n  A,\n  b,\n  B {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "locales": "zh-CN"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts inline heritage clauses in interfaces",
+      "line": 332,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B, A\n{}",
+      "output": "interface Interface extends\n  A, B\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts inline heritage clauses in classes",
+      "line": 354,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B, A\n{}",
+      "output": "class Class implements\n  A, B\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > groups elements by name pattern - string pattern",
+      "line": 383,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  A, B, HelloInterface\n{}",
+      "output": "class Class implements\n  HelloInterface, A, B\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "heritageClausesContainingHello",
+              "elementNamePattern": "Hello"
+            }
+          ],
+          "groups": [
+            "heritageClausesContainingHello",
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "heritageClausesContainingHello",
+            "right": "HelloInterface",
+            "leftGroup": "unknown",
+            "left": "B"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > groups elements by name pattern - array of patterns",
+      "line": 383,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  A, B, HelloInterface\n{}",
+      "output": "class Class implements\n  HelloInterface, A, B\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "heritageClausesContainingHello",
+              "elementNamePattern": [
+                "noMatch",
+                "Hello"
+              ]
+            }
+          ],
+          "groups": [
+            "heritageClausesContainingHello",
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "heritageClausesContainingHello",
+            "right": "HelloInterface",
+            "leftGroup": "unknown",
+            "left": "B"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > groups elements by name pattern - case-insensitive regex",
+      "line": 383,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  A, B, HelloInterface\n{}",
+      "output": "class Class implements\n  HelloInterface, A, B\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "heritageClausesContainingHello",
+              "elementNamePattern": {
+                "pattern": "HELLO",
+                "flags": "i"
+              }
+            }
+          ],
+          "groups": [
+            "heritageClausesContainingHello",
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "heritageClausesContainingHello",
+            "right": "HelloInterface",
+            "leftGroup": "unknown",
+            "left": "B"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > groups elements by name pattern - regex in array",
+      "line": 383,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  A, B, HelloInterface\n{}",
+      "output": "class Class implements\n  HelloInterface, A, B\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "heritageClausesContainingHello",
+              "elementNamePattern": [
+                "noMatch",
+                {
+                  "pattern": "HELLO",
+                  "flags": "i"
+                }
+              ]
+            }
+          ],
+          "groups": [
+            "heritageClausesContainingHello",
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "heritageClausesContainingHello",
+            "right": "HelloInterface",
+            "leftGroup": "unknown",
+            "left": "B"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > overrides sort type and order for specific groups",
+      "line": 421,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  p, aFoo, oo, bbFoo\n{}",
+      "output": "class Class implements\n  bbFoo, aFoo, oo, p\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "reversedContainingFooByLineLength",
+              "elementNamePattern": "Foo",
+              "type": "line-length",
+              "order": "desc"
+            }
+          ],
+          "groups": [
+            "reversedContainingFooByLineLength",
+            "unknown"
+          ],
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "reversedContainingFooByLineLength",
+            "leftGroup": "unknown",
+            "right": "aFoo",
+            "left": "p"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        },
+        {
+          "data": {
+            "rightGroup": "reversedContainingFooByLineLength",
+            "leftGroup": "unknown",
+            "right": "bbFoo",
+            "left": "oo"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > applies fallback sort when primary sort results in tie",
+      "line": 471,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  fooZar, fooBar\n{}",
+      "output": "class Class implements\n  fooBar, fooZar\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "fallbackSort": {
+                "type": "alphabetical",
+                "order": "asc"
+              },
+              "elementNamePattern": "^foo",
+              "type": "line-length",
+              "groupName": "foo",
+              "order": "desc"
+            }
+          ],
+          "type": "alphabetical",
+          "groups": [
+            "foo"
+          ],
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "fooBar",
+            "left": "fooZar"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > preserves original order for unsorted groups",
+      "line": 511,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  bFoo, aFoo, dFoo, eFoo, m, cFoo\n{}",
+      "output": "class Class implements\n  bFoo, aFoo, dFoo, eFoo, cFoo, m\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "groupName": "unsortedContainingFoo",
+              "elementNamePattern": "Foo",
+              "type": "unsorted"
+            }
+          ],
+          "groups": [
+            "unsortedContainingFoo",
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "unsortedContainingFoo",
+            "leftGroup": "unknown",
+            "right": "cFoo",
+            "left": "m"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports negative regex patterns in custom groups",
+      "line": 549,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  iHaveFooInMyName, meTooIHaveFoo, a, b\n{}",
+      "output": null,
+      "options": [
+        {
+          "customGroups": [
+            {
+              "elementNamePattern": "^(?!.*Foo).*$",
+              "groupName": "elementsWithoutFoo"
+            }
+          ],
+          "groups": [
+            "unknown",
+            "elementsWithoutFoo"
+          ],
+          "type": "alphabetical"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines between and inside groups by default when \"newlinesBetween\" is 0",
+      "line": 571,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n    a,\n\n\n   y,\n  z,\n\n      b\n{}",
+      "output": "class Class implements\n    a,\n   b,\n  y,\n      z\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            }
+          ],
+          "groups": [
+            "a",
+            "unknown"
+          ],
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "y",
+            "left": "a"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "z"
+          }
+        },
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "z"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines inside groups when newlinesInside is 0",
+      "line": 622,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n    a,\n\n\n   y,\n  z,\n\n      b\n{}",
+      "output": "class Class implements\n    a,\n\n\n   b,\n  y,\n      z\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            }
+          ],
+          "groups": [
+            "a",
+            "unknown"
+          ],
+          "newlinesInside": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "z"
+          }
+        },
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "z"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines between groups when newlinesBetween is 0",
+      "line": 671,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n    a,\n\n\n   y,\n  z,\n\n      b\n{}",
+      "output": "class Class implements\n    a,\n   b,\n  y,\n\n      z\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            }
+          ],
+          "groups": [
+            "a",
+            "unknown"
+          ],
+          "newlinesInside": "ignore",
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "y",
+            "left": "a"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "z"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > adds newlines between groups when newlinesBetween is 1",
+      "line": 720,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n    a,\n\n\n   z,\n  y,\n      b\n{}",
+      "output": "class Class implements\n    a,\n\n   y,\n  z,\n\n      b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            }
+          ],
+          "groups": [
+            "a",
+            "unknown",
+            "b"
+          ],
+          "newlinesBetween": 1
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "z",
+            "left": "a"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "y",
+            "left": "z"
+          }
+        },
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "y"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > applies inline newline settings between specific groups",
+      "line": 776,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b,\n\n\n  c,\n\n  d,\n\n\n  e\n{}",
+      "output": "class Class implements\n  a,\n\n  b,\n\n  c,\n  d,\n\n\n  e\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "elementNamePattern": "c",
+              "groupName": "c"
+            },
+            {
+              "elementNamePattern": "d",
+              "groupName": "d"
+            },
+            {
+              "elementNamePattern": "e",
+              "groupName": "e"
+            }
+          ],
+          "groups": [
+            "a",
+            {
+              "newlinesBetween": 1
+            },
+            "b",
+            {
+              "newlinesBetween": 1
+            },
+            "c",
+            {
+              "newlinesBetween": 0
+            },
+            "d",
+            {
+              "newlinesBetween": "ignore"
+            },
+            "e"
+          ],
+          "newlinesBetween": 1
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        },
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "c",
+            "left": "b"
+          }
+        },
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "d",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > enforces 2 newlines when global is 2 and group is 0",
+      "line": 853,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b"
+          ],
+          "newlinesBetween": 2
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > enforces 2 newlines when global is 2 and group is ignore",
+      "line": 853,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": "ignore"
+            },
+            "b"
+          ],
+          "newlinesBetween": 2
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > enforces 2 newlines when global is 0 and group is 2",
+      "line": 853,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": 2
+            },
+            "b"
+          ],
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > enforces 2 newlines when global is ignore and group is 2",
+      "line": 853,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": 2
+            },
+            "b"
+          ],
+          "newlinesBetween": "ignore"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines when 0 overrides global 1 between specific groups",
+      "line": 898,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  b\n{}",
+      "output": "class Class implements\n  a,\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "elementNamePattern": "c",
+              "groupName": "c"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            {
+              "newlinesBetween": 0
+            },
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b",
+            {
+              "newlinesBetween": 1
+            },
+            "c"
+          ],
+          "newlinesBetween": 1
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines when 0 overrides global 2 between specific groups",
+      "line": 898,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  b\n{}",
+      "output": "class Class implements\n  a,\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "elementNamePattern": "c",
+              "groupName": "c"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            {
+              "newlinesBetween": 0
+            },
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b",
+            {
+              "newlinesBetween": 1
+            },
+            "c"
+          ],
+          "newlinesBetween": 2
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines when 0 overrides global ignore between specific groups",
+      "line": 898,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  b\n{}",
+      "output": "class Class implements\n  a,\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "elementNamePattern": "c",
+              "groupName": "c"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            {
+              "newlinesBetween": 0
+            },
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b",
+            {
+              "newlinesBetween": 1
+            },
+            "c"
+          ],
+          "newlinesBetween": "ignore"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > removes newlines when 0 overrides global 0 between specific groups",
+      "line": 898,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  b\n{}",
+      "output": "class Class implements\n  a,\n  b\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "elementNamePattern": "c",
+              "groupName": "c"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            {
+              "newlinesBetween": 0
+            },
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b",
+            {
+              "newlinesBetween": 1
+            },
+            "c"
+          ],
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts any spacing when global is ignore and group is 0",
+      "line": 949,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n\n  a,\n\n  b\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b"
+          ],
+          "newlinesBetween": "ignore"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts any spacing when global is ignore and group is 0",
+      "line": 977,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": 0
+            },
+            "b"
+          ],
+          "newlinesBetween": "ignore"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts any spacing when global is 0 and group is ignore",
+      "line": 949,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n\n  a,\n\n  b\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": "ignore"
+            },
+            "b"
+          ],
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > accepts any spacing when global is 0 and group is ignore",
+      "line": 977,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "b",
+              "groupName": "b"
+            },
+            {
+              "groupName": "unusedGroup",
+              "elementNamePattern": "X"
+            }
+          ],
+          "groups": [
+            "a",
+            "unusedGroup",
+            {
+              "newlinesBetween": "ignore"
+            },
+            "b"
+          ],
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > preserves inline comments when reordering elements",
+      "line": 1006,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  b,\n  a, // Comment after\n\n  c\n{}",
+      "output": "class Class implements\n  a, // Comment after\n\n  b,\n  c\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "elementNamePattern": "b|c",
+              "groupName": "b|c"
+            }
+          ],
+          "groups": [
+            "unknown",
+            "b|c"
+          ],
+          "newlinesBetween": 1,
+          "newlinesInside": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "unknown",
+            "leftGroup": "b|c",
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > preserves partition boundaries regardless of newlinesBetween 0",
+      "line": 1051,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  // Partition comment\n\n  c,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n  // Partition comment\n\n  b,\n  c\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "a",
+              "groupName": "a"
+            }
+          ],
+          "groups": [
+            "a",
+            "unknown"
+          ],
+          "partitionByComment": true,
+          "newlinesBetween": 0
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > allows to use newlinesInside: 1",
+      "line": 1096,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n  b\n{}",
+      "output": "class Class implements\n  a,\n\n  b\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "elementNamePattern": ".*",
+              "groupName": "group1",
+              "newlinesInside": 1
+            }
+          ],
+          "groups": [
+            "group1"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "missedSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > allows to use newlinesInside: 0",
+      "line": 1132,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  a,\n\n  b\n{}",
+      "output": "class Class implements\n  a,\n  b\n{}",
+      "options": [
+        {
+          "customGroups": [
+            {
+              "elementNamePattern": ".*",
+              "groupName": "group1",
+              "newlinesInside": 0
+            }
+          ],
+          "type": "alphabetical",
+          "groups": [
+            "group1"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "extraSpacingBetweenHeritageClauses",
+          "data": {
+            "right": "b",
+            "left": "a"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts within newline-separated partitions",
+      "line": 1169,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  d,\n  a,\n\n  c,\n\n  e,\n  b\n{}",
+      "output": "class Class implements\n  a,\n  d,\n\n  c,\n\n  b,\n  e\n{}",
+      "options": [
+        {
+          "partitionByNewLine": true,
+          "type": "alphabetical"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "d"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "e"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > sorts heritageClauses within partition comment boundaries",
+      "line": 1212,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  // Part: A\n  Cc,\n  D,\n  // Not partition comment\n  Bbb,\n  // Part: B\n  Aaaa,\n  E,\n  // Part: C\n  Gg,\n  // Not partition comment\n  Fff\n{}",
+      "output": "class Class implements\n  // Part: A\n  // Not partition comment\n  Bbb,\n  Cc,\n  D,\n  // Part: B\n  Aaaa,\n  E,\n  // Part: C\n  // Not partition comment\n  Fff,\n  Gg\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": "^Part"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "Bbb",
+            "left": "D"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "Fff",
+            "left": "Gg"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > treats all comments as partition boundaries",
+      "line": 1265,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  // Comment\n  bb,\n  // Other comment\n  a\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": true
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports multiple partition comment patterns",
+      "line": 1284,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  /* Partition Comment */\n  // Part: A\n  D,\n  // Part: B\n  Aaa,\n  C,\n  Bb,\n  /* Other */\n  E\n{}",
+      "output": "class Class implements\n  /* Partition Comment */\n  // Part: A\n  D,\n  // Part: B\n  Aaa,\n  Bb,\n  C,\n  /* Other */\n  E\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": [
+            "Partition Comment",
+            "Part:",
+            "Other"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "Bb",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports regex patterns for partition comments",
+      "line": 1327,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  E,\n  F,\n  // I am a partition comment because I don't have f o o\n  A,\n  B\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": [
+            "^(?!.*foo).*$"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > ignores block comments when line comments are partition boundaries",
+      "line": 1347,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  /* Comment */\n  A\n{}",
+      "output": "class Class implements\n  /* Comment */\n  A,\n  B\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "line": true
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > uses line comments as partition boundaries",
+      "line": 1380,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  // Comment\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "line": true
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > matches specific line comment patterns",
+      "line": 1400,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  // B\n  B,\n  // A\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "line": [
+              "A",
+              "B"
+            ]
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports regex patterns for line comment partitions",
+      "line": 1422,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  // I am a partition comment because I don't have f o o\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "line": [
+              "^(?!.*foo).*$"
+            ]
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > ignores line comments when block comments are partition boundaries",
+      "line": 1442,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  // Comment\n  A\n{}",
+      "output": "class Class implements\n  // Comment\n  A,\n  B\n{}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "block": true
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > uses block comments as partition boundaries",
+      "line": 1475,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  /* Comment */\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "block": true
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > matches specific block comment patterns",
+      "line": 1495,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  /* B */\n  B,\n  /* A */\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "block": [
+              "A",
+              "B"
+            ]
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > supports regex patterns for block comment partitions",
+      "line": 1517,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  /* I am a partition comment because I don't have f o o */\n  A\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "partitionByComment": {
+            "block": [
+              "^(?!.*foo).*$"
+            ]
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.allNamesMatchPattern > applies conditional configuration when all names match string pattern",
+      "line": 1548,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, g, r {}",
+      "output": "interface Interface extends r, g, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "foo"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^r$",
+              "groupName": "r"
+            },
+            {
+              "elementNamePattern": "^g$",
+              "groupName": "g"
+            },
+            {
+              "elementNamePattern": "^b$",
+              "groupName": "b"
+            }
+          ],
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[rgb]$"
+          },
+          "groups": [
+            "r",
+            "g",
+            "b"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "g",
+            "leftGroup": "b",
+            "right": "g",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        },
+        {
+          "data": {
+            "rightGroup": "r",
+            "leftGroup": "g",
+            "right": "r",
+            "left": "g"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.allNamesMatchPattern > applies conditional configuration when all names match array with string patterns",
+      "line": 1548,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, g, r {}",
+      "output": "interface Interface extends r, g, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": [
+              "noMatch",
+              "foo"
+            ]
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^r$",
+              "groupName": "r"
+            },
+            {
+              "elementNamePattern": "^g$",
+              "groupName": "g"
+            },
+            {
+              "elementNamePattern": "^b$",
+              "groupName": "b"
+            }
+          ],
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[rgb]$"
+          },
+          "groups": [
+            "r",
+            "g",
+            "b"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "g",
+            "leftGroup": "b",
+            "right": "g",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        },
+        {
+          "data": {
+            "rightGroup": "r",
+            "leftGroup": "g",
+            "right": "r",
+            "left": "g"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.allNamesMatchPattern > applies conditional configuration when all names match regex pattern object",
+      "line": 1548,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, g, r {}",
+      "output": "interface Interface extends r, g, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": {
+              "pattern": "FOO",
+              "flags": "i"
+            }
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^r$",
+              "groupName": "r"
+            },
+            {
+              "elementNamePattern": "^g$",
+              "groupName": "g"
+            },
+            {
+              "elementNamePattern": "^b$",
+              "groupName": "b"
+            }
+          ],
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[rgb]$"
+          },
+          "groups": [
+            "r",
+            "g",
+            "b"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "g",
+            "leftGroup": "b",
+            "right": "g",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        },
+        {
+          "data": {
+            "rightGroup": "r",
+            "leftGroup": "g",
+            "right": "r",
+            "left": "g"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.allNamesMatchPattern > applies conditional configuration when all names match array with regex pattern object",
+      "line": 1548,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, g, r {}",
+      "output": "interface Interface extends r, g, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": [
+              "noMatch",
+              {
+                "pattern": "FOO",
+                "flags": "i"
+              }
+            ]
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^r$",
+              "groupName": "r"
+            },
+            {
+              "elementNamePattern": "^g$",
+              "groupName": "g"
+            },
+            {
+              "elementNamePattern": "^b$",
+              "groupName": "b"
+            }
+          ],
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[rgb]$"
+          },
+          "groups": [
+            "r",
+            "g",
+            "b"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "g",
+            "leftGroup": "b",
+            "right": "g",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        },
+        {
+          "data": {
+            "rightGroup": "r",
+            "leftGroup": "g",
+            "right": "r",
+            "left": "g"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > skips config when selector does not match the sorted node type",
+      "line": 1612,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": "interface Interface extends a, b {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > applies config when selector matches the sorted node type",
+      "line": 1641,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": null,
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > falls through to next matching config when not matching",
+      "line": 1658,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": "interface Interface extends a, b {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration",
+            "allNamesMatchPattern": "^[ac]$"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        },
+        {
+          "type": "unsorted"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > falls through to next matching config when not matching",
+      "line": 1696,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends a, b {}",
+      "output": "interface Interface extends b, a {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration",
+            "allNamesMatchPattern": "^[ac]$"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "desc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[ab]$"
+          }
+        },
+        {
+          "type": "unsorted"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "b",
+            "left": "a"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > applies first matching option when selectors overlap",
+      "line": 1737,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": null,
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "* > TSInterfaceDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > applies first matching option when selectors overlap",
+      "line": 1759,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": "interface Interface extends a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        },
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "* > TSInterfaceDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > interfaces > picks the first matching option when multiple options match",
+      "line": 1795,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends b, a {}",
+      "output": "interface Interface extends a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        },
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > skips config when selector does not match the sorted node type",
+      "line": 1830,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": "class Class implements a, b {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "TSInterfaceDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > applies config when selector matches the sorted node type",
+      "line": 1859,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": null,
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > falls through to next matching config when not matching",
+      "line": 1876,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": "class Class implements a, b {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration",
+            "allNamesMatchPattern": "^[ac]$"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        },
+        {
+          "type": "unsorted"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > falls through to next matching config when not matching",
+      "line": 1914,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements a, b {}",
+      "output": "class Class implements b, a {}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration",
+            "allNamesMatchPattern": "^[ac]$"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "desc",
+          "useConfigurationIf": {
+            "allNamesMatchPattern": "^[ab]$"
+          }
+        },
+        {
+          "type": "unsorted"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "b",
+            "left": "a"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > applies first matching option when selectors overlap",
+      "line": 1955,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": null,
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        },
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "* > ClassDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > applies first matching option when selectors overlap",
+      "line": 1977,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": "class Class implements a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        },
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "* > ClassDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > alphabetical > useConfigurationIf.matchesAstSelector > classes > picks the first matching option when multiple options match",
+      "line": 2013,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements b, a {}",
+      "output": "class Class implements a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        },
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "useConfigurationIf": {
+            "matchesAstSelector": "ClassDeclaration"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "right": "a",
+            "left": "b"
+          },
+          "messageId": "unexpectedHeritageClausesOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > accepts sorted heritage clauses",
+      "line": 2055,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > accepts sorted heritage clauses",
+      "line": 2066,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts simple heritage clauses",
+      "line": 2077,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  c,\n  b {\n}",
+      "output": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts namespaced heritage clauses",
+      "line": 2103,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  A.a,\n  C.c,\n  B.b {\n}",
+      "output": "interface Interface extends\n  A.a,\n  B.b,\n  C.c {\n}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > preserves comments when sorting heritage clauses",
+      "line": 2129,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  /**\n   * Comment B\n   */\n  b,\n  /**\n   * Comment A\n   */\n  a,\n  // Comment D\n  d,\n  /* Comment C */\n  c {\n}",
+      "output": "interface Interface extends\n  /**\n   * Comment A\n   */\n  a,\n  /**\n   * Comment B\n   */\n  b,\n  /* Comment C */\n  c,\n  // Comment D\n  d {\n}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "c",
+            "left": "d"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts heritage clauses with inline comments",
+      "line": 2177,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  b // Comment B\n  , a // Comment A\n  {\n}",
+      "output": "interface Interface extends\n  a // Comment A\n  , b // Comment B\n  {\n}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > supports regex patterns in custom groups for heritage clauses",
+      "line": 2203,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n    iHaveFooInMyName,\n    meTooIHaveFoo,\n    a,\n    b {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^(?!.*Foo).*$",
+              "groupName": "elementsWithoutFoo"
+            }
+          ],
+          "groups": [
+            "unknown",
+            "elementsWithoutFoo"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > trims special characters in heritage clauses",
+      "line": 2228,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  _a,\n  b,\n  _c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc",
+          "specialCharacters": "trim"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > removes special characters in heritage clauses",
+      "line": 2246,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  ab,\n  a_c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc",
+          "specialCharacters": "remove"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts heritage clauses according to locale-specific rules",
+      "line": 2263,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  你好,\n  世界,\n  a,\n  A,\n  b,\n  B {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc",
+          "locales": "zh-CN"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts inline heritage clauses in interfaces",
+      "line": 2279,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B, A\n{}",
+      "output": "interface Interface extends\n  A, B\n{}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > natural > sorts inline heritage clauses in classes",
+      "line": 2301,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B, A\n{}",
+      "output": "class Class implements\n  A, B\n{}",
+      "options": [
+        {
+          "type": "natural",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > accepts sorted heritage clauses",
+      "line": 2330,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > accepts sorted heritage clauses",
+      "line": 2341,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts simple heritage clauses",
+      "line": 2352,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  aaa,\n  c,\n  bb {\n}",
+      "output": "interface Interface extends\n  aaa,\n  bb,\n  c {\n}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "bb",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts namespaced heritage clauses",
+      "line": 2378,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  A.aaa,\n  C.c,\n  B.bb {\n}",
+      "output": "interface Interface extends\n  A.aaa,\n  B.bb,\n  C.c {\n}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "bb",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > preserves comments when sorting heritage clauses",
+      "line": 2404,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  /**\n   * Comment B\n   */\n  bbb,\n  /**\n   * Comment A\n   */\n  aaaa,\n  // Comment D\n  d,\n  /* Comment C */\n  cc {\n}",
+      "output": "interface Interface extends\n  /**\n   * Comment A\n   */\n  aaaa,\n  /**\n   * Comment B\n   */\n  bbb,\n  /* Comment C */\n  cc,\n  // Comment D\n  d {\n}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "aaaa",
+            "left": "bbb"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "cc",
+            "left": "d"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts heritage clauses with inline comments",
+      "line": 2452,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  b // Comment B\n  , aa // Comment A\n  {\n}",
+      "output": "interface Interface extends\n  aa // Comment A\n  , b // Comment B\n  {\n}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "aa",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > supports regex patterns in custom groups for heritage clauses",
+      "line": 2478,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n    iHaveFooInMyName,\n    meTooIHaveFoo,\n    a,\n    b {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^(?!.*Foo).*$",
+              "groupName": "elementsWithoutFoo"
+            }
+          ],
+          "groups": [
+            "unknown",
+            "elementsWithoutFoo"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > trims special characters in heritage clauses",
+      "line": 2503,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  _aaa,\n  bb,\n  _c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc",
+          "specialCharacters": "trim"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > removes special characters in heritage clauses",
+      "line": 2521,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  abc,\n  a_c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc",
+          "specialCharacters": "remove"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts heritage clauses according to locale-specific rules",
+      "line": 2538,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface MyInterface extends\n  你好,\n  世界,\n  a,\n  A,\n  b,\n  B {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc",
+          "locales": "zh-CN"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts inline heritage clauses in interfaces",
+      "line": 2554,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B, AA\n{}",
+      "output": "interface Interface extends\n  AA, B\n{}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "AA",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > line-length > sorts inline heritage clauses in classes",
+      "line": 2576,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B, AA\n{}",
+      "output": "class Class implements\n  AA, B\n{}",
+      "options": [
+        {
+          "type": "line-length",
+          "order": "desc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "AA",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > custom > accepts sorted heritage clauses",
+      "line": 2610,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "custom",
+          "order": "asc",
+          "alphabet": {
+            "$alphabet": "Alphabet.generateRecommendedAlphabet().sortByLocaleCompare('en-US').getCharacters()"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > custom > accepts sorted heritage clauses",
+      "line": 2621,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a {\n}",
+      "output": null,
+      "options": [
+        {
+          "type": "custom",
+          "order": "asc",
+          "alphabet": {
+            "$alphabet": "Alphabet.generateRecommendedAlphabet().sortByLocaleCompare('en-US').getCharacters()"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > custom > sorts simple heritage clauses",
+      "line": 2632,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  c,\n  b {\n}",
+      "output": "interface Interface extends\n  a,\n  b,\n  c {\n}",
+      "options": [
+        {
+          "type": "custom",
+          "order": "asc",
+          "alphabet": {
+            "$alphabet": "Alphabet.generateRecommendedAlphabet().sortByLocaleCompare('en-US').getCharacters()"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > custom > sorts namespaced heritage clauses",
+      "line": 2658,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  A.a,\n  C.c,\n  B.b {\n}",
+      "output": "interface Interface extends\n  A.a,\n  B.b,\n  C.c {\n}",
+      "options": [
+        {
+          "type": "custom",
+          "order": "asc",
+          "alphabet": {
+            "$alphabet": "Alphabet.generateRecommendedAlphabet().sortByLocaleCompare('en-US').getCharacters()"
+          }
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "b",
+            "left": "c"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > subgroup-order > fallback sorts by subgroup order",
+      "line": 2695,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B,\n  BB,\n  A,\n  AA {\n}",
+      "output": "interface Interface extends\n  AA,\n  BB,\n  A,\n  B {\n}",
+      "options": [
+        {
+          "fallbackSort": {
+            "type": "subgroup-order",
+            "order": "asc"
+          },
+          "type": "line-length",
+          "order": "desc",
+          "customGroups": [
+            {
+              "elementNamePattern": "A",
+              "groupName": "A"
+            },
+            {
+              "elementNamePattern": "B",
+              "groupName": "B"
+            }
+          ],
+          "groups": [
+            [
+              "A",
+              "B"
+            ],
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "BB",
+            "left": "B"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "AA",
+            "left": "A"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > subgroup-order > fallback sorts by subgroup order through overriding groups option",
+      "line": 2742,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  B,\n  BB,\n  A,\n  AA {\n}",
+      "output": "interface Interface extends\n  AA,\n  BB,\n  A,\n  B {\n}",
+      "options": [
+        {
+          "fallbackSort": {
+            "type": "subgroup-order",
+            "order": "asc"
+          },
+          "type": "line-length",
+          "order": "desc",
+          "customGroups": [
+            {
+              "elementNamePattern": "A",
+              "groupName": "A"
+            },
+            {
+              "elementNamePattern": "B",
+              "groupName": "B"
+            }
+          ],
+          "groups": [
+            {
+              "group": [
+                "A",
+                "B"
+              ],
+              "newlinesInside": 0
+            },
+            "unknown"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "BB",
+            "left": "B"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "AA",
+            "left": "A"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > unsorted > allows unsorted heritage clauses when sorting is not configured",
+      "line": 2796,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  b,\n  c,\n  a\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > unsorted > enforces custom group ordering in heritage clauses",
+      "line": 2809,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  ab,\n  aa,\n  ba,\n  bb\n{}",
+      "output": "interface Interface extends\n  ba,\n  bb,\n  ab,\n  aa\n{}",
+      "options": [
+        {
+          "type": "unsorted",
+          "order": "asc",
+          "customGroups": [
+            {
+              "elementNamePattern": "^a",
+              "groupName": "a"
+            },
+            {
+              "elementNamePattern": "^b",
+              "groupName": "b"
+            }
+          ],
+          "groups": [
+            "b",
+            "a"
+          ]
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "data": {
+            "rightGroup": "b",
+            "leftGroup": "a",
+            "right": "ba",
+            "left": "aa"
+          },
+          "messageId": "unexpectedHeritageClausesGroupOrder"
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > uses default sorting configuration",
+      "line": 2865,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  b {\n}",
+      "output": null,
+      "options": [],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > uses default sorting configuration",
+      "line": 2874,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  b,\n  a {\n}",
+      "output": "interface Interface extends\n  a,\n  b {\n}",
+      "options": [],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > respects the global settings configuration",
+      "line": 2904,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  ccc,\n  bb,\n  a\n{}",
+      "output": null,
+      "options": [
+        {}
+      ],
+      "settings": {
+        "perfectionist": {
+          "type": "line-length",
+          "order": "desc"
+        }
+      },
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > respects the global settings configuration",
+      "line": 2916,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  a,\n  bb,\n  ccc\n{}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": {
+        "perfectionist": {
+          "type": "line-length",
+          "order": "desc"
+        }
+      },
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > accepts heritage clauses with eslint-disable-next-line comments",
+      "line": 2931,
+      "kind": "valid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  B,\n  C,\n  // eslint-disable-next-line\n  A\n{}",
+      "output": null,
+      "options": [],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts heritage clauses with eslint-disable-next-line comments",
+      "line": 2944,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  // eslint-disable-next-line\n  A\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  // eslint-disable-next-line\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts heritage clauses with eslint-disable-next-line comments",
+      "line": 2970,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  /* eslint-disable-next-line */\n  A\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  /* eslint-disable-next-line */\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts heritage clauses with eslint-disable-line comments",
+      "line": 2998,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  A // eslint-disable-line\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  A // eslint-disable-line\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts heritage clauses with eslint-disable-line comments",
+      "line": 3022,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  A /* eslint-disable-line */\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  A /* eslint-disable-line */\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts heritage clauses with multiple eslint-disable comments",
+      "line": 3048,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  D,\n  C,\n  // eslint-disable-next-line\n  A,\n  B\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  // eslint-disable-next-line\n  A,\n  D\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "C",
+            "left": "D"
+          }
+        },
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "A"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > respects eslint-disable/enable comment blocks",
+      "line": 3082,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  D,\n  E,\n  /* eslint-disable */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  A\n{}",
+      "output": "interface Interface extends\n  A,\n  D,\n  /* eslint-disable */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  E\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts interface extends with rule-specific eslint-disable comments",
+      "line": 3123,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses\n  A\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts interface extends with rule-specific eslint-disable comments",
+      "line": 3149,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  A // eslint-disable-line rule-to-test/sort-heritage-clauses\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  A // eslint-disable-line rule-to-test/sort-heritage-clauses\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts interface extends with rule-specific eslint-disable comments",
+      "line": 3173,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  /* eslint-disable-next-line rule-to-test/sort-heritage-clauses */\n  A\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  /* eslint-disable-next-line rule-to-test/sort-heritage-clauses */\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts interface extends with rule-specific eslint-disable comments",
+      "line": 3199,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  A /* eslint-disable-line rule-to-test/sort-heritage-clauses */\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  A /* eslint-disable-line rule-to-test/sort-heritage-clauses */\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts class implements with rule-specific eslint-disable comments",
+      "line": 3123,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  B,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses\n  A\n{}",
+      "output": "class Class implements\n  B,\n  C,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts class implements with rule-specific eslint-disable comments",
+      "line": 3149,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  B,\n  A // eslint-disable-line rule-to-test/sort-heritage-clauses\n{}",
+      "output": "class Class implements\n  B,\n  C,\n  A // eslint-disable-line rule-to-test/sort-heritage-clauses\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts class implements with rule-specific eslint-disable comments",
+      "line": 3173,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  B,\n  /* eslint-disable-next-line rule-to-test/sort-heritage-clauses */\n  A\n{}",
+      "output": "class Class implements\n  B,\n  C,\n  /* eslint-disable-next-line rule-to-test/sort-heritage-clauses */\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > sorts class implements with rule-specific eslint-disable comments",
+      "line": 3199,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  C,\n  B,\n  A /* eslint-disable-line rule-to-test/sort-heritage-clauses */\n{}",
+      "output": "class Class implements\n  B,\n  C,\n  A /* eslint-disable-line rule-to-test/sort-heritage-clauses */\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > respects rule-specific eslint-disable/enable blocks",
+      "line": 3226,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  D,\n  E,\n  /* eslint-disable rule-to-test/sort-heritage-clauses */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  A\n{}",
+      "output": "interface Interface extends\n  A,\n  D,\n  /* eslint-disable rule-to-test/sort-heritage-clauses */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  E\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > respects rule-specific eslint-disable/enable blocks",
+      "line": 3260,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "class Class implements\n  D,\n  E,\n  /* eslint-disable rule-to-test/sort-heritage-clauses */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  A\n{}",
+      "output": "class Class implements\n  A,\n  D,\n  /* eslint-disable rule-to-test/sort-heritage-clauses */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable */\n  E\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > honors a disable directive that carries a description",
+      "line": 3296,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses -- Pinned.\n  A\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  // eslint-disable-next-line rule-to-test/sort-heritage-clauses -- Pinned.\n  A\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > honors a disable directive that carries a description",
+      "line": 3322,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  C,\n  B,\n  A // eslint-disable-line -- Pinned.\n{}",
+      "output": "interface Interface extends\n  B,\n  C,\n  A // eslint-disable-line -- Pinned.\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "B",
+            "left": "C"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > handles eslint-disable comments > honors a disable directive that carries a description",
+      "line": 3346,
+      "kind": "invalid",
+      "tester": "eslint",
+      "parser": "typescript",
+      "lang": null,
+      "code": "interface Interface extends\n  D,\n  E,\n  /* eslint-disable rule-to-test/sort-heritage-clauses -- Pinned. */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable rule-to-test/sort-heritage-clauses -- Done. */\n  A\n{}",
+      "output": "interface Interface extends\n  A,\n  D,\n  /* eslint-disable rule-to-test/sort-heritage-clauses -- Pinned. */\n  C,\n  B,\n  // Shouldn't move\n  /* eslint-enable rule-to-test/sort-heritage-clauses -- Done. */\n  E\n{}",
+      "options": [
+        {}
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "A",
+            "left": "B"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > oxlint > supports oxlint",
+      "line": 3385,
+      "kind": "invalid",
+      "tester": "oxlint",
+      "parser": "oxlint",
+      "lang": "ts",
+      "code": "interface Interface extends b, a {}",
+      "output": "interface Interface extends a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > oxlint > supports oxlint",
+      "line": 3400,
+      "kind": "invalid",
+      "tester": "oxlint",
+      "parser": "oxlint",
+      "lang": "ts",
+      "code": "class Class implements b, a {}",
+      "output": "class Class implements a, b {}",
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [
+        {
+          "messageId": "unexpectedHeritageClausesOrder",
+          "data": {
+            "right": "a",
+            "left": "b"
+          }
+        }
+      ],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > oxlint > supports oxlint",
+      "line": 3417,
+      "kind": "valid",
+      "tester": "oxlint",
+      "parser": "oxlint",
+      "lang": "ts",
+      "code": "interface Interface extends a, b {}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    },
+    {
+      "name": "sort-heritage-clauses > misc > oxlint > supports oxlint",
+      "line": 3423,
+      "kind": "valid",
+      "tester": "oxlint",
+      "parser": "oxlint",
+      "lang": "ts",
+      "code": "class Class implements a, b {}",
+      "output": null,
+      "options": [
+        {
+          "type": "alphabetical",
+          "order": "asc"
+        }
+      ],
+      "settings": null,
+      "filename": null,
+      "errors": [],
+      "unsupported": false
+    }
+  ]
+}

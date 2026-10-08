@@ -1,0 +1,10 @@
+[
+	{ "key": "shapes.go#ifChain", "line": 3, "cyclomatic": 4, "cognitive": 3 },
+	{ "key": "shapes.go#elseIfLadder", "line": 19, "cyclomatic": 4, "cognitive": 4 },
+	{ "key": "shapes.go#switchFour", "line": 31, "cyclomatic": 5, "cognitive": 1 },
+	{ "key": "shapes.go#nestedClosure", "line": 46, "cyclomatic": 2, "cognitive": 2 },
+	{ "key": "shapes.go#logicalRun", "line": 56, "cyclomatic": 4, "cognitive": 1 },
+	{ "key": "shapes.go#mixedLogical", "line": 60, "cyclomatic": 3, "cognitive": 2 },
+	{ "key": "shapes.go#loopWithIf", "line": 64, "cyclomatic": 3, "cognitive": 3 },
+	{ "key": "shapes.go#(*shape).Read", "line": 76, "cyclomatic": 1, "cognitive": 0 }
+]

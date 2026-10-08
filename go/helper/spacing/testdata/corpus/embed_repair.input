@@ -1,0 +1,11 @@
+package sample
+
+import _ "embed"
+
+//go:embed data.txt
+
+var data string
+
+type holder struct {
+	value string
+}

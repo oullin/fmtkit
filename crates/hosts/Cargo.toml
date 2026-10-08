@@ -1,0 +1,26 @@
+[package]
+name = "fmtkit-hosts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+fmtkit-config.workspace = true
+fmtkit-core.workspace = true
+fmtkit-ts.workspace = true
+markup_fmt.workspace = true
+oxc-markdown-parser.workspace = true
+oxc_allocator.workspace = true
+oxc_formatter_core.workspace = true
+oxc_formatter_css.workspace = true
+oxc_formatter_markdown.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

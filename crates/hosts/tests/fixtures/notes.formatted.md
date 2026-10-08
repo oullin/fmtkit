@@ -1,0 +1,67 @@
+---
+title:  Notes
+tags: [a, b]
+---
+
+Notes
+=====
+
+Some _emphasis_ and **strong** text.
+
+- first
+- second
+    - nested
+
+1. one
+2. two
+
+```ts
+export function sum(a: number, b: number): number {
+	return a + b;
+}
+```
+
+```tsx title="Button.tsx"
+export const Button = () => <button type="button">Go</button>;
+```
+
+```css
+.a {
+	color: red;
+}
+```
+
+```scss
+.a {
+	.b {
+		margin: 0;
+	}
+}
+```
+
+```bash
+echo   "left as written"
+```
+
+```json
+{"left":   "as written"}
+```
+
+- item with code:
+
+    ```js
+    const answer = 42;
+    ```
+
+> Quoted:
+>
+> ```css
+> a {
+> 	color: blue;
+> }
+> ```
+
+| Name | Value |
+| :--- | ----: |
+| a    |     1 |
+| bb   |    22 |

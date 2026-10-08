@@ -1,0 +1,28 @@
+[package]
+name = "fmtkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fmtkit"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+fmtkit-config.workspace = true
+fmtkit-core.workspace = true
+fmtkit-discover.workspace = true
+fmtkit-engine.workspace = true
+fmtkit-report.workspace = true
+mimalloc.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

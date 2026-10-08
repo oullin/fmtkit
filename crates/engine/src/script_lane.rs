@@ -1,0 +1,120 @@
+use std::fs;
+
+use fmtkit_config::Config;
+use fmtkit_core::{FileOutcome, Lang, Mode, is_declaration, is_test_file};
+use fmtkit_discover::SourceFile;
+use fmtkit_lint::Linter;
+
+use crate::{Run, write};
+
+/// What one script or host document became, before it is written.
+struct Processed {
+    output: String,
+    applied: Vec<String>,
+    outcome: FileOutcome,
+}
+
+/// Process one TypeScript, JavaScript, or host file. `None` leaves the file out
+/// of the report (a generated file).
+pub fn process(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
+    let outcome = process_inner(run, file);
+
+    run.progress.tick();
+
+    outcome
+}
+
+fn process_inner(run: &Run<'_>, file: &SourceFile) -> Option<FileOutcome> {
+    let bytes = match fs::read(&file.abs) {
+        Ok(bytes) => bytes,
+        Err(e) => return Some(FileOutcome::failed(&file.rel, Some(file.lang), format!("read: {e}"))),
+    };
+
+    let key = run.cache.key(run.mode, &file.rel, &bytes);
+
+    if let Some(outcome) = run.cache.get(&key) {
+        return Some(outcome);
+    }
+
+    let Ok(source) = String::from_utf8(bytes) else {
+        return Some(FileOutcome::failed(&file.rel, Some(file.lang), "not valid UTF-8"));
+    };
+
+    if fmtkit_discover::is_generated(&source) {
+        return None;
+    }
+
+    let score = file.lang.is_scorable() && !is_test_file(&file.abs) && !is_declaration(&file.abs);
+    let processed = match transform(run.config, run.linter, &file.rel, file.lang, &source, score) {
+        Ok(processed) => processed,
+        Err(message) => return Some(FileOutcome::failed(&file.rel, Some(file.lang), message)),
+    };
+
+    let mut outcome = processed.outcome;
+
+    outcome.changed = processed.output != source;
+    outcome.applied = processed.applied;
+
+    if !outcome.changed {
+        run.cache.put(key, &outcome);
+
+        return Some(outcome);
+    }
+
+    if run.mode == Mode::Format {
+        if let Err(e) = write::atomic(&file.abs, processed.output.as_bytes()) {
+            outcome.error = Some(format!("write: {e}"));
+
+            return Some(outcome);
+        }
+
+        // The rewritten file is clean: a later run over it can skip straight to this outcome.
+        let clean = FileOutcome { applied: Vec::new(), changed: false, ..outcome.clone() };
+
+        run.cache.put(run.cache.key(run.mode, &file.rel, processed.output.as_bytes()), &clean);
+    }
+
+    Some(outcome)
+}
+
+/// Lint fixes, then the lane's formatter, then lint diagnostics against the
+/// final text.
+fn transform(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, source: &str, score: bool) -> Result<Processed, String> {
+    let linter = linter.filter(|l| lang.is_lintable() && !l.ignores(rel));
+    let mut applied = Vec::new();
+    let mut outcome = FileOutcome::new(rel, Some(lang));
+    let mut linted = linter.map(|l| l.lint(rel, lang, source, true));
+    let fixed = linted.as_mut().and_then(|l| l.fixed.take());
+
+    if fixed.is_some() {
+        applied.push("lint".to_owned());
+    }
+
+    let input = fixed.as_deref().unwrap_or(source);
+    let output = if lang.is_host() {
+        let formatted = fmtkit_hosts::format_host(rel, lang, input, &config.ts.format).map_err(|e| e.to_string())?;
+
+        applied.extend(formatted.applied.iter().map(|s| (*s).to_owned()));
+
+        formatted.output
+    } else {
+        let formatted = fmtkit_ts::format_source(rel, lang, input, &config.ts.format, score).map_err(|e| e.to_string())?;
+
+        applied.extend(formatted.applied.iter().map(|s| (*s).to_owned()));
+        outcome.complexity = formatted.complexity;
+
+        formatted.output
+    };
+
+    if let (Some(linter), Some(linted)) = (linter, linted) {
+        // Positions only need refreshing when something is left to report and the formatter moved it.
+        outcome.lint = if linted.diagnostics.is_empty() || output == input { linted.diagnostics } else { linter.lint(rel, lang, &output, false).diagnostics };
+    }
+
+    Ok(Processed { output, applied, outcome })
+}
+
+/// [`transform`] for `--stdin-filepath`: the formatted text, or the reason it failed.
+pub fn format_text(config: &Config, linter: Option<&Linter>, rel: &str, lang: Lang, source: &str) -> Result<String, String> {
+    transform(config, linter, rel, lang, source, false).map(|p| p.output)
+}

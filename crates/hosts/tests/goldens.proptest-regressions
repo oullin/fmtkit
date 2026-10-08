@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 7ae2d38bad7e60369b8d561e57777fd6d51d67ce6b0390ae6c71f4dd21e0d57f # shrinks to (lang, source) = (Html, "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Fixture</title>\n<style>\nbody{margin:0;font-family:system-ui,sans-serif}\n.card>h1{font-size:2rem}\n</style>\n<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"WebPage\"}</script>\n</head>\n<body>\n<div class=\"card\"><h1>Title</h1><p style=\"color:red;margin:0\">Some <b>bold</b> text.</p></div>\n<script>\nconst items = ['a', 'b'];\n\nfor (const item of items) {\n\tconsole.log(item);\n}\n</script>\n<script type=\"module\">\nimport { start } from './app.js';\n\nstart();\n</script>\n</body>\n</html>\n")

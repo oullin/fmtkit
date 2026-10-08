@@ -1,0 +1,25 @@
+[package]
+name = "fmtkit-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fmtkit-cache.workspace = true
+fmtkit-config.workspace = true
+fmtkit-core.workspace = true
+fmtkit-discover.workspace = true
+fmtkit-go.workspace = true
+fmtkit-hosts.workspace = true
+fmtkit-lint.workspace = true
+fmtkit-ts.workspace = true
+rayon.workspace = true
+similar.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+rustc-hash.workspace = true

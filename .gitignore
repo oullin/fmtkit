@@ -8,6 +8,7 @@
 /storage/dist/
 /storage/dist-test/
 /storage/.cache/
+/storage/target*/
 *.exe
 *.exe~
 *.dll

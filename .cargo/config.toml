@@ -1,0 +1,3 @@
+# Every build artifact lives under storage/ (see scripts/lib/env.sh).
+[build]
+target-dir = "storage/target"

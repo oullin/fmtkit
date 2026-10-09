@@ -78,8 +78,8 @@ struct Executable {
 }
 
 /// Serve the repository that contains `cwd` until stopped, or until this
-/// executable changes.
-pub(crate) fn serve(cwd: &Path) -> ExitCode {
+/// executable changes; with `watch`, watch it between calls.
+pub(crate) fn serve(cwd: &Path, watch: bool) -> ExitCode {
     let root = fmtkit_discover::find_root(cwd);
 
     let Some(socket) = fmtkit_cache::socket(&root) else {
@@ -98,7 +98,11 @@ pub(crate) fn serve(cwd: &Path) -> ExitCode {
     let env = environment();
     let mut session = Session::default();
 
-    eprintln!("fmtkit: serving {} on {}", root.display(), socket.display());
+    if watch {
+        session.watch();
+    }
+
+    eprintln!("fmtkit: serving {} on {}{}", root.display(), socket.display(), if watch { ", watching it" } else { "" });
 
     for stream in listener.incoming() {
         let Ok(stream) = stream else {
@@ -114,6 +118,10 @@ pub(crate) fn serve(cwd: &Path) -> ExitCode {
         match answered {
             Ok(code) => eprintln!("fmtkit: answered in {:.1} ms with exit {code}", started.elapsed().as_secs_f64() * 1000.0),
             Err(reason) => eprintln!("fmtkit: refused a call: {reason}"),
+        }
+
+        if let Some(reason) = session.watch_failure() {
+            eprintln!("fmtkit: stopped watching: {reason}");
         }
 
         session.persist();

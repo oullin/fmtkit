@@ -44,9 +44,16 @@ enum Command {
     Check(RunArgs),
     /// Keep running for this repository, so `format` and `check` here start
     /// warm: they hand their runs to it while it runs.
-    Serve,
+    Serve(ServeArgs),
     /// Print the version.
     Version,
+}
+
+#[derive(Args)]
+struct ServeArgs {
+    /// Watch the repository between calls (kqueue on macOS, inotify on Linux), so a call looks only at what changed since the last.
+    #[arg(long)]
+    watch: bool,
 }
 
 #[derive(Args, Serialize, Deserialize)]
@@ -139,20 +146,20 @@ fn main() -> ExitCode {
         }
         Command::Format(args) => run(Mode::Format, args),
         Command::Check(args) => run(Mode::Check, args),
-        Command::Serve => serve(),
+        Command::Serve(args) => serve(&args),
     }
 }
 
 #[cfg(unix)]
-fn serve() -> ExitCode {
+fn serve(args: &ServeArgs) -> ExitCode {
     match std::env::current_dir() {
-        Ok(cwd) => serve::serve(&cwd),
+        Ok(cwd) => serve::serve(&cwd, args.watch),
         Err(e) => fail(EXIT_INTERNAL, &format!("current directory: {e}")),
     }
 }
 
 #[cfg(not(unix))]
-fn serve() -> ExitCode {
+fn serve(_args: &ServeArgs) -> ExitCode {
     fail(EXIT_USAGE, "serve needs a Unix socket")
 }
 

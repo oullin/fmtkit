@@ -203,6 +203,17 @@ impl Session {
         Ok(Report { schema: REPORT_SCHEMA, mode: options.mode, result, files, complexity, vet, missing: discovery.missing })
     }
 
+    /// Watch the repository between runs, so each run looks only at what
+    /// changed since the one before (see [`Repository::watch`]).
+    pub fn watch(&mut self) {
+        self.repository.watch();
+    }
+
+    /// Why watching stopped, once.
+    pub fn watch_failure(&mut self) -> Option<String> {
+        self.repository.watch_failure()
+    }
+
     /// Write what the runs since the last call learned.
     pub fn persist(&mut self) {
         if let Some(stores) = &mut self.stores {

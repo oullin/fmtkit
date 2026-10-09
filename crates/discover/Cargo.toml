@@ -19,5 +19,12 @@ rayon.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+[target.'cfg(target_os = "macos")'.dependencies]
+kqueue.workspace = true
+rustix = { workspace = true, features = ["process"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { workspace = true, features = ["fs"] }
+
 [dev-dependencies]
 tempfile.workspace = true

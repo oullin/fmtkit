@@ -23,6 +23,8 @@ const PATIENCE: Duration = Duration::from_secs(60);
 struct Server {
     child: Child,
     lines: Receiver<String>,
+    /// The line the server starts with.
+    banner: String,
 }
 
 impl Server {
@@ -41,10 +43,11 @@ impl Server {
             }
         });
 
-        let server = Self { child, lines };
-        let first = server.next();
+        let mut server = Self { child, lines, banner: String::new() };
 
-        assert!(first.contains("serving"), "{first}");
+        server.banner = server.next();
+
+        assert!(server.banner.contains("serving"), "{}", server.banner);
 
         server
     }
@@ -158,6 +161,39 @@ fn a_server_whose_executable_changed_refuses_and_stops() {
     assert_exit(&fixture.command_with(&exe, &["check"]).output().unwrap(), 1);
     assert!(server.next().contains("refused a call: the server's executable changed"));
     assert!(server.next().contains("stopping"));
+}
+
+#[test]
+fn a_watching_server_follows_each_change() {
+    let fixture = Fixture::new(&[("app.ts", UNFORMATTED), ("lib/util.ts", "export const util = 1;\n")]);
+
+    common::git(fixture.path(), &["add", "-A"]);
+    common::git(fixture.path(), &["-c", "user.name=fmtkit", "-c", "user.email=fmtkit@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"]);
+
+    let server = Server::start_with(fixture.command(&["serve", "--watch"]));
+
+    assert!(server.banner.ends_with("watching it"), "{}", server.banner);
+
+    // Committed, so nothing changed.
+    assert_exit(&fixture.run(&["check"]), 0);
+    assert!(server.next().contains("with exit 0"));
+
+    fixture.write("app.ts", &format!("{UNFORMATTED}// edited\n"));
+    assert_exit(&fixture.run(&["check"]), 1);
+    assert!(server.next().contains("with exit 1"));
+
+    assert_exit(&fixture.run(&["format"]), 0);
+    assert!(server.next().contains("with exit 0"));
+    assert_exit(&fixture.run(&["check"]), 0);
+    assert!(server.next().contains("with exit 0"));
+
+    fixture.write("lib/new.ts", UNFORMATTED);
+    assert_exit(&fixture.run(&["check"]), 1);
+    assert!(server.next().contains("with exit 1"));
+
+    fs::remove_file(fixture.path().join("lib/new.ts")).unwrap();
+    assert_exit(&fixture.run(&["check"]), 0);
+    assert!(server.next().contains("with exit 0"));
 }
 
 /// Copy the built binary to `exe` by replacing it, dated `modified`.

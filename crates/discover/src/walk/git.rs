@@ -9,7 +9,9 @@
 //!
 //! With a [`Memory`], a directory whose stamp is unchanged is not listed: its
 //! stored listing is replayed, and ignore files are read only for the
-//! directories that are listed.
+//! directories that are listed. Under a watch ([`Sight`]), a directory nothing
+//! was reported for is not even looked at; the walk records what it saw of
+//! the others.
 
 use std::fs;
 use std::io;
@@ -21,6 +23,7 @@ use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 use crate::filter::Filter;
 use crate::memory::{Context, Listing, Memory, Stamp};
+use crate::watch::{Sight, Sighting};
 use crate::{DiscoverError, Walked};
 
 /// One directory's `.gitignore`, chained to the nearest parent that has one.
@@ -41,16 +44,19 @@ struct Walk<'a, K> {
     exclude_matcher: OnceLock<Gitignore>,
     global_matcher: OnceLock<Gitignore>,
     memory: Option<&'a Memory>,
+    sight: Option<&'a Sight<'a>>,
     found: Mutex<Walked>,
     failure: Mutex<Option<DiscoverError>>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn walk<K>(
     root: &Path,
     filter: &Filter,
     ignore_case: bool,
     exclude: &Path,
     memory: Option<&Memory>,
+    sight: Option<&Sight<'_>>,
     threads: usize,
     keep: &K,
 ) -> Result<Walked, DiscoverError>
@@ -75,6 +81,7 @@ where
         exclude_matcher: OnceLock::new(),
         global_matcher: OnceLock::new(),
         memory,
+        sight,
         found: Mutex::new(Walked::default()),
         failure: Mutex::new(None),
     };
@@ -96,6 +103,12 @@ where
     /// A `trusted` directory's stored listing may be replayed: every ignore
     /// file above it is unchanged since the listing was stored.
     fn visit<'s>(&'s self, scope: &rayon::Scope<'s>, dir: &Path, rel: &str, parent: Option<Arc<Layer>>, trusted: bool) {
+        if trusted && let Some(listing) = self.vouched(rel) {
+            let layers = if listing.rules.is_some() { Some(layer(dir, parent)) } else { parent };
+
+            return self.replay(scope, dir, rel, listing, layers.as_ref(), trusted);
+        }
+
         let stamp = match fs::metadata(dir) {
             Ok(meta) => Stamp::from_metadata(&meta),
             Err(err) if err.kind() == io::ErrorKind::NotFound => return,
@@ -106,6 +119,8 @@ where
         let replayed = stored.filter(|listing| listing.rules.is_none_or(|rules| Stamp::of(&dir.join(".gitignore")) == Some(rules)));
 
         if let Some(listing) = replayed {
+            self.saw(rel, listing.stamp, listing.rules);
+
             let layers = if listing.rules.is_some() { Some(layer(dir, parent)) } else { parent };
 
             return self.replay(scope, dir, rel, listing, layers.as_ref(), trusted);
@@ -115,6 +130,10 @@ where
             return;
         };
 
+        if let Some(stamp) = stamp {
+            self.saw(rel, stamp, listing.rules);
+        }
+
         // Listings below keep only while this directory's rules are the ones
         // they were filtered by.
         let trusted = trusted && self.memory.and_then(|memory| memory.previous(rel)).is_some_and(|previous| previous.rules == listing.rules);
@@ -123,6 +142,22 @@ where
 
         if let (Some(memory), Some(_)) = (self.memory, stamp) {
             memory.remember(rel, listing);
+        }
+    }
+
+    /// The stored listing of `rel`, when the watch vouches it still holds:
+    /// nothing was reported for the directory since a walk saw it with the
+    /// listing's stamp and rules.
+    fn vouched(&self, rel: &str) -> Option<&Listing> {
+        let sighting = self.sight?.clean(rel)?;
+
+        self.memory?.listing(rel, &sighting.stamp).filter(|listing| listing.rules == sighting.rules)
+    }
+
+    /// Tell the watch what the walk saw of `rel`.
+    fn saw(&self, rel: &str, stamp: Stamp, rules: Option<Stamp>) {
+        if let Some(sight) = self.sight {
+            sight.saw(rel, Sighting { stamp, rules });
         }
     }
 

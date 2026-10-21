@@ -1,23 +1,30 @@
 //! Table tests for the anti-slop rules.
 //!
-//! Every table holds v1's own test cases plus edge cases, with the findings
-//! the v1 plugin produced for them under oxlint 1.86: byte spans and exact
-//! messages. Like v1's rule tester, each case runs one rule alone, and the
-//! snippet's own `oxlint-disable` directives apply.
+//! Every table for a v1 rule holds v1's own test cases plus edge cases, with
+//! the findings the v1 plugin produced for them under oxlint 1.86: byte spans
+//! and exact messages. The rules adapted from t3code have no recorded
+//! findings; their tables are fmtkit's own. Like v1's rule tester, each case
+//! runs one rule alone, and the snippet's own `oxlint-disable` directives apply.
 
 mod no_ambient_nondeterminism;
 mod no_chained_type_assertions;
 mod no_conditional_empty_object_spread;
+mod no_hookless_use_function;
 mod no_known_value_widening;
+mod no_low_value_comments;
 mod no_module_mocking;
 mod no_object_parameters;
+mod no_polling_loop_in_tests;
+mod no_real_time_wait_in_tests;
 mod no_reflect_apply;
 mod no_reflect_get;
 mod no_runtime_typeof;
 mod no_shape_in_symbol_names;
+mod no_test_in_loop;
 mod no_unknown_parameters;
 mod no_unknown_returns;
 mod no_unknown_type_aliases;
+mod no_unreasoned_test_skip;
 mod no_unsafe_dictionary_type;
 mod no_widen_then_assert;
 mod require_safety_comment_for_type_assertion;
@@ -88,7 +95,7 @@ pub fn check(rule: &str, options: &str, cases: &[Case]) {
 }
 
 #[test]
-fn every_v1_rule_is_registered() {
+fn every_rule_is_registered() {
     let names: Vec<&str> = RULES.iter().map(|(name, _)| *name).collect();
 
     assert_eq!(
@@ -97,16 +104,22 @@ fn every_v1_rule_is_registered() {
             "anti-slop/no-ambient-nondeterminism",
             "anti-slop/no-chained-type-assertions",
             "anti-slop/no-conditional-empty-object-spread",
+            "anti-slop/no-hookless-use-function",
             "anti-slop/no-known-value-widening",
+            "anti-slop/no-low-value-comments",
             "anti-slop/no-module-mocking",
             "anti-slop/no-object-parameters",
+            "anti-slop/no-polling-loop-in-tests",
+            "anti-slop/no-real-time-wait-in-tests",
             "anti-slop/no-reflect-apply",
             "anti-slop/no-reflect-get",
             "anti-slop/no-runtime-typeof",
             "anti-slop/no-shape-in-symbol-names",
+            "anti-slop/no-test-in-loop",
             "anti-slop/no-unknown-parameters",
             "anti-slop/no-unknown-returns",
             "anti-slop/no-unknown-type-aliases",
+            "anti-slop/no-unreasoned-test-skip",
             "anti-slop/no-unsafe-dictionary-type",
             "anti-slop/no-widen-then-assert",
             "anti-slop/require-safety-comment-for-type-assertion",

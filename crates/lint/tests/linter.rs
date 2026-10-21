@@ -72,6 +72,40 @@ fn overrides_replace_aliased_policy_entries() {
 }
 
 #[test]
+fn bundled_policy_requires_a_reason_for_type_checker_directives() {
+    let linter = Linter::new(&Lint::default()).unwrap();
+    let flagged = |source: &str| rules_of(&linter, "a.ts", Lang::Ts, source).into_iter().filter(|(rule, ..)| rule == "typescript/ban-ts-comment").count();
+
+    for bare in [
+        "// @ts-ignore
+let a = 1;
+",
+        "// @ts-expect-error
+let a = 1;
+",
+        "// @ts-nocheck
+let a = 1;
+",
+    ] {
+        assert_eq!(flagged(bare), 1, "{bare}");
+    }
+
+    for reasoned in [
+        "// @ts-ignore: the fixture is untyped
+let a = 1;
+",
+        "// @ts-expect-error -- checks the runtime guard
+let a = 1;
+",
+        "// @ts-nocheck generated file
+let a = 1;
+",
+    ] {
+        assert_eq!(flagged(reasoned), 0, "{reasoned}");
+    }
+}
+
+#[test]
 fn plugins_are_enabled_by_rule_names() {
     let linter = linter(&[("unicorn/prefer-node-protocol", json!("error"))]);
 

@@ -38,10 +38,12 @@ jobs:
                   go-version-file: go/helper/go.mod
                   cache-dependency-path: go/helper/go.sum
 
+            # hyperfine 2 runs commands without a shell and changes the JSON
+            # export, and scripts/bench.sh relies on both.
             - uses: taiki-e/install-action@v2
               name: Install hyperfine
               with:
-                  tool: hyperfine
+                  tool: hyperfine@1
 
             # Each side is built in its own checkout into storage/bench/<side>.
             # A base that predates the Rust workspace has nothing to compare.

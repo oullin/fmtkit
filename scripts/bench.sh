@@ -13,7 +13,7 @@ set -euo pipefail
 # fmtkit-go-helper.
 #
 # usage: bench.sh <base-dir> <head-dir>
-# Requires bash, git, and hyperfine.
+# Requires bash, git, and hyperfine 1.x.
 
 source "$(dirname "$0")/lib/env.sh"
 

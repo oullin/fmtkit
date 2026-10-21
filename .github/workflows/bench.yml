@@ -7,6 +7,9 @@ on:
         branches:
             - main
 
+permissions:
+    contents: read
+
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     CARGO_TERM_COLOR: always
@@ -40,7 +43,7 @@ jobs:
 
             # hyperfine 2 runs commands without a shell and changes the JSON
             # export, and scripts/bench.sh relies on both.
-            - uses: taiki-e/install-action@v2
+            - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2.87.29
               name: Install hyperfine
               with:
                   tool: hyperfine@1

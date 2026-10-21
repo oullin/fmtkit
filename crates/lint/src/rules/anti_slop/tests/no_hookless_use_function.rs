@@ -26,6 +26,18 @@ fn adapted() {
                 expected: &[],
             },
             Case {
+                name: "overload signatures of a real hook",
+                path: "case.tsx",
+                code: "import { useState } from \"react\";\n\nexport function useN(a: string): number;\nexport function useN(a: number): number;\nexport function useN(a: unknown): number {\n\treturn useState(0)[0];\n}\n",
+                expected: &[],
+            },
+            Case {
+                name: "declared hook",
+                path: "case.d.ts",
+                code: "import type { Foo } from \"react\";\n\nexport declare function useFoo(): Foo;\n",
+                expected: &[],
+            },
+            Case {
                 name: "calls React.useState",
                 path: "case.tsx",
                 code: "export function useCount(): number {\n\treturn React.useState(0)[0];\n}\n",

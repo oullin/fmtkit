@@ -32,11 +32,12 @@ impl Rule for NoHooklessUseFunction {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &mut Context<'_, 'a>) {
         let (name, span, calls_hook) = match node.kind() {
             AstKind::Function(function) if function.is_declaration() => {
-                let Some(id) = &function.id else {
+                // An overload or `declare function` has no body to check.
+                let (Some(id), Some(body)) = (&function.id, function.body.as_deref()) else {
                     return;
                 };
 
-                (id.name.as_str(), id.span, function.body.as_deref().is_some_and(|body| HookCall::find(|finder| finder.visit_function_body(body))))
+                (id.name.as_str(), id.span, HookCall::find(|finder| finder.visit_function_body(body)))
             }
             AstKind::VariableDeclarator(declarator) => {
                 let (BindingPattern::BindingIdentifier(id), Some(init)) = (&declarator.id, &declarator.init) else {

@@ -6,6 +6,8 @@
 
 pub mod lexical;
 pub mod params;
+pub mod testing;
+pub mod timers;
 pub mod types;
 
 use oxc_ast::AstKind;
@@ -139,4 +141,9 @@ pub fn comment_value<'a>(source: &'a str, comment: &Comment) -> &'a str {
     let span = comment.content_span();
 
     &source[span.start as usize..span.end as usize]
+}
+
+/// Whether `text` holds an issue reference: `#123` or an `http(s)://` link.
+pub fn links_issue(text: &str) -> bool {
+    text.contains("http://") || text.contains("https://") || text.match_indices('#').any(|(at, _)| text[at + 1..].starts_with(|c: char| c.is_ascii_digit()))
 }

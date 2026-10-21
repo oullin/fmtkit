@@ -2,11 +2,11 @@
 //! replace dependencies through real interfaces.
 
 use oxc_ast::AstKind;
-use oxc_ast::ast::Expression;
 use oxc_semantic::AstNode;
 
 use super::super::{Context, Rule};
-use super::shared::{member, strip_parens};
+use super::shared::member;
+use super::shared::testing::is_test_framework_object;
 
 pub const NAME: &str = "anti-slop/no-module-mocking";
 
@@ -28,30 +28,4 @@ impl Rule for NoModuleMocking {
             ctx.report(call.span, "Replace module mocking with dependency injection through a real interface, service layer, or faithful test implementation.");
         }
     }
-}
-
-/// Whether `expression` names the global `vi` or `jest`, or `vi` imported from
-/// `vitest` or `jest` from `@jest/globals` under any local name.
-fn is_test_framework_object(ctx: &Context<'_, '_>, expression: &Expression<'_>) -> bool {
-    let Expression::Identifier(identifier) = strip_parens(expression) else {
-        return false;
-    };
-
-    let nodes = ctx.semantic.nodes();
-    let scoping = ctx.semantic.scoping();
-    let Some(symbol) = scoping.find_binding(nodes.get_node(identifier.node_id.get()).scope_id(), identifier.name) else {
-        return identifier.name == "vi" || identifier.name == "jest";
-    };
-
-    let declaration = scoping.symbol_declaration(symbol);
-    let AstKind::ImportSpecifier(specifier) = nodes.kind(declaration) else {
-        return false;
-    };
-
-    let imported = specifier.imported.name();
-
-    nodes
-        .ancestor_kinds(declaration)
-        .find_map(|kind| if let AstKind::ImportDeclaration(import) = kind { Some(import.source.value.as_str()) } else { None })
-        .is_some_and(|source| (source == "vitest" && imported == "vi") || (source == "@jest/globals" && imported == "jest"))
 }

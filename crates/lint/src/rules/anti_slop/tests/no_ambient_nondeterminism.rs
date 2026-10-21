@@ -191,3 +191,55 @@ fn edges() {
         ],
     );
 }
+
+/// fmtkit's additions: readings that seed a mock are allowed, as in
+/// t3code's `t3code/no-wall-clock-in-tests`, and `process.hrtime.bigint()` is a reading.
+#[test]
+fn additions() {
+    check(
+        "anti-slop/no-ambient-nondeterminism",
+        "[]",
+        &[
+            Case { name: "seeds fake time", path: "case.test.ts", code: "import { vi } from \"vitest\";\n\nvi.setSystemTime(Date.now());\n", expected: &[] },
+            Case { name: "inside a vi.fn implementation", path: "case.test.ts", code: "export const now = vi.fn(() => Date.now());\n", expected: &[] },
+            Case { name: "returned by a mock", path: "case.test.ts", code: "clock.mockReturnValue(new Date());\n", expected: &[] },
+            Case {
+                name: "inside a vi.mock factory",
+                path: "case.test.ts",
+                code: "vi.mock(\"./clock\", () => ({ now: () => performance.now() }));\n",
+                expected: &[],
+            },
+            Case {
+                name: "shadowed vi is not the framework",
+                path: "case.test.ts",
+                code: "const vi = { fn: <T>(f: T): T => f };\n\nexport const now = vi.fn(() => Date.now());\n",
+                expected: &[(70, 80, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.")],
+            },
+            Case {
+                name: "measured by the test",
+                path: "case.test.ts",
+                code: "it(\"is fast\", () => {\n\tconst start = Date.now();\n\n\trun();\n\texpect(Date.now() - start).toBeLessThan(5);\n});\n",
+                expected: &[
+                    (37, 47, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                    (66, 76, "`Date.now()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it."),
+                ],
+            },
+            Case {
+                name: "process.hrtime.bigint",
+                path: "case.ts",
+                code: "export const at = process.hrtime.bigint();\n",
+                expected: &[(
+                    18,
+                    41,
+                    "`process.hrtime.bigint()` makes this output depend on when and where it ran. Take the value as a parameter so the caller owns it.",
+                )],
+            },
+            Case {
+                name: "shadowed process",
+                path: "case.ts",
+                code: "const process = { hrtime: { bigint: (): bigint => 0n } };\n\nexport const at = process.hrtime.bigint();\n",
+                expected: &[],
+            },
+        ],
+    );
+}

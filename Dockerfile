@@ -8,7 +8,7 @@ FROM debian:trixie-slim
 ARG TARGETPLATFORM
 
 # Keep in sync with the go directive in go/helper/go.mod.
-ARG GO_VERSION=1.27.1
+ARG GO_VERSION=1.27.3
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl \

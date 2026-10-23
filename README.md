@@ -18,7 +18,7 @@ brew install oullin/fmtkit/fmtkit
 # Docker (linux/amd64, linux/arm64; includes Go for go vet)
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/oullin/fmtkit:latest check --all
 
-# From source (Rust 1.96+, Go 1.27.1)
+# From source (Rust 1.96+, Go 1.27.3)
 git clone https://github.com/oullin/fmtkit.git && cd fmtkit && make build
 ```
 
@@ -220,7 +220,7 @@ fmtkit schema=2 mode=check result=fail files=2 changed=2 violations=5 lint=5 com
 
 ## Development
 
-Needs Rust 1.96+, Go 1.27.1, and Bash. Build output goes to `storage/`.
+Needs Rust 1.96+, Go 1.27.3, and Bash. Build output goes to `storage/`.
 
 | Target        | What it does                                          |
 | ------------- | ----------------------------------------------------- |

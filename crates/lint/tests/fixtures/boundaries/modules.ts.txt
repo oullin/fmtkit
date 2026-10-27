@@ -1,0 +1,16 @@
+import value from './value';
+export * from '../barrel';
+export { value } from './named';
+const a = require('./a');
+const b = await import('./b');
+import c = require('./c');
+const d = require(name);
+const text = './not-an-import'; // ../comment
+const template = `require('./not-an-import')`;
+const computed = import(`./${name}`);
+const literalTemplate = require(`./literal`);
+const dynamicTemplate = import(`../literal`);
+const wrapped = require(('./wrapped'));
+const wrappedCallee = (require)('./wrapped-callee');
+import { absolute } from '@kernel';
+export type { Value } from '@api/example/value';

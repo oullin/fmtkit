@@ -1,0 +1,23 @@
+type Unsafe = any;
+const parse = (input: unknown): unknown => input;
+const valid = typeof value === 'string';
+type Value = typeof value;
+import type { infer as Infer } from 'zod';
+type A = z.infer<typeof schema>;
+type B = z.input<typeof schema>;
+type C = z.output<typeof schema>;
+import { type infer as InlineInfer } from 'zod';
+import { infer as RuntimeInfer } from 'other';
+import type { source as infer } from 'other';
+import type * as inferNamespace from 'zod';
+type Unrelated = other.infer<typeof schema>;
+type Nested = ns.z.input<typeof schema>;
+type Nullable = string | null;
+type Optional = number | undefined;
+type Parenthesised = string | (null);
+type Inner = (string | null) | number;
+type Alone = null;
+type Both = null | undefined;
+type NullishInside = string | { value: null };
+const literal = 'any typeof z.infer null | undefined';
+// any typeof z.infer null | undefined

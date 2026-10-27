@@ -1,0 +1,7 @@
+export class First {}
+class Local {}
+export { Local };
+export default class Second {}
+export class Third {}
+namespace Nested { export class Fourth {} }
+const Expression = class Fifth {};

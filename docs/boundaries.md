@@ -31,7 +31,7 @@ Every rule accepts at most one options object. Unknown keys and invalid option t
 | `names` | `reserved-internal-name` | Required, non-empty list of reserved strings. Messages preserve each configured spelling. |
 | `rules` | `reserved-specifier` | Required, non-empty list of specifier entries. Each entry has `name`, `match`, optional `except`, optional `allow`, and `message`. |
 
-Path globs match the whole repository-relative path, with forward slashes. `*` stays within a segment, `**` spans zero or more directories, and `?` and character classes are supported. A bare filename matches that root file; use `**/filename.ts` for any directory. Braces are literal. Blank and malformed patterns are errors.
+Path globs match the whole repository-relative path, with forward slashes. `*` stays within a segment, `**` spans zero or more directories, and `?` and character classes match Unicode characters. Classes use Go’s `[^a]` negation; `[!a]` contains the literal characters `!` and `a`. A bare filename matches that root file; use `**/filename.ts` for any directory. Braces are literal. Blank and malformed patterns are errors.
 
 `{package}` is rejected in `exempt` and `allow`. Expand it to each registered package directory before configuring fmtkit. There is no workspace registry in the linter.
 

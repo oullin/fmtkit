@@ -3,7 +3,7 @@
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
     Declaration, ExportDefaultDeclarationKind, Expression, ImportDeclarationSpecifier, ImportOrExportKind, MethodDefinitionKind, Program, Statement,
-    TSModuleReference, TSType, TSTypeName,
+    StringLiteral, TSModuleReference, TSType, TSTypeName,
 };
 use oxc_semantic::Semantic;
 use oxc_span::{GetSpan, Span};
@@ -31,7 +31,7 @@ impl Facts {
             match node.kind() {
                 AstKind::Program(program) => facts.layout(program),
                 AstKind::ImportDeclaration(import) => {
-                    facts.specifiers.push((import.source.span, import.source.value.to_string()));
+                    facts.literal_specifier(&import.source);
 
                     if import.import_kind == ImportOrExportKind::Type
                         && import.specifiers.as_ref().is_some_and(|specifiers| {
@@ -44,11 +44,11 @@ impl Facts {
                         facts.infer_imports.push(import.span);
                     }
                 }
-                AstKind::ExportFromDeclaration(export) => facts.specifiers.push((export.source.span, export.source.value.to_string())),
-                AstKind::ExportAllDeclaration(export) => facts.specifiers.push((export.source.span, export.source.value.to_string())),
+                AstKind::ExportFromDeclaration(export) => facts.literal_specifier(&export.source),
+                AstKind::ExportAllDeclaration(export) => facts.literal_specifier(&export.source),
                 AstKind::TSImportEqualsDeclaration(import) => {
                     if let TSModuleReference::ExternalModuleReference(reference) = &import.module_reference {
-                        facts.specifiers.push((reference.expression.span, reference.expression.value.to_string()));
+                        facts.literal_specifier(&reference.expression);
                     }
                 }
                 AstKind::ImportExpression(import) => facts.specifier(&import.source),
@@ -103,19 +103,25 @@ impl Facts {
     }
 
     fn identifier(&mut self, span: Span, name: &str) {
-        self.identifiers.push((span, name.to_lowercase()));
+        self.identifiers.push((span, name.to_owned()));
     }
 
     fn specifier(&mut self, expression: &Expression<'_>) {
         match expression {
-            Expression::StringLiteral(literal) => self.specifiers.push((literal.span, literal.value.to_string())),
+            Expression::StringLiteral(literal) => self.literal_specifier(literal),
             Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
-                if let Some(value) = template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()) {
-                    self.specifiers.push((template.span, value.to_string()));
+                if let Some(quasi) = template.quasis.first()
+                    && let Some(value) = &quasi.value.cooked
+                {
+                    self.specifiers.push((template.span, module_text(value, quasi.lone_surrogates)));
                 }
             }
             _ => {}
         }
+    }
+
+    fn literal_specifier(&mut self, literal: &StringLiteral<'_>) {
+        self.specifiers.push((literal.span, module_text(&literal.value, literal.lone_surrogates)));
     }
 
     fn layout(&mut self, program: &Program<'_>) {
@@ -149,4 +155,32 @@ impl Facts {
             }
         }
     }
+}
+
+/// Go uses Unicode simple lowercase, which keeps one scalar per character.
+/// Rust's full mapping expands U+0130 to an i followed by a combining dot.
+pub fn simple_lowercase(value: &str) -> String {
+    value.chars().filter_map(|character| character.to_lowercase().next()).collect()
+}
+
+/// The extractor's JSON reaches Go as lossy Unicode. Decode oxc's surrogate
+/// escape representation to that same text before comparing module names.
+fn module_text(value: &str, lone_surrogates: bool) -> String {
+    if !lone_surrogates {
+        return value.to_owned();
+    }
+
+    let mut text = String::new();
+    let mut characters = value.chars();
+
+    while let Some(character) = characters.next() {
+        text.push(character);
+        if character == '\u{fffd}' {
+            for _ in 0..4 {
+                characters.next();
+            }
+        }
+    }
+
+    text
 }

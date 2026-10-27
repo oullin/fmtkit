@@ -66,6 +66,24 @@ fn reference_syntax_fixtures() {
 }
 
 #[test]
+fn module_text_matches_go_json_decoding_of_lone_surrogates() {
+    assert_findings(
+        "relative-module",
+        &[],
+        "src/example.ts",
+        r"import x from './\ud800'; const y = require(`./\udfff`);",
+        &[(1, "relative module specifier is forbidden: ./�"), (1, "relative module specifier is forbidden: ./�")],
+    );
+    assert_findings(
+        "reserved-specifier",
+        &[json!({"rules": [{"name": "unicode", "match": ["�"], "message": "reserved module"}]})],
+        "src/example.ts",
+        r"import x from '\ud800';",
+        &[(1, "reserved module")],
+    );
+}
+
+#[test]
 fn layout_counts_only_top_level_exported_class_declarations() {
     let source = include_str!("fixtures/boundaries/classes.ts.txt");
 
@@ -135,6 +153,22 @@ fn reserved_names_cover_identifiers_without_counting_strings_or_private_fields()
         "const LIFECYCLE = 1;",
         &[(1, "internal identifiers must omit Cycle"), (1, "internal identifiers must omit Life")],
     );
+}
+
+#[test]
+fn reserved_names_preserve_the_extractors_unicode_candidate_filter() {
+    let source = "const İx = 1;";
+    assert_findings("reserved-internal-name", &[json!({"names": ["ix"]})], "src/a.ts", source, &[]);
+    assert_findings(
+        "reserved-internal-name",
+        &[json!({"names": ["ix", "x"]})],
+        "src/a.ts",
+        source,
+        &[(1, "internal identifiers must omit ix"), (1, "internal identifiers must omit x")],
+    );
+    assert_findings("reserved-internal-name", &[json!({"names": ["i\u{307}"]})], "src/a.ts", source, &[]);
+    assert_findings("reserved-internal-name", &[json!({"names": ["ix"]})], "src/İx.ts", "", &[(1, "internal file names must omit ix")]);
+    assert_findings("explicit-any", &[], ".ts", "type Unsafe = any;", &[(1, ANY)]);
 }
 
 #[test]
@@ -212,6 +246,35 @@ fn ordered_exemptions_are_scoped_to_each_rule() {
         "import mock from './mock';",
         &[(1, "relative module specifier is forbidden: ./mock")],
     );
+}
+
+#[test]
+fn exemptions_match_cloud_character_classes_unicode_and_zero_directories() {
+    for (pattern, file, exempt) in [
+        ("src/?.ts", "src/é.ts", true),
+        ("src/?.ts", "src/ab.ts", false),
+        ("src/[!a].ts", "src/!.ts", true),
+        ("src/[!a].ts", "src/b.ts", false),
+        ("src/[^a].ts", "src/é.ts", true),
+        ("src/[à-ü].ts", "src/é.ts", true),
+        ("src/[à-ü].ts", "src/a.ts", false),
+        ("src/[z-a].ts", "src/z.ts", false),
+        (r"src/[\-].ts", "src/-.ts", true),
+        ("src/{x,y}.ts", "src/{x,y}.ts", true),
+        ("src/{x,y}.ts", "src/x.ts", false),
+        (r"src/\{x\}.ts", "src/{x}.ts", true),
+        ("src/example.ts/**", "src/example.ts", true),
+        ("src/example.ts/**/**", "src/example.ts", true),
+        ("src/**/?.ts", "src/é.ts", true),
+        ("src/**/?.ts", "src/deep/é.ts", true),
+        ("**/?.ts/**", "é.ts", true),
+        ("src/*/?.ts", "src/é.ts", false),
+    ] {
+        let expected = if exempt { vec![] } else { vec![(1, ANY)] };
+        assert_findings("explicit-any", &[json!({"exempt": [pattern]})], file, "type Unsafe = any;", &expected);
+    }
+    assert_findings("explicit-any", &[json!({"exempt": ["**", "!src/?.ts", "src/é.ts"]})], "src/é.ts", "type Unsafe = any;", &[]);
+    assert_findings("explicit-any", &[json!({"exempt": ["**", "!src/?.ts"]})], "src/é.ts", "type Unsafe = any;", &[(1, ANY)]);
 }
 
 fn specifier_options() -> Value {

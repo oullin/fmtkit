@@ -1,6 +1,7 @@
 //! Opt-in, single-file TypeScript boundary policies ported from oc.
 
 mod options;
+mod pathglob;
 mod shared;
 
 use oxc_span::Span;
@@ -51,8 +52,7 @@ impl Rule for Boundary {
     }
 
     fn run_once(&self, ctx: &mut Context<'_, '_>) {
-        let authored =
-            std::path::Path::new(ctx.rel).extension().is_some_and(|extension| extension == "ts" || extension == "tsx") && !ctx.rel.ends_with(".d.ts");
+        let authored = ctx.rel.rsplit_once('.').is_some_and(|(_, extension)| matches!(extension, "ts" | "tsx")) && !ctx.rel.ends_with(".d.ts");
 
         if self.options.exempt.matches(ctx.rel) || !authored {
             return;
@@ -78,13 +78,26 @@ impl Rule for Boundary {
                 }
             }
             Kind::ReservedInternalName => {
-                for name in &self.options.names {
-                    let lower = name.to_lowercase();
+                // The extractor first selects identifiers using JavaScript's
+                // full lowercase mapping; Go then compares simple lowercase.
+                let names: Vec<_> = self.options.names.iter().map(|name| name.to_lowercase()).collect();
+                let identifiers: Vec<_> = facts
+                    .identifiers
+                    .iter()
+                    .filter_map(|(span, identifier)| {
+                        let lower = identifier.to_lowercase();
+                        names.iter().any(|name| lower.contains(name)).then(|| (*span, shared::simple_lowercase(identifier)))
+                    })
+                    .collect();
+                let file = shared::simple_lowercase(ctx.rel);
 
-                    if ctx.rel.to_lowercase().contains(&lower) {
+                for name in &self.options.names {
+                    let lower = shared::simple_lowercase(name);
+
+                    if file.contains(&lower) {
                         ctx.report(Span::new(0, 0), format!("internal file names must omit {name}"));
                     }
-                    for (span, identifier) in &facts.identifiers {
+                    for (span, identifier) in &identifiers {
                         if identifier.contains(&lower) {
                             ctx.report(*span, format!("internal identifiers must omit {name}"));
                         }

@@ -55,12 +55,16 @@ fn strings(key: &str, value: &Value) -> Result<Vec<String>, String> {
 pub struct Paths {
     globs: GlobSet,
     excluded: Vec<bool>,
+    indices: Vec<usize>,
+    compatible: Vec<(usize, regress::Regex)>,
 }
 
 impl Paths {
     fn parse(key: &str, patterns: &[String]) -> Result<Self, String> {
         let mut globs = GlobSetBuilder::new();
         let mut excluded = Vec::new();
+        let mut indices = Vec::new();
+        let mut compatible = Vec::new();
 
         for pattern in patterns {
             let (include, glob) = pattern.strip_prefix('!').map_or((false, pattern.as_str()), |glob| (true, glob));
@@ -70,6 +74,14 @@ impl Paths {
             }
             if glob.contains("{package}") {
                 return Err(format!("{key}: {{package}} is not supported; expand it to repository-relative package directories"));
+            }
+
+            let index = excluded.len();
+            excluded.push(!include);
+
+            if super::pathglob::needs_compatibility(glob) {
+                compatible.push((index, super::pathglob::compile(glob).map_err(|error| format!("invalid {key} glob {pattern:?}: {error}"))?));
+                continue;
             }
 
             // Cloud uses path.Match per segment, where braces are literal and
@@ -82,14 +94,20 @@ impl Paths {
                 .map_err(|error| format!("invalid {key} glob {pattern:?}: {error}"))?;
 
             globs.add(built);
-            excluded.push(!include);
+            indices.push(index);
         }
 
-        Ok(Self { globs: globs.build().map_err(|error| format!("invalid {key} globs: {error}"))?, excluded })
+        Ok(Self { globs: globs.build().map_err(|error| format!("invalid {key} globs: {error}"))?, excluded, indices, compatible })
     }
 
     pub fn matches(&self, path: &str) -> bool {
-        self.globs.matches(path).last().is_some_and(|&index| self.excluded[index])
+        self.globs
+            .matches(path)
+            .into_iter()
+            .map(|index| self.indices[index])
+            .chain(self.compatible.iter().filter_map(|(index, regex)| regex.find(path).map(|_| *index)))
+            .max()
+            .is_some_and(|index| self.excluded[index])
     }
 }
 

@@ -95,3 +95,18 @@ fn overrides_are_the_generic_typescript_override() {
 
     assert_eq!(shipped["overrides"], json!([expected]));
 }
+
+#[test]
+fn boundaries_rules_are_opt_in() {
+    let (_, _, shipped) = load();
+
+    for (name, _) in fmtkit_lint::rules::boundaries::RULES {
+        assert_eq!(shipped["rules"][name], "off", "{name} must remain opt-in");
+    }
+
+    let linter = fmtkit_lint::Linter::new(&fmtkit_config::Lint::default()).unwrap();
+    let source = "export class Lifecycle {}\nexport class Other {}\nimport x from './x';\ntype A = any | null;\ntype B = z.infer<typeof x>;\nReflect.get(x, 'key');\ntypeof x;";
+    let result = linter.lint("src/index.ts", fmtkit_core::Lang::Ts, source, false);
+
+    assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("boundaries/")));
+}

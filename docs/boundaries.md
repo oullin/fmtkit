@@ -4,18 +4,18 @@ The native `boundaries/*` rules port the single-file checks from Omniyat's `oc v
 
 ## Rules
 
-| Rule | Refuses |
-| --- | --- |
-| `boundaries/exported-class-count` | More than one top-level exported class declaration outside a path ending in `/index.ts`. Reports once, at the second class, with the total. Default-exported classes count. Local classes, class expressions, re-exports, and classes inside namespaces do not. |
-| `boundaries/barrel-only` | The first statement other than an import or export in a path ending in `/index.ts`. Exported declarations such as `export const`, classes, and functions are refused. Re-exports, `export default expression`, and `export = expression` are accepted. Directives and empty statements are refused. |
-| `boundaries/relative-module` | Module specifiers beginning with `./` or `../`. |
-| `boundaries/reserved-internal-name` | Each configured name appearing as a case-insensitive substring of the repository-relative path or an identifier. String contents, quoted property keys, comments, and private identifiers do not count. |
-| `boundaries/dynamic-property-access` | Calls to `Reflect.get` and `Reflect.set`, including optional calls. Computed properties such as `Reflect['get']`, other reflection methods, and ordinary element access are accepted. |
-| `boundaries/explicit-any` | Every explicit `any` type keyword. `unknown` and text containing the word are accepted. |
-| `boundaries/runtime-typeof` | Runtime `typeof` expressions. Type queries such as `type Value = typeof value` are accepted. |
-| `boundaries/zod-infer` | Type references to exactly `z.infer`, `z.input`, or `z.output`, and declaration-level type-only named imports whose imported or local name is `infer`, from any module. Inline `import { type infer }` and namespace imports are accepted. |
-| `boundaries/nullable-union` | Each union with a direct `null` or `undefined` member. A lone nullish type, a parenthesised member such as `string \| (null)`, and nullish types inside objects are accepted. Nested unions are checked separately. |
-| `boundaries/reserved-specifier` | Imports matching a configured module prefix outside its allowed files, unless the module matches an exception. |
+| Rule                                 | Refuses                                                                                                                                                                                                                                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boundaries/exported-class-count`    | More than one top-level exported class declaration outside a path ending in `/index.ts`. Reports once, at the second class, with the total. Default-exported classes count. Local classes, class expressions, re-exports, and classes inside namespaces do not.                                     |
+| `boundaries/barrel-only`             | The first statement other than an import or export in a path ending in `/index.ts`. Exported declarations such as `export const`, classes, and functions are refused. Re-exports, `export default expression`, and `export = expression` are accepted. Directives and empty statements are refused. |
+| `boundaries/relative-module`         | Module specifiers beginning with `./` or `../`.                                                                                                                                                                                                                                                     |
+| `boundaries/reserved-internal-name`  | Each configured name appearing as a case-insensitive substring of the repository-relative path or an identifier. String contents, quoted property keys, comments, and private identifiers do not count.                                                                                             |
+| `boundaries/dynamic-property-access` | Calls to `Reflect.get` and `Reflect.set`, including optional calls. Computed properties such as `Reflect['get']`, other reflection methods, and ordinary element access are accepted.                                                                                                               |
+| `boundaries/explicit-any`            | Every explicit `any` type keyword. `unknown` and text containing the word are accepted.                                                                                                                                                                                                             |
+| `boundaries/runtime-typeof`          | Runtime `typeof` expressions. Type queries such as `type Value = typeof value` are accepted.                                                                                                                                                                                                        |
+| `boundaries/zod-infer`               | Type references to exactly `z.infer`, `z.input`, or `z.output`, and declaration-level type-only named imports whose imported or local name is `infer`, from any module. Inline `import { type infer }` and namespace imports are accepted.                                                          |
+| `boundaries/nullable-union`          | Each union with a direct `null` or `undefined` member. A lone nullish type, a parenthesised member such as `string \| (null)`, and nullish types inside objects are accepted. Nested unions are checked separately.                                                                                 |
+| `boundaries/reserved-specifier`      | Imports matching a configured module prefix outside its allowed files, unless the module matches an exception.                                                                                                                                                                                      |
 
 Module specifiers come from static imports, re-exports, external `import = require(...)` declarations, bare `require(...)` calls, and dynamic `import(...)`. String literals and templates without substitutions count. Other strings and type-level `import('module')` queries do not. A shadowed `require` still counts because the source check uses syntax rather than name resolution.
 
@@ -25,11 +25,11 @@ These checks retain the source extractor's treatment of parentheses. For example
 
 Every rule accepts at most one options object. Unknown keys and invalid option types are errors. Boundary rules report findings without changing source.
 
-| Option | Rules | Meaning |
-| --- | --- | --- |
-| `exempt` | All | Ordered path globs, default `[]`. A matching positive entry skips the file. A leading `!` re-includes it. The last matching entry wins. |
-| `names` | `reserved-internal-name` | Required, non-empty list of reserved strings. Messages preserve each configured spelling. |
-| `rules` | `reserved-specifier` | Required, non-empty list of specifier entries. Each entry has `name`, `match`, optional `except`, optional `allow`, and `message`. |
+| Option   | Rules                    | Meaning                                                                                                                                 |
+| -------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `exempt` | All                      | Ordered path globs, default `[]`. A matching positive entry skips the file. A leading `!` re-includes it. The last matching entry wins. |
+| `names`  | `reserved-internal-name` | Required, non-empty list of reserved strings. Messages preserve each configured spelling.                                               |
+| `rules`  | `reserved-specifier`     | Required, non-empty list of specifier entries. Each entry has `name`, `match`, optional `except`, optional `allow`, and `message`.      |
 
 Path globs match the whole repository-relative path, with forward slashes. `*` stays within a segment, `**` spans zero or more directories, and `?` and character classes match Unicode characters. Classes use Go’s `[^a]` negation; `[!a]` contains the literal characters `!` and `a`. A bare filename matches that root file; use `**/filename.ts` for any directory. Braces are literal. Blank and malformed patterns are errors.
 

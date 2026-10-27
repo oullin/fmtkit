@@ -1,6 +1,6 @@
 //! Linting: oxc_linter with the bundled policy, plus fmtkit's native rules
-//! (`@nkzw/*`, `perfectionist/*`, `no-only-tests/*`, `anti-slop/*`) run as one
-//! visitor over the same semantic model.
+//! (`@nkzw/*`, `perfectionist/*`, `no-only-tests/*`, `anti-slop/*`,
+//! `observability/*`) run as one visitor over the same semantic model.
 
 mod oxc_bridge;
 pub mod rules;

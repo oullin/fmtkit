@@ -1,0 +1,37 @@
+request.catch(() => {}); // expect: catches.promise
+request.catch(function (error) { /* empty */ }); // expect: catches.promise
+request.catch(async (error) => undefined); // expect: catches.promise
+request.catch(error => (undefined)); // expect: catches.promise
+request.catch(error => { return; }); // expect: catches.promise
+request.catch(error => { return undefined; }); // expect: catches.promise
+request.catch(error => void 0); // expect: catches.promise
+request.catch(error => { console.error(error); return undefined; }); // expect: catches.promise
+request.catch(error => { if (enabled) { return undefined; } return fallback; }); // expect: catches.promise
+request.catch(error => (undefined as void)); // expect: catches.promise
+request.catch(error => enabled ? fallback : undefined); // expect: catches.promise
+request.catch((() => {}) as Handler); // expect: catches.promise
+
+request.catch(error => { console.warn(error); });
+request.catch(error => { throw error; });
+request.catch(error => fallback);
+request.catch(error => Result.err({ errorClass: safe(error), cause: error }));
+request.catch(function (error) { return Result.err(error); });
+request.catch(error => { const later = () => undefined; return fallback; });
+request.catch(reportException);
+const object = { catch() {} };
+const text = 'promise.catch(() => {})';
+const regex = /\.catch\(\(\) => \{\}\)/;
+
+const discard = () => {};
+const discardAlias = discard;
+function discardError(error: unknown) { return undefined; }
+const handlers = { discard(error: unknown) {} };
+request.catch(discard); // expect: catches.promise
+request.catch(discardAlias); // expect: catches.promise
+request.catch(discardError); // expect: catches.promise
+request.catch(handlers.discard); // expect: catches.promise
+request.catch(() => { ; }); // expect: catches.promise
+const report = (error: unknown) => { console.error(error); };
+request.catch(report);
+const cycle = cycle;
+request.catch(cycle);

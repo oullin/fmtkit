@@ -116,7 +116,7 @@ fn transform(config: &Config, linter: Option<&Linter>, mode: Mode, rel: &str, la
     if let (Some(linter), Some(linted)) = (linter, linted) {
         outcome.lint = if mode == Mode::Check && fixed.is_some() {
             linter.lint(rel, lang, source, false).diagnostics
-        } else if linted.diagnostics.is_empty() || output == input {
+        } else if mode == Mode::Check || linted.diagnostics.is_empty() || output == input {
             linted.diagnostics
         } else {
             // The formatter moved what is left to report.

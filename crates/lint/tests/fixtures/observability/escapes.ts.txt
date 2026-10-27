@@ -1,0 +1,45 @@
+export function escaped() {
+	try { action(); }
+	// observability: swallowed because the resource is already closed
+	catch (error) {}
+	try { action();
+		// observability: swallowed because the cache is optional
+	} catch (error) {}
+	try { action(); }
+	// observability: swallowed because
+	catch (error) {} // expect: catches.unobserved
+	try { action(); }
+	// observability: swallowed because the resource is already closed
+
+	catch (error) {} // expect: catches.unobserved
+	try { action(); } catch (error) { // expect: catches.unobserved
+		// observability: swallowed because this is inside the handler
+	}
+	try { action(); }
+	/* // observability: swallowed because a block comment is not the escape */
+	catch (error) {} // expect: catches.unobserved
+	try { action(); } /*
+	// observability: swallowed because this is inside a block comment
+	*/ catch (error) {} // expect: catches.unobserved
+	try { const text = `
+// observability: swallowed because this is template text
+`; } catch (error) {} // expect: catches.unobserved
+}
+
+// observability: swallowed because the background request is best effort
+request.catch(() => {});
+// observability: swallowed because   whitespace before the reason is harmless
+request.catch(() => undefined);
+request
+	// observability: swallowed because the background request is best effort
+	.catch(() => undefined);
+// observability: swallowed because
+request.catch(() => {}); // expect: catches.promise
+// observability: swallowed because this applies to only the outer handler
+request.catch(() => {
+	request.catch(() => {}); // expect: catches.promise
+});
+
+const discard = () => undefined;
+// observability: swallowed because the background request is best effort
+request.catch(discard);

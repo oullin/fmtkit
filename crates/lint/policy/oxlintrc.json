@@ -166,6 +166,8 @@
 		],
 		"no-with": "error",
 		"object-shorthand": "error",
+		"observability/no-swallowing-promise-catch": "off",
+		"observability/no-unobserved-catch": "off",
 		"oxc/approx-constant": "error",
 		"oxc/bad-bitwise-operator": "error",
 		"oxc/bad-char-at-comparison": "error",

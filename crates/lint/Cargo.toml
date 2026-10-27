@@ -12,9 +12,9 @@ workspace = true
 [dependencies]
 fmtkit-config.workspace = true
 fmtkit-core.workspace = true
+globset.workspace = true
 icu_collator.workspace = true
 icu_locale_core.workspace = true
-globset.workspace = true
 ignore.workspace = true
 oxc_allocator.workspace = true
 oxc_ast.workspace = true

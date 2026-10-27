@@ -22,30 +22,34 @@ enum Value<'s, 'a> {
     Class { class: &'s Class<'a>, instance: bool },
 }
 
+/// A real member path is short. Aliases that grow a member path on every
+/// cycle (a = a.x) stop here instead of running to the node bound.
+const MAX_PATH: usize = 32;
+
 pub fn swallows<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
     let mut value = Value::Expression(expression);
     let mut properties = Vec::new();
     let mut seen = FxHashSet::default();
 
-    // The bound also stops aliases that grow a member path on every cycle
-    // (a = b.x; b = a). Resolution is iterative even for long alias chains.
+    // Resolution is iterative even for long alias chains; the node bound stops
+    // any cycle that `seen` does not.
     for _ in 0..semantic.nodes().len() {
         let next = match value {
             Value::Expression(expression) => {
                 let expression = unwrap(expression);
 
-                if !seen.insert((expression.span(), properties.clone())) {
+                if properties.len() > MAX_PATH || !seen.insert((expression.span(), properties.clone())) {
                     return false;
                 }
 
                 resolve_expression(expression, semantic, &mut properties)
             }
-            Value::Function(function) => return properties.is_empty() && function.body.as_ref().is_some_and(|body| swallows_block(body)),
+            Value::Function(function) => return properties.is_empty() && function.body.as_ref().is_some_and(|body| swallows_block(body, semantic)),
             Value::Arrow(arrow) => {
                 return properties.is_empty()
                     && match &arrow.body {
-                        ArrowFunctionBody::FunctionBody(body) => swallows_block(body),
-                        body => returns_undefined(body.as_expression()),
+                        ArrowFunctionBody::FunctionBody(body) => swallows_block(body, semantic),
+                        body => returns_undefined(body.as_expression(), semantic),
                     };
             }
             Value::Object(object) => properties.pop().and_then(|name| object_member(object, name)),
@@ -172,12 +176,12 @@ fn constructor<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semanti
     }
 }
 
-fn swallows_block(body: &FunctionBody<'_>) -> bool {
+fn swallows_block<'a>(body: &FunctionBody<'a>, semantic: &Semantic<'a>) -> bool {
     if body.directives.is_empty() && body.statements.iter().all(|statement| matches!(statement, Statement::EmptyStatement(_))) {
         return true;
     }
 
-    let mut returns = Contains::new(|node| matches!(node, AstKind::ReturnStatement(statement) if returns_undefined(statement.argument.as_ref())));
+    let mut returns = Contains::new(|node| matches!(node, AstKind::ReturnStatement(statement) if returns_undefined(statement.argument.as_ref(), semantic)));
 
     returns.visit_function_body(body);
 

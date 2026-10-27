@@ -32,7 +32,7 @@ impl Rule for NoUnobservedCatch {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &mut Context<'_, 'a>) {
         let AstKind::CatchClause(clause) = node.kind() else { return };
 
-        if self.0.ignore.is_match(ctx.rel) || shared::escaped(ctx, clause.span.start) || catches::handled(clause, &self.0.observers) {
+        if self.0.ignore.is_match(ctx.rel) || shared::escaped(ctx, clause.span.start) || catches::handled(clause, &self.0.observers, ctx.semantic) {
             return;
         }
 

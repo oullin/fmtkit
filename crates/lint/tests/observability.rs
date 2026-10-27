@@ -121,6 +121,8 @@ fn clause_evidence_and_wrappers() {
         "try {} catch (e) { const outcome = { cause: e, later: () => ({errorClass: 'E'}) }; }",
         "try {} catch (e) { const outcome = { cause: other as e, errorClass: 'E' }; }",
         "try {} catch (e) { console[method](e); }",
+        "try {} catch (e) { { const e = other; const outcome = { cause: e, errorClass: 'E' }; } }",
+        "try {} catch (e) { let e2; { let e = other; e2 = { cause: e, errorClass: 'E' }; } }",
     ];
 
     for code in invalid {
@@ -139,6 +141,9 @@ fn promise_resolution_and_nesting() {
         "const empty = () => {}; function f(empty) { request.catch(empty); }",
         "import { discard } from './elsewhere'; request.catch(discard);",
         "const a = b.x; const b = a; request.catch(a);",
+        "const a = a.x; request.catch(a);",
+        "function handler(undefined) { return undefined; } request.catch(handler);",
+        "request.catch(() => { const undefined = fallback; return undefined; });",
         "const obj = { catch() {} }; const text = 'request.catch(() => {})';",
         "request[catchName](() => {});",
         "request.catch(); request.catch(...handlers);",

@@ -57,9 +57,9 @@ The escape applies only to sites on the next line. A blank line breaks it. Comme
 
 Both rules accept one optional object. Unknown keys are errors.
 
-| Option | Rules | Meaning |
-| --- | --- | --- |
-| `ignore` | Both | Unique glob strings matched against the repository-relative path, with forward slashes. Matching files are skipped by that rule. Defaults to `[]`. |
+| Option      | Rules                 | Meaning                                                                                                                                                                             |
+| ----------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ignore`    | Both                  | Unique glob strings matched against the repository-relative path, with forward slashes. Matching files are skipped by that rule. Defaults to `[]`.                                  |
 | `observers` | `no-unobserved-catch` | Unique strings replacing the default observer list. Each is `name`, `Owner.member`, `Owner.*`, or `*.member`. An empty list leaves throws and propagation as the accepted evidence. |
 
 ```toml

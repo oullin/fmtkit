@@ -1,0 +1,12 @@
+Reflect.get(value, key);
+Reflect.set(value, key, next);
+Reflect.has(value, key);
+Reflect['get'](value, key);
+(Reflect).get(value, key);
+(Reflect.get)(value, key);
+Reflect?.get(value, key);
+Reflect.set?.(value, key, next);
+other.Reflect.get(value, key);
+value[key];
+const text = 'Reflect.get(value, key)';
+// Reflect.set(value, key, next)

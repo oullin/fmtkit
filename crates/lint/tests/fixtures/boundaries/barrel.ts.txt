@@ -1,0 +1,8 @@
+import { value } from '@api/example/value';
+import other = require('@api/other');
+export { value } from '@api/example/value';
+export type { Value } from '@api/example/value';
+export * from '@api/other';
+export default value;
+export const declared = 1;
+const local = 2;

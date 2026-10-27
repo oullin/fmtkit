@@ -1,0 +1,138 @@
+[
+  {
+    "name": "framework-cache",
+    "match": [
+      "@omniyat-collection/framework/cache"
+    ],
+    "allow": [
+      "packages/cache/**"
+    ],
+    "message": "@omniyat-collection/framework/cache may be imported only by packages/cache"
+  },
+  {
+    "name": "framework-container",
+    "match": [
+      "@omniyat-collection/framework/container"
+    ],
+    "allow": [
+      "packages/container/**"
+    ],
+    "message": "@omniyat-collection/framework/container may be imported only by packages/container"
+  },
+  {
+    "name": "framework-httpx",
+    "match": [
+      "@omniyat-collection/framework/httpx"
+    ],
+    "except": [
+      "@omniyat-collection/framework/httpx/routing/navigator"
+    ],
+    "allow": [
+      "packages/http/**"
+    ],
+    "message": "@omniyat-collection/framework/httpx may be imported only by packages/http"
+  },
+  {
+    "name": "framework-money",
+    "match": [
+      "@omniyat-collection/framework/support/money"
+    ],
+    "allow": [
+      "packages/kernel/src/money/money.ts"
+    ],
+    "message": "@omniyat-collection/framework/support/money may be imported only by packages/kernel/src/money/money.ts"
+  },
+  {
+    "name": "framework-navigator",
+    "match": [
+      "@omniyat-collection/framework/httpx/routing/navigator"
+    ],
+    "allow": [
+      "packages/kernel/**"
+    ],
+    "message": "@omniyat-collection/framework/httpx/routing/navigator may be imported only by packages/kernel"
+  },
+  {
+    "name": "framework-phone",
+    "match": [
+      "@omniyat-collection/framework/support/phone"
+    ],
+    "allow": [
+      "packages/auth/src/client/phone/**",
+      "packages/testing-faker/src/**"
+    ],
+    "message": "@omniyat-collection/framework/support/phone may be imported only by packages/auth/src/client/phone and packages/testing-faker"
+  },
+  {
+    "name": "framework-workflow",
+    "match": [
+      "@omniyat-collection/framework/workflow"
+    ],
+    "allow": [
+      "packages/workflow/**"
+    ],
+    "message": "@omniyat-collection/framework/workflow may be imported only by packages/workflow"
+  },
+  {
+    "name": "better-result",
+    "match": [
+      "better-result"
+    ],
+    "allow": [
+      "packages/primitives/src/result.ts"
+    ],
+    "message": "better-result may be imported only by packages/primitives/src/result.ts"
+  },
+  {
+    "name": "effect",
+    "match": [
+      "effect",
+      "@effect"
+    ],
+    "allow": [
+      "packages/primitives/src/effect/**"
+    ],
+    "message": "effect may be imported only under packages/primitives/src/effect/"
+  },
+  {
+    "name": "ai-sdk",
+    "match": [
+      "ai",
+      "@ai-sdk"
+    ],
+    "allow": [
+      "packages/assistant/**"
+    ],
+    "message": "the AI SDK may be imported only by packages/assistant/"
+  },
+  {
+    "name": "twilio",
+    "match": [
+      "@twilio",
+      "@omniyat/twilio",
+      "twilio"
+    ],
+    "allow": [
+      "packages/twilio/**",
+      "packages/providers/**",
+      "**/*.test.ts",
+      "**/*.test.tsx"
+    ],
+    "message": "Twilio implementations may be imported only by provider composition"
+  },
+  {
+    "name": "twilio-persistence",
+    "match": [
+      "@db",
+      "@omniyat/database",
+      "drizzle-orm"
+    ],
+    "allow": [
+      "**",
+      "!packages/twilio/**",
+      "**/*.test.ts",
+      "**/*.test.tsx"
+    ],
+    "message": "Twilio adapters must emit consumer-owned results instead of accessing persistence"
+  }
+]

@@ -289,7 +289,14 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
             let start = finding.span.start + section.start;
             let (line, column) = index.line_col(start);
 
-            pass.diagnostics.push(Diagnostic { rule: finding.rule.to_owned(), file: rel.to_owned(), line, column, message: finding.message, severity });
+            pass.diagnostics.push(Diagnostic {
+                rule: finding.name.map_or_else(|| finding.rule.to_owned(), |name| format!("{}/{name}", finding.rule)),
+                file: rel.to_owned(),
+                line,
+                column,
+                message: finding.message,
+                severity,
+            });
 
             if fix {
                 let edits = finding.fix.into_iter().map(|e| Edit::new(e.start + section.start, e.end + section.start, e.text)).collect();

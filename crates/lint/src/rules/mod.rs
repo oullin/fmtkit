@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 use fmtkit_core::Edit;
 
 pub mod anti_slop;
+pub mod boundaries;
 pub mod nkzw;
 pub mod no_only_tests;
 pub mod observability;
@@ -25,6 +26,8 @@ pub struct Finding {
     pub rule: &'static str,
     pub span: Span,
     pub message: String,
+    /// Optional configured entry name, appended to the diagnostic rule code.
+    pub name: Option<String>,
     /// A safe fix: edits against the source the rule saw. Must not overlap.
     pub fix: Vec<Edit>,
 }
@@ -67,8 +70,12 @@ impl<'s, 'a> Context<'s, 'a> {
         self.report_with_fix(span, message, Vec::new());
     }
 
+    pub fn report_named(&mut self, span: Span, name: &str, message: &str) {
+        self.findings.push(Finding { rule: self.rule, span, message: message.to_owned(), name: Some(name.to_owned()), fix: Vec::new() });
+    }
+
     pub fn report_with_fix(&mut self, span: Span, message: impl Into<String>, fix: Vec<Edit>) {
-        self.findings.push(Finding { rule: self.rule, span, message: message.into(), fix });
+        self.findings.push(Finding { rule: self.rule, span, message: message.into(), name: None, fix });
     }
 }
 
@@ -93,7 +100,14 @@ pub type Factory = fn(&[serde_json::Value]) -> Result<Box<dyn Rule>, String>;
 
 /// Every native rule, by full name.
 pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
-    anti_slop::RULES.iter().chain(nkzw::RULES).chain(no_only_tests::RULES).chain(observability::RULES).chain(perfectionist::RULES).copied()
+    anti_slop::RULES
+        .iter()
+        .chain(boundaries::RULES)
+        .chain(nkzw::RULES)
+        .chain(no_only_tests::RULES)
+        .chain(observability::RULES)
+        .chain(perfectionist::RULES)
+        .copied()
 }
 
 /// Run `rules` over one file.

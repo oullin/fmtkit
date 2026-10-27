@@ -70,7 +70,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Vue, HTML, Markdown:** formatted as whole documents. Scripts inside them go through the script pipeline; styles and CSS fences through the oxc CSS formatter. Markdown prose is not rewrapped.
 
-**Lint:** Oxlint (pinned to `oxlint_v1.86.0`) with a bundled policy of 200 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The `anti-slop/*` rules are available but off by default. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors.
+**Lint:** Oxlint (pinned to `oxlint_v1.86.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The `anti-slop/*` rules are available but off by default. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors.
 
 ### What it leaves alone
 

@@ -10,6 +10,17 @@
 		"correctness": "error"
 	},
 	"rules": {
+    "boundaries/exported-class-count": "off",
+    "boundaries/barrel-only": "off",
+    "boundaries/relative-module": "off",
+    "boundaries/reserved-internal-name": "off",
+    "boundaries/dynamic-property-access": "off",
+    "boundaries/explicit-any": "off",
+    "boundaries/runtime-typeof": "off",
+    "boundaries/zod-infer": "off",
+    "boundaries/nullable-union": "off",
+    "boundaries/reserved-specifier": "off",
+
 		"@nkzw/ensure-relay-types": "error",
 		"@nkzw/no-instanceof": "error",
 		"@nkzw/require-use-effect-arguments": "error",

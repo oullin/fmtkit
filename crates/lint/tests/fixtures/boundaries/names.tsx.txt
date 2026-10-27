@@ -1,0 +1,12 @@
+export class OrderLifecycleService {}
+const Lifecycle = { lifecycle: 1, 'lifecycle': 'lifecycle' };
+const shorthand = { Lifecycle };
+const { lifecycle: localLifecycle } = Lifecycle;
+Lifecycle.lifecycle;
+Lifecycle['lifecycle'];
+type LifecycleType<LifecycleParam> = { lifecycle: LifecycleParam };
+class Other { #lifecycle = 1; }
+const element = <Lifecycle lifecycle="lifecycle"><lifecycle /></Lifecycle>;
+lifecycleLabel: for (;;) { break lifecycleLabel; }
+const escapedLifecycl\u0065 = 1;
+// lifecycle

@@ -95,3 +95,13 @@ fn overrides_are_the_generic_typescript_override() {
 
     assert_eq!(shipped["overrides"], json!([expected]));
 }
+
+/// Catch observers are project-specific, so upgrading the bundled policy must
+/// leave the catch rules opt-in.
+#[test]
+fn observability_rules_are_opt_in() {
+    let linter = fmtkit_lint::Linter::new(&fmtkit_config::Lint::default()).unwrap();
+    let result = linter.lint("a.ts", fmtkit_core::Lang::Ts, "try {} catch {}\nrequest.catch(() => {});", false);
+
+    assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("observability/")));
+}

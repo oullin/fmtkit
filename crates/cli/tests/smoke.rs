@@ -89,6 +89,26 @@ fn check_reports_complexity_on_the_lines_on_disk() {
 }
 
 #[test]
+fn check_reports_catch_rules_on_the_lines_on_disk() {
+    let fixture = Fixture::new(&[
+        (
+            "fmtkit.toml",
+            "[lint]\nbundled = false\n[lint.rules]\n\"observability/no-unobserved-catch\" = \"error\"\n\"observability/no-swallowing-promise-catch\" = \"error\"\n",
+        ),
+        ("app.ts", "export function f() {\n\ttry { action(); } catch (error) {}\n}\nrequest.catch(() => {});\n"),
+    ]);
+    let before = fixture.snapshot();
+    let output = fixture.run(&["check", "--all", "--format", "agent"]);
+    let report = text(&output);
+
+    assert_exit(&output, 1);
+    assert!(report.contains("app.ts:2:20 observability/no-unobserved-catch "), "{report}");
+    assert!(report.contains("app.ts:4:9 observability/no-swallowing-promise-catch "), "{report}");
+    assert_eq!(fixture.snapshot(), before);
+    assert_eq!(text(&fixture.run(&["check", "--all", "--format", "agent"])), report);
+}
+
+#[test]
 fn check_writes_nothing_and_fails_on_changes() {
     let fixture = Fixture::new(&[("app.ts", "const  a = 1\nexport default a\n")]);
     let before = fixture.snapshot();

@@ -1,0 +1,7 @@
+export function Component() {
+	const element = <div title="catch (error) {}">{`nested ${ { brace: '}' }.brace }`}</div>;
+	try { action(); } catch (error) { // expect: catches.unobserved
+		return <span>{String(error)}</span>;
+	}
+	return element;
+}

@@ -1,0 +1,57 @@
+export function unobserved() {
+	try { action(); } catch (error) { // expect: catches.unobserved
+		return fallback;
+	}
+	try { action(); } catch { /* no binding */ } // expect: catches.unobserved
+	try { action(); } catch (error) { // expect: catches.unobserved
+		console.info('ignored', error);
+	}
+	try { action(); } catch (error) { // expect: catches.unobserved
+		const text = 'throw error; OperationalLogger.warn(error)';
+		const pattern = /[{}]catch\(.*\)\{console.error\(error\)\}/;
+		const template = `Sentry.captureException(error) ${ { nested: { value: '}' } }.nested.value }`;
+		return undefined;
+	}
+	try { action(); } catch (error) { // expect: catches.unobserved
+		const callback = () => console.error(error);
+		const object = { report() { throw error; } };
+	}
+	try { action(); } catch (outer) { // expect: catches.unobserved
+		try { action(); } catch (inner) { console.error(inner); }
+	}
+	try { action(); } catch (outer) { // expect: catches.unobserved
+		return { error: otherError, errorClass: 'OtherError' };
+	}
+	try { action(); } catch (error) { // expect: catches.unobserved
+		return { error, reason: 'failed' };
+	}
+	try { action(); } catch (error) { // expect: catches.unobserved
+		return { error: unrelated.error, errorClass: 'OtherError' };
+	}
+}
+
+export function unrelatedClassName() {
+	try { action(); } catch (error) { // expect: catches.unobserved
+		return { cause: error, reason: errorClass };
+	}
+}
+
+export function handled() {
+	try { action(); } catch (error) { OperationalLogger.warn('failed', { errorClass: safe(error), reason: 'denied' }); }
+	try { action(); } catch (error) { OperationalLogger.error('failed', { errorClass: safe(error), reason: 'retry' }); }
+	try { action(); } catch (error) { reportException(error); }
+	try { action(); } catch (error) { reporter.reportException(error); }
+	try { action(); } catch (error) { console.warn(error); }
+	try { action(); } catch (error) { console.error(error); }
+	try { action(); } catch (error) { Sentry.captureException(error); }
+	try { action(); } catch (error) { throw error; }
+	try { action(); } catch { throw new Error('failed'); }
+	try { action(); } catch (error) { return Result.err({ cause: error, errorClass: safe(error) }); }
+	try { action(); } catch (error) { result = { error, errorClass: safe(error) }; }
+	try { action(); } catch (error) { const outcome = { cause: error, errorClass: safe(error) }; return outcome; }
+	try { action(); } catch (error) { return { cause: error, 'errorClass': safe(error) } as const; }
+	try { action(); } catch (error) { console['error'](error); }
+	try { action(); } catch (error) { return { error, errorClass }; }
+	try { action(); } catch (error) { if (enabled) { console.error(error); } }
+	try { action(); } catch (error) { return `${ (() => { try { action(); } catch (inner) { throw inner; } })() }`; } // expect: catches.unobserved
+}

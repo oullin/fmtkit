@@ -16,6 +16,7 @@ use fmtkit_core::Edit;
 pub mod anti_slop;
 pub mod nkzw;
 pub mod no_only_tests;
+pub mod observability;
 pub mod perfectionist;
 
 /// One finding from a native rule, positioned by byte span.
@@ -92,7 +93,7 @@ pub type Factory = fn(&[serde_json::Value]) -> Result<Box<dyn Rule>, String>;
 
 /// Every native rule, by full name.
 pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
-    anti_slop::RULES.iter().chain(nkzw::RULES).chain(no_only_tests::RULES).chain(perfectionist::RULES).copied()
+    anti_slop::RULES.iter().chain(nkzw::RULES).chain(no_only_tests::RULES).chain(observability::RULES).chain(perfectionist::RULES).copied()
 }
 
 /// Run `rules` over one file.

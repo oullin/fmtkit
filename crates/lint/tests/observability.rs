@@ -344,6 +344,63 @@ fn catches_outside_boundaries() {
 }
 
 #[test]
+fn boundary_catch_fallbacks() {
+    for source in ["zod", "zod/v4", "zod/mini"] {
+        for code in [
+            "z.string().catch('fallback');",
+            "z.string().optional().catch(undefined);",
+            "z.array(z.string()).catch([]);",
+            "z.object({ label: z.string() }).catch({ label: 'fallback' });",
+            "z.string().catch(() => 'fallback');",
+            "const schema = z.string().optional(); schema.catch(() => x);",
+            "const schema = z.string(); const alias = schema; alias['catch'](() => x);",
+        ] {
+            let code = format!("import {{ z }} from '{source}';\n{code}");
+
+            assert_sites(BOUNDARY, &[], "a.ts", &code, &[]);
+            assert_sites(BOUNDARY, &[json!({ "translate": false })], "a.ts", &code, &[]);
+        }
+    }
+
+    for code in [
+        "import { z as schema } from 'zod'; schema.string().catch(() => x);",
+        "import * as schema from 'zod/v4'; schema.z.string().catch(() => x);",
+        "import schema from 'zod'; schema.string().catch(() => x);",
+        "import { z } from 'zod'; ((z.string() as Schema)!).catch(() => x);",
+        "Promise.resolve().catch('x');",
+        "p.catch(42);",
+        "p.catch(undefined);",
+        "p.catch([]);",
+        "p.catch({});",
+        "const fallback = 'x'; const alias = fallback; p.catch(alias);",
+        "const fallback = { value: [] }; p.catch(fallback.value);",
+        "p.catch(null);",
+        "p.catch(false);",
+        "p.catch(void action());",
+    ] {
+        assert_sites(BOUNDARY, &[], "a.ts", code, &[]);
+    }
+
+    let findings = [
+        ("p.catch(handler);", (1, 3)),
+        ("p.catch(() => value);", (1, 3)),
+        ("import { z } from './schema';\nz.string().catch(() => x);", (2, 12)),
+        ("import { z } from 'zod/other';\nz.string().catch(() => x);", (2, 12)),
+        ("import { z } from 'zod';\nfunction f(z) {\nz.string().catch(() => x); }", (3, 12)),
+        ("import { z } from 'zod';\nlet schema = z.string(); schema = p;\nschema.catch(() => x);", (3, 8)),
+        ("import { z } from 'zod';\nconst schema = z.string(); const alias = schema; alias.catch = other;\nschema.catch(() => x);", (3, 8)),
+        ("const fallback = 'x';\nfunction f(fallback) {\np.catch(fallback); }", (3, 3)),
+        ("let handler = 'x'; handler = () => value;\np.catch(handler);", (2, 3)),
+        ("function f(undefined) {\np.catch(undefined); }", (2, 3)),
+        ("const a = b; const b = a;\np.catch(a);", (2, 3)),
+    ];
+
+    for (code, site) in findings {
+        assert_sites(BOUNDARY, &[], "a.ts", code, &[site]);
+    }
+}
+
+#[test]
 fn boundary_paths_use_ordered_boundary_globs() {
     let options = [
         json!({ "allow": ["packages/observability/**", "**/worker.ts", "**/*.test.ts", "!packages/observability/domain/**", "packages/observability/domain/safe.ts"] }),

@@ -89,8 +89,13 @@ impl Rule for NoCatchOutsideBoundary {
                 Span::new(clause.span.start, clause.span.start + 5)
             }
             AstKind::CallExpression(call) => {
-                let Some((_, "catch", span)) = shared::member(&call.callee) else { return };
+                let Some((receiver, "catch", span)) = shared::member(&call.callee) else { return };
                 let Some(handler) = call.arguments.first() else { return };
+
+                if handlers::zod_schema(receiver, ctx.semantic) || handler.as_expression().is_some_and(|handler| handlers::non_callable(handler, ctx.semantic))
+                {
+                    return;
+                }
 
                 if self.0.translate && handler.as_expression().is_some_and(|handler| handlers::translates(handler, ctx.semantic)) {
                     return;

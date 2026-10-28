@@ -20,6 +20,8 @@ enum Value<'s, 'a> {
     Arrow(&'s ArrowFunctionExpression<'a>),
     Object(&'s ObjectExpression<'a>),
     Class { class: &'s Class<'a>, instance: bool },
+    Import(&'a str),
+    NonCallable,
 }
 
 /// A real member path is short. Aliases that grow a member path on every
@@ -34,12 +36,55 @@ pub fn translates<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> b
     matches_handler(expression, semantic, |body| body.directives.is_empty() && single_throw(&body.statements), |_| false)
 }
 
+pub fn non_callable<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
+    matches!(resolve_value(expression, semantic), Some(Value::NonCallable | Value::Object(_)))
+}
+
+/// Follow call receivers and lexical aliases to an import, without inferring
+/// return types or exempting an unresolved receiver.
+pub fn zod_schema<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semantic<'a>) -> bool {
+    let mut properties = Vec::new();
+    let mut seen = FxHashSet::default();
+
+    for _ in 0..semantic.nodes().len() {
+        expression = unwrap(expression);
+
+        if !seen.insert(expression.span()) {
+            return false;
+        }
+
+        if let Expression::CallExpression(call) = expression {
+            expression = &call.callee;
+            continue;
+        }
+
+        match resolve_expression(expression, semantic, &mut properties) {
+            Some(Value::Expression(next)) => expression = next,
+            Some(Value::Import(source)) => return matches!(source, "zod" | "zod/v4" | "zod/mini"),
+            _ => return false,
+        }
+    }
+
+    false
+}
+
 fn matches_handler<'a>(
     expression: &Expression<'a>,
     semantic: &Semantic<'a>,
     block: impl FnOnce(&FunctionBody<'a>) -> bool,
     expression_body: impl FnOnce(Option<&Expression<'a>>) -> bool,
 ) -> bool {
+    match resolve_value(expression, semantic) {
+        Some(Value::Function(function)) => function.body.as_ref().is_some_and(|body| block(body)),
+        Some(Value::Arrow(arrow)) => match &arrow.body {
+            ArrowFunctionBody::FunctionBody(body) => block(body),
+            body => expression_body(body.as_expression()),
+        },
+        _ => false,
+    }
+}
+
+fn resolve_value<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Semantic<'a>) -> Option<Value<'s, 'a>> {
     let mut value = Value::Expression(expression);
     let mut properties = Vec::new();
     let mut seen = FxHashSet::default();
@@ -52,28 +97,22 @@ fn matches_handler<'a>(
                 let expression = unwrap(expression);
 
                 if properties.len() > MAX_PATH || !seen.insert((expression.span(), properties.clone())) {
-                    return false;
+                    return None;
                 }
 
                 resolve_expression(expression, semantic, &mut properties)
             }
-            Value::Function(function) => return properties.is_empty() && function.body.as_ref().is_some_and(|body| block(body)),
-            Value::Arrow(arrow) => {
-                return properties.is_empty()
-                    && match &arrow.body {
-                        ArrowFunctionBody::FunctionBody(body) => block(body),
-                        body => expression_body(body.as_expression()),
-                    };
-            }
+            value if properties.is_empty() => return Some(value),
             Value::Object(object) => properties.pop().and_then(|name| object_member(object, name)),
             Value::Class { class, instance } => properties.pop().and_then(|name| class_member(class, instance, name, semantic)),
+            _ => return None,
         };
-        let Some(next) = next else { return false };
+        let next = next?;
 
         value = next;
     }
 
-    false
+    None
 }
 
 fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Semantic<'a>, properties: &mut Vec<&'a str>) -> Option<Value<'s, 'a>> {
@@ -86,16 +125,30 @@ fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Sema
     match expression {
         Expression::Identifier(id) => {
             let scoping = semantic.scoping();
-            let symbol = scoping.get_reference(id.reference_id.get()?).symbol_id()?;
+            let symbol = scoping.get_reference(id.reference_id.get()?).symbol_id();
+
+            if id.name == "undefined" && symbol.is_none() {
+                return Some(Value::NonCallable);
+            }
+
+            let symbol = symbol?;
 
             if mutated(symbol, semantic) {
                 return None;
             }
 
-            match semantic.nodes().kind(scoping.symbol_declaration(symbol)) {
+            let declaration = scoping.symbol_declaration(symbol);
+
+            match semantic.nodes().kind(declaration) {
                 AstKind::VariableDeclarator(declaration) => Some(Value::Expression(declaration.init.as_ref()?)),
                 AstKind::Function(function) => Some(Value::Function(function)),
                 AstKind::Class(class) => Some(Value::Class { class, instance: false }),
+                AstKind::ImportSpecifier(_) | AstKind::ImportDefaultSpecifier(_) | AstKind::ImportNamespaceSpecifier(_) => {
+                    semantic.nodes().ancestor_kinds(declaration).find_map(|kind| match kind {
+                        AstKind::ImportDeclaration(import) => Some(Value::Import(import.source.value.as_str())),
+                        _ => None,
+                    })
+                }
                 _ => None,
             }
         }
@@ -105,6 +158,8 @@ fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Sema
         Expression::ClassExpression(class) => Some(Value::Class { class, instance: false }),
         Expression::NewExpression(new) => Some(Value::Class { class: constructor(&new.callee, semantic)?, instance: true }),
         Expression::ThisExpression(this) => this_owner(this, semantic),
+        Expression::ArrayExpression(_) | Expression::TemplateLiteral(_) | Expression::UnaryExpression(_) => Some(Value::NonCallable),
+        expression if expression.is_literal() => Some(Value::NonCallable),
         _ => None,
     }
 }

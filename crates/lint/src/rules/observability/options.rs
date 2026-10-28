@@ -1,10 +1,11 @@
-//! Strict configuration shared by the two catch rules.
+//! Strict configuration for the catch rules.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use oxc_ast::ast::Expression;
 use oxc_syntax::identifier::is_identifier_name;
 use serde_json::Value;
 
+use super::super::boundaries::Paths;
 use super::shared::{member, unwrap};
 
 const DEFAULT_OBSERVERS: &[&str] = &["reportException", "*.reportException", "OperationalLogger.*", "console.warn", "console.error", "Sentry.captureException"];
@@ -87,5 +88,41 @@ impl Observer {
                 (name == "*" || name == property) && (owner == "*" || matches!(unwrap(object), Expression::Identifier(id) if id.name == owner.as_str()))
             }),
         }
+    }
+}
+
+pub struct BoundaryOptions {
+    pub allow: Paths,
+    pub translate: bool,
+}
+
+impl BoundaryOptions {
+    pub fn parse(values: &[Value]) -> Result<Self, String> {
+        let object = match values {
+            [] => None,
+            [Value::Object(object)] => Some(object),
+            [_] => return Err("expected an options object".into()),
+            _ => return Err("expected at most one options object".into()),
+        };
+        let mut options = Self { allow: Paths::default(), translate: true };
+
+        for (key, value) in object.into_iter().flatten() {
+            match key.as_str() {
+                "allow" => {
+                    let patterns = value
+                        .as_array()
+                        .ok_or("allow must be an array of strings")?
+                        .iter()
+                        .map(|item| item.as_str().map(str::to_owned).ok_or("allow must be an array of strings"))
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    options.allow = Paths::parse(key, &patterns)?;
+                }
+                "translate" => options.translate = value.as_bool().ok_or("translate must be a boolean")?,
+                _ => return Err(format!("unknown option {key:?}")),
+            }
+        }
+
+        Ok(options)
     }
 }

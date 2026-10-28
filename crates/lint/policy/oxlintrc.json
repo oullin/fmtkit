@@ -166,6 +166,7 @@
 		],
 		"no-with": "error",
 		"object-shorthand": "error",
+		"observability/no-catch-outside-boundary": "off",
 		"observability/no-swallowing-promise-catch": "off",
 		"observability/no-unobserved-catch": "off",
 		"oxc/approx-constant": "error",

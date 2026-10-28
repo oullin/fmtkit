@@ -2,7 +2,7 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::CommentKind;
-use oxc_ast::ast::{ArrowFunctionExpression, CatchClause, Class, Expression, Function, MethodDefinition, ObjectProperty, TSType};
+use oxc_ast::ast::{ArrowFunctionExpression, CatchClause, Class, Expression, Function, MethodDefinition, ObjectProperty, Statement, TSType};
 use oxc_ast_visit::{Visit, walk};
 use oxc_semantic::Semantic;
 use oxc_span::Span;
@@ -115,4 +115,8 @@ pub fn escaped(ctx: &mut Context<'_, '_>, at: u32) -> bool {
     let line = escapes.starts.partition_point(|&start| start <= at as usize).saturating_sub(1);
 
     escapes.lines.contains(&line)
+}
+
+pub fn single_throw(statements: &[Statement<'_>]) -> bool {
+    matches!(statements, [Statement::ThrowStatement(_)])
 }

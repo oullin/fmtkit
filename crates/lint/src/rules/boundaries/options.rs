@@ -60,7 +60,7 @@ pub struct Paths {
 }
 
 impl Paths {
-    fn parse(key: &str, patterns: &[String]) -> Result<Self, String> {
+    pub fn parse(key: &str, patterns: &[String]) -> Result<Self, String> {
         let mut globs = GlobSetBuilder::new();
         let mut excluded = Vec::new();
         let mut indices = Vec::new();

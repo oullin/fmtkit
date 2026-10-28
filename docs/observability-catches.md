@@ -55,7 +55,7 @@ The escape applies only to sites on the next line. A blank line breaks it. Comme
 
 ## Options
 
-Both rules accept one optional object. Unknown keys are errors.
+`no-unobserved-catch` and `no-swallowing-promise-catch` accept one optional object. Unknown keys are errors.
 
 | Option      | Rules                 | Meaning                                                                                                                                                                             |
 | ----------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,3 +69,29 @@ Both rules accept one optional object. Unknown keys are errors.
 ```
 
 These options do not inherit the source check's repository-specific exclusions. Add any test, script, or reporter paths your repository needs to `ignore`.
+
+## Catches outside failure boundaries
+
+`observability/no-catch-outside-boundary` reports every catch clause and `.catch(handler)` call outside the configured failure boundaries. Reporting an error does not exempt a catch from this rule. It is off in the bundled policy.
+
+By default, a catch block containing only a single `throw` statement is accepted anywhere. Rethrows and new errors, with or without a `cause`, count as translation. Promise handlers with a block containing only a single `throw` also qualify, using the same-file handler resolution from `no-swallowing-promise-catch`. Unresolved handlers are findings, including a handler reached through a binding that is written again after its declaration or through a member that is assigned, updated or deleted, directly or through an alias binding of the same object. Set `translate = false` to require even these catches to live at a boundary.
+
+The [intentional-swallow comment](#allow-an-intentional-swallow) also exempts this rule, with the same token and next-line requirements. Findings use diagnostic code `observability/no-catch-outside-boundary` and message: “A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.”
+
+The rule accepts one optional options object. Unknown keys and invalid option types are errors.
+
+| Option      | Default | Meaning                                                                                                                               |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`     | `[]`    | Ordered repository-relative path globs. A positive match allows the file; a leading `!` re-includes it for checking. Last match wins. |
+| `translate` | `true`  | Accept a catch or resolved promise handler whose block contains only one `throw` statement.                                           |
+
+`allow` uses the [boundary rules' path glob semantics](boundaries.md#options), including Unicode matching, literal braces, and rejection of blank or malformed patterns and `{package}`. An empty list checks every file.
+
+```toml
+[lint.rules]
+"observability/no-catch-outside-boundary" = ["error", { allow = [
+    "packages/observability/**",
+    "**/worker.ts",
+    "**/*.test.ts",
+], translate = true }]
+```

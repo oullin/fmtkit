@@ -88,6 +88,12 @@ fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Sema
             let scoping = semantic.scoping();
             let symbol = scoping.get_reference(id.reference_id.get()?).symbol_id()?;
 
+            // A binding written after its declaration may hold any value at the
+            // call, so it stays unresolved rather than resolving to its initialiser.
+            if scoping.get_resolved_references(symbol).any(oxc_semantic::Reference::is_write) {
+                return None;
+            }
+
             match semantic.nodes().kind(scoping.symbol_declaration(symbol)) {
                 AstKind::VariableDeclarator(declaration) => Some(Value::Expression(declaration.init.as_ref()?)),
                 AstKind::Function(function) => Some(Value::Function(function)),

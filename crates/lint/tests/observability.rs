@@ -150,6 +150,7 @@ fn promise_resolution_and_nesting() {
         "request[catchName](() => {});",
         "request.catch(); request.catch(...handlers);",
         "const discard = function () {}; const obj = { discard }; request.catch(obj.discard);",
+        "let handler = () => {}; handler = (e) => { throw e; }; request.catch(handler);",
         "class Handlers { static get discard() { return undefined; } } request.catch(Handlers.discard);",
     ];
 
@@ -298,6 +299,9 @@ fn catches_outside_boundaries() {
     assert_sites(BOUNDARY, &[json!({})], "src/domain.js", "try {} catch {}", &[(1, 8)]);
     assert_sites(BOUNDARY, &[], "a.ts", "request.catch(); request[method](handler); const text = 'try {} catch {}';", &[]);
     assert_sites(BOUNDARY, &[], "a.ts", "request.catch(...handlers);", &[(1, 9)]);
+    // A handler reassigned after its declaration is unresolved, so its single-throw initialiser grants no translation.
+    assert_sites(BOUNDARY, &[], "a.ts", "let handler = (e) => { throw e; };\nhandler = (e) => {};\nrequest.catch(handler);", &[(3, 9)]);
+    assert_sites(BOUNDARY, &[], "a.ts", "const handler = (e) => { throw e; };\nrequest.catch(handler);", &[]);
 }
 
 #[test]

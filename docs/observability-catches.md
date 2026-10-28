@@ -74,7 +74,7 @@ These options do not inherit the source check's repository-specific exclusions. 
 
 `observability/no-catch-outside-boundary` reports every catch clause and `.catch(handler)` call outside the configured failure boundaries. Reporting an error does not exempt a catch from this rule. It is off in the bundled policy.
 
-By default, a catch block containing only a single `throw` statement is accepted anywhere. Rethrows and new errors, with or without a `cause`, count as translation. Promise handlers with a block containing only a single `throw` also qualify, using the same-file handler resolution from `no-swallowing-promise-catch`. Unresolved handlers are findings. Set `translate = false` to require even these catches to live at a boundary.
+By default, a catch block containing only a single `throw` statement is accepted anywhere. Rethrows and new errors, with or without a `cause`, count as translation. Promise handlers with a block containing only a single `throw` also qualify, using the same-file handler resolution from `no-swallowing-promise-catch`. Unresolved handlers are findings, including a handler identifier that is written again after its declaration. Set `translate = false` to require even these catches to live at a boundary.
 
 The [intentional-swallow comment](#allow-an-intentional-swallow) also exempts this rule, with the same token and next-line requirements. Findings use diagnostic code `observability/no-catch-outside-boundary` and message: “A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.”
 

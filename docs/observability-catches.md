@@ -78,6 +78,8 @@ Calls with a known non-callable argument and schema fallback chains rooted in an
 
 By default, a catch block containing only a single `throw` statement is accepted anywhere. Rethrows and new errors, with or without a `cause`, count as translation. Promise handlers with a block containing only a single `throw` also qualify, using the same-file handler resolution from `no-swallowing-promise-catch`. Unresolved handlers are findings, including a handler reached through a binding that is written again after its declaration or through a member that is assigned, updated or deleted, directly or through an alias binding of the same object. Set `translate = false` to require even these catches to live at a boundary.
 
+With `translate` enabled, a single `return` whose argument references the caught binding (or any name a destructured catch parameter binds) also counts as translation, including member reads, call or constructor arguments, and Promise arrow expression bodies; this is a lexical check with no type inference. Returns without that binding, bindingless catches, conditions, cleanup, logging, and bodies with multiple statements still report.
+
 The [intentional-swallow comment](#allow-an-intentional-swallow) also exempts this rule, with the same token and next-line requirements. Findings use diagnostic code `observability/no-catch-outside-boundary` and message: “A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.”
 
 The rule accepts one optional options object. Unknown keys and invalid option types are errors.
@@ -85,7 +87,7 @@ The rule accepts one optional options object. Unknown keys and invalid option ty
 | Option      | Default | Meaning                                                                                                                               |
 | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `allow`     | `[]`    | Ordered repository-relative path globs. A positive match allows the file; a leading `!` re-includes it for checking. Last match wins. |
-| `translate` | `true`  | Accept a catch or resolved promise handler whose block contains only one `throw` statement.                                           |
+| `translate` | `true`  | Accept a single `throw` or a single return referencing the caught binding, including Promise arrow expression bodies.                 |
 
 `allow` uses the [boundary rules' path glob semantics](boundaries.md#options), including Unicode matching, literal braces, and rejection of blank or malformed patterns and `{package}`. An empty list checks every file.
 

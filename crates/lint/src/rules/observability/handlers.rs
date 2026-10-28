@@ -3,8 +3,8 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    ArrowFunctionBody, ArrowFunctionExpression, Class, ClassElement, Expression, Function, FunctionBody, MethodDefinitionKind, ObjectExpression,
-    ObjectPropertyKind, PropertyKind, Statement, ThisExpression, UnaryOperator,
+    ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, Class, ClassElement, Expression, Function, FunctionBody, MethodDefinitionKind,
+    ObjectExpression, ObjectPropertyKind, PropertyKind, Statement, ThisExpression, UnaryOperator,
 };
 use oxc_ast_visit::Visit;
 use oxc_semantic::{AstNodes, NodeId, Semantic, SymbolId};
@@ -41,7 +41,7 @@ pub fn translates<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> b
     )
 }
 
-pub fn translates_statements<'a>(statements: &[Statement<'a>], caught: Option<SymbolId>, semantic: &Semantic<'a>) -> bool {
+pub fn translates_statements<'a>(statements: &[Statement<'a>], caught: &[SymbolId], semantic: &Semantic<'a>) -> bool {
     if single_throw(statements) {
         return true;
     }
@@ -49,10 +49,12 @@ pub fn translates_statements<'a>(statements: &[Statement<'a>], caught: Option<Sy
     matches!(statements, [Statement::ReturnStatement(statement)] if statement.argument.as_ref().is_some_and(|value| references_caught(value, caught, semantic)))
 }
 
-fn references_caught<'a>(value: &Expression<'a>, caught: Option<SymbolId>, semantic: &Semantic<'a>) -> bool {
-    let Some(caught) = caught else { return false };
+fn references_caught<'a>(value: &Expression<'a>, caught: &[SymbolId], semantic: &Semantic<'a>) -> bool {
+    if caught.is_empty() {
+        return false;
+    }
     let mut reference = Contains::new(
-        |node| matches!(node, AstKind::IdentifierReference(id) if id.reference_id.get().is_some_and(|reference| semantic.scoping().get_reference(reference).symbol_id() == Some(caught))),
+        |node| matches!(node, AstKind::IdentifierReference(id) if id.reference_id.get().is_some_and(|reference| semantic.scoping().get_reference(reference).symbol_id().is_some_and(|symbol| caught.contains(&symbol)))),
     );
 
     reference.visit_expression(value);
@@ -108,24 +110,47 @@ fn asynchronous_call(callee: &Expression<'_>) -> bool {
     }
 }
 
+/// Every symbol a parameter pattern binds, so a destructured caught error
+/// (`({ cause }) => err(cause)`) still counts as the caught binding.
+pub fn bound_symbols(pattern: &BindingPattern<'_>) -> Vec<SymbolId> {
+    let mut symbols = Vec::new();
+    collect_bound(pattern, &mut symbols);
+    symbols
+}
+
+fn collect_bound(pattern: &BindingPattern<'_>, symbols: &mut Vec<SymbolId>) {
+    match pattern {
+        BindingPattern::BindingIdentifier(id) => symbols.extend(id.symbol_id.get()),
+        BindingPattern::ObjectPattern(object) => {
+            object.properties.iter().for_each(|property| collect_bound(&property.value, symbols));
+            object.rest.iter().for_each(|rest| collect_bound(&rest.argument, symbols));
+        }
+        BindingPattern::ArrayPattern(array) => {
+            array.elements.iter().flatten().for_each(|element| collect_bound(element, symbols));
+            array.rest.iter().for_each(|rest| collect_bound(&rest.argument, symbols));
+        }
+        BindingPattern::AssignmentPattern(assignment) => collect_bound(&assignment.left, symbols),
+    }
+}
+
 fn matches_handler<'a>(
     expression: &Expression<'a>,
     semantic: &Semantic<'a>,
-    block: impl FnOnce(&FunctionBody<'a>, Option<SymbolId>) -> bool,
-    expression_body: impl FnOnce(Option<&Expression<'a>>, Option<SymbolId>) -> bool,
+    block: impl FnOnce(&FunctionBody<'a>, &[SymbolId]) -> bool,
+    expression_body: impl FnOnce(Option<&Expression<'a>>, &[SymbolId]) -> bool,
 ) -> bool {
     match resolve_value(expression, semantic) {
         Some(Value::Function(function)) => {
-            let caught = function.params.items.first().and_then(|param| param.pattern.get_binding_identifier()).and_then(|id| id.symbol_id.get());
+            let caught = function.params.items.first().map(|param| bound_symbols(&param.pattern)).unwrap_or_default();
 
-            function.body.as_ref().is_some_and(|body| block(body, caught))
+            function.body.as_ref().is_some_and(|body| block(body, &caught))
         }
         Some(Value::Arrow(arrow)) => {
-            let caught = arrow.params.items.first().and_then(|param| param.pattern.get_binding_identifier()).and_then(|id| id.symbol_id.get());
+            let caught = arrow.params.items.first().map(|param| bound_symbols(&param.pattern)).unwrap_or_default();
 
             match &arrow.body {
-                ArrowFunctionBody::FunctionBody(body) => block(body, caught),
-                body => expression_body(body.as_expression(), caught),
+                ArrowFunctionBody::FunctionBody(body) => block(body, &caught),
+                body => expression_body(body.as_expression(), &caught),
             }
         }
         _ => false,

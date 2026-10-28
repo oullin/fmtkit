@@ -12,7 +12,7 @@ use oxc_span::GetSpan;
 use rustc_hash::FxHashSet;
 
 use super::catches::returns_undefined;
-use super::shared::{Contains, member, unwrap};
+use super::shared::{Contains, member, single_throw, unwrap};
 
 enum Value<'s, 'a> {
     Expression(&'s Expression<'a>),
@@ -27,6 +27,19 @@ enum Value<'s, 'a> {
 const MAX_PATH: usize = 32;
 
 pub fn swallows<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
+    matches_handler(expression, semantic, |body| swallows_block(body, semantic), |body| returns_undefined(body, semantic))
+}
+
+pub fn translates<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
+    matches_handler(expression, semantic, |body| body.directives.is_empty() && single_throw(&body.statements), |_| false)
+}
+
+fn matches_handler<'a>(
+    expression: &Expression<'a>,
+    semantic: &Semantic<'a>,
+    block: impl FnOnce(&FunctionBody<'a>) -> bool,
+    expression_body: impl FnOnce(Option<&Expression<'a>>) -> bool,
+) -> bool {
     let mut value = Value::Expression(expression);
     let mut properties = Vec::new();
     let mut seen = FxHashSet::default();
@@ -44,12 +57,12 @@ pub fn swallows<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> boo
 
                 resolve_expression(expression, semantic, &mut properties)
             }
-            Value::Function(function) => return properties.is_empty() && function.body.as_ref().is_some_and(|body| swallows_block(body, semantic)),
+            Value::Function(function) => return properties.is_empty() && function.body.as_ref().is_some_and(|body| block(body)),
             Value::Arrow(arrow) => {
                 return properties.is_empty()
                     && match &arrow.body {
-                        ArrowFunctionBody::FunctionBody(body) => swallows_block(body, semantic),
-                        body => returns_undefined(body.as_expression(), semantic),
+                        ArrowFunctionBody::FunctionBody(body) => block(body),
+                        body => expression_body(body.as_expression()),
                     };
             }
             Value::Object(object) => properties.pop().and_then(|name| object_member(object, name)),

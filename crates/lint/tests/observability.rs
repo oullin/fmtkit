@@ -7,6 +7,8 @@ use fmtkit_lint::Linter;
 use serde_json::{Value, json};
 use support::{lint, only};
 
+const BOUNDARY: &str = "observability/no-catch-outside-boundary";
+const BOUNDARY_MESSAGE: &str = "A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.";
 const CLAUSE: &str = "observability/no-unobserved-catch";
 const PROMISE: &str = "observability/no-swallowing-promise-catch";
 const CLAUSE_MESSAGE: &str = "Catch must report, throw, or carry the caught error into an outcome with errorClass";
@@ -179,7 +181,12 @@ fn promise_resolution_and_nesting() {
 #[test]
 fn escape_tokens_and_line_endings() {
     for newline in ["\n", "\r\n", "\r", "\u{2028}", "\u{2029}"] {
-        for (rule, site) in [(CLAUSE, "try {} catch {}"), (PROMISE, "request['catch'](() => undefined);")] {
+        for (rule, site) in [
+            (CLAUSE, "try {} catch {}"),
+            (PROMISE, "request['catch'](() => undefined);"),
+            (BOUNDARY, "try {} catch {}"),
+            (BOUNDARY, "request['catch'](handler);"),
+        ] {
             let code = format!("\t// observability: swallowed because\t a reason{newline}{site}");
 
             assert_sites(rule, &[], "a.ts", &code, &[]);
@@ -197,6 +204,7 @@ fn escape_tokens_and_line_endings() {
 
     for (code, sites) in cases {
         assert_sites(PROMISE, &[], "a.ts", code, sites);
+        assert_sites(BOUNDARY, &[], "a.ts", code, sites);
     }
 }
 
@@ -274,4 +282,113 @@ fn assert_invalid_options(rule: &str, options: Vec<Value>) {
     let config = Lint { bundled: false, rules: [(rule.to_owned(), json!(setting))].into(), ignore: Vec::new() };
 
     assert!(Linter::new(&config).is_err(), "{rule}: {setting:?}");
+}
+
+#[test]
+fn catches_outside_boundaries() {
+    let code = "try {} catch (e) { reportException(e); }\nrequest.catch(handler);\nrequest['catch'](() => {});\nrequest?.catch?.(handler);";
+    let result = lint(&only(BOUNDARY, &[]), "src/domain.ts", code, true);
+    let actual: Vec<_> = result.diagnostics.iter().map(|d| (d.rule.as_str(), d.message.as_str(), d.line, d.column)).collect();
+
+    assert_eq!(
+        actual,
+        [(BOUNDARY, BOUNDARY_MESSAGE, 1, 8), (BOUNDARY, BOUNDARY_MESSAGE, 2, 9), (BOUNDARY, BOUNDARY_MESSAGE, 3, 9), (BOUNDARY, BOUNDARY_MESSAGE, 4, 10)]
+    );
+    assert!(result.fixed.is_none());
+    assert_sites(BOUNDARY, &[json!({})], "src/domain.js", "try {} catch {}", &[(1, 8)]);
+    assert_sites(BOUNDARY, &[], "a.ts", "request.catch(); request[method](handler); const text = 'try {} catch {}';", &[]);
+    assert_sites(BOUNDARY, &[], "a.ts", "request.catch(...handlers);", &[(1, 9)]);
+}
+
+#[test]
+fn boundary_paths_use_ordered_boundary_globs() {
+    let options = [
+        json!({ "allow": ["packages/observability/**", "**/worker.ts", "**/*.test.ts", "!packages/observability/domain/**", "packages/observability/domain/safe.ts"] }),
+    ];
+    let code = "try {} catch {}\nrequest.catch(handler);";
+
+    for file in ["packages/observability/log.ts", "worker.ts", "src/worker.ts", "a.test.ts", "src/a.test.ts", "packages/observability/domain/safe.ts"] {
+        assert_sites(BOUNDARY, &options, file, code, &[]);
+    }
+    for file in ["src/domain.ts", "packages/observability/domain/checked.ts", "other/packages/observability/a.ts", "src/worker.tsx"] {
+        assert_sites(BOUNDARY, &options, file, code, &[(1, 8), (2, 9)]);
+    }
+
+    for (pattern, allowed, checked) in [
+        ("src/*.ts", "src/a.ts", "src/nested/a.ts"),
+        ("worker.ts", "worker.ts", "src/worker.ts"),
+        ("src/?.ts", "src/é.ts", "src/ab.ts"),
+        ("src/[^a].ts", "src/é.ts", "src/a.ts"),
+        ("src/[!a].ts", "src/!.ts", "src/b.ts"),
+        ("src/{one,two}.ts", "src/{one,two}.ts", "src/one.ts"),
+    ] {
+        let options = [json!({ "allow": [pattern] })];
+
+        assert_sites(BOUNDARY, &options, allowed, code, &[]);
+        assert_sites(BOUNDARY, &options, checked, code, &[(1, 8), (2, 9)]);
+    }
+
+    assert_sites(BOUNDARY, &[json!({ "allow": [] })], "src/a.ts", code, &[(1, 8), (2, 9)]);
+    assert_sites(BOUNDARY, &[json!({ "allow": ["!src/**"] })], "src/a.ts", code, &[(1, 8), (2, 9)]);
+    assert_sites(BOUNDARY, &[json!({ "allow": ["**", "!src/?.ts"] })], "src/é.ts", code, &[(1, 8), (2, 9)]);
+    assert_sites(BOUNDARY, &[json!({ "allow": ["**/?.ts", "!src/a.ts"] })], "src/a.ts", code, &[(1, 8), (2, 9)]);
+}
+
+#[test]
+fn boundary_translation_requires_only_one_throw() {
+    for code in [
+        "try {} catch (e) { throw e; }",
+        "try {} catch { throw new Error('translated'); }",
+        "try {} catch (e) { /* translation */ throw new Error('translated', { cause: e }); }",
+    ] {
+        assert_sites(BOUNDARY, &[], "a.ts", code, &[]);
+        assert_sites(BOUNDARY, &[json!({ "translate": false })], "a.ts", code, &[(1, 8)]);
+    }
+    for code in [
+        "try {} catch (e) { reportException(e); throw e; }",
+        "try {} catch (e) { if (e) throw e; }",
+        "try {} catch (e) { { throw e; } }",
+        "try {} catch (e) { ; throw e; }",
+        "try {} catch (e) { function later() { throw e; } }",
+        "try {} catch (e) { 'use strict'; throw e; }",
+    ] {
+        assert_sites(BOUNDARY, &[], "a.ts", code, &[(1, 8)]);
+    }
+    for (prefix, handler) in [
+        ("", "e => { throw e; }"),
+        ("", "function(e) { throw new Error('translated', { cause: e }); }"),
+        ("function translate(e) { throw e; }\n", "translate"),
+        ("const obj = { translate(e) { throw e; } };\n", "obj.translate"),
+        ("const translate = e => { throw e; }; const alias = translate;\n", "alias"),
+    ] {
+        let code = format!("{prefix}request.catch({handler});");
+        let line = if prefix.is_empty() { 1 } else { 2 };
+
+        assert_sites(BOUNDARY, &[], "a.ts", &code, &[]);
+        assert_sites(BOUNDARY, &[json!({ "translate": false })], "a.ts", &code, &[(line, 9)]);
+    }
+    for handler in ["e => e", "e => { 'use strict'; throw e; }", "e => { reportException(e); throw e; }", "e => { if (e) throw e; }"] {
+        assert_sites(BOUNDARY, &[], "a.ts", &format!("request.catch({handler});"), &[(1, 9)]);
+    }
+}
+
+#[test]
+fn boundary_options_are_strict() {
+    for options in [
+        vec![json!(null)],
+        vec![json!(false)],
+        vec![json!({}), json!({})],
+        vec![json!({ "unknown": [] })],
+        vec![json!({ "ignore": [] })],
+        vec![json!({ "allow": "src/**" })],
+        vec![json!({ "allow": [1] })],
+        vec![json!({ "allow": ["["] })],
+        vec![json!({ "allow": [""] })],
+        vec![json!({ "allow": ["! "] })],
+        vec![json!({ "allow": ["{package}/**"] })],
+        vec![json!({ "translate": "true" })],
+        vec![json!({ "translate": null })],
+    ] {
+        assert_invalid_options(BOUNDARY, options);
+    }
 }

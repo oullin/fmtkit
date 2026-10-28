@@ -1,5 +1,5 @@
-//! Opt-in catch policies: require evidence of handling caught errors and reject
-//! promise handlers that explicitly discard their result.
+//! Opt-in catch policies: require handling evidence, reject discarded promise
+//! errors, and restrict catches to failure boundaries.
 
 mod catches;
 mod handlers;
@@ -11,9 +11,10 @@ use oxc_semantic::AstNode;
 use oxc_span::Span;
 
 use super::{Context, Factory, Rule};
-use options::Options;
+use options::{BoundaryOptions, Options};
 
 pub const RULES: &[(&str, Factory)] = &[
+    (NoCatchOutsideBoundary::NAME, |options| Ok(Box::new(NoCatchOutsideBoundary(BoundaryOptions::parse(options)?)))),
     (NoUnobservedCatch::NAME, |options| Ok(Box::new(NoUnobservedCatch(Options::parse(options, true)?)))),
     (NoSwallowingPromiseCatch::NAME, |options| Ok(Box::new(NoSwallowingPromiseCatch(Options::parse(options, false)?)))),
 ];
@@ -63,6 +64,45 @@ impl Rule for NoSwallowingPromiseCatch {
 
         if handlers::swallows(handler, ctx.semantic) {
             ctx.report(span, "Promise catch handler must not be empty or return undefined");
+        }
+    }
+}
+
+struct NoCatchOutsideBoundary(BoundaryOptions);
+
+impl NoCatchOutsideBoundary {
+    const NAME: &str = "observability/no-catch-outside-boundary";
+}
+
+impl Rule for NoCatchOutsideBoundary {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn run<'a>(&self, node: &AstNode<'a>, ctx: &mut Context<'_, 'a>) {
+        let span = match node.kind() {
+            AstKind::CatchClause(clause) => {
+                if self.0.translate && shared::single_throw(&clause.body.body) {
+                    return;
+                }
+
+                Span::new(clause.span.start, clause.span.start + 5)
+            }
+            AstKind::CallExpression(call) => {
+                let Some((_, "catch", span)) = shared::member(&call.callee) else { return };
+                let Some(handler) = call.arguments.first() else { return };
+
+                if self.0.translate && handler.as_expression().is_some_and(|handler| handlers::translates(handler, ctx.semantic)) {
+                    return;
+                }
+
+                span
+            }
+            _ => return,
+        };
+
+        if !self.0.allow.matches(ctx.rel) && !shared::escaped(ctx, span.start) {
+            ctx.report(span, "A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.");
         }
     }
 }

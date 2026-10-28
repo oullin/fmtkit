@@ -100,6 +100,12 @@ fn overrides_are_the_generic_typescript_override() {
 /// leave the catch rules opt-in.
 #[test]
 fn observability_rules_are_opt_in() {
+    let (_, _, shipped) = load();
+
+    for (name, _) in fmtkit_lint::rules::observability::RULES {
+        assert_eq!(shipped["rules"][name], "off", "{name} must remain opt-in");
+    }
+
     let linter = fmtkit_lint::Linter::new(&fmtkit_config::Lint::default()).unwrap();
     let result = linter.lint("a.ts", fmtkit_core::Lang::Ts, "try {} catch {}\nrequest.catch(() => {});", false);
 

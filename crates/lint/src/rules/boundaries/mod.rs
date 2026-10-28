@@ -7,6 +7,7 @@ mod shared;
 use oxc_span::Span;
 
 use super::{Context, Factory, Rule};
+pub(super) use options::Paths;
 use options::{Options, matches};
 use shared::Facts;
 

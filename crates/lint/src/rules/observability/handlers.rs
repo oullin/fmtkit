@@ -3,8 +3,8 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, Class, ClassElement, Expression, Function, FunctionBody, MethodDefinitionKind,
-    ObjectExpression, ObjectPropertyKind, PropertyKind, Statement, ThisExpression, UnaryOperator,
+    ArrowFunctionBody, ArrowFunctionExpression, BindingPattern, Class, ClassElement, Expression, FormalParameters, Function, FunctionBody,
+    MethodDefinitionKind, ObjectExpression, ObjectPropertyKind, PropertyKind, Statement, ThisExpression, UnaryOperator,
 };
 use oxc_ast_visit::Visit;
 use oxc_semantic::{AstNodes, NodeId, Semantic, SymbolId};
@@ -133,6 +133,17 @@ fn collect_bound(pattern: &BindingPattern<'_>, symbols: &mut Vec<SymbolId>) {
     }
 }
 
+/// The symbols the first parameter binds, whether it is a formal parameter
+/// (`(e)`, `({ message })`) or a rest element (`(...errors)`).
+fn first_parameter(params: &FormalParameters<'_>) -> Vec<SymbolId> {
+    params
+        .items
+        .first()
+        .map(|param| bound_symbols(&param.pattern))
+        .or_else(|| params.rest.as_deref().map(|rest| bound_symbols(&rest.rest.argument)))
+        .unwrap_or_default()
+}
+
 fn matches_handler<'a>(
     expression: &Expression<'a>,
     semantic: &Semantic<'a>,
@@ -141,12 +152,12 @@ fn matches_handler<'a>(
 ) -> bool {
     match resolve_value(expression, semantic) {
         Some(Value::Function(function)) => {
-            let caught = function.params.items.first().map(|param| bound_symbols(&param.pattern)).unwrap_or_default();
+            let caught = first_parameter(&function.params);
 
             function.body.as_ref().is_some_and(|body| block(body, &caught))
         }
         Some(Value::Arrow(arrow)) => {
-            let caught = arrow.params.items.first().map(|param| bound_symbols(&param.pattern)).unwrap_or_default();
+            let caught = first_parameter(&arrow.params);
 
             match &arrow.body {
                 ArrowFunctionBody::FunctionBody(body) => block(body, &caught),

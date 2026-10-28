@@ -29,11 +29,35 @@ enum Value<'s, 'a> {
 const MAX_PATH: usize = 32;
 
 pub fn swallows<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
-    matches_handler(expression, semantic, |body| swallows_block(body, semantic), |body| returns_undefined(body, semantic))
+    matches_handler(expression, semantic, |body, _| swallows_block(body, semantic), |body, _| returns_undefined(body, semantic))
 }
 
 pub fn translates<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
-    matches_handler(expression, semantic, |body| body.directives.is_empty() && single_throw(&body.statements), |_| false)
+    matches_handler(
+        expression,
+        semantic,
+        |body, caught| body.directives.is_empty() && translates_statements(&body.statements, caught, semantic),
+        |body, caught| body.is_some_and(|body| references_caught(body, caught, semantic)),
+    )
+}
+
+pub fn translates_statements<'a>(statements: &[Statement<'a>], caught: Option<SymbolId>, semantic: &Semantic<'a>) -> bool {
+    if single_throw(statements) {
+        return true;
+    }
+
+    matches!(statements, [Statement::ReturnStatement(statement)] if statement.argument.as_ref().is_some_and(|value| references_caught(value, caught, semantic)))
+}
+
+fn references_caught<'a>(value: &Expression<'a>, caught: Option<SymbolId>, semantic: &Semantic<'a>) -> bool {
+    let Some(caught) = caught else { return false };
+    let mut reference = Contains::new(
+        |node| matches!(node, AstKind::IdentifierReference(id) if id.reference_id.get().is_some_and(|reference| semantic.scoping().get_reference(reference).symbol_id() == Some(caught))),
+    );
+
+    reference.visit_expression(value);
+
+    reference.found
 }
 
 pub fn non_callable<'a>(expression: &Expression<'a>, semantic: &Semantic<'a>) -> bool {
@@ -87,15 +111,23 @@ fn asynchronous_call(callee: &Expression<'_>) -> bool {
 fn matches_handler<'a>(
     expression: &Expression<'a>,
     semantic: &Semantic<'a>,
-    block: impl FnOnce(&FunctionBody<'a>) -> bool,
-    expression_body: impl FnOnce(Option<&Expression<'a>>) -> bool,
+    block: impl FnOnce(&FunctionBody<'a>, Option<SymbolId>) -> bool,
+    expression_body: impl FnOnce(Option<&Expression<'a>>, Option<SymbolId>) -> bool,
 ) -> bool {
     match resolve_value(expression, semantic) {
-        Some(Value::Function(function)) => function.body.as_ref().is_some_and(|body| block(body)),
-        Some(Value::Arrow(arrow)) => match &arrow.body {
-            ArrowFunctionBody::FunctionBody(body) => block(body),
-            body => expression_body(body.as_expression()),
-        },
+        Some(Value::Function(function)) => {
+            let caught = function.params.items.first().and_then(|param| param.pattern.get_binding_identifier()).and_then(|id| id.symbol_id.get());
+
+            function.body.as_ref().is_some_and(|body| block(body, caught))
+        }
+        Some(Value::Arrow(arrow)) => {
+            let caught = arrow.params.items.first().and_then(|param| param.pattern.get_binding_identifier()).and_then(|id| id.symbol_id.get());
+
+            match &arrow.body {
+                ArrowFunctionBody::FunctionBody(body) => block(body, caught),
+                body => expression_body(body.as_expression(), caught),
+            }
+        }
         _ => false,
     }
 }

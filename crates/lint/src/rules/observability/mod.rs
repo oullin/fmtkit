@@ -82,7 +82,9 @@ impl Rule for NoCatchOutsideBoundary {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &mut Context<'_, 'a>) {
         let span = match node.kind() {
             AstKind::CatchClause(clause) => {
-                if self.0.translate && shared::single_throw(&clause.body.body) {
+                let caught = clause.param.as_ref().and_then(|param| param.pattern.get_binding_identifier()).and_then(|id| id.symbol_id.get());
+
+                if self.0.translate && handlers::translates_statements(&clause.body.body, caught, ctx.semantic) {
                     return;
                 }
 

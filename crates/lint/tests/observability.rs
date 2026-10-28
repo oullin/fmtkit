@@ -440,7 +440,7 @@ fn boundary_paths_use_ordered_boundary_globs() {
 }
 
 #[test]
-fn boundary_translation_requires_only_one_throw() {
+fn boundary_translation_accepts_a_single_throw() {
     for code in [
         "try {} catch (e) { throw e; }",
         "try {} catch { throw new Error('translated'); }",
@@ -472,8 +472,43 @@ fn boundary_translation_requires_only_one_throw() {
         assert_sites(BOUNDARY, &[], "a.ts", &code, &[]);
         assert_sites(BOUNDARY, &[json!({ "translate": false })], "a.ts", &code, &[(line, 9)]);
     }
-    for handler in ["e => e", "e => { 'use strict'; throw e; }", "e => { reportException(e); throw e; }", "e => { if (e) throw e; }"] {
+    for handler in ["e => { 'use strict'; throw e; }", "e => { reportException(e); throw e; }", "e => { if (e) throw e; }"] {
         assert_sites(BOUNDARY, &[], "a.ts", &format!("request.catch({handler});"), &[(1, 9)]);
+    }
+}
+
+#[test]
+fn boundary_translation_accepts_only_a_single_return_of_the_caught_value() {
+    for (code, site, translates) in [
+        ("try {} catch (cause) { return Result.err(new CacheError('read_failed', { cause })); }", (1, 8), true),
+        ("try {} catch (error) { return { ok: false, error: toMigrationError(error) }; }", (1, 8), true),
+        ("try {} catch (e) { return e; }", (1, 8), true),
+        ("try {} catch (e) { return err(((e as Error)!).message); }", (1, 8), true),
+        ("try {} catch (e) { return fallback; }", (1, 8), false),
+        ("try {} catch { return Result.err(new E()); }", (1, 8), false),
+        ("try {} catch (e) { console.error(e); return err(e); }", (1, 8), false),
+        ("try {} catch (e) { if (x) return err(e); throw e; }", (1, 8), false),
+        ("try {} catch (e) { const cause = e; return err(cause); }", (1, 8), false),
+        ("try {} catch (e) { return; }", (1, 8), false),
+        ("try {} catch (e) { return err(() => e); }", (1, 8), false),
+        ("try {} catch (e) { return fallback as typeof e; }", (1, 8), false),
+        ("p.catch((e) => Result.err(e));", (1, 3), true),
+        ("p.catch((e) => Result.err(wrap(e)));", (1, 3), true),
+        ("p.catch((e) => e);", (1, 3), true),
+        ("p.catch(function(e) { return Result.err(new E(e)); });", (1, 3), true),
+        ("const h = e => { return err(e); }; const alias = h; p.catch(alias);", (1, 55), true),
+        ("const h = { handle(e) { return err(e.message); } }; p.catch(h.handle);", (1, 55), true),
+        ("p.catch((e) => fallback);", (1, 3), false),
+        ("p.catch(() => Result.err(new E()));", (1, 3), false),
+        ("p.catch((e) => { console.error(e); return err(e); });", (1, 3), false),
+        ("p.catch((e) => { 'use strict'; return err(e); });", (1, 3), false),
+        ("p.catch((e, other) => err(other));", (1, 3), false),
+        ("const e = other; p.catch(() => err(e));", (1, 20), false),
+    ] {
+        let expected = if translates { &[][..] } else { std::slice::from_ref(&site) };
+
+        assert_sites(BOUNDARY, &[], "a.ts", code, expected);
+        assert_sites(BOUNDARY, &[json!({ "translate": false })], "a.ts", code, &[site]);
     }
 }
 

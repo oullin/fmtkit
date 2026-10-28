@@ -151,6 +151,8 @@ fn promise_resolution_and_nesting() {
         "request.catch(); request.catch(...handlers);",
         "const discard = function () {}; const obj = { discard }; request.catch(obj.discard);",
         "let handler = () => {}; handler = (e) => { throw e; }; request.catch(handler);",
+        "const h = { f: () => {} }; h.f = (e) => { throw e; }; request.catch(h.f);",
+        "let C = class { f() {} }; C = class { f(e) { throw e; } }; const h = new C(); request.catch(h.f);",
         "class Handlers { static get discard() { return undefined; } } request.catch(Handlers.discard);",
     ];
 
@@ -302,6 +304,11 @@ fn catches_outside_boundaries() {
     // A handler reassigned after its declaration is unresolved, so its single-throw initialiser grants no translation.
     assert_sites(BOUNDARY, &[], "a.ts", "let handler = (e) => { throw e; };\nhandler = (e) => {};\nrequest.catch(handler);", &[(3, 9)]);
     assert_sites(BOUNDARY, &[], "a.ts", "const handler = (e) => { throw e; };\nrequest.catch(handler);", &[]);
+    // A member assigned after its declaration, or an instance of a reassigned class binding, is unresolved too.
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nh.f = () => {};\nrequest.catch(h.f);", &[(3, 9)]);
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\ndelete h.f;\nrequest.catch(h.f);", &[(3, 9)]);
+    assert_sites(BOUNDARY, &[], "a.ts", "let C = class { f(e) { throw e; } };\nC = class { f(e) {} };\nconst h = new C();\nrequest.catch(h.f);", &[(4, 9)]);
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst n = h.f(1);\nrequest.catch(h.f);", &[]);
 }
 
 #[test]

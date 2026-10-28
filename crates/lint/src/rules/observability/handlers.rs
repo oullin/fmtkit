@@ -4,10 +4,10 @@
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
     ArrowFunctionBody, ArrowFunctionExpression, Class, ClassElement, Expression, Function, FunctionBody, MethodDefinitionKind, ObjectExpression,
-    ObjectPropertyKind, PropertyKind, Statement, ThisExpression,
+    ObjectPropertyKind, PropertyKind, Statement, ThisExpression, UnaryOperator,
 };
 use oxc_ast_visit::Visit;
-use oxc_semantic::Semantic;
+use oxc_semantic::{AstNodes, NodeId, Semantic, SymbolId};
 use oxc_span::GetSpan;
 use rustc_hash::FxHashSet;
 
@@ -88,9 +88,7 @@ fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Sema
             let scoping = semantic.scoping();
             let symbol = scoping.get_reference(id.reference_id.get()?).symbol_id()?;
 
-            // A binding written after its declaration may hold any value at the
-            // call, so it stays unresolved rather than resolving to its initialiser.
-            if scoping.get_resolved_references(symbol).any(oxc_semantic::Reference::is_write) {
+            if mutated(symbol, semantic) {
                 return None;
             }
 
@@ -180,7 +178,7 @@ fn constructor<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semanti
                 let scoping = semantic.scoping();
                 let symbol = scoping.get_reference(id.reference_id.get()?).symbol_id()?;
 
-                if !seen.insert(symbol) {
+                if !seen.insert(symbol) || mutated(symbol, semantic) {
                     return None;
                 }
 
@@ -193,6 +191,37 @@ fn constructor<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semanti
             _ => return None,
         }
     }
+}
+
+/// A binding written after its declaration, or a member reached through it that
+/// is assigned, updated or deleted, may hold any value at the call. It stays
+/// unresolved rather than resolving to its initialiser.
+fn mutated(symbol: SymbolId, semantic: &Semantic<'_>) -> bool {
+    semantic.scoping().get_resolved_references(symbol).any(|reference| reference.is_write() || member_written(reference.node_id(), semantic.nodes()))
+}
+
+fn member_written(reference: NodeId, nodes: &AstNodes<'_>) -> bool {
+    let mut target = reference;
+
+    for ancestor in nodes.ancestors(reference) {
+        match ancestor.kind() {
+            AstKind::IdentifierReference(_)
+            | AstKind::StaticMemberExpression(_)
+            | AstKind::ComputedMemberExpression(_)
+            | AstKind::PrivateFieldExpression(_)
+            | AstKind::ParenthesizedExpression(_)
+            | AstKind::TSAsExpression(_)
+            | AstKind::TSSatisfiesExpression(_)
+            | AstKind::TSNonNullExpression(_)
+            | AstKind::TSTypeAssertion(_) => target = ancestor.id(),
+            AstKind::AssignmentExpression(assignment) => return target != reference && assignment.left.span() == nodes.get_node(target).kind().span(),
+            AstKind::UpdateExpression(_) => return target != reference,
+            AstKind::UnaryExpression(unary) => return target != reference && unary.operator == UnaryOperator::Delete,
+            _ => return false,
+        }
+    }
+
+    false
 }
 
 fn swallows_block<'a>(body: &FunctionBody<'a>, semantic: &Semantic<'a>) -> bool {

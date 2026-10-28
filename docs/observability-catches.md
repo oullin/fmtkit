@@ -74,7 +74,7 @@ These options do not inherit the source check's repository-specific exclusions. 
 
 `observability/no-catch-outside-boundary` reports every catch clause and `.catch(handler)` call outside the configured failure boundaries. Reporting an error does not exempt a catch from this rule. It is off in the bundled policy.
 
-Calls with a known non-callable argument and schema fallback chains rooted in an import binding from `zod`, `zod/v4`, or `zod/mini`, including lexical aliases, are excluded; unresolved Promise handlers still report.
+Calls with a known non-callable argument and schema fallback chains rooted in an import binding from `zod`, `zod/v4`, or `zod/mini`, including lexical aliases, are excluded; a chain that passes through a Promise-returning method (`parseAsync`, `safeParseAsync`, `spa`, `then`, `finally`) is a rejection handler and still reports, as do unresolved Promise handlers.
 
 By default, a catch block containing only a single `throw` statement is accepted anywhere. Rethrows and new errors, with or without a `cause`, count as translation. Promise handlers with a block containing only a single `throw` also qualify, using the same-file handler resolution from `no-swallowing-promise-catch`. Unresolved handlers are findings, including a handler reached through a binding that is written again after its declaration or through a member that is assigned, updated or deleted, directly or through an alias binding of the same object. Set `translate = false` to require even these catches to live at a boundary.
 

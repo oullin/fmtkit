@@ -54,6 +54,10 @@ pub fn zod_schema<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Sema
         }
 
         if let Expression::CallExpression(call) = expression {
+            if asynchronous_call(&call.callee) {
+                return false;
+            }
+
             expression = &call.callee;
             continue;
         }
@@ -66,6 +70,18 @@ pub fn zod_schema<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Sema
     }
 
     false
+}
+
+/// Zod methods that return a Promise rather than a schema. A `.catch` on their
+/// result is a rejection handler, whatever the chain's import root.
+const ASYNCHRONOUS_METHODS: [&str; 5] = ["parseAsync", "safeParseAsync", "spa", "then", "finally"];
+
+fn asynchronous_call(callee: &Expression<'_>) -> bool {
+    match unwrap(callee) {
+        Expression::StaticMemberExpression(member) => ASYNCHRONOUS_METHODS.contains(&member.property.name.as_str()),
+        Expression::ComputedMemberExpression(member) => member.static_property_name().is_some_and(|name| ASYNCHRONOUS_METHODS.contains(&name.as_str())),
+        _ => false,
+    }
 }
 
 fn matches_handler<'a>(

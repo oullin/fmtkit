@@ -152,6 +152,7 @@ fn promise_resolution_and_nesting() {
         "const discard = function () {}; const obj = { discard }; request.catch(obj.discard);",
         "let handler = () => {}; handler = (e) => { throw e; }; request.catch(handler);",
         "const h = { f: () => {} }; h.f = (e) => { throw e; }; request.catch(h.f);",
+        "const h = { f: () => {} }; const alias = h; alias.f = (e) => { throw e; }; request.catch(h.f);",
         "let C = class { f() {} }; C = class { f(e) { throw e; } }; const h = new C(); request.catch(h.f);",
         "class Handlers { static get discard() { return undefined; } } request.catch(Handlers.discard);",
     ];
@@ -171,6 +172,7 @@ fn promise_resolution_and_nesting() {
         ("const obj = { discard() {}, run() {\nrequest.catch(this.discard); } };", &[(2, 9)]),
         ("class Base { discard() {} } class Child extends Base {} const child = new Child();\nrequest.catch(child.discard);", &[(2, 9)]),
         ("const obj = { inner: { discard: () => {} } };\nrequest.catch(obj.inner.discard);", &[(2, 9)]),
+        ("const handler = () => {}; cache[handler.name] = true;\nrequest.catch(handler);", &[(2, 9)]),
         ("class Handlers { static discard() {} }\nrequest.catch(Handlers.discard);", &[(2, 9)]),
         ("class Handlers { discard() {} } const handlers = new Handlers();\nrequest.catch(handlers.discard);", &[(2, 9)]),
         ("request.catch(() => { request.catch(() => undefined); });", &[(1, 31)]),
@@ -309,6 +311,18 @@ fn catches_outside_boundaries() {
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\ndelete h.f;\nrequest.catch(h.f);", &[(3, 9)]);
     assert_sites(BOUNDARY, &[], "a.ts", "let C = class { f(e) { throw e; } };\nC = class { f(e) {} };\nconst h = new C();\nrequest.catch(h.f);", &[(4, 9)]);
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst n = h.f(1);\nrequest.catch(h.f);", &[]);
+    // A member written through a lexical alias of the object is a write to the object.
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst alias = h;\nalias.f = () => {};\nrequest.catch(h.f);", &[(4, 9)]);
+    assert_sites(
+        BOUNDARY,
+        &[],
+        "a.ts",
+        "const h = { f: (e) => { throw e; } };\nconst a = h;\nconst b = (a as typeof h);\nb.f = () => {};\nrequest.catch(h.f);",
+        &[(5, 9)],
+    );
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst alias = h;\nconst n = alias.f(1);\nrequest.catch(h.f);", &[]);
+    // A reference inside a computed key is not a write through the handler.
+    assert_sites(BOUNDARY, &[], "a.ts", "const handler = (e) => { throw e; };\ncache[handler.name] = true;\nrequest.catch(handler);", &[]);
 }
 
 #[test]

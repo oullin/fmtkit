@@ -193,11 +193,53 @@ fn constructor<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semanti
     }
 }
 
-/// A binding written after its declaration, or a member reached through it that
-/// is assigned, updated or deleted, may hold any value at the call. It stays
-/// unresolved rather than resolving to its initialiser.
+/// A binding written after its declaration, or a member reached through it or
+/// through a lexical alias of it that is assigned, updated or deleted, may hold
+/// any value at the call. It stays unresolved rather than resolving to its
+/// initialiser. Aliases made by calls or parameters are not followed.
 fn mutated(symbol: SymbolId, semantic: &Semantic<'_>) -> bool {
-    semantic.scoping().get_resolved_references(symbol).any(|reference| reference.is_write() || member_written(reference.node_id(), semantic.nodes()))
+    mutated_through(symbol, semantic, &mut FxHashSet::default())
+}
+
+fn mutated_through(symbol: SymbolId, semantic: &Semantic<'_>, seen: &mut FxHashSet<SymbolId>) -> bool {
+    if !seen.insert(symbol) {
+        return false;
+    }
+
+    let nodes = semantic.nodes();
+
+    semantic.scoping().get_resolved_references(symbol).any(|reference| {
+        reference.is_write()
+            || member_written(reference.node_id(), nodes)
+            || alias_of(reference.node_id(), nodes).is_some_and(|alias| mutated_through(alias, semantic, seen))
+    })
+}
+
+/// The binding a `const alias = reference` declarator makes of the reference,
+/// through parentheses and TypeScript wrappers.
+fn alias_of(reference: NodeId, nodes: &AstNodes<'_>) -> Option<SymbolId> {
+    let mut target = reference;
+
+    for ancestor in nodes.ancestors(reference) {
+        match ancestor.kind() {
+            AstKind::IdentifierReference(_)
+            | AstKind::ParenthesizedExpression(_)
+            | AstKind::TSAsExpression(_)
+            | AstKind::TSSatisfiesExpression(_)
+            | AstKind::TSNonNullExpression(_)
+            | AstKind::TSTypeAssertion(_) => target = ancestor.id(),
+            AstKind::VariableDeclarator(declarator) => {
+                if declarator.init.as_ref()?.span() != nodes.get_node(target).kind().span() {
+                    return None;
+                }
+
+                return declarator.id.get_binding_identifier()?.symbol_id.get();
+            }
+            _ => return None,
+        }
+    }
+
+    None
 }
 
 fn member_written(reference: NodeId, nodes: &AstNodes<'_>) -> bool {
@@ -205,6 +247,8 @@ fn member_written(reference: NodeId, nodes: &AstNodes<'_>) -> bool {
 
     for ancestor in nodes.ancestors(reference) {
         match ancestor.kind() {
+            // A member is followed only from its receiver: a reference inside a computed key names nothing written.
+            AstKind::ComputedMemberExpression(member) if member.object.span() != nodes.get_node(target).kind().span() => return false,
             AstKind::IdentifierReference(_)
             | AstKind::StaticMemberExpression(_)
             | AstKind::ComputedMemberExpression(_)

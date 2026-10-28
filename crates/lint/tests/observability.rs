@@ -321,6 +321,21 @@ fn catches_outside_boundaries() {
         &[(5, 9)],
     );
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst alias = h;\nconst n = alias.f(1);\nrequest.catch(h.f);", &[]);
+    // An alias of a nested member is followed from its receiver; an alias keyed by the reference is not.
+    assert_sites(
+        BOUNDARY,
+        &[],
+        "a.ts",
+        "const h = { inner: { f: (e) => { throw e; } } };\nconst alias = h.inner;\nalias.f = () => {};\nrequest.catch(h.inner.f);",
+        &[(4, 9)],
+    );
+    assert_sites(
+        BOUNDARY,
+        &[],
+        "a.ts",
+        "const h = { f: (e) => { throw e; }, key: 'k' };\nconst alias = other[h.key];\nalias.f = () => {};\nrequest.catch(h.f);",
+        &[],
+    );
     // Reassigning the alias itself leaves the object as it was; a member write through a let alias still counts.
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nlet alias = h;\nalias = other;\nrequest.catch(h.f);", &[]);
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nlet alias = h;\nalias.f = () => {};\nrequest.catch(h.f);", &[(4, 9)]);

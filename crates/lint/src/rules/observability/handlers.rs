@@ -218,14 +218,19 @@ fn mutated_through(symbol: SymbolId, rebinding: bool, semantic: &Semantic<'_>, s
     })
 }
 
-/// The binding an `alias = reference` declarator makes of the reference,
-/// through parentheses and TypeScript wrappers.
+/// The binding an `alias = reference` or `alias = reference.member` declarator
+/// makes, through parentheses and TypeScript wrappers.
 fn alias_of(reference: NodeId, nodes: &AstNodes<'_>) -> Option<SymbolId> {
     let mut target = reference;
 
     for ancestor in nodes.ancestors(reference) {
         match ancestor.kind() {
+            // An alias of a member reached from the reference is followed too; a reference inside a computed key is not.
+            AstKind::ComputedMemberExpression(member) if member.object.span() != nodes.get_node(target).kind().span() => return None,
             AstKind::IdentifierReference(_)
+            | AstKind::StaticMemberExpression(_)
+            | AstKind::ComputedMemberExpression(_)
+            | AstKind::PrivateFieldExpression(_)
             | AstKind::ParenthesizedExpression(_)
             | AstKind::TSAsExpression(_)
             | AstKind::TSSatisfiesExpression(_)

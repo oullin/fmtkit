@@ -198,10 +198,13 @@ fn constructor<'s, 'a>(mut expression: &'s Expression<'a>, semantic: &'s Semanti
 /// any value at the call. It stays unresolved rather than resolving to its
 /// initialiser. Aliases made by calls or parameters are not followed.
 fn mutated(symbol: SymbolId, semantic: &Semantic<'_>) -> bool {
-    mutated_through(symbol, semantic, &mut FxHashSet::default())
+    mutated_through(symbol, true, semantic, &mut FxHashSet::default())
 }
 
-fn mutated_through(symbol: SymbolId, semantic: &Semantic<'_>, seen: &mut FxHashSet<SymbolId>) -> bool {
+/// `rebinding` says whether a write to the binding itself counts: it does for
+/// the resolved binding, not for an alias, whose own reassignment leaves the
+/// original object as it was. Member writes through an alias still count.
+fn mutated_through(symbol: SymbolId, rebinding: bool, semantic: &Semantic<'_>, seen: &mut FxHashSet<SymbolId>) -> bool {
     if !seen.insert(symbol) {
         return false;
     }
@@ -209,13 +212,13 @@ fn mutated_through(symbol: SymbolId, semantic: &Semantic<'_>, seen: &mut FxHashS
     let nodes = semantic.nodes();
 
     semantic.scoping().get_resolved_references(symbol).any(|reference| {
-        reference.is_write()
+        (rebinding && reference.is_write())
             || member_written(reference.node_id(), nodes)
-            || alias_of(reference.node_id(), nodes).is_some_and(|alias| mutated_through(alias, semantic, seen))
+            || alias_of(reference.node_id(), nodes).is_some_and(|alias| mutated_through(alias, false, semantic, seen))
     })
 }
 
-/// The binding a `const alias = reference` declarator makes of the reference,
+/// The binding an `alias = reference` declarator makes of the reference,
 /// through parentheses and TypeScript wrappers.
 fn alias_of(reference: NodeId, nodes: &AstNodes<'_>) -> Option<SymbolId> {
     let mut target = reference;

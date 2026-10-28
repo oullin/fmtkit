@@ -321,6 +321,9 @@ fn catches_outside_boundaries() {
         &[(5, 9)],
     );
     assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nconst alias = h;\nconst n = alias.f(1);\nrequest.catch(h.f);", &[]);
+    // Reassigning the alias itself leaves the object as it was; a member write through a let alias still counts.
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nlet alias = h;\nalias = other;\nrequest.catch(h.f);", &[]);
+    assert_sites(BOUNDARY, &[], "a.ts", "const h = { f: (e) => { throw e; } };\nlet alias = h;\nalias.f = () => {};\nrequest.catch(h.f);", &[(4, 9)]);
     // A reference inside a computed key is not a write through the handler.
     assert_sites(BOUNDARY, &[], "a.ts", "const handler = (e) => { throw e; };\ncache[handler.name] = true;\nrequest.catch(handler);", &[]);
 }

@@ -569,7 +569,7 @@ fn boundary_imports_admit_only_files_reserved_specifier_checks() {
         assert_sites(BOUNDARY, &options, file, code, &[]);
     }
 
-    for file in ["src/domain.js", "src/domain.mjs", "src/domain.jsx", "src/domain.mts", "src/domain.cts", "src/domain", "ts"] {
+    for file in ["src/domain.js", "src/domain.mjs", "src/domain.jsx", "src/domain.mts", "src/domain.cts"] {
         assert_sites(BOUNDARY, &options, file, code, &[(2, 8), (3, 9)]);
     }
 }

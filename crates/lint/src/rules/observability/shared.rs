@@ -2,7 +2,10 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::CommentKind;
-use oxc_ast::ast::{ArrowFunctionExpression, CatchClause, Class, Expression, Function, MethodDefinition, ObjectProperty, Statement, TSType};
+use oxc_ast::ast::{
+    ArrowFunctionExpression, CatchClause, Class, Expression, Function, ImportDeclarationSpecifier, ImportOrExportKind, MethodDefinition, ObjectProperty,
+    Statement, TSType,
+};
 use oxc_ast_visit::{Visit, walk};
 use oxc_semantic::Semantic;
 use oxc_span::Span;
@@ -119,4 +122,48 @@ pub fn escaped(ctx: &mut Context<'_, '_>, at: u32) -> bool {
 
 pub fn single_throw(statements: &[Statement<'_>]) -> bool {
     matches!(statements, [Statement::ThrowStatement(_)])
+}
+
+/// The file's static value imports as (module, imported name) pairs: named
+/// specifiers of non-type `import` declarations, keyed by the imported name
+/// rather than the local alias. Namespace and default imports, re-exports,
+/// `require` and dynamic `import()` do not take part.
+struct Imports(Vec<(String, String)>);
+
+impl Imports {
+    fn new(semantic: &Semantic<'_>) -> Self {
+        let mut imports = Vec::new();
+
+        for node in semantic.nodes().iter() {
+            let AstKind::ImportDeclaration(import) = node.kind() else { continue };
+
+            if import.import_kind == ImportOrExportKind::Type {
+                continue;
+            }
+
+            for specifier in import.specifiers.iter().flatten() {
+                if let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier
+                    && specifier.import_kind == ImportOrExportKind::Value
+                {
+                    imports.push((import.source.value.to_string(), specifier.imported.name().to_string()));
+                }
+            }
+        }
+
+        Self(imports)
+    }
+}
+
+/// Whether the file statically imports one of `boundaries`' names from one of
+/// its modules. Only a file that `boundaries/reserved-specifier` checks can be
+/// admitted this way, so an import that rule never sees admits nothing. The
+/// import scan runs once per file.
+pub fn imports_boundary(ctx: &mut Context<'_, '_>, boundaries: &super::options::Boundaries) -> bool {
+    if !super::super::boundaries::authored(ctx.rel) {
+        return false;
+    }
+
+    let imports = ctx.shared(Imports::new);
+
+    boundaries.admits(imports.0.iter().map(|(module, name)| (module.as_str(), name.as_str())))
 }

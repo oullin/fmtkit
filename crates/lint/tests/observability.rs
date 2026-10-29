@@ -523,6 +523,71 @@ fn boundary_translation_accepts_only_a_single_return_of_the_caught_value() {
 }
 
 #[test]
+fn boundary_imports_admit_a_file() {
+    let options = [json!({ "boundaries": { "modules": ["@observability", "@omniyat/observability"], "names": ["FailureBoundary"] } })];
+    let catches = "try {} catch {}\nrequest.catch(handler);";
+
+    for import in [
+        "import { FailureBoundary } from '@observability';",
+        "import { FailureBoundary as Boundary } from '@observability';",
+        "import { FailureBoundary } from '@omniyat/observability';",
+        "import { other, FailureBoundary } from \"@observability\";",
+        "import Default, { FailureBoundary } from '@observability';",
+        "import { type Other, FailureBoundary } from '@observability';",
+        "import { 'FailureBoundary' as Boundary } from '@observability';",
+        "import { FailureBoundary } from '@observability' with { type: 'json' };",
+    ] {
+        assert_sites(BOUNDARY, &options, "src/domain.ts", &format!("{import}\n{catches}"), &[]);
+    }
+
+    for import in [
+        "",
+        "import type { FailureBoundary } from '@observability';",
+        "import { type FailureBoundary } from '@observability';",
+        "import * as observability from '@observability';",
+        "import FailureBoundary from '@observability';",
+        "import { Other } from '@observability';",
+        "import { Boundary as FailureBoundary } from '@observability';",
+        "import { FailureBoundary } from '@observability/runtime';",
+        "import { FailureBoundary } from 'observability';",
+        "import { FailureBoundary } from './observability';",
+        "export { FailureBoundary } from '@observability';",
+        "const { FailureBoundary } = require('@observability');",
+        "const { FailureBoundary } = await import('@observability');",
+        "import '@observability';",
+    ] {
+        assert_sites(BOUNDARY, &options, "src/domain.ts", &format!("{import}\n{catches}"), &[(2, 8), (3, 9)]);
+    }
+}
+
+#[test]
+fn boundary_imports_admit_only_files_reserved_specifier_checks() {
+    let options = [json!({ "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary"] } })];
+    let code = "import { FailureBoundary } from '@observability';\ntry {} catch {}\nrequest.catch(handler);";
+
+    for file in ["src/domain.ts", "src/domain.tsx", "src/ts/domain.ts"] {
+        assert_sites(BOUNDARY, &options, file, code, &[]);
+    }
+
+    for file in ["src/domain.js", "src/domain.mjs", "src/domain.jsx", "src/domain.mts", "src/domain.cts"] {
+        assert_sites(BOUNDARY, &options, file, code, &[(2, 8), (3, 9)]);
+    }
+}
+
+#[test]
+fn boundary_imports_combine_with_allow() {
+    let options = [json!({ "allow": ["**/*.test.ts"], "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary"] } })];
+    let catches = "try {} catch {}\nrequest.catch(handler);";
+    let imported = format!("import {{ FailureBoundary }} from '@observability';\n{catches}");
+
+    assert_sites(BOUNDARY, &options, "src/a.test.ts", catches, &[]);
+    assert_sites(BOUNDARY, &options, "src/domain.ts", &imported, &[]);
+    assert_sites(BOUNDARY, &options, "src/domain.ts", catches, &[(1, 8), (2, 9)]);
+    assert_sites(BOUNDARY, &[json!({ "allow": ["**/*.test.ts"] })], "src/domain.ts", &imported, &[(2, 8), (3, 9)]);
+    assert_sites(BOUNDARY, &[], "src/domain.ts", &imported, &[(2, 8), (3, 9)]);
+}
+
+#[test]
 fn boundary_options_are_strict() {
     for options in [
         vec![json!(null)],
@@ -538,6 +603,27 @@ fn boundary_options_are_strict() {
         vec![json!({ "allow": ["{package}/**"] })],
         vec![json!({ "translate": "true" })],
         vec![json!({ "translate": null })],
+        vec![json!({ "boundaries": null })],
+        vec![json!({ "boundaries": [] })],
+        vec![json!({ "boundaries": "@observability" })],
+        vec![json!({ "boundaries": {} })],
+        vec![json!({ "boundaries": { "modules": ["@observability"] } })],
+        vec![json!({ "boundaries": { "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary"], "paths": [] } })],
+        vec![json!({ "boundaries": { "modules": "@observability", "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": [], "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": [1], "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": [""], "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": [" "], "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability", "@observability"], "names": ["FailureBoundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": "FailureBoundary" } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": [] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": [null] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": [""] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": ["Failure Boundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": ["Failure.Boundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": ["1Boundary"] } })],
+        vec![json!({ "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary", "FailureBoundary"] } })],
     ] {
         assert_invalid_options(BOUNDARY, options);
     }

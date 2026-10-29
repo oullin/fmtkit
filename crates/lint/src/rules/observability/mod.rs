@@ -108,7 +108,11 @@ impl Rule for NoCatchOutsideBoundary {
             _ => return,
         };
 
-        if !self.0.allow.matches(ctx.rel) && !shared::escaped(ctx, span.start) {
+        if self.0.allow.matches(ctx.rel) || self.0.boundaries.as_ref().is_some_and(|boundaries| shared::imports_boundary(ctx, boundaries)) {
+            return;
+        }
+
+        if !shared::escaped(ctx, span.start) {
             ctx.report(span, "A catch outside a failure boundary: raise an OperationalFailure and let the edge observe it.");
         }
     }

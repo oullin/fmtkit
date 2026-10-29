@@ -84,12 +84,15 @@ The [intentional-swallow comment](#allow-an-intentional-swallow) also exempts th
 
 The rule accepts one optional options object. Unknown keys and invalid option types are errors.
 
-| Option      | Default | Meaning                                                                                                                               |
-| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `allow`     | `[]`    | Ordered repository-relative path globs. A positive match allows the file; a leading `!` re-includes it for checking. Last match wins. |
-| `translate` | `true`  | Accept a single `throw` or a single return referencing the caught binding, including Promise arrow expression bodies.                 |
+| Option       | Default | Meaning                                                                                                                                             |
+| ------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`      | `[]`    | Ordered repository-relative path globs. A positive match allows the file; a leading `!` re-includes it for checking. Last match wins.               |
+| `boundaries` | unset   | `{ modules, names }`: a file that statically imports one of `names` from one of `modules` is a failure boundary, and every catch in it is accepted. |
+| `translate`  | `true`  | Accept a single `throw` or a single return referencing the caught binding, including Promise arrow expression bodies.                               |
 
 `allow` uses the [boundary rules' path glob semantics](boundaries.md#options), including Unicode matching, literal braces, and rejection of blank or malformed patterns and `{package}`. An empty list checks every file.
+
+`boundaries` derives the failure boundaries from what a file imports, so a consumer does not maintain a second path list beside `boundaries/reserved-specifier`. `modules` and `names` are each required, non-empty arrays of unique, non-blank strings, and each name must be an identifier name; unknown keys inside `boundaries` are errors. A file counts when it contains a static `import` declaration whose source equals one of `modules` exactly, that is not type-only, and that has a named specifier whose imported name is one of `names`. The comparison uses the imported name, so `import { FailureBoundary as Boundary } from '@observability'` counts. Module names do not prefix-match: `@observability/runtime` does not match `@observability`. `import type { FailureBoundary }`, the inline `import { type FailureBoundary }`, namespace and default imports, `export { FailureBoundary } from`, `require(...)` and dynamic `import()` do not count. Import admission applies only to the authored `.ts` and `.tsx` files that `boundaries/reserved-specifier` checks, so a JavaScript, `.mts`, `.cts` or `.d.ts` file is never admitted by import and only `allow` can admit it. `allow` keeps its meaning and is evaluated first; a file passes if either admits it. Without `boundaries`, behaviour is unchanged. The import scan runs once per file.
 
 ```toml
 [lint.rules]
@@ -98,4 +101,18 @@ The rule accepts one optional options object. Unknown keys and invalid option ty
     "**/worker.ts",
     "**/*.test.ts",
 ], translate = true }]
+```
+
+With `boundaries`, the `allow` list shrinks to the observability package, scripts and tests, and the rule accepts a catch wherever the file imports the boundary. `boundaries/reserved-specifier` stays the one place that decides who may import `FailureBoundary`, so a file that passes both rules is a boundary by construction.
+
+```toml
+[lint.rules]
+"boundaries/reserved-specifier" = ["error", { rules = [
+    { name = "failure-boundary", match = ["@observability", "@omniyat/observability"], allow = ["packages/*/src/edge/**"], message = "the failure boundary may be imported only by edge modules" },
+] }]
+"observability/no-catch-outside-boundary" = ["error", { allow = [
+    "packages/observability/**",
+    "**/scripts/**",
+    "**/*.test.ts",
+], boundaries = { modules = ["@observability", "@omniyat/observability"], names = ["FailureBoundary"] } }]
 ```

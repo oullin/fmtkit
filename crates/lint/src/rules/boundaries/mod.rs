@@ -25,6 +25,12 @@ enum Kind {
     ReservedSpecifier,
 }
 
+/// Whether the boundary rules check this repository-relative path: an
+/// authored `.ts` or `.tsx` file, not a `.d.ts` declaration.
+pub fn authored(rel: &str) -> bool {
+    rel.rsplit_once('.').is_some_and(|(_, extension)| matches!(extension, "ts" | "tsx")) && !rel.ends_with(".d.ts")
+}
+
 pub const RULES: &[(&str, Factory)] = &[
     ("boundaries/exported-class-count", |options| build(Kind::ExportedClassCount, options)),
     ("boundaries/barrel-only", |options| build(Kind::BarrelOnly, options)),
@@ -53,9 +59,7 @@ impl Rule for Boundary {
     }
 
     fn run_once(&self, ctx: &mut Context<'_, '_>) {
-        let authored = ctx.rel.rsplit_once('.').is_some_and(|(_, extension)| matches!(extension, "ts" | "tsx")) && !ctx.rel.ends_with(".d.ts");
-
-        if self.options.exempt.matches(ctx.rel) || !authored {
+        if self.options.exempt.matches(ctx.rel) || !authored(ctx.rel) {
             return;
         }
 

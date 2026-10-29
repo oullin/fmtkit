@@ -561,6 +561,20 @@ fn boundary_imports_admit_a_file() {
 }
 
 #[test]
+fn boundary_imports_admit_only_files_reserved_specifier_checks() {
+    let options = [json!({ "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary"] } })];
+    let code = "import { FailureBoundary } from '@observability';\ntry {} catch {}\nrequest.catch(handler);";
+
+    for file in ["src/domain.ts", "src/domain.tsx", "src/ts/domain.ts"] {
+        assert_sites(BOUNDARY, &options, file, code, &[]);
+    }
+
+    for file in ["src/domain.js", "src/domain.mjs", "src/domain.jsx", "src/domain.mts", "src/domain.cts", "src/domain", "ts"] {
+        assert_sites(BOUNDARY, &options, file, code, &[(2, 8), (3, 9)]);
+    }
+}
+
+#[test]
 fn boundary_imports_combine_with_allow() {
     let options = [json!({ "allow": ["**/*.test.ts"], "boundaries": { "modules": ["@observability"], "names": ["FailureBoundary"] } })];
     let catches = "try {} catch {}\nrequest.catch(handler);";

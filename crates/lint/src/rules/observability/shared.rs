@@ -155,8 +155,14 @@ impl Imports {
 }
 
 /// Whether the file statically imports one of `boundaries`' names from one of
-/// its modules. The import scan runs once per file.
+/// its modules. Only a file that `boundaries/reserved-specifier` checks can be
+/// admitted this way, so an import that rule never sees admits nothing. The
+/// import scan runs once per file.
 pub fn imports_boundary(ctx: &mut Context<'_, '_>, boundaries: &super::options::Boundaries) -> bool {
+    if !super::super::boundaries::authored(ctx.rel) {
+        return false;
+    }
+
     let imports = ctx.shared(Imports::new);
 
     boundaries.admits(imports.0.iter().map(|(module, name)| (module.as_str(), name.as_str())))

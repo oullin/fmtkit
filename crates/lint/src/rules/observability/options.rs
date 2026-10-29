@@ -94,6 +94,7 @@ impl Observer {
 pub struct BoundaryOptions {
     pub allow: Paths,
     pub translate: bool,
+    pub boundaries: Option<Boundaries>,
 }
 
 impl BoundaryOptions {
@@ -104,7 +105,7 @@ impl BoundaryOptions {
             [_] => return Err("expected an options object".into()),
             _ => return Err("expected at most one options object".into()),
         };
-        let mut options = Self { allow: Paths::default(), translate: true };
+        let mut options = Self { allow: Paths::default(), translate: true, boundaries: None };
 
         for (key, value) in object.into_iter().flatten() {
             match key.as_str() {
@@ -119,10 +120,70 @@ impl BoundaryOptions {
                     options.allow = Paths::parse(key, &patterns)?;
                 }
                 "translate" => options.translate = value.as_bool().ok_or("translate must be a boolean")?,
+                "boundaries" => options.boundaries = Some(Boundaries::parse(value)?),
                 _ => return Err(format!("unknown option {key:?}")),
             }
         }
 
         Ok(options)
     }
+}
+
+/// Files that import a failure boundary are boundaries themselves: a static,
+/// non-type import of one of `names` from one of `modules`, matched exactly.
+pub struct Boundaries {
+    pub modules: Vec<String>,
+    pub names: Vec<String>,
+}
+
+impl Boundaries {
+    fn parse(value: &Value) -> Result<Self, String> {
+        let object = value.as_object().ok_or("boundaries must be an object")?;
+        let mut modules = None;
+        let mut names = None;
+
+        for (key, value) in object {
+            match key.as_str() {
+                "modules" => modules = Some(non_blank_strings("boundaries.modules", value)?),
+                "names" => {
+                    let parsed = non_blank_strings("boundaries.names", value)?;
+
+                    if let Some(name) = parsed.iter().find(|name| !is_identifier_name(name)) {
+                        return Err(format!("invalid boundaries name {name:?}: expected an identifier name"));
+                    }
+
+                    names = Some(parsed);
+                }
+                _ => return Err(format!("unknown boundaries option {key:?}")),
+            }
+        }
+
+        Ok(Self { modules: modules.ok_or("boundaries.modules is required")?, names: names.ok_or("boundaries.names is required")? })
+    }
+
+    /// Whether one of the file's named value imports is a configured boundary.
+    pub fn admits<'i>(&self, imports: impl IntoIterator<Item = (&'i str, &'i str)>) -> bool {
+        imports.into_iter().any(|(module, name)| self.modules.iter().any(|m| m == module) && self.names.iter().any(|n| n == name))
+    }
+}
+
+fn non_blank_strings(key: &str, value: &Value) -> Result<Vec<String>, String> {
+    let invalid = || format!("{key} must be a non-empty array of unique non-blank strings");
+    let mut strings: Vec<String> = Vec::new();
+
+    for item in value.as_array().ok_or_else(invalid)? {
+        let item = item.as_str().ok_or_else(invalid)?;
+
+        if item.trim().is_empty() || strings.iter().any(|known| known == item) {
+            return Err(invalid());
+        }
+
+        strings.push(item.to_owned());
+    }
+
+    if strings.is_empty() {
+        return Err(invalid());
+    }
+
+    Ok(strings)
 }

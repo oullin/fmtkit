@@ -31,18 +31,18 @@ The rule leaves these alone:
 - A pattern built from a variable.
 - A class field.
 - Test files (`*.test.*` and `*.spec.*`).
-- A `g` or `y` literal held in a variable. Its `lastIndex` carries over between calls, so a fresh pattern per call is what lets an `exec` loop start from the beginning.
+- A `g` or `y` pattern held in a variable or passed to any other call. Its `lastIndex` carries over between calls, so a fresh pattern per call is what lets an `exec` loop start from the beginning.
 
-A `g` or `y` literal passed straight to a call, such as `text.replace(/a/gu, '')`, is still reported. `replace`, `split` and `matchAll` don't depend on the pattern's previous state, so it's safe to share.
+A `g` or `y` pattern is still reported where it's safe to share: as the pattern argument of `split`, which copies it, or, with the `g` flag, of `replace`, `replaceAll`, `match` or `matchAll`, which reset `lastIndex` first. For example, `text.replace(/a/gu, '')` is reported, but `text.match(/a/y)` isn't, because without `g` those methods read `lastIndex`.
 
-`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a pattern with the `g` or `y` flag: a literal, `new RegExp(source, flags)`, or a `const` in the same file bound to either. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them.
+`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a pattern with the `g` or `y` flag: a literal, `new RegExp(source, flags)`, or a `const` in the same file bound to either. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them. A scanner that sets the pattern's `lastIndex` earlier in the same function than the call is positioning the pattern on purpose, so that call isn't reported either.
 
 `perf/prefer-shared-pattern` reports a literal that a shared module already exports. Both options are required:
 
-| Option     | Meaning                                                                                  |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| `module`   | The import specifier named in the message, such as `@acme/patterns`.                     |
-| `patterns` | Each exported name mapped to its literal exactly as written, flags included: `'/\s+/u'`. |
+| Option     | Meaning                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module`   | The import specifier named in the message, such as `@acme/patterns`.                                                                           |
+| `patterns` | Each exported name mapped to its literal exactly as written, flags included: `'/\s+/u'`. A value without a body and a closing `/` is an error. |
 
 The declaration that defines a name, `export const WHITESPACE = /\s+/u;`, isn't reported. A literal only matches when its text is identical, so `/\s+/gu` doesn't match `/\s+/u`.
 
@@ -56,7 +56,7 @@ const url = new URL(base);
 return { origin: url.origin, host: url.hostname };
 ```
 
-Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. `new URL(next())` never matches another parse. `new URL(path, base)` and `new URL(base)` are different inputs.
+Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. Their text must be identical, and each name in them must refer to the same binding, so two loops that each declare `u` parse different inputs. `new URL(next())` never matches another parse. `new URL(path, base)` and `new URL(base)` are different inputs.
 
 ## Queries
 

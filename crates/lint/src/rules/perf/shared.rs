@@ -31,9 +31,41 @@ pub fn is_stateful_regex<'a>(ctx: &Context<'_, 'a>, expression: &Expression<'a>)
     }
 }
 
+/// The `g` and `y` flags a pattern carries, the two that keep `lastIndex`.
+#[derive(Clone, Copy)]
+pub struct StateFlags {
+    pub global: bool,
+    pub sticky: bool,
+}
+
+impl StateFlags {
+    pub fn of_literal(flags: RegExpFlags) -> Self {
+        Self { global: flags.contains(RegExpFlags::G), sticky: flags.contains(RegExpFlags::Y) }
+    }
+
+    /// The flags argument of `RegExp(pattern, flags)`, as a string or a
+    /// template without substitutions; none when it is absent or computed.
+    pub fn of_arguments(arguments: &[Argument<'_>]) -> Self {
+        let flags = match arguments.get(1) {
+            Some(Argument::StringLiteral(flags)) => Some(flags.value.as_str()),
+            Some(Argument::TemplateLiteral(template)) if template.expressions.is_empty() => {
+                template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()).map(oxc_ast::ast::Str::as_str)
+            }
+            _ => None,
+        }
+        .unwrap_or_default();
+
+        Self { global: flags.contains('g'), sticky: flags.contains('y') }
+    }
+
+    pub fn stateful(self) -> bool {
+        self.global || self.sticky
+    }
+}
+
 /// Whether the flags argument of `RegExp(pattern, flags)` holds `g` or `y`.
 fn stateful_flags(arguments: &[Argument<'_>]) -> bool {
-    matches!(arguments.get(1), Some(Argument::StringLiteral(flags)) if flags.value.contains(['g', 'y']))
+    StateFlags::of_arguments(arguments).stateful()
 }
 
 /// The initialiser of the `const` declaration `identifier` refers to, when

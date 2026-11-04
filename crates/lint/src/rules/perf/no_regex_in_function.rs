@@ -2,25 +2,29 @@
 //! function is built again on every call; a module-level constant is built
 //! once.
 //!
-//! A pattern held in a variable with the `g` or `y` flag is left alone: it
-//! keeps `lastIndex`, so a fresh one per call is what makes an `exec` loop
-//! start from the beginning. Passed straight to `replace`, `split` or
-//! `matchAll`, the flag is safe to share, so those are still reported.
-//! Test files are skipped.
+//! A pattern with the `g` or `y` flag keeps `lastIndex`, so a fresh one per
+//! call is what lets an `exec` loop start from the beginning. Such a pattern
+//! is reported only where sharing it is safe: as the pattern argument of
+//! `split`, which copies it, or, with the `g` flag, of `replace`,
+//! `replaceAll`, `match` or `matchAll`, which reset `lastIndex` first. Held in
+//! a variable or passed to any other call, it is left alone. Test files are
+//! skipped.
 
 use oxc_ast::AstKind;
-use oxc_ast::ast::RegExpFlags;
 use oxc_semantic::AstNode;
 use oxc_span::{GetSpan, Span};
 
 use super::super::anti_slop::shared::testing::is_test_file;
-use super::super::anti_slop::shared::{enclosing_function, is_global, parent};
+use super::super::anti_slop::shared::{enclosing_function, is_global, member, parent};
 use super::super::{Context, Rule};
-use super::shared::static_arguments;
+use super::shared::{StateFlags, static_arguments};
 
 pub const NAME: &str = "perf/no-regex-in-function";
 
 const MESSAGE: &str = "This regular expression is built on every call. Hoist it to a module-level constant.";
+
+/// The string methods that reset a `g` pattern's `lastIndex` before they use it.
+const GLOBAL_RESETTING: [&str; 4] = ["match", "matchAll", "replace", "replaceAll"];
 
 pub struct NoRegexInFunction;
 
@@ -43,21 +47,32 @@ impl Rule for NoRegexInFunction {
 }
 
 /// The span of a pattern the function could share: a literal, or `RegExp`
-/// called with static arguments.
+/// called with static arguments, when its flags make sharing it safe here.
 fn built_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>) -> Option<Span> {
-    match node.kind() {
-        AstKind::RegExpLiteral(literal) => {
-            let stateful = literal.regex.flags.intersects(RegExpFlags::G | RegExpFlags::Y);
-
-            (!stateful || is_call_argument(ctx, node)).then_some(literal.span)
+    let (span, flags) = match node.kind() {
+        AstKind::RegExpLiteral(literal) => (literal.span, StateFlags::of_literal(literal.regex.flags)),
+        AstKind::NewExpression(new) if is_global(ctx, &new.callee, "RegExp") && static_arguments(&new.arguments) => {
+            (new.span, StateFlags::of_arguments(&new.arguments))
         }
-        AstKind::NewExpression(new) if is_global(ctx, &new.callee, "RegExp") && static_arguments(&new.arguments) => Some(new.span),
-        AstKind::CallExpression(call) if is_global(ctx, &call.callee, "RegExp") && static_arguments(&call.arguments) => Some(call.span),
-        _ => None,
-    }
+        AstKind::CallExpression(call) if is_global(ctx, &call.callee, "RegExp") && static_arguments(&call.arguments) => {
+            (call.span, StateFlags::of_arguments(&call.arguments))
+        }
+        _ => return None,
+    };
+
+    (!flags.stateful() || is_shared_safely(ctx, node, flags)).then_some(span)
 }
 
-/// Whether `node` is passed straight to a call, as in `text.replace(/a/g, "b")`.
-fn is_call_argument(ctx: &Context<'_, '_>, node: &AstNode<'_>) -> bool {
-    matches!(parent(ctx.semantic.nodes(), node.id()).kind(), AstKind::CallExpression(call) if call.arguments.iter().any(|argument| argument.span() == node.kind().span()))
+/// Whether `node` is the pattern argument of a string method that does not
+/// read the pattern's `lastIndex`, as in `text.replace(/a/g, "b")`.
+fn is_shared_safely(ctx: &Context<'_, '_>, node: &AstNode<'_>, flags: StateFlags) -> bool {
+    let AstKind::CallExpression(call) = parent(ctx.semantic.nodes(), node.id()).kind() else {
+        return false;
+    };
+
+    if call.arguments.first().is_none_or(|argument| argument.span() != node.kind().span()) {
+        return false;
+    }
+
+    member(&call.callee).is_some_and(|(_, method)| method == "split" || (flags.global && GLOBAL_RESETTING.contains(&method)))
 }

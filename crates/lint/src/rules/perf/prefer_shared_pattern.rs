@@ -48,10 +48,8 @@ fn patterns(value: &Value) -> Result<FxHashMap<String, String>, String> {
     let mut by_literal = FxHashMap::default();
 
     for (name, literal) in object {
-        let literal = literal
-            .as_str()
-            .filter(|literal| literal.len() > 2 && literal.starts_with('/'))
-            .ok_or_else(|| format!("pattern \"{name}\" must be a literal such as \"/\\\\s+/u\""))?;
+        let literal =
+            literal.as_str().filter(|literal| is_literal(literal)).ok_or_else(|| format!("pattern \"{name}\" must be a literal such as \"/\\\\s+/u\""))?;
 
         if let Some(other) = by_literal.insert(literal.to_owned(), name.clone()) {
             return Err(format!("patterns \"{other}\" and \"{name}\" share the literal {literal}"));
@@ -93,4 +91,10 @@ impl Rule for PreferSharedPattern {
 /// Whether `node` is the value of the declaration that defines `name`.
 fn defines(ctx: &Context<'_, '_>, node: &AstNode<'_>, name: &str) -> bool {
     matches!(parent(ctx.semantic.nodes(), node.id()).kind(), AstKind::VariableDeclarator(declarator) if declarator.id.get_identifier_name().is_some_and(|declared| declared == name))
+}
+
+/// Whether `text` reads as a regex literal: an opening `/`, a non-empty body
+/// and a closing `/`, then any flags.
+fn is_literal(text: &str) -> bool {
+    text.strip_prefix('/').and_then(|rest| rest.rfind('/')).is_some_and(|closing| closing > 0)
 }

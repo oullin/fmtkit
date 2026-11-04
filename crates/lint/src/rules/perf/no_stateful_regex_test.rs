@@ -3,8 +3,9 @@
 //! so a shared one answers the same input differently on each call. This is
 //! the guard that makes hoisting patterns to module level safe.
 //!
-//! A scanner that sets the pattern's `lastIndex` in the same function, then
-//! calls `exec`, positions the pattern on purpose and is not reported.
+//! A scanner that sets the pattern's `lastIndex` earlier in the same function
+//! than the call positions the pattern on purpose and is not reported. An
+//! assignment after the call does not cover it.
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{AssignmentTarget, Expression};
@@ -33,7 +34,7 @@ impl Rule for NoStatefulRegexTest {
             return;
         };
 
-        if is_stateful_regex(ctx, object) && !positions_pattern(ctx, node, object) {
+        if is_stateful_regex(ctx, object) && !positions_pattern(ctx, node, object, call.span) {
             ctx.report(
                 call.span,
                 format!("`{method}` on a pattern with the `g` or `y` flag starts from the previous match's `lastIndex`. Use a pattern without those flags."),
@@ -43,8 +44,9 @@ impl Rule for NoStatefulRegexTest {
 }
 
 /// Whether the function around `node` (or the module, outside any function)
-/// assigns the pattern's `lastIndex`, as a scanner does before each `exec`.
-fn positions_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>, object: &Expression<'_>) -> bool {
+/// assigns the pattern's `lastIndex` before `call`, as a scanner does before
+/// each `exec`.
+fn positions_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>, object: &Expression<'_>, call: Span) -> bool {
     let Expression::Identifier(pattern) = strip_parens(object) else {
         return false;
     };
@@ -54,7 +56,7 @@ fn positions_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>, object: &Express
         .map_or_else(|| Span::new(0, ctx.source().len().try_into().unwrap_or(u32::MAX)), |function| function.kind().span());
 
     nodes.iter().any(|candidate| match candidate.kind() {
-        AstKind::AssignmentExpression(assignment) if scope.contains_inclusive(assignment.span) => matches!(
+        AstKind::AssignmentExpression(assignment) if scope.contains_inclusive(assignment.span) && assignment.span.end <= call.start => matches!(
             &assignment.left,
             AssignmentTarget::StaticMemberExpression(target)
                 if target.property.name == "lastIndex" && matches!(strip_parens(&target.object), Expression::Identifier(name) if name.name == pattern.name)

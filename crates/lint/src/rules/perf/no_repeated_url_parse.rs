@@ -4,12 +4,15 @@
 //!
 //! Only inputs that read the same value each time count: names, property
 //! reads, strings and templates without substitutions. `new URL(next())`
-//! never matches another parse.
+//! never matches another parse. Two inputs match only when their text is
+//! the same and each name in them refers to the same binding, so a loop
+//! variable reused by a second loop is a different input.
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{Argument, Expression};
-use oxc_semantic::{AstNode, NodeId};
+use oxc_semantic::{AstNode, NodeId, Scoping};
 use oxc_span::{GetSpan, Span};
+use oxc_syntax::symbol::SymbolId;
 use rustc_hash::FxHashSet;
 
 use super::super::anti_slop::shared::{enclosing_function, is_global, strip_parens};
@@ -18,6 +21,10 @@ use super::super::{Context, Rule};
 pub const NAME: &str = "perf/no-repeated-url-parse";
 
 const MESSAGE: &str = "This input is already parsed as a URL here. Parse it once and read every part from that `URL`.";
+
+/// One parse: its function (none at module level), its input text, and the
+/// binding each argument's root name refers to.
+type Parse<'s> = (Option<NodeId>, &'s str, Vec<Option<SymbolId>>);
 
 pub struct NoRepeatedUrlParse;
 
@@ -29,7 +36,7 @@ impl Rule for NoRepeatedUrlParse {
     fn run_once(&self, ctx: &mut Context<'_, '_>) {
         let semantic = ctx.semantic;
         let source = semantic.source_text();
-        let mut parsed: FxHashSet<(Option<NodeId>, &str)> = FxHashSet::default();
+        let mut parsed: FxHashSet<Parse<'_>> = FxHashSet::default();
         let mut repeats: Vec<Span> = Vec::new();
 
         for node in semantic.nodes().iter() {
@@ -47,7 +54,10 @@ impl Rule for NoRepeatedUrlParse {
 
             let scope = enclosing_function(semantic.nodes(), node.id(), false).map(AstNode::id);
 
-            if !parsed.insert((scope, &source[input.start as usize..input.end as usize])) {
+            let bindings =
+                new.arguments.iter().map(|argument| argument.as_expression().and_then(|expression| root_binding(semantic.scoping(), expression))).collect();
+
+            if !parsed.insert((scope, &source[input.start as usize..input.end as usize], bindings)) {
                 repeats.push(new.span);
             }
         }
@@ -71,5 +81,16 @@ fn is_stable(expression: &Expression<'_>) -> bool {
         Expression::TemplateLiteral(template) => template.expressions.is_empty(),
         Expression::StaticMemberExpression(member) => is_stable(&member.object),
         _ => false,
+    }
+}
+
+/// The binding the name at the root of `expression` refers to: `base` in
+/// `base` or `runtime` in `runtime.baseUrl`; none for literals, `this` and
+/// globals.
+fn root_binding(scoping: &Scoping, expression: &Expression<'_>) -> Option<SymbolId> {
+    match strip_parens(expression) {
+        Expression::Identifier(identifier) => scoping.get_reference(identifier.reference_id.get()?).symbol_id(),
+        Expression::StaticMemberExpression(member) => root_binding(scoping, &member.object),
+        _ => None,
     }
 }

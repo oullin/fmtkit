@@ -58,6 +58,19 @@ export class C {
     assert_sites(REGEX, &[], "a.test.ts", "it('x', () => { expect('a').toMatch(/a/u); });", &[]);
 }
 
+#[test]
+fn regex_in_function_shares_stateful_patterns_only_where_safe() {
+    let code = "\
+export function f(s: string, check: (r: RegExp) => boolean) {
+\tconst re = new RegExp('a', 'g');
+\tconst sticky = RegExp(`b`, `y`);
+\treturn [check(/c/g), s.match(/d/y), s.split(/,/y), s.match(/e/g), re, sticky];
+}
+";
+
+    assert_sites(REGEX, &[], "a.ts", code, &[(4, 46), (4, 61)]);
+}
+
 const STATEFUL: &str = "perf/no-stateful-regex-test";
 
 #[test]
@@ -104,6 +117,20 @@ export const other = (text: string) => TOKEN.exec(text);
     assert_sites(STATEFUL, &[], "a.ts", code, &[(6, 40)]);
 }
 
+#[test]
+fn stateful_regex_test_needs_the_position_set_before_the_call() {
+    let code = "\
+const TOKEN = /\\w+/y;
+export function scan(text: string, at: number) {
+\tconst match = TOKEN.exec(text);
+\tTOKEN.lastIndex = at;
+\treturn match;
+}
+";
+
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(3, 16)]);
+}
+
 const SHARED: &str = "perf/prefer-shared-pattern";
 
 fn shared_options() -> Vec<Value> {
@@ -141,6 +168,8 @@ fn prefer_shared_pattern_validates_its_options() {
     assert!(error(json!({ "patterns": { "A": "/a/" } })).is_some_and(|e| e.contains("\"module\" is required")));
     assert!(error(json!({ "module": "m", "patterns": {} })).is_some_and(|e| e.contains("at least one pattern")));
     assert!(error(json!({ "module": "m", "patterns": { "A": "a" } })).is_some_and(|e| e.contains("must be a literal")));
+    assert!(error(json!({ "module": "m", "patterns": { "A": "/abc" } })).is_some_and(|e| e.contains("must be a literal")));
+    assert!(error(json!({ "module": "m", "patterns": { "A": "//" } })).is_some_and(|e| e.contains("must be a literal")));
     assert!(error(json!({ "module": "m", "patterns": { "A": "/a/", "B": "/a/" } })).is_some_and(|e| e.contains("share the literal")));
     assert!(error(json!({ "module": "m", "patterns": { "A": "/a/" }, "extra": true })).is_some_and(|e| e.contains("unknown option")));
 }
@@ -171,6 +200,18 @@ export function c(next: () => string) {
 }
 export function d(path: string, base: string) {
 \treturn [new URL(path, base).href, new URL(base).href];
+}
+";
+
+    assert_sites(URL_PARSE, &[], "a.ts", code, &[]);
+}
+
+#[test]
+fn repeated_url_parse_keeps_bindings_with_the_same_name_apart() {
+    let code = "\
+export function f(first: string[], second: string[]) {
+\tfor (const u of first) new URL(u).origin;
+\tfor (const u of second) new URL(u).host;
 }
 ";
 

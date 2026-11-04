@@ -2,11 +2,16 @@
 //! with the `g` or `y` flag. Such a pattern keeps `lastIndex` between calls,
 //! so a shared one answers the same input differently on each call. This is
 //! the guard that makes hoisting patterns to module level safe.
+//!
+//! A scanner that sets the pattern's `lastIndex` in the same function, then
+//! calls `exec`, positions the pattern on purpose and is not reported.
 
 use oxc_ast::AstKind;
+use oxc_ast::ast::{AssignmentTarget, Expression};
 use oxc_semantic::AstNode;
+use oxc_span::{GetSpan, Span};
 
-use super::super::anti_slop::shared::member;
+use super::super::anti_slop::shared::{enclosing_function, member, strip_parens};
 use super::super::{Context, Rule};
 use super::shared::is_stateful_regex;
 
@@ -28,11 +33,32 @@ impl Rule for NoStatefulRegexTest {
             return;
         };
 
-        if is_stateful_regex(ctx, object) {
+        if is_stateful_regex(ctx, object) && !positions_pattern(ctx, node, object) {
             ctx.report(
                 call.span,
                 format!("`{method}` on a pattern with the `g` or `y` flag starts from the previous match's `lastIndex`. Use a pattern without those flags."),
             );
         }
     }
+}
+
+/// Whether the function around `node` (or the module, outside any function)
+/// assigns the pattern's `lastIndex`, as a scanner does before each `exec`.
+fn positions_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>, object: &Expression<'_>) -> bool {
+    let Expression::Identifier(pattern) = strip_parens(object) else {
+        return false;
+    };
+
+    let nodes = ctx.semantic.nodes();
+    let scope = enclosing_function(nodes, node.id(), false)
+        .map_or_else(|| Span::new(0, ctx.source().len().try_into().unwrap_or(u32::MAX)), |function| function.kind().span());
+
+    nodes.iter().any(|candidate| match candidate.kind() {
+        AstKind::AssignmentExpression(assignment) if scope.contains_inclusive(assignment.span) => matches!(
+            &assignment.left,
+            AssignmentTarget::StaticMemberExpression(target)
+                if target.property.name == "lastIndex" && matches!(strip_parens(&target.object), Expression::Identifier(name) if name.name == pattern.name)
+        ),
+        _ => false,
+    })
 }

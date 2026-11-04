@@ -48,7 +48,10 @@ fn patterns(value: &Value) -> Result<FxHashMap<String, String>, String> {
     let mut by_literal = FxHashMap::default();
 
     for (name, literal) in object {
-        let literal = literal.as_str().filter(|literal| literal.len() > 2 && literal.starts_with('/')).ok_or_else(|| format!("pattern \"{name}\" must be a literal such as \"/\\\\s+/u\""))?;
+        let literal = literal
+            .as_str()
+            .filter(|literal| literal.len() > 2 && literal.starts_with('/'))
+            .ok_or_else(|| format!("pattern \"{name}\" must be a literal such as \"/\\\\s+/u\""))?;
 
         if let Some(other) = by_literal.insert(literal.to_owned(), name.clone()) {
             return Err(format!("patterns \"{other}\" and \"{name}\" share the literal {literal}"));

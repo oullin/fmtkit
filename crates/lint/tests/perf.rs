@@ -90,6 +90,20 @@ export const a = (s: string) => RUNS.test(s) || local.test(s);
     assert_sites(STATEFUL, &[], "a.ts", code, &[]);
 }
 
+#[test]
+fn stateful_regex_test_leaves_scanners_that_position_the_pattern() {
+    let code = "\
+const TOKEN = /\\w+/y;
+export function scan(text: string, at: number) {
+\tTOKEN.lastIndex = at;
+\treturn TOKEN.exec(text);
+}
+export const other = (text: string) => TOKEN.exec(text);
+";
+
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(6, 40)]);
+}
+
 const SHARED: &str = "perf/prefer-shared-pattern";
 
 fn shared_options() -> Vec<Value> {
@@ -118,7 +132,11 @@ fn prefer_shared_pattern_leaves_the_defining_declaration() {
 
 #[test]
 fn prefer_shared_pattern_validates_its_options() {
-    let error = |options: Value| fmtkit_lint::Linter::new(&fmtkit_config::Lint { bundled: false, rules: [(SHARED.to_owned(), json!(["error", options]))].into(), ignore: Vec::new() }).err().map(|e| e.to_string());
+    let error = |options: Value| {
+        fmtkit_lint::Linter::new(&fmtkit_config::Lint { bundled: false, rules: [(SHARED.to_owned(), json!(["error", options]))].into(), ignore: Vec::new() })
+            .err()
+            .map(|e| e.to_string())
+    };
 
     assert!(error(json!({ "patterns": { "A": "/a/" } })).is_some_and(|e| e.contains("\"module\" is required")));
     assert!(error(json!({ "module": "m", "patterns": {} })).is_some_and(|e| e.contains("at least one pattern")));

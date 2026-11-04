@@ -69,7 +69,9 @@ impl Rule for NoQueryInLoop {
         if is_in_loop_body(ctx, node, awaited.span) {
             ctx.report(
                 awaited.span,
-                format!("`{name}` is queried once per loop iteration. Read every item in one query (`inArray`, a join, or one `sql` statement) before the loop."),
+                format!(
+                    "`{name}` is queried once per loop iteration. Read every item in one query (`inArray`, a join, or one `sql` statement) before the loop."
+                ),
             );
         }
     }

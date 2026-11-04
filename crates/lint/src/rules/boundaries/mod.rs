@@ -8,7 +8,7 @@ use oxc_span::Span;
 
 use super::{Context, Factory, Rule};
 pub(super) use options::Paths;
-use options::{Options, matches};
+use options::{Options, admits, matches};
 use shared::Facts;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -23,6 +23,9 @@ enum Kind {
     ZodInfer,
     NullableUnion,
     ReservedSpecifier,
+    ContractsSegment,
+    RouteLiteral,
+    SourceRoot,
 }
 
 /// Whether the boundary rules check this repository-relative path: an
@@ -42,7 +45,13 @@ pub const RULES: &[(&str, Factory)] = &[
     ("boundaries/zod-infer", |options| build(Kind::ZodInfer, options)),
     ("boundaries/nullable-union", |options| build(Kind::NullableUnion, options)),
     ("boundaries/reserved-specifier", |options| build(Kind::ReservedSpecifier, options)),
+    ("boundaries/contracts-segment", |options| build(Kind::ContractsSegment, options)),
+    ("boundaries/route-literal", |options| build(Kind::RouteLiteral, options)),
+    ("boundaries/source-root", |options| build(Kind::SourceRoot, options)),
 ];
+
+const CONTRACTS: &str = "a contracts segment may import only contracts and its allowed modules";
+const ROUTES: &str = "route path string literals are forbidden; reference the route table";
 
 fn build(kind: Kind, options: &[serde_json::Value]) -> Result<Box<dyn Rule>, String> {
     Ok(Box::new(Boundary { kind, options: Options::parse(options, kind)? }))
@@ -60,6 +69,14 @@ impl Rule for Boundary {
 
     fn run_once(&self, ctx: &mut Context<'_, '_>) {
         if self.options.exempt.matches(ctx.rel) || !authored(ctx.rel) {
+            return;
+        }
+
+        // A path rule needs no syntax facts.
+        if self.kind == Kind::SourceRoot {
+            if let Some(message) = self.outside_roots(ctx.rel) {
+                ctx.report(Span::new(0, 0), message);
+            }
             return;
         }
 
@@ -129,9 +146,61 @@ impl Rule for Boundary {
                     }
                 }
             }
+            Kind::ContractsSegment if self.options.segments.matches(ctx.rel) => {
+                let test = is_test(ctx.rel);
+                let message = self.options.message.as_deref().unwrap_or(CONTRACTS);
+
+                for (span, specifier) in &facts.specifiers {
+                    let allowed = names_contracts(specifier) || admits(&self.options.modules, specifier) || (test && admits(&self.options.tests, specifier));
+
+                    if !allowed {
+                        ctx.report(*span, message);
+                    }
+                }
+            }
+            Kind::RouteLiteral => {
+                let message = self.options.message.as_deref().unwrap_or(ROUTES);
+
+                for (span, text) in &facts.strings {
+                    if self
+                        .options
+                        .prefixes
+                        .iter()
+                        .any(|prefix| text.strip_prefix(prefix.as_str()).is_some_and(|rest| rest.is_empty() || rest.starts_with('/')))
+                    {
+                        ctx.report(*span, message);
+                    }
+                }
+            }
             _ => {}
         }
     }
+}
+
+impl Boundary {
+    /// The finding for a file that sits in a configured package but outside
+    /// that package's source folders. The longest matching package wins, so
+    /// a package nested in another is judged by its own folders.
+    fn outside_roots(&self, rel: &str) -> Option<String> {
+        let segments: Vec<_> = rel.split('/').collect();
+        let package = (1..segments.len()).rev().find(|&depth| self.options.packages.matches(&segments[..depth].join("/")))?;
+
+        if self.options.roots.iter().any(|root| root == segments[package]) {
+            return None;
+        }
+
+        Some(format!("{rel} is outside the source folders of package {}: {}", segments[..package].join("/"), self.options.roots.join(", ")))
+    }
+}
+
+/// A module specifier with a `contracts` path segment, such as
+/// `@scope/name/contracts`, `#name/feature/contracts/wire` or `#contracts`.
+fn names_contracts(specifier: &str) -> bool {
+    specifier.split('/').any(|segment| segment.trim_start_matches(['#', '@']) == "contracts")
+}
+
+fn is_test(rel: &str) -> bool {
+    rel.ends_with(".test.ts") || rel.ends_with(".test.tsx")
 }
 
 fn report(ctx: &mut Context<'_, '_>, sites: &[Span], message: &str) {

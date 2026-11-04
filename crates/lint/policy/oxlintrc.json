@@ -20,6 +20,9 @@
     "boundaries/zod-infer": "off",
     "boundaries/nullable-union": "off",
     "boundaries/reserved-specifier": "off",
+    "boundaries/contracts-segment": "off",
+    "boundaries/route-literal": "off",
+    "boundaries/source-root": "off",
 
 		"@nkzw/ensure-relay-types": "error",
 		"@nkzw/no-instanceof": "error",

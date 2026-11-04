@@ -10,6 +10,13 @@ pub struct Options {
     pub exempt: Paths,
     pub names: Vec<String>,
     pub rules: Vec<Specifier>,
+    pub segments: Paths,
+    pub modules: Vec<String>,
+    pub tests: Vec<String>,
+    pub prefixes: Vec<String>,
+    pub message: Option<String>,
+    pub packages: Paths,
+    pub roots: Vec<String>,
 }
 
 impl Options {
@@ -21,14 +28,54 @@ impl Options {
             _ => return Err("expected at most one options object".into()),
         };
         let mut options = Self::default();
+        let mut required = Vec::new();
 
         for (key, value) in object.into_iter().flatten() {
-            match key.as_str() {
-                "exempt" => options.exempt = Paths::parse(key, &strings(key, value)?)?,
-                "names" if kind == Kind::ReservedInternalName => options.names = strings(key, value)?,
-                "rules" if kind == Kind::ReservedSpecifier => options.rules = specifiers(value)?,
+            match (key.as_str(), kind) {
+                ("exempt", _) => options.exempt = Paths::parse(key, &strings(key, value)?)?,
+                ("names", Kind::ReservedInternalName) => options.names = strings(key, value)?,
+                ("rules", Kind::ReservedSpecifier) => options.rules = specifiers(value)?,
+                ("segments", Kind::ContractsSegment) | ("packages", Kind::SourceRoot) => {
+                    let patterns = strings(key, value)?;
+                    let paths = Paths::parse(key, &patterns)?;
+
+                    if !patterns.is_empty() {
+                        required.push(key.as_str());
+                    }
+                    if kind == Kind::SourceRoot {
+                        options.packages = paths;
+                    } else {
+                        options.segments = paths;
+                    }
+                }
+                ("modules", Kind::ContractsSegment) => options.modules = names(key, value)?,
+                ("tests", Kind::ContractsSegment) => options.tests = names(key, value)?,
+                ("prefixes", Kind::RouteLiteral) => options.prefixes = names(key, value)?,
+                ("roots", Kind::SourceRoot) => {
+                    options.roots = names(key, value)?;
+
+                    if options.roots.iter().any(|root| root.contains('/')) {
+                        return Err("roots: an entry names a nested folder; list top-level folder names".into());
+                    }
+                }
+                ("message", Kind::ContractsSegment | Kind::RouteLiteral) => {
+                    options.message =
+                        Some(value.as_str().filter(|message| !message.trim().is_empty()).map(str::to_owned).ok_or("message must be a non-blank string")?);
+                }
                 _ => return Err(format!("unknown option {key:?}")),
             }
+        }
+
+        let missing = match kind {
+            Kind::ContractsSegment if !required.contains(&"segments") => Some("segments"),
+            Kind::RouteLiteral if options.prefixes.is_empty() => Some("prefixes"),
+            Kind::SourceRoot if !required.contains(&"packages") => Some("packages"),
+            Kind::SourceRoot if options.roots.is_empty() => Some("roots"),
+            _ => None,
+        };
+
+        if let Some(key) = missing {
+            return Err(format!("{key} is required and must not be empty"));
         }
 
         if kind == Kind::ReservedInternalName && options.names.is_empty() {
@@ -49,6 +96,17 @@ fn strings(key: &str, value: &Value) -> Result<Vec<String>, String> {
         .iter()
         .map(|item| item.as_str().map(str::to_owned).ok_or_else(|| format!("{key} must be an array of strings")))
         .collect()
+}
+
+/// A list of non-blank strings, such as module names or folder names.
+fn names(key: &str, value: &Value) -> Result<Vec<String>, String> {
+    let values = strings(key, value)?;
+
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(format!("{key}: an entry is blank"));
+    }
+
+    Ok(values)
 }
 
 #[derive(Default)]
@@ -175,4 +233,13 @@ fn specifiers(value: &Value) -> Result<Vec<Specifier>, String> {
 
 pub fn matches(modules: &[String], specifier: &str) -> bool {
     modules.iter().any(|module| specifier == module || specifier.strip_prefix(module).is_some_and(|suffix| suffix.starts_with('/')))
+}
+
+/// Like [`matches`], except that an entry ending in `*` matches every specifier
+/// that starts with the text before the star, such as `node:*` or `@scope-*`.
+pub fn admits(modules: &[String], specifier: &str) -> bool {
+    modules.iter().any(|module| match module.strip_suffix('*') {
+        Some(prefix) => specifier.starts_with(prefix),
+        None => matches(std::slice::from_ref(module), specifier),
+    })
 }

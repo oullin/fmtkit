@@ -379,6 +379,9 @@ fn options_reject_unknown_keys_wrong_types_and_unexpanded_packages() {
         let base = match *name {
             "boundaries/reserved-internal-name" => json!({"names": ["lifecycle"]}),
             "boundaries/reserved-specifier" => specifier_options(),
+            "boundaries/contracts-segment" => json!({"segments": ["src/**/contracts/**"]}),
+            "boundaries/route-literal" => json!({"prefixes": ["/api"]}),
+            "boundaries/source-root" => json!({"packages": ["packages/*"], "roots": ["src"]}),
             _ => json!({}),
         };
         for invalid in [
@@ -428,6 +431,28 @@ fn options_reject_unknown_keys_wrong_types_and_unexpanded_packages() {
         rule.as_object_mut().unwrap().extend(patch.as_object().unwrap().clone());
         assert_invalid("boundaries/reserved-specifier", vec![json!({"rules": [rule]})]);
     }
+    for invalid in [json!({}), json!({"segments": []}), json!({"segments": ["src/**"], "modules": [""]}), json!({"segments": ["src/**"], "tests": "vitest"})] {
+        assert_invalid("boundaries/contracts-segment", vec![invalid]);
+    }
+    for invalid in [
+        json!({}),
+        json!({"prefixes": []}),
+        json!({"prefixes": [" "]}),
+        json!({"prefixes": ["/api"], "message": ""}),
+        json!({"prefixes": ["/api"], "modules": []}),
+    ] {
+        assert_invalid("boundaries/route-literal", vec![invalid]);
+    }
+    for invalid in [
+        json!({"roots": ["src"]}),
+        json!({"packages": ["packages/*"]}),
+        json!({"packages": [], "roots": ["src"]}),
+        json!({"packages": ["packages/*"], "roots": []}),
+        json!({"packages": ["packages/*"], "roots": ["src/core"]}),
+        json!({"packages": ["packages/*"], "roots": ["src"], "message": "custom"}),
+    ] {
+        assert_invalid("boundaries/source-root", vec![invalid]);
+    }
     let duplicate = json!({"name": "private", "match": ["effect"], "message": "private module"});
     assert_invalid("boundaries/reserved-specifier", vec![json!({"rules": [duplicate, duplicate]})]);
 }
@@ -442,4 +467,127 @@ fn assert_invalid(name: &str, options: Vec<Value>) {
     if json!(setting).to_string().contains("{package}") {
         assert!(error.to_string().contains("{package} is not supported"), "{error}");
     }
+}
+
+const CONTRACTS: &str = "a contracts segment may import only contracts and its allowed modules";
+const ROUTES: &str = "route path string literals are forbidden; reference the route table";
+
+fn contracts_options() -> Value {
+    json!({
+        "segments": ["packages/*/src/**/contracts/**", "connector/src/**/contracts/**", "!packages/workspace/src/contracts/**"],
+        "modules": ["@kernel", "@primitives", "@omniyat-collection/*", "zod"],
+        "tests": ["node:*", "vitest", "@testing", "#fixtures"],
+    })
+}
+
+#[test]
+fn contracts_segments_import_only_contracts_and_allowed_modules() {
+    let code = "\
+import { Money } from '@kernel/money';
+import { z } from 'zod';
+import { Parse } from '@omniyat-collection/framework/support/parse';
+import { Wire } from '@living/contracts';
+import { Own } from '#connector/core/contracts';
+import { Root } from '#contracts';
+import { ConnectorBoxes } from '@db';
+import type { Ports } from '#connector/interface/ports';
+import { readFile } from 'node:fs';
+import { kernelish } from '@kernelish';
+";
+    let options = [contracts_options()];
+
+    assert_findings(
+        "contracts-segment",
+        &options,
+        "connector/src/core/contracts/change.ts",
+        code,
+        &[(7, CONTRACTS), (8, CONTRACTS), (9, CONTRACTS), (10, CONTRACTS)],
+    );
+    // Test files may also import the configured test modules.
+    assert_findings("contracts-segment", &options, "connector/src/core/contracts/change.test.ts", code, &[(7, CONTRACTS), (8, CONTRACTS), (10, CONTRACTS)]);
+    // Files outside a segment, and segments re-excluded with `!`, are not checked.
+    assert_findings("contracts-segment", &options, "connector/src/core/outgoing/change.ts", code, &[]);
+    assert_findings("contracts-segment", &options, "packages/workspace/src/contracts/reader.ts", code, &[]);
+}
+
+#[test]
+fn contracts_segment_messages_can_be_configured() {
+    let mut options = contracts_options();
+    options
+        .as_object_mut()
+        .unwrap()
+        .insert("message".into(), json!("a contracts segment may import only sibling contracts, kernel, primitives, Framework and zod"));
+
+    assert_findings(
+        "contracts-segment",
+        &[options],
+        "packages/env/src/contracts/secrets.ts",
+        "import { Rows } from '@db';",
+        &[(1, "a contracts segment may import only sibling contracts, kernel, primitives, Framework and zod")],
+    );
+}
+
+#[test]
+fn route_literals_cover_strings_templates_and_types() {
+    let code = "\
+const path = '/api/v1/users';
+const root = \"/api\";
+const nested = `/api/v1/${id}`;
+type Route = '/api/qa';
+const other = '/apiary';
+const plain = 'api/v1';
+const later = `prefix/${id}/api/v1`;
+";
+    let options = [json!({"prefixes": ["/api"]})];
+
+    assert_findings("route-literal", &options, "src/example.ts", code, &[(1, ROUTES), (2, ROUTES), (3, ROUTES), (4, ROUTES)]);
+    assert_findings(
+        "route-literal",
+        &[json!({"prefixes": ["/api"], "exempt": ["packages/kernel/src/routes/**"]})],
+        "packages/kernel/src/routes/router.ts",
+        code,
+        &[],
+    );
+    assert_findings(
+        "route-literal",
+        &[json!({"prefixes": ["/api"], "message": "route path string literals are forbidden; reference a Router member"})],
+        "src/example.ts",
+        "fetch('/api/health');",
+        &[(1, "route path string literals are forbidden; reference a Router member")],
+    );
+}
+
+#[test]
+fn source_roots_judge_each_file_by_its_innermost_package() {
+    let options = [json!({"packages": ["packages/*", "connector", "connector/api"], "roots": ["src", "scripts", "tests"]})];
+    let outside = |file: &str, package: &str| format!("{file} is outside the source folders of package {package}: src, scripts, tests");
+
+    for file in [
+        "packages/kernel/src/money.ts",
+        "packages/kernel/scripts/build.ts",
+        "connector/src/core/link.ts",
+        "connector/api/src/worker.ts",
+        "connector/api/tests/worker.test.ts",
+        "apps/api/core/worker.ts",
+        "index.ts",
+    ] {
+        assert_findings("source-root", &options, file, "export const value = 1;", &[]);
+    }
+    for (file, package) in [
+        ("connector/core/link.ts", "connector"),
+        ("connector/index.ts", "connector"),
+        ("connector/api/worker.ts", "connector/api"),
+        ("packages/kernel/money.tsx", "packages/kernel"),
+    ] {
+        let message = outside(file, package);
+        assert_findings("source-root", &options, file, "export const value = 1;", &[(1, message.as_str())]);
+    }
+    // Configuration files at a package root are exempted by path.
+    assert_findings(
+        "source-root",
+        &[json!({"packages": ["connector"], "roots": ["src"], "exempt": ["**/vitest.config.ts"]})],
+        "connector/vitest.config.ts",
+        "export default {};",
+        &[],
+    );
 }

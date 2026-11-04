@@ -21,6 +21,8 @@ pub struct Facts {
     pub zod_helpers: Vec<Span>,
     pub infer_imports: Vec<Span>,
     pub nullish_unions: Vec<Span>,
+    /// String literals and the head text of template literals, in source order.
+    pub strings: Vec<(Span, String)>,
 }
 
 impl Facts {
@@ -63,6 +65,12 @@ impl Facts {
                         && matches!(member.property.name.as_str(), "get" | "set")
                     {
                         facts.reflect_calls.push(call.span);
+                    }
+                }
+                AstKind::StringLiteral(literal) => facts.strings.push((literal.span, literal.value.to_string())),
+                AstKind::TemplateLiteral(template) => {
+                    if let Some(head) = template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()) {
+                        facts.strings.push((template.span, head.to_string()));
                     }
                 }
                 AstKind::TSAnyKeyword(keyword) => facts.anys.push(keyword.span),

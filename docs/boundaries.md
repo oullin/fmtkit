@@ -1,6 +1,6 @@
 # TypeScript boundary rules
 
-The native `boundaries/*` rules port the single-file checks from Omniyat's `oc verify boundaries`. All ten rules are off in the bundled policy. Enable them under `[lint.rules]` in `fmtkit.toml`.
+The native `boundaries/*` rules port the single-file checks from Omniyat's `oc verify boundaries`, and from the Collections domain checks that `oc verify` runs as a plugin. All thirteen rules are off in the bundled policy. Enable them under `[lint.rules]` in `fmtkit.toml`.
 
 ## Rules
 
@@ -16,6 +16,9 @@ The native `boundaries/*` rules port the single-file checks from Omniyat's `oc v
 | `boundaries/zod-infer`               | Type references to exactly `z.infer`, `z.input`, or `z.output`, and declaration-level type-only named imports whose imported or local name is `infer`, from any module. Inline `import { type infer }` and namespace imports are accepted.                                                          |
 | `boundaries/nullable-union`          | Each union with a direct `null` or `undefined` member. A lone nullish type, a parenthesised member such as `string \| (null)`, and nullish types inside objects are accepted. Nested unions are checked separately.                                                                                 |
 | `boundaries/reserved-specifier`      | Imports matching a configured module prefix outside its allowed files, unless the module matches an exception.                                                                                                                                                                                      |
+| `boundaries/contracts-segment`       | Imports in a file under a configured contracts segment, unless the module names a `contracts` folder or is an allowed module. Test files may also import the configured test modules.                                                                                                               |
+| `boundaries/route-literal`           | String literals, string literal types, and template literal heads that equal a configured route prefix or continue it after a `/`. `/apiary` and `api/v1` are accepted for the prefix `/api`.                                                                                                       |
+| `boundaries/source-root`             | A file inside a configured package directory but outside that package's source folders, such as `connector/core/link.ts` when the only source folder is `src`. Reports once per file, on line 1.                                                                                                    |
 
 Module specifiers come from static imports, re-exports, external `import = require(...)` declarations, bare `require(...)` calls, and dynamic `import(...)`. String literals and templates without substitutions count. Other strings and type-level `import('module')` queries do not. A shadowed `require` still counts because the source check uses syntax rather than name resolution.
 
@@ -25,11 +28,18 @@ These checks retain the source extractor's treatment of parentheses. For example
 
 Every rule accepts at most one options object. Unknown keys and invalid option types are errors. Boundary rules report findings without changing source.
 
-| Option   | Rules                    | Meaning                                                                                                                                 |
-| -------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `exempt` | All                      | Ordered path globs, default `[]`. A matching positive entry skips the file. A leading `!` re-includes it. The last matching entry wins. |
-| `names`  | `reserved-internal-name` | Required, non-empty list of reserved strings. Messages preserve each configured spelling.                                               |
-| `rules`  | `reserved-specifier`     | Required, non-empty list of specifier entries. Each entry has `name`, `match`, optional `except`, optional `allow`, and `message`.      |
+| Option     | Rules                                | Meaning                                                                                                                                 |
+| ---------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `exempt`   | All                                  | Ordered path globs, default `[]`. A matching positive entry skips the file. A leading `!` re-includes it. The last matching entry wins. |
+| `names`    | `reserved-internal-name`             | Required, non-empty list of reserved strings. Messages preserve each configured spelling.                                               |
+| `rules`    | `reserved-specifier`                 | Required, non-empty list of specifier entries. Each entry has `name`, `match`, optional `except`, optional `allow`, and `message`.      |
+| `segments` | `contracts-segment`                  | Required, non-empty ordered path globs that mark contracts-segment files. A leading `!` re-excludes a path.                             |
+| `modules`  | `contracts-segment`                  | Module names a contracts segment may import, default `[]`.                                                                              |
+| `tests`    | `contracts-segment`                  | Further module names that `*.test.ts` and `*.test.tsx` files in a segment may import, default `[]`.                                     |
+| `prefixes` | `route-literal`                      | Required, non-empty list of route prefixes, such as `/api`.                                                                             |
+| `message`  | `contracts-segment`, `route-literal` | Replaces the default finding message.                                                                                                   |
+| `packages` | `source-root`                        | Required, non-empty ordered path globs that name package directories, such as `packages/*`.                                             |
+| `roots`    | `source-root`                        | Required, non-empty list of top-level folder names that hold a package's code, such as `src` and `scripts`.                             |
 
 Path globs match the whole repository-relative path, with forward slashes. `*` stays within a segment, `**` spans zero or more directories, and `?` and character classes match Unicode characters. Classes use Go’s `[^a]` negation; `[!a]` contains the literal characters `!` and `a`. A bare filename matches that root file; use `**/filename.ts` for any directory. Braces are literal. Blank and malformed patterns are errors.
 
@@ -38,6 +48,10 @@ Path globs match the whole repository-relative path, with forward slashes. `*` s
 Each specifier entry requires a unique, non-blank `name`, a non-empty `match` list, and a non-blank `message`. Built-in boundary rule names are reserved. `match` and `except` contain module names, not globs: `effect` matches `effect` and `effect/Layer`, but does not match `effection`. `allow` has the same ordered path semantics as `exempt`. An outer `exempt` skips every specifier entry for that file.
 
 Configured findings use `boundaries/reserved-specifier/<name>` as their diagnostic code and preserve `message` verbatim. Severity and suppression use the configured `boundaries/reserved-specifier` rule. Standard token-backed comments such as `// eslint-disable-next-line boundaries/reserved-specifier` work; comment-like text in strings does not suppress findings.
+
+In `modules` and `tests`, an entry is a module name with the same matching as `match`, except that an entry ending in `*` matches every module that starts with the text before the star: `node:*` matches `node:fs`, and `@framework-*` matches `@framework-go/codec`. A module also passes `contracts-segment` when one of its `/` segments, without a leading `#` or `@`, is `contracts`: `@living/contracts`, `#connector/core/contracts`, and `#contracts` all pass.
+
+`source-root` judges a file by the longest package directory that contains it, so `connector/api/src/worker.ts` passes with the packages `connector` and `connector/api` and the root `src`. Files outside every package are not checked. Use `exempt` for configuration files at a package root, such as `**/vitest.config.ts`.
 
 ## Translate Collections configuration
 
@@ -161,6 +175,67 @@ ignore = [
 ```
 
 An `oc` allowlist entry becomes a final `exempt` path for its built-in rule. For a specifier entry, append the path to that entry's `allow` list so other entries continue to run. fmtkit does not accept `allowlist` or `frozen` options.
+
+## Translate the Collections domain rules
+
+The `contracts-segment` and `route-literal` rules port Collections' `domain-boundaries.contracts-segment` and `domain-boundaries.route-literal` checks from `packages/workspace/src/boundaries/rules/`. `source-root` has no `oc` counterpart; it keeps each registered package's code under its source folders. Expand the brace lists of package directories: braces are literal in these globs.
+
+```toml
+"boundaries/contracts-segment" = ["error", {
+	segments = [
+		"packages/*/src/**/contracts/**",
+		"identity/auth/src/**/contracts/**",
+		"handover/src/**/contracts/**",
+		"identity/src/**/contracts/**",
+		"living/src/**/contracts/**",
+		"portfolio/src/**/contracts/**",
+		"post-handover/src/**/contracts/**",
+		"pre-handover/src/**/contracts/**",
+		"database/src/**/contracts/**",
+		"connector/src/**/contracts/**",
+		"connector/api/src/**/contracts/**",
+		"apps/*/src/**/contracts/**",
+		# Its contracts folder reads contracts; it declares no wire contract.
+		"!packages/workspace/src/**",
+	],
+	modules = ["@kernel", "@omniyat/kernel", "@primitives", "@omniyat/primitives", "@omniyat-collection/*", "@framework-*", "zod"],
+	tests = ["node:*", "vitest", "yaml", "@testing", "@omniyat/testing", "#fixtures", "#handover/fixtures", "#identity/fixtures", "#living/fixtures", "#portfolio/fixtures", "#post-handover/fixtures", "#pre-handover/fixtures"],
+	message = "a contracts segment may import only sibling contracts, kernel, primitives, Framework and zod",
+}]
+"boundaries/route-literal" = ["error", {
+	prefixes = ["/api"],
+	message = "route path string literals are forbidden; reference a Router member",
+	exempt = [
+		"**/*.test.ts",
+		"**/*.test.tsx",
+		# The Router modules own the canonical paths.
+		"packages/kernel/src/routes/**",
+		"packages/providers/src/routes/**",
+		"packages/*/src/contracts/routes/**",
+		"packages/*/src/contracts/routes.ts",
+		"identity/auth/src/contracts/routes/**",
+		"identity/auth/src/contracts/routes.ts",
+		"connector/src/core/contracts/routes/**",
+		# Better Auth's manifest names an external namespace.
+		"identity/auth/src/engine/routes/**",
+		"packages/workspace/src/boundaries/**",
+		# Mailpit's REST surface is not an Omniyat route.
+		"apps/api/scripts/proof/**",
+		"identity/auth/src/core/email/mailpit.ts",
+		"packages/testing/src/fakes/mailpit-email-provider.ts",
+		# Structural mounts and the auth wildcard.
+		"apps/api/src/core/application.ts",
+		"identity/auth/src/engine/auth-provider.ts",
+	],
+}]
+"boundaries/source-root" = ["error", {
+	packages = ["packages/*", "connector", "connector/api", "database", "handover", "identity", "identity/auth", "living", "portfolio", "post-handover", "pre-handover"],
+	roots = ["src", "scripts", "tests", "fixtures", "seeds", "runtime-tests"],
+	exempt = ["**/vitest.config.ts", "**/drizzle.config.ts"],
+}]
+```
+
+On Collections `chore/config-hygiene` (4 November 2026), this configuration reports the same `contracts-segment` findings as the `oc` check with the connector included (nine, in five connector files), no `route-literal` findings, and no `source-root` findings.
 
 ## Scope and parser differences
 

@@ -126,3 +126,20 @@ fn boundaries_rules_are_opt_in() {
 
     assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("boundaries/")));
 }
+
+/// The `perf/*` rules suit codebases that chose them, so the bundled policy
+/// leaves them out and a default run reports none of them.
+#[test]
+fn perf_rules_are_opt_in() {
+    let (_, _, shipped) = load();
+
+    for (name, _) in fmtkit_lint::rules::perf::RULES {
+        assert!(shipped["rules"].get(name).is_none_or(|setting| setting == "off"), "{name} must remain opt-in");
+    }
+
+    let linter = fmtkit_lint::Linter::new(&fmtkit_config::Lint::default()).unwrap();
+    let source = "export async function f(ids: string[], s: string) {\n\tfor (const id of ids) {\n\t\tawait db.select().from(t);\n\t}\n\treturn [/a/u.test(s), new URL(s).href, new URL(s).origin];\n}\n";
+    let result = linter.lint("src/index.ts", fmtkit_core::Lang::Ts, source, false);
+
+    assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("perf/")));
+}

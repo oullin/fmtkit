@@ -18,6 +18,7 @@ pub mod boundaries;
 pub mod nkzw;
 pub mod no_only_tests;
 pub mod observability;
+pub mod perf;
 pub mod perfectionist;
 
 /// One finding from a native rule, positioned by byte span.
@@ -106,6 +107,7 @@ pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
         .chain(nkzw::RULES)
         .chain(no_only_tests::RULES)
         .chain(observability::RULES)
+        .chain(perf::RULES)
         .chain(perfectionist::RULES)
         .copied()
 }

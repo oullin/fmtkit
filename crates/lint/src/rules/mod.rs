@@ -15,6 +15,7 @@ use fmtkit_core::Edit;
 
 pub mod anti_slop;
 pub mod boundaries;
+pub mod naming;
 pub mod nkzw;
 pub mod no_only_tests;
 pub mod observability;
@@ -104,6 +105,7 @@ pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
     anti_slop::RULES
         .iter()
         .chain(boundaries::RULES)
+        .chain(naming::RULES)
         .chain(nkzw::RULES)
         .chain(no_only_tests::RULES)
         .chain(observability::RULES)

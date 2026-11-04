@@ -143,3 +143,19 @@ fn perf_rules_are_opt_in() {
 
     assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("perf/")));
 }
+
+/// The `naming/*` rules need a repository's workspace layout, so the bundled
+/// policy leaves them out.
+#[test]
+fn naming_rules_are_opt_in() {
+    let (_, _, shipped) = load();
+
+    for (name, _) in fmtkit_lint::rules::naming::RULES {
+        assert!(shipped["rules"].get(name).is_none_or(|setting| setting == "off"), "{name} must remain opt-in");
+    }
+
+    let linter = fmtkit_lint::Linter::new(&fmtkit_config::Lint::default()).unwrap();
+    let result = linter.lint("packages/twilio/src/twilio-client.ts", fmtkit_core::Lang::Ts, "export class TwilioClientFactory {}\n", false);
+
+    assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("naming/")));
+}

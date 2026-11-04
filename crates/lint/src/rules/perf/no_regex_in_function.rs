@@ -12,19 +12,16 @@
 
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
-use oxc_span::{GetSpan, Span};
+use oxc_span::Span;
 
 use super::super::anti_slop::shared::testing::is_test_file;
-use super::super::anti_slop::shared::{enclosing_function, is_global, member, parent};
+use super::super::anti_slop::shared::{enclosing_function, is_global};
 use super::super::{Context, Rule};
-use super::shared::{StateFlags, static_arguments};
+use super::shared::{StateFlags, is_shared_safely, static_arguments};
 
 pub const NAME: &str = "perf/no-regex-in-function";
 
 const MESSAGE: &str = "This regular expression is built on every call. Hoist it to a module-level constant.";
-
-/// The string methods that reset a `g` pattern's `lastIndex` before they use it.
-const GLOBAL_RESETTING: [&str; 4] = ["match", "matchAll", "replace", "replaceAll"];
 
 pub struct NoRegexInFunction;
 
@@ -61,18 +58,4 @@ fn built_pattern(ctx: &Context<'_, '_>, node: &AstNode<'_>) -> Option<Span> {
     };
 
     (!flags.stateful() || is_shared_safely(ctx, node, flags)).then_some(span)
-}
-
-/// Whether `node` is the pattern argument of a string method that does not
-/// read the pattern's `lastIndex`, as in `text.replace(/a/g, "b")`.
-fn is_shared_safely(ctx: &Context<'_, '_>, node: &AstNode<'_>, flags: StateFlags) -> bool {
-    let AstKind::CallExpression(call) = parent(ctx.semantic.nodes(), node.id()).kind() else {
-        return false;
-    };
-
-    if call.arguments.first().is_none_or(|argument| argument.span() != node.kind().span()) {
-        return false;
-    }
-
-    member(&call.callee).is_some_and(|(_, method)| method == "split" || (flags.global && GLOBAL_RESETTING.contains(&method)))
 }

@@ -3,7 +3,11 @@
 //!
 //! The rule has no default list: `patterns` maps each exported name to its
 //! literal exactly as written, flags included. The declaration that defines a
-//! name (`const WHITESPACE = /\s+/u`) is not reported.
+//! name (`const WHITESPACE = /\s+/u`) is not reported. A literal with the `g`
+//! or `y` flag is reported only where sharing it cannot change a result: the
+//! pattern argument of `split`, or, with `g`, of `replace`, `replaceAll`,
+//! `match` or `matchAll`. Elsewhere, such as an `exec` loop, a fresh pattern
+//! starts at `lastIndex` 0 and a shared one would not.
 
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
@@ -12,6 +16,7 @@ use serde_json::Value;
 
 use super::super::anti_slop::shared::parent;
 use super::super::{Context, Rule};
+use super::shared::{StateFlags, is_shared_safely};
 
 pub const NAME: &str = "perf/prefer-shared-pattern";
 
@@ -81,6 +86,12 @@ impl Rule for PreferSharedPattern {
         };
 
         if defines(ctx, node, name) {
+            return;
+        }
+
+        let flags = StateFlags::of_literal(literal.regex.flags);
+
+        if flags.stateful() && !is_shared_safely(ctx, node, flags) {
             return;
         }
 

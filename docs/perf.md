@@ -35,7 +35,9 @@ The rule leaves these alone:
 
 A `g` or `y` pattern is still reported where it's safe to share: as the pattern argument of `split`, which copies it, or, with the `g` flag, of `replace`, `replaceAll`, `match` or `matchAll`, which reset `lastIndex` first. For example, `text.replace(/a/gu, '')` is reported, but `text.match(/a/y)` isn't, because without `g` those methods read `lastIndex`.
 
-`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a pattern with the `g` or `y` flag: a literal, `new RegExp(source, flags)`, or a `const` in the same file bound to either. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them. A scanner that sets the pattern's `lastIndex` earlier in the same function than the call is positioning the pattern on purpose, so that call isn't reported either.
+`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a name bound to a `const` in the same file whose pattern has the `g` or `y` flag: a literal, `new RegExp(source, flags)` or `RegExp(source, flags)`. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them. A literal written at the call, such as `/a/y.test(text)`, is built fresh with `lastIndex` at 0, and its `y` flag changes what it matches, so it isn't reported either.
+
+A scanner that positions the pattern on purpose isn't reported. The `lastIndex` assignment must run before the call on every path to it: a statement earlier in a block that holds the call, in the same function. An assignment after the call, inside an `if`, or outside the callback that makes the call doesn't count.
 
 `perf/prefer-shared-pattern` reports a literal that a shared module already exports. Both options are required:
 
@@ -44,7 +46,7 @@ A `g` or `y` pattern is still reported where it's safe to share: as the pattern 
 | `module`   | The import specifier named in the message, such as `@acme/patterns`.                                                                           |
 | `patterns` | Each exported name mapped to its literal exactly as written, flags included: `'/\s+/u'`. A value without a body and a closing `/` is an error. |
 
-The declaration that defines a name, `export const WHITESPACE = /\s+/u;`, isn't reported. A literal only matches when its text is identical, so `/\s+/gu` doesn't match `/\s+/u`.
+The declaration that defines a name, `export const WHITESPACE = /\s+/u;`, isn't reported. A literal only matches when its text is identical, so `/\s+/gu` doesn't match `/\s+/u`. A literal with the `g` or `y` flag is reported only where sharing it can't change a result, the same places `perf/no-regex-in-function` reports one. In an `exec` loop, the fresh literal starts at `lastIndex` 0 and a shared one wouldn't.
 
 ## URLs
 
@@ -56,7 +58,9 @@ const url = new URL(base);
 return { origin: url.origin, host: url.hostname };
 ```
 
-Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. Their text must be identical, and each name in them must refer to the same binding, so two loops that each declare `u` parse different inputs. `new URL(next())` never matches another parse. `new URL(path, base)` and `new URL(base)` are different inputs.
+Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. Their text must be identical, and each name in them must refer to the same binding, so two loops that each declare `u` parse different inputs. `new URL(next())` never matches another parse, and neither does an input whose name is assigned again anywhere. `new URL(path, base)` and `new URL(base)` are different inputs.
+
+Parses in opposite arms of one `if` or `?:` never both run, so they don't match. Class field initialisers are grouped by class, so two classes that each parse `this.base` aren't reported.
 
 ## Queries
 

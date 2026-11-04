@@ -3,9 +3,14 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{Argument, Expression, IdentifierReference, RegExpFlags, VariableDeclarationKind};
+use oxc_semantic::AstNode;
+use oxc_span::GetSpan;
 
 use super::super::Context;
-use super::super::anti_slop::shared::{is_global, member, strip_parens};
+use super::super::anti_slop::shared::{is_global, member, parent, strip_parens};
+
+/// The string methods that reset a `g` pattern's `lastIndex` before they use it.
+const GLOBAL_RESETTING: [&str; 4] = ["match", "matchAll", "replace", "replaceAll"];
 
 /// Whether there are arguments and every one is a string, or a template with
 /// no substitutions: a value known before the call runs.
@@ -19,16 +24,35 @@ pub fn static_arguments(arguments: &[Argument<'_>]) -> bool {
 }
 
 /// Whether `expression` is a regular expression that keeps `lastIndex`
-/// between calls (the `g` or `y` flag): a literal, `new RegExp(…, flags)`, or
-/// a `const` in this file bound to either.
+/// between calls (the `g` or `y` flag): a literal, `new RegExp(…, flags)`,
+/// `RegExp(…, flags)`, or a `const` in this file bound to one of them.
 pub fn is_stateful_regex<'a>(ctx: &Context<'_, 'a>, expression: &Expression<'a>) -> bool {
     match strip_parens(expression) {
         Expression::RegExpLiteral(literal) => literal.regex.flags.intersects(RegExpFlags::G | RegExpFlags::Y),
         Expression::NewExpression(new) => is_global(ctx, &new.callee, "RegExp") && stateful_flags(&new.arguments),
-        Expression::Identifier(identifier) => const_initialiser(ctx, identifier)
-            .is_some_and(|init| matches!(strip_parens(init), Expression::RegExpLiteral(_) | Expression::NewExpression(_)) && is_stateful_regex(ctx, init)),
+        Expression::CallExpression(call) => is_global(ctx, &call.callee, "RegExp") && stateful_flags(&call.arguments),
+        Expression::Identifier(identifier) => const_initialiser(ctx, identifier).is_some_and(|init| {
+            matches!(strip_parens(init), Expression::RegExpLiteral(_) | Expression::NewExpression(_) | Expression::CallExpression(_))
+                && is_stateful_regex(ctx, init)
+        }),
         _ => false,
     }
+}
+
+/// Whether `node`, a pattern with `flags`, is the pattern argument of a string
+/// method that does not read its `lastIndex`: `split`, which copies it, or,
+/// with the `g` flag, `replace`, `replaceAll`, `match` or `matchAll`, which
+/// reset it first. Such a pattern can be shared whatever its flags.
+pub fn is_shared_safely(ctx: &Context<'_, '_>, node: &AstNode<'_>, flags: StateFlags) -> bool {
+    let AstKind::CallExpression(call) = parent(ctx.semantic.nodes(), node.id()).kind() else {
+        return false;
+    };
+
+    if call.arguments.first().is_none_or(|argument| argument.span() != node.kind().span()) {
+        return false;
+    }
+
+    member(&call.callee).is_some_and(|(_, method)| method == "split" || (flags.global && GLOBAL_RESETTING.contains(&method)))
 }
 
 /// The `g` and `y` flags a pattern carries, the two that keep `lastIndex`.

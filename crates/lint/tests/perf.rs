@@ -79,13 +79,14 @@ fn stateful_regex_test_reports_global_and_sticky_patterns() {
 const RUNS = /\\s+/gu;
 const STICKY = new RegExp('a', 'y');
 const PLAIN = /\\s+/u;
+const CALLED = RegExp('b', 'g');
 export const a = (s: string) => RUNS.test(s);
 export const b = (s: string) => STICKY.exec(s);
-export const c = (s: string) => /x/g.test(s);
-export const d = (s: string) => PLAIN.test(s) || s.replace(RUNS, ' ');
+export const c = (s: string) => CALLED.test(s);
+export const d = (s: string) => PLAIN.test(s) || s.replace(RUNS, ' ') || /x/g.test(s) || /y/y.exec(s);
 ";
 
-    assert_sites(STATEFUL, &[], "a.ts", code, &[(4, 33), (5, 33), (6, 33)]);
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(5, 33), (6, 33), (7, 33)]);
     assert_eq!(
         messages(STATEFUL, &[], "const R = /a/g;\nR.exec('a');"),
         ["`exec` on a pattern with the `g` or `y` flag starts from the previous match's `lastIndex`. Use a pattern without those flags."]
@@ -131,6 +132,34 @@ export function scan(text: string, at: number) {
     assert_sites(STATEFUL, &[], "a.ts", code, &[(3, 16)]);
 }
 
+#[test]
+fn stateful_regex_test_needs_the_position_set_on_every_path() {
+    let code = "\
+const TOKEN = /\\w+/y;
+export function f(text: string, reset: boolean) {
+\tif (reset) TOKEN.lastIndex = 0;
+\treturn TOKEN.exec(text);
+}
+export function g(text: string) {
+\t{
+\t\tconst TOKEN = /\\w+/y;
+\t\tTOKEN.lastIndex = 0;
+\t}
+\treturn TOKEN.exec(text);
+}
+export function h(texts: string[]) {
+\tTOKEN.lastIndex = 0;
+\treturn texts.map((text) => TOKEN.exec(text));
+}
+export function k(text: string) {
+\tTOKEN.lastIndex = 0;
+\twhile (TOKEN.exec(text) !== null) {}
+}
+";
+
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(4, 9), (11, 9), (15, 29)]);
+}
+
 const SHARED: &str = "perf/prefer-shared-pattern";
 
 fn shared_options() -> Vec<Value> {
@@ -155,6 +184,18 @@ export const other = /\\s+/gu;
 #[test]
 fn prefer_shared_pattern_leaves_the_defining_declaration() {
     assert_sites(SHARED, &shared_options(), "patterns.ts", "export const WHITESPACE = /\\s+/u;\nexport const TRAILING_SLASH = /\\/$/u;\n", &[]);
+}
+
+#[test]
+fn prefer_shared_pattern_shares_stateful_literals_only_where_safe() {
+    let options = [json!({ "module": "@primitives/patterns", "patterns": { "COMMAS": "/,/g" } })];
+    let code = "\
+export const a = (s: string) => /,/g.test(s);
+export const b = (s: string) => s.replace(/,/g, '');
+export function c(s: string) { const re = /,/g; return re.exec(s); }
+";
+
+    assert_sites(SHARED, &options, "a.ts", code, &[(2, 43)]);
 }
 
 #[test]
@@ -216,6 +257,49 @@ export function f(first: string[], second: string[]) {
 ";
 
     assert_sites(URL_PARSE, &[], "a.ts", code, &[]);
+}
+
+#[test]
+fn repeated_url_parse_keeps_exclusive_branches_reassigned_inputs_and_classes_apart() {
+    let code = "\
+export function f(a: string, wide: boolean) {
+\treturn wide ? new URL(a).host : new URL(a).hostname;
+}
+export function g(a: string, wide: boolean) {
+\tif (wide) return new URL(a).href;
+\telse return new URL(a).origin;
+}
+export function h(url: string, fallback: string) {
+\tlet next = url;
+\tconst first = new URL(next).href;
+\tnext = fallback;
+\treturn [first, new URL(next).href];
+}
+export class A {
+\thost = new URL(this.base).host;
+}
+export class B {
+\thref = new URL(this.base).href;
+}
+";
+
+    assert_sites(URL_PARSE, &[], "a.ts", code, &[]);
+}
+
+#[test]
+fn repeated_url_parse_reports_repeats_within_a_class_and_after_a_branch() {
+    let code = "\
+export class C {
+\thost = new URL(this.base).host;
+\thref = new URL(this.base).href;
+}
+export function k(a: string, wide: boolean) {
+\tconst host = wide ? new URL(a).host : '';
+\treturn [host, new URL(a).href];
+}
+";
+
+    assert_sites(URL_PARSE, &[], "a.ts", code, &[(3, 9), (7, 16)]);
 }
 
 const SELECT: &str = "perf/no-select-all";

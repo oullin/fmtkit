@@ -36,7 +36,7 @@ Every rule accepts at most one options object. Unknown keys and invalid option t
 | `segments` | `contracts-segment`                  | Required, non-empty ordered path globs that mark contracts-segment files. A leading `!` re-excludes a path.                             |
 | `modules`  | `contracts-segment`                  | Module names a contracts segment may import, default `[]`.                                                                              |
 | `tests`    | `contracts-segment`                  | Further module names that `*.test.ts` and `*.test.tsx` files in a segment may import, default `[]`.                                     |
-| `prefixes` | `route-literal`                      | Required, non-empty list of route prefixes, such as `/api`.                                                                             |
+| `prefixes` | `route-literal`                      | Required, non-empty list of route prefixes, such as `/api`. A prefix ending in `/` is an error.                                         |
 | `message`  | `contracts-segment`, `route-literal` | Replaces the default finding message.                                                                                                   |
 | `packages` | `source-root`                        | Required, non-empty ordered path globs that name package directories, such as `packages/*`.                                             |
 | `roots`    | `source-root`                        | Required, non-empty list of top-level folder names that hold a package's code, such as `src` and `scripts`.                             |

@@ -438,6 +438,8 @@ fn options_reject_unknown_keys_wrong_types_and_unexpanded_packages() {
         json!({}),
         json!({"prefixes": []}),
         json!({"prefixes": [" "]}),
+        json!({"prefixes": ["/api/"]}),
+        json!({"prefixes": ["/"]}),
         json!({"prefixes": ["/api"], "message": ""}),
         json!({"prefixes": ["/api"], "modules": []}),
     ] {

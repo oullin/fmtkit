@@ -50,7 +50,15 @@ impl Options {
                 }
                 ("modules", Kind::ContractsSegment) => options.modules = names(key, value)?,
                 ("tests", Kind::ContractsSegment) => options.tests = names(key, value)?,
-                ("prefixes", Kind::RouteLiteral) => options.prefixes = names(key, value)?,
+                ("prefixes", Kind::RouteLiteral) => {
+                    options.prefixes = names(key, value)?;
+
+                    // A prefix matches itself or continues after a `/`, so a
+                    // trailing slash would never match `/api/users`.
+                    if let Some(prefix) = options.prefixes.iter().find(|prefix| prefix.ends_with('/')) {
+                        return Err(format!("prefixes: {prefix:?} ends in /; write it without the trailing slash"));
+                    }
+                }
                 ("roots", Kind::SourceRoot) => {
                     options.roots = names(key, value)?;
 

@@ -33,9 +33,9 @@ The rule leaves these alone:
 - Test files (`*.test.*` and `*.spec.*`).
 - A `g` or `y` pattern held in a variable or passed to any other call. Its `lastIndex` carries over between calls, so a fresh pattern per call is what lets an `exec` loop start from the beginning.
 
-A `g` or `y` pattern is still reported where it's safe to share: as the pattern argument of `split`, which copies it, or, with the `g` flag, of `replace`, `replaceAll`, `match` or `matchAll`, which reset `lastIndex` first. For example, `text.replace(/a/gu, '')` is reported, but `text.match(/a/y)` isn't, because without `g` those methods read `lastIndex`.
+A `g` or `y` pattern is still reported where it's safe to share: as the pattern argument of `split`, which copies it, or, with the `g` flag, of `replace`, `replaceAll` or `match`, which reset `lastIndex` first. For example, `text.replace(/a/gu, '')` is reported, but `text.match(/a/y)` isn't, because without `g` those methods read `lastIndex`. `matchAll` isn't on the list: it starts from the pattern's current `lastIndex`.
 
-`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a name bound to a `const` in the same file whose pattern has the `g` or `y` flag: a literal, `new RegExp(source, flags)` or `RegExp(source, flags)`. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them. A literal written at the call, such as `/a/y.test(text)`, is built fresh with `lastIndex` at 0, and its `y` flag changes what it matches, so it isn't reported either.
+`perf/no-stateful-regex-test` makes sharing patterns safe. It reports `test` or `exec` called on a name bound to a `const` in the same file whose pattern has the `g` or `y` flag: a literal, `new RegExp(source, flags)` or `RegExp(source, flags)`. Without a flags argument, `RegExp(/a/g)` keeps the flags of the literal it copies. Such a pattern starts each call from the previous match's `lastIndex`, so a shared one gives different answers for the same input. Give `test` and `exec` a pattern without those flags. The rule can't see the flags of an imported pattern or a `let` binding, so it doesn't report them. A literal written at the call, such as `/a/y.test(text)`, is built fresh with `lastIndex` at 0, and its `y` flag changes what it matches, so it isn't reported either. Nor is a `const` that the calling function declares itself, because each call builds its own pattern. A callback inside that function shares the pattern across its calls, so it is reported.
 
 A scanner that positions the pattern on purpose isn't reported. The `lastIndex` assignment must run before the call on every path to it: a statement earlier in a block that holds the call, in the same function. An assignment after the call, inside an `if`, or outside the callback that makes the call doesn't count.
 
@@ -58,9 +58,9 @@ const url = new URL(base);
 return { origin: url.origin, host: url.hostname };
 ```
 
-Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. Their text must be identical, and each name in them must refer to the same binding, so two loops that each declare `u` parse different inputs. `new URL(next())` never matches another parse, and neither does an input whose name is assigned again anywhere. `new URL(path, base)` and `new URL(base)` are different inputs.
+Inputs only match when they always read the same value: names, property reads, strings and templates without substitutions. Their text must be identical, and each name in them must refer to the same binding, so two loops that each declare `u` parse different inputs. `new URL(next())` never matches another parse, and neither does an input whose name, or a property path it reads such as `cfg.url`, is assigned anywhere in the file. `new URL(path, base)` and `new URL(base)` are different inputs.
 
-Parses in opposite arms of one `if` or `?:` never both run, so they don't match. Class field initialisers are grouped by class, so two classes that each parse `this.base` aren't reported.
+Parses in opposite arms of one `if` or `?:` never both run, so they don't match, unless a loop in the same function repeats that branch. Class field initialisers are grouped by class, with static and instance fields apart, so two classes that each parse `this.base` aren't reported, and neither is a static field next to an instance field.
 
 ## Queries
 

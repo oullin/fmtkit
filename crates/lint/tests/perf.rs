@@ -64,7 +64,7 @@ fn regex_in_function_shares_stateful_patterns_only_where_safe() {
 export function f(s: string, check: (r: RegExp) => boolean) {
 \tconst re = new RegExp('a', 'g');
 \tconst sticky = RegExp(`b`, `y`);
-\treturn [check(/c/g), s.match(/d/y), s.split(/,/y), s.match(/e/g), re, sticky];
+\treturn [check(/c/g), s.match(/d/y), s.split(/,/y), s.match(/e/g), re, sticky, s.matchAll(/f/g)];
 }
 ";
 
@@ -80,13 +80,16 @@ const RUNS = /\\s+/gu;
 const STICKY = new RegExp('a', 'y');
 const PLAIN = /\\s+/u;
 const CALLED = RegExp('b', 'g');
+const INHERITED = new RegExp(/c/y);
+const INHERITED_CALL = RegExp(/e/g);
 export const a = (s: string) => RUNS.test(s);
 export const b = (s: string) => STICKY.exec(s);
 export const c = (s: string) => CALLED.test(s);
 export const d = (s: string) => PLAIN.test(s) || s.replace(RUNS, ' ') || /x/g.test(s) || /y/y.exec(s);
+export const e = (s: string) => INHERITED.exec(s) || INHERITED_CALL.test(s);
 ";
 
-    assert_sites(STATEFUL, &[], "a.ts", code, &[(5, 33), (6, 33), (7, 33)]);
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(7, 33), (8, 33), (9, 33), (11, 33), (11, 54)]);
     assert_eq!(
         messages(STATEFUL, &[], "const R = /a/g;\nR.exec('a');"),
         ["`exec` on a pattern with the `g` or `y` flag starts from the previous match's `lastIndex`. Use a pattern without those flags."]
@@ -160,6 +163,23 @@ export function k(text: string) {
     assert_sites(STATEFUL, &[], "a.ts", code, &[(4, 9), (11, 9), (15, 29)]);
 }
 
+#[test]
+fn stateful_regex_test_leaves_patterns_built_per_call() {
+    let code = "\
+const SHARED = /a/y;
+export function starts(s: string) {
+\tconst R = /a/y;
+\treturn R.test(s) || SHARED.test(s);
+}
+export function each(xs: string[]) {
+\tconst R = /a/g;
+\treturn xs.filter((x) => R.test(x));
+}
+";
+
+    assert_sites(STATEFUL, &[], "a.ts", code, &[(4, 22), (8, 26)]);
+}
+
 const SHARED: &str = "perf/prefer-shared-pattern";
 
 fn shared_options() -> Vec<Value> {
@@ -193,6 +213,7 @@ fn prefer_shared_pattern_shares_stateful_literals_only_where_safe() {
 export const a = (s: string) => /,/g.test(s);
 export const b = (s: string) => s.replace(/,/g, '');
 export function c(s: string) { const re = /,/g; return re.exec(s); }
+export const d = (s: string) => [...s.matchAll(/,/g)];
 ";
 
     assert_sites(SHARED, &options, "a.ts", code, &[(2, 43)]);
@@ -300,6 +321,29 @@ export function k(a: string, wide: boolean) {
 ";
 
     assert_sites(URL_PARSE, &[], "a.ts", code, &[(3, 9), (7, 16)]);
+}
+
+#[test]
+fn repeated_url_parse_tracks_property_writes_static_fields_and_loops() {
+    let code = "\
+export function f(cfg: { url: string }, next: string) {
+\tconst a = new URL(cfg.url).host;
+\tcfg.url = next;
+\treturn [a, new URL(cfg.url).host];
+}
+export class C {
+\tstatic origin = new URL(this.base).origin;
+\thost = new URL(this.base).host;
+}
+export function g(flags: boolean[], base: string) {
+\tfor (const flag of flags) {
+\t\tif (flag) new URL(base).host;
+\t\telse new URL(base).href;
+\t}
+}
+";
+
+    assert_sites(URL_PARSE, &[], "a.ts", code, &[(13, 8)]);
 }
 
 const SELECT: &str = "perf/no-select-all";

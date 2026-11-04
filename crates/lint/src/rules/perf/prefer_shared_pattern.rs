@@ -5,8 +5,8 @@
 //! literal exactly as written, flags included. The declaration that defines a
 //! name (`const WHITESPACE = /\s+/u`) is not reported. A literal with the `g`
 //! or `y` flag is reported only where sharing it cannot change a result: the
-//! pattern argument of `split`, or, with `g`, of `replace`, `replaceAll`,
-//! `match` or `matchAll`. Elsewhere, such as an `exec` loop, a fresh pattern
+//! pattern argument of `split`, or, with `g`, of `replace`, `replaceAll` or
+//! `match`. Elsewhere, such as an `exec` loop, a fresh pattern
 //! starts at `lastIndex` 0 and a shared one would not.
 
 use oxc_ast::AstKind;

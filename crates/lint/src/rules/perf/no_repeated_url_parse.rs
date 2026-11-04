@@ -4,20 +4,22 @@
 //!
 //! Only inputs that read the same value each time count: names, property
 //! reads, strings and templates without substitutions. `new URL(next())`
-//! never matches another parse, and neither does an input whose name is
-//! assigned again anywhere. Two inputs match only when their text is the same
+//! never matches another parse, and neither does an input whose name, or a
+//! property path it reads, is assigned anywhere in the file. Two inputs match only when their text is the same
 //! and each name in them refers to the same binding, so a loop variable reused
 //! by a second loop is a different input.
 //!
 //! Parses in opposite arms of one `if` or `?:` never both run, so they do not
-//! match. A class field initialiser is grouped with its class, not the module.
+//! match, unless a loop in the same function repeats the branch. A class field
+//! initialiser is grouped with its class, static and instance fields apart,
+//! not with the module.
 
 use oxc_ast::AstKind;
-use oxc_ast::ast::{Argument, Expression, FunctionType};
-use oxc_semantic::{AstNode, AstNodes, NodeId, Scoping};
+use oxc_ast::ast::{Argument, AssignmentTarget, Expression, FunctionType};
+use oxc_semantic::{AstNodes, NodeId, Scoping};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::symbol::SymbolId;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::super::anti_slop::shared::{ancestors, is_global, strip_parens};
 use super::super::{Context, Rule};
@@ -26,9 +28,10 @@ pub const NAME: &str = "perf/no-repeated-url-parse";
 
 const MESSAGE: &str = "This input is already parsed as a URL here. Parse it once and read every part from that `URL`.";
 
-/// One parse: its function or class (none at module level), its input text,
-/// and the binding each argument's root name refers to.
-type Parse<'s> = (Option<NodeId>, &'s str, Vec<Option<SymbolId>>);
+/// One parse: its function or class (none at module level) and whether it is a
+/// static member's, its input text, and the binding each argument's root name
+/// refers to.
+type Parse<'s> = (Option<(NodeId, bool)>, &'s str, Vec<Option<SymbolId>>);
 
 pub struct NoRepeatedUrlParse;
 
@@ -42,6 +45,7 @@ impl Rule for NoRepeatedUrlParse {
         let (source, scoping, nodes) = (semantic.source_text(), semantic.scoping(), semantic.nodes());
         let mut parsed: FxHashMap<Parse<'_>, Vec<NodeId>> = FxHashMap::default();
         let mut repeats: Vec<Span> = Vec::new();
+        let written = written_members(nodes, source);
 
         for node in nodes.iter() {
             let AstKind::NewExpression(new) = node.kind() else {
@@ -59,7 +63,7 @@ impl Rule for NoRepeatedUrlParse {
             let bindings: Vec<_> =
                 new.arguments.iter().map(|argument| argument.as_expression().and_then(|expression| root_binding(scoping, expression))).collect();
 
-            if bindings.iter().flatten().any(|&symbol| scoping.symbol_is_mutated(symbol)) {
+            if bindings.iter().flatten().any(|&symbol| scoping.symbol_is_mutated(symbol)) || reads_written(&new.arguments, source, &written) {
                 continue;
             }
 
@@ -105,20 +109,62 @@ fn root_binding(scoping: &Scoping, expression: &Expression<'_>) -> Option<Symbol
     }
 }
 
-/// The function a parse runs in, or the class whose field initialiser holds
-/// it; none at module level.
-fn parse_scope(nodes: &AstNodes<'_>, id: NodeId) -> Option<NodeId> {
-    ancestors(nodes, id)
-        .find(|node| match node.kind() {
-            AstKind::ArrowFunctionExpression(_) | AstKind::Class(_) => true,
-            AstKind::Function(function) => matches!(function.r#type, FunctionType::FunctionDeclaration | FunctionType::FunctionExpression),
-            _ => false,
+/// The text of every property path the file assigns to: `cfg.url` in
+/// `cfg.url = next`.
+fn written_members<'s>(nodes: &AstNodes<'_>, source: &'s str) -> FxHashSet<&'s str> {
+    nodes
+        .iter()
+        .filter_map(|node| match node.kind() {
+            AstKind::AssignmentExpression(assignment) => match &assignment.left {
+                AssignmentTarget::StaticMemberExpression(target) => Some(&source[target.span.start as usize..target.span.end as usize]),
+                _ => None,
+            },
+            _ => None,
         })
-        .map(AstNode::id)
+        .collect()
 }
 
-/// Whether `a` and `b` sit in opposite arms of one `if` or `?:`, so at most
-/// one of them runs.
+/// Whether an argument reads a property path the file assigns to, or a
+/// property below one.
+fn reads_written(arguments: &[Argument<'_>], source: &str, written: &FxHashSet<&str>) -> bool {
+    arguments.iter().any(|argument| {
+        let text = &source[argument.span().start as usize..argument.span().end as usize];
+
+        written.iter().any(|path| text.strip_prefix(path).is_some_and(|rest| rest.is_empty() || rest.starts_with('.')))
+    })
+}
+
+/// Whether `kind` starts a scope of its own: a function, or a class whose field
+/// initialisers run apart from the module.
+fn is_boundary(kind: AstKind<'_>) -> bool {
+    match kind {
+        AstKind::ArrowFunctionExpression(_) | AstKind::Class(_) => true,
+        AstKind::Function(function) => matches!(function.r#type, FunctionType::FunctionDeclaration | FunctionType::FunctionExpression),
+        _ => false,
+    }
+}
+
+/// The function a parse runs in, or the class whose field initialiser or
+/// static block holds it, with whether that is a static member; none at
+/// module level.
+fn parse_scope(nodes: &AstNodes<'_>, id: NodeId) -> Option<(NodeId, bool)> {
+    let mut is_static = false;
+
+    for node in ancestors(nodes, id) {
+        match node.kind() {
+            AstKind::PropertyDefinition(property) => is_static = property.r#static,
+            AstKind::StaticBlock(_) => is_static = true,
+            AstKind::Class(_) => return Some((node.id(), is_static)),
+            kind if is_boundary(kind) => return Some((node.id(), false)),
+            _ => {}
+        }
+    }
+
+    None
+}
+
+/// Whether `a` and `b` sit in opposite arms of one `if` or `?:` that no loop
+/// in the same function repeats, so at most one of them runs.
 fn exclusive(nodes: &AstNodes<'_>, a: NodeId, b: NodeId) -> bool {
     let (a_span, b_span) = (nodes.get_node(a).kind().span(), nodes.get_node(b).kind().span());
     let opposite = |left: Span, right: Option<Span>| {
@@ -127,9 +173,23 @@ fn exclusive(nodes: &AstNodes<'_>, a: NodeId, b: NodeId) -> bool {
         })
     };
 
-    ancestors(nodes, a).any(|node| match node.kind() {
-        AstKind::IfStatement(statement) => opposite(statement.consequent.span(), statement.alternate.as_ref().map(GetSpan::span)),
-        AstKind::ConditionalExpression(conditional) => opposite(conditional.consequent.span(), Some(conditional.alternate.span())),
-        _ => false,
+    ancestors(nodes, a).any(|node| {
+        let branches = match node.kind() {
+            AstKind::IfStatement(statement) => opposite(statement.consequent.span(), statement.alternate.as_ref().map(GetSpan::span)),
+            AstKind::ConditionalExpression(conditional) => opposite(conditional.consequent.span(), Some(conditional.alternate.span())),
+            _ => false,
+        };
+
+        branches && !in_loop(nodes, node.id())
+    })
+}
+
+/// Whether a loop in the same function holds `id`.
+fn in_loop(nodes: &AstNodes<'_>, id: NodeId) -> bool {
+    ancestors(nodes, id).take_while(|node| !is_boundary(node.kind())).any(|node| {
+        matches!(
+            node.kind(),
+            AstKind::ForStatement(_) | AstKind::ForInStatement(_) | AstKind::ForOfStatement(_) | AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_)
+        )
     })
 }

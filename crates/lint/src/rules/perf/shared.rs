@@ -9,8 +9,9 @@ use oxc_span::GetSpan;
 use super::super::Context;
 use super::super::anti_slop::shared::{is_global, member, parent, strip_parens};
 
-/// The string methods that reset a `g` pattern's `lastIndex` before they use it.
-const GLOBAL_RESETTING: [&str; 4] = ["match", "matchAll", "replace", "replaceAll"];
+/// The string methods that reset a `g` pattern's `lastIndex` before they use
+/// it. `matchAll` is not one: it copies the pattern's current `lastIndex`.
+const GLOBAL_RESETTING: [&str; 3] = ["match", "replace", "replaceAll"];
 
 /// Whether there are arguments and every one is a string, or a template with
 /// no substitutions: a value known before the call runs.
@@ -41,8 +42,8 @@ pub fn is_stateful_regex<'a>(ctx: &Context<'_, 'a>, expression: &Expression<'a>)
 
 /// Whether `node`, a pattern with `flags`, is the pattern argument of a string
 /// method that does not read its `lastIndex`: `split`, which copies it, or,
-/// with the `g` flag, `replace`, `replaceAll`, `match` or `matchAll`, which
-/// reset it first. Such a pattern can be shared whatever its flags.
+/// with the `g` flag, `replace`, `replaceAll` or `match`, which reset it
+/// first. Such a pattern can be shared whatever its flags.
 pub fn is_shared_safely(ctx: &Context<'_, '_>, node: &AstNode<'_>, flags: StateFlags) -> bool {
     let AstKind::CallExpression(call) = parent(ctx.semantic.nodes(), node.id()).kind() else {
         return false;
@@ -67,12 +68,14 @@ impl StateFlags {
         Self { global: flags.contains(RegExpFlags::G), sticky: flags.contains(RegExpFlags::Y) }
     }
 
-    /// The flags argument of `RegExp(pattern, flags)`, as a string or a
-    /// template without substitutions; none when it is absent or computed.
+    /// The flags of `RegExp(pattern, flags)`: the flags argument, as a string
+    /// or a template without substitutions, or, when it is absent, the flags of
+    /// a regex literal passed as the pattern. None when they are computed.
     pub fn of_arguments(arguments: &[Argument<'_>]) -> Self {
-        let flags = match arguments.get(1) {
-            Some(Argument::StringLiteral(flags)) => Some(flags.value.as_str()),
-            Some(Argument::TemplateLiteral(template)) if template.expressions.is_empty() => {
+        let flags = match (arguments.first(), arguments.get(1)) {
+            (Some(Argument::RegExpLiteral(literal)), None) => return Self::of_literal(literal.regex.flags),
+            (_, Some(Argument::StringLiteral(flags))) => Some(flags.value.as_str()),
+            (_, Some(Argument::TemplateLiteral(template))) if template.expressions.is_empty() => {
                 template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()).map(oxc_ast::ast::Str::as_str)
             }
             _ => None,

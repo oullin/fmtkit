@@ -6,7 +6,7 @@
 //! call is what lets an `exec` loop start from the beginning. Such a pattern
 //! is reported only where sharing it is safe: as the pattern argument of
 //! `split`, which copies it, or, with the `g` flag, of `replace`,
-//! `replaceAll`, `match` or `matchAll`, which reset `lastIndex` first. Held in
+//! `replaceAll` or `match`, which reset `lastIndex` first. Held in
 //! a variable or passed to any other call, it is left alone. Test files are
 //! skipped.
 

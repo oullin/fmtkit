@@ -3,9 +3,11 @@
 //! between calls, so a shared one answers the same input differently on each
 //! call. This is the guard that makes hoisting patterns to module level safe.
 //!
-//! Only a name bound to a `const` pattern in this file counts. A literal or a
-//! `RegExp(…)` written at the call is built fresh, starting at `lastIndex` 0,
-//! and its `y` flag changes what it matches.
+//! Only a name bound to a `const` pattern in this file counts, and only when
+//! the pattern outlives the function making the call. A literal or a
+//! `RegExp(…)` written at the call, or a `const` declared in the same function
+//! call, is built fresh, starting at `lastIndex` 0, and its `y` flag changes
+//! what it matches.
 //!
 //! A scanner that sets the pattern's `lastIndex` before the call on every path
 //! to it positions the pattern on purpose and is not reported: the assignment
@@ -19,7 +21,7 @@ use oxc_semantic::{AstNode, AstNodes, NodeId};
 use oxc_span::GetSpan;
 use oxc_syntax::symbol::SymbolId;
 
-use super::super::anti_slop::shared::{ancestors, member, parent, strip_parens};
+use super::super::anti_slop::shared::{ancestors, enclosing_function, member, parent, strip_parens};
 use super::super::{Context, Rule};
 use super::shared::is_stateful_regex;
 
@@ -45,13 +47,23 @@ impl Rule for NoStatefulRegexTest {
             return;
         };
 
-        if is_stateful_regex(ctx, object) && !positions_pattern(ctx, node, pattern) {
+        if is_stateful_regex(ctx, object) && !is_fresh_per_call(ctx, node, pattern) && !positions_pattern(ctx, node, pattern) {
             ctx.report(
                 call.span,
                 format!("`{method}` on a pattern with the `g` or `y` flag starts from the previous match's `lastIndex`. Use a pattern without those flags."),
             );
         }
     }
+}
+
+/// Whether the function making `call` declares `pattern` itself, so every
+/// invocation tests a pattern of its own.
+fn is_fresh_per_call(ctx: &Context<'_, '_>, call: &AstNode<'_>, pattern: &IdentifierReference<'_>) -> bool {
+    let (Some(symbol), Some(function)) = (binding(ctx, pattern), enclosing_function(ctx.semantic.nodes(), call.id(), false)) else {
+        return false;
+    };
+
+    function.kind().span().contains_inclusive(ctx.semantic.symbol_declaration(symbol).kind().span())
 }
 
 /// Whether `pattern.lastIndex = …` runs before `call` on every path to it: an

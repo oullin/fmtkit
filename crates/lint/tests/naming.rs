@@ -57,6 +57,10 @@ fn plurals_that_keep_their_e_are_matched_in_the_singular() {
     );
     assert_eq!(messages(json!({}), "packages/sizes/src/size-chart.ts", ""), ["file name size-chart.ts repeats \"size\" from its path; name it \"chart.ts\""]);
     assert_eq!(messages(json!({}), "packages/cookies/src/cookie-jar.ts", ""), ["file name cookie-jar.ts repeats \"cookie\" from its path; name it \"jar.ts\""]);
+    assert_eq!(
+        messages(json!({}), "packages/statuses/src/status-badge.ts", ""),
+        ["file name status-badge.ts repeats \"status\" from its path; name it \"badge.ts\""]
+    );
 }
 
 /// Q15: a file name that starts with an ancestor folder's name, nested
@@ -184,6 +188,32 @@ function authParse(value: unknown): unknown { return value; }
     assert_eq!(messages(json!({}), "identity/auth/src/parse.ts", overloads), ["\"authParse\" repeats \"auth\" from its path; name it \"parse\""]);
 }
 
+/// Q14 and unit 5.last: names kept on purpose come from `allow`, exactly or
+/// with `*`, for declarations, files and folders alike.
+#[test]
+fn allowed_names_are_kept() {
+    let code = "export class LivingServiceProvider {}\nexport const LivingBootContext = 1;\nexport class LivingRoomRepository {}\n";
+    let allow = json!({ "allow": ["*ServiceProvider", "LivingBootContext", "living-routes", "living-*-tools"] });
+
+    assert_eq!(messages(json!({}), "packages/living/src/providers.ts", code).len(), 3);
+    assert_eq!(
+        messages(allow.clone(), "packages/living/src/providers.ts", code),
+        ["\"LivingRoomRepository\" repeats \"living\" from its workspace name; name it \"RoomRepository\""]
+    );
+    assert_clean(allow.clone(), "packages/living/src/living-routes.ts", "");
+    assert_clean(allow, "packages/living/src/living-chat-tools/index.ts", "");
+}
+
+/// A name with an exported declaration is judged as an export, whichever of
+/// its declarations comes first.
+#[test]
+fn a_name_exported_anywhere_is_judged_as_an_export() {
+    assert_eq!(
+        messages(json!({}), "packages/twilio/src/lookup/modes.ts", "const TwilioLookupMode = 1;\nexport type TwilioLookupMode = number;\n"),
+        ["\"TwilioLookupMode\" repeats \"twilio\" from its workspace name; name it \"LookupMode\""]
+    );
+}
+
 /// Q26: configured terms are not cut apart, configured folder names are never
 /// reported, and exempt paths are skipped. Nothing is exempt by default.
 #[test]
@@ -221,7 +251,9 @@ fn options_are_validated() {
     assert!(build(json!({})).is_some_and(|error| error.contains("workspaces is required")));
     assert!(build(json!({ "workspaces": [] })).is_some_and(|error| error.contains("workspaces is required")));
     assert!(build(json!({ "workspaces": ["packages/*"], "terms": [" "] })).is_some_and(|error| error.contains("non-blank")));
-    assert!(build(json!({ "workspaces": ["packages/*"], "allow": [] })).is_some_and(|error| error.contains("unknown option")));
+    assert!(build(json!({ "workspaces": ["packages/*"], "allow": ["*ServiceProvider"] })).is_none());
+    assert!(build(json!({ "workspaces": ["packages/*"], "allow": [""] })).is_some_and(|error| error.contains("non-blank")));
+    assert!(build(json!({ "workspaces": ["packages/*"], "keep": [] })).is_some_and(|error| error.contains("unknown option")));
 }
 
 /// Acronyms, digits, a leading underscore and screaming case split into words

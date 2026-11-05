@@ -91,7 +91,7 @@ fn singulars(word: &str) -> Vec<String> {
         found.push(format!("{stem}ie"));
     }
 
-    for suffix in ["sses", "xes", "ches", "shes", "zes"] {
+    for suffix in ["sses", "uses", "xes", "ches", "shes", "zes"] {
         if word.len() > suffix.len() && word.ends_with(suffix) {
             found.push(word[..word.len() - 2].to_owned());
 

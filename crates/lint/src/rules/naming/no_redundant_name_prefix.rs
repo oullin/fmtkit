@@ -14,8 +14,9 @@
 //! because `Provider` alone would clash where the workspaces meet.
 //!
 //! The rule reads one file at a time and has no default exemptions: product
-//! and vendor terms (`terms`), folder names a tool requires (`folders`) and
-//! skipped paths (`exempt`) all come from its options.
+//! and vendor terms (`terms`), folder names a tool requires (`folders`),
+//! names kept on purpose (`allow`) and skipped paths (`exempt`) all come from
+//! its options.
 
 use oxc_ast::ast::{BindingIdentifier, Declaration, ExportDefaultDeclarationKind, ImportDeclarationSpecifier, Statement};
 use oxc_span::Span;
@@ -28,13 +29,14 @@ use super::words::{self, Word};
 
 pub const NAME: &str = "naming/no-redundant-name-prefix";
 
-/// `[{ workspaces: [glob], terms?: [name], folders?: [name], exempt?: [glob] }]`.
+/// `[{ workspaces: [glob], terms?: [name], folders?: [name], allow?: [pattern], exempt?: [glob] }]`.
 pub fn build(options: &[Value]) -> Result<Box<dyn Rule>, String> {
     let [Value::Object(object)] = options else {
         return Err("expected one options object with \"workspaces\"".into());
     };
 
-    let mut rule = NoRedundantNamePrefix { workspaces: Paths::default(), terms: Vec::new(), folders: FxHashSet::default(), exempt: Paths::default() };
+    let mut rule =
+        NoRedundantNamePrefix { workspaces: Paths::default(), terms: Vec::new(), folders: FxHashSet::default(), allow: Vec::new(), exempt: Paths::default() };
     let mut workspaces = false;
 
     for (key, value) in object {
@@ -47,6 +49,7 @@ pub fn build(options: &[Value]) -> Result<Box<dyn Rule>, String> {
             }
             "terms" => rule.terms = names(key, value)?.iter().map(|term| words::phrase(term)).collect(),
             "folders" => rule.folders = names(key, value)?.into_iter().collect(),
+            "allow" => rule.allow = names(key, value)?,
             "exempt" => rule.exempt = Paths::parse(key, &names(key, value)?)?,
             other => return Err(format!("unknown option {other:?}")),
         }
@@ -79,6 +82,9 @@ struct NoRedundantNamePrefix {
     terms: Vec<Vec<String>>,
     /// Folder names a tool requires, never reported.
     folders: FxHashSet<String>,
+    /// Names kept on purpose, exactly or with `*` for any run of characters:
+    /// `*ServiceProvider` keeps `LivingServiceProvider`.
+    allow: Vec<String>,
     exempt: Paths,
 }
 
@@ -109,6 +115,7 @@ impl Rule for NoRedundantNamePrefix {
 
         for (index, folder) in segments.iter().enumerate().take(segments.len() - 1).skip(depth) {
             if !self.folders.contains(*folder)
+                && !self.allowed(folder)
                 && let Some(trim) = self.trim(folder, &path, 1, true)
             {
                 let at = segments[..=index].join("/");
@@ -121,7 +128,9 @@ impl Rule for NoRedundantNamePrefix {
         let file = segments[segments.len() - 1];
         let (stem, extension) = file.split_at(file.find('.').unwrap_or(file.len()));
 
-        if let Some(trim) = self.trim(stem, &path, 1, true) {
+        if !self.allowed(stem)
+            && let Some(trim) = self.trim(stem, &path, 1, true)
+        {
             ctx.report(Span::new(0, 0), format!("file name {file} repeats \"{}\" from its path; name it \"{}{extension}\"", trim.prefix, trim.suggestion));
         }
 
@@ -135,13 +144,15 @@ impl Rule for NoRedundantNamePrefix {
             .filter_map(|(identifier, exported)| {
                 let name = identifier.name.as_str();
 
-                if !judged.insert(name) {
+                if !judged.insert(name) || self.allowed(name) {
                     return None;
                 }
+                // Exported if any of its declarations is.
+                let exported = *exported || module.declarations.iter().any(|(other, exported)| *exported && other.name == identifier.name);
 
-                let trim = if *exported { self.trim(name, &workspace, 2, false) } else { self.trim(name, &path, 1, true) };
+                let trim = if exported { self.trim(name, &workspace, 2, false) } else { self.trim(name, &path, 1, true) };
 
-                trim.map(|trim| (*identifier, *exported, trim))
+                trim.map(|trim| (*identifier, exported, trim))
             })
             .collect();
         let mut suggested: FxHashMap<&str, usize> = FxHashMap::default();
@@ -199,6 +210,11 @@ impl NoRedundantNamePrefix {
             prefix: words[..at].iter().map(|word| word.lower.as_str()).collect::<Vec<_>>().join("-"),
             suggestion: words::rest(name, &words, at),
         })
+    }
+
+    /// Whether `name` matches an `allow` entry.
+    fn allowed(&self, name: &str) -> bool {
+        self.allow.iter().any(|pattern| wildcard(pattern, name))
     }
 
     /// Whether removing `prefix` at `at` would leave part of a configured term.
@@ -279,4 +295,26 @@ impl<'a> Module<'a> {
             self.declarations.push((identifier, exported));
         }
     }
+}
+
+/// Whether `name` matches `pattern`, where `*` stands for any run of characters.
+fn wildcard(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = name.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<_> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        return rest.is_empty();
+    };
+
+    for part in middle {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+
+    rest.ends_with(last)
 }

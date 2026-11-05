@@ -28,6 +28,7 @@ Prefixes that follow each other are trimmed together: `auth-sign-in-limit.ts` un
 - **An exported name that would be left with one word.** An export is read where it is imported, beside the workspace's import specifier but not its folders. `AccessProvider` in `access` keeps its name, because `Provider` alone would clash where the workspaces meet.
 - **A configured term.** A trim that would cut a `terms` entry apart is not reported: with `terms = ["cloudflare-access"]`, `cloudflare-access-jwt.ts` in `cloudflare` stays. A term that is exactly the prefix does not protect it.
 - **A configured folder name.** A `folders` entry, such as a folder a tool requires, is never reported. Files inside it are still judged.
+- **An allowed name.** A folder, file stem or declaration matching an `allow` entry is never reported. An entry is a whole name or uses `*` for any run of characters, so `*ServiceProvider` keeps every workspace's service provider. Use it for names kept on purpose, such as role names that would clash across workspaces.
 - **An exempt path.** Files matching an `exempt` glob are skipped.
 
 Nothing is exempt by default.
@@ -43,6 +44,7 @@ When trimming a declaration gives a name the module already binds, by an import 
 | `workspaces` | array of globs | yes      | Workspace directories, relative to the repository root.                                 |
 | `terms`      | array of names | no       | Product and vendor terms that a trim must not cut apart.                                |
 | `folders`    | array of names | no       | Folder names that are never reported.                                                   |
+| `allow`      | array of names | no       | Folder, file and declaration names never reported; `*` matches any characters.          |
 | `exempt`     | array of globs | no       | Files the rule skips. A leading `!` re-includes a path; the last matching pattern wins. |
 
 Globs follow the [`boundaries/*` rules](boundaries.md): a single `*` does not cross a `/`.

@@ -34,7 +34,7 @@ Nothing is exempt by default.
 
 ## When the shorter name is taken
 
-When trimming a declaration gives a name the module already binds, by an import or another declaration, the message asks for a word that tells the two apart instead of the prefix. Keep the distinguishing word, not the domain. The rule sees one file at a time, so it cannot see a sibling file with the shorter name; apply the same choice when renaming files.
+When trimming a declaration gives a name the module already binds, by an import or another declaration, or two declarations trim to the same name, the message asks for a word that tells the two apart instead of the prefix. Keep the distinguishing word, not the domain. The rule sees one file at a time, so it cannot see a sibling file with the shorter name; apply the same choice when renaming files.
 
 ## Options
 

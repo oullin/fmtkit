@@ -151,6 +151,21 @@ fn a_trim_that_collides_asks_for_a_distinguishing_word() {
     );
 }
 
+/// Q15: where two declarations trim to the same name, both messages ask for a
+/// distinguishing word, since following both would declare the name twice.
+#[test]
+fn two_trims_to_one_name_ask_for_a_distinguishing_word() {
+    let code = "const authSession = 1;\nconst signInSession = 2;\n";
+
+    assert_eq!(
+        messages(json!({}), "identity/auth/src/sign-in/x.ts", code),
+        [
+            "\"authSession\" repeats \"auth\" from its path, and another declaration here also trims to \"session\"; keep a word that tells them apart instead of \"auth\"",
+            "\"signInSession\" repeats \"sign-in\" from its path, and another declaration here also trims to \"session\"; keep a word that tells them apart instead of \"sign-in\""
+        ]
+    );
+}
+
 /// Q26: configured terms are not cut apart, configured folder names are never
 /// reported, and exempt paths are skipped. Nothing is exempt by default.
 #[test]

@@ -19,7 +19,7 @@
 
 use oxc_ast::ast::{BindingIdentifier, Declaration, ExportDefaultDeclarationKind, ImportDeclarationSpecifier, Statement};
 use oxc_span::Span;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::Value;
 
 use super::super::boundaries::{Paths, authored};
@@ -126,17 +126,36 @@ impl Rule for NoRedundantNamePrefix {
         }
 
         let module = Module::of(ctx);
+        let trims: Vec<_> = module
+            .declarations
+            .iter()
+            .filter_map(|(identifier, exported)| {
+                let name = identifier.name.as_str();
+                let trim = if *exported { self.trim(name, &workspace, 2, false) } else { self.trim(name, &path, 1, true) };
 
-        for (identifier, exported) in &module.declarations {
+                trim.map(|trim| (*identifier, *exported, trim))
+            })
+            .collect();
+        let mut suggested: FxHashMap<&str, usize> = FxHashMap::default();
+
+        for (_, _, trim) in &trims {
+            *suggested.entry(trim.suggestion.as_str()).or_default() += 1;
+        }
+
+        for (identifier, exported, trim) in &trims {
             let name = identifier.name.as_str();
-            let trim = if *exported { self.trim(name, &workspace, 2, false) } else { self.trim(name, &path, 1, true) };
-            let Some(trim) = trim else {
-                continue;
-            };
             let said = if *exported { "its workspace name" } else { "its path" };
-            let message = if module.taken.contains(trim.suggestion.as_str()) {
+            // A trim to a name already bound, or two trims to one name, would declare it twice.
+            let clash = if module.taken.contains(trim.suggestion.as_str()) {
+                Some("this module already declares")
+            } else if suggested[trim.suggestion.as_str()] > 1 {
+                Some("another declaration here also trims to")
+            } else {
+                None
+            };
+            let message = if let Some(clash) = clash {
                 format!(
-                    "\"{name}\" repeats \"{}\" from {said}, and this module already declares \"{}\"; keep a word that tells them apart instead of \"{}\"",
+                    "\"{name}\" repeats \"{}\" from {said}, and {clash} \"{}\"; keep a word that tells them apart instead of \"{}\"",
                     trim.prefix, trim.suggestion, trim.prefix
                 )
             } else {

@@ -126,11 +126,19 @@ impl Rule for NoRedundantNamePrefix {
         }
 
         let module = Module::of(ctx);
+        // One entity per name: a `const` and `type` pair, overloads or merged
+        // interfaces are renamed together, so each name is judged once.
+        let mut judged = FxHashSet::default();
         let trims: Vec<_> = module
             .declarations
             .iter()
             .filter_map(|(identifier, exported)| {
                 let name = identifier.name.as_str();
+
+                if !judged.insert(name) {
+                    return None;
+                }
+
                 let trim = if *exported { self.trim(name, &workspace, 2, false) } else { self.trim(name, &path, 1, true) };
 
                 trim.map(|trim| (*identifier, *exported, trim))

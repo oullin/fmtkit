@@ -166,6 +166,24 @@ fn two_trims_to_one_name_ask_for_a_distinguishing_word() {
     );
 }
 
+/// A name declared more than once, as a `const` and `type` pair or as
+/// overloads, is one entity: it gets one finding and its suggestion.
+#[test]
+fn a_name_declared_twice_is_judged_once() {
+    let pair = "export const AssistantFrameErr = 1;\nexport type AssistantFrameErr = number;\n";
+    let overloads = "\
+function authParse(value: string): string;
+function authParse(value: number): number;
+function authParse(value: unknown): unknown { return value; }
+";
+
+    assert_eq!(
+        messages(json!({}), "packages/assistant/src/contracts/frame.ts", pair),
+        ["\"AssistantFrameErr\" repeats \"assistant\" from its workspace name; name it \"FrameErr\""]
+    );
+    assert_eq!(messages(json!({}), "identity/auth/src/parse.ts", overloads), ["\"authParse\" repeats \"auth\" from its path; name it \"parse\""]);
+}
+
 /// Q26: configured terms are not cut apart, configured folder names are never
 /// reported, and exempt paths are skipped. Nothing is exempt by default.
 #[test]

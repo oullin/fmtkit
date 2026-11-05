@@ -47,6 +47,18 @@ fn file_names_that_repeat_the_workspace_are_reported() {
     );
 }
 
+/// A plural whose singular keeps the `e` before its `s` is matched in the
+/// singular too.
+#[test]
+fn plurals_that_keep_their_e_are_matched_in_the_singular() {
+    assert_eq!(
+        messages(json!({}), "packages/caches/src/cache-store.ts", ""),
+        ["file name cache-store.ts repeats \"cache\" from its path; name it \"store.ts\""]
+    );
+    assert_eq!(messages(json!({}), "packages/sizes/src/size-chart.ts", ""), ["file name size-chart.ts repeats \"size\" from its path; name it \"chart.ts\""]);
+    assert_eq!(messages(json!({}), "packages/cookies/src/cookie-jar.ts", ""), ["file name cookie-jar.ts repeats \"cookie\" from its path; name it \"jar.ts\""]);
+}
+
 /// Q15: a file name that starts with an ancestor folder's name, nested
 /// workspaces judged by the innermost one, and consecutive prefixes trimmed
 /// together.

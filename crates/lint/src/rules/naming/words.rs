@@ -54,45 +54,59 @@ pub fn phrase(name: &str) -> Vec<String> {
     split(name).into_iter().map(|word| word.lower).collect()
 }
 
-/// `name` as a phrase, and again with its last word made singular when that
-/// differs: `notifications` gives `notifications` and `notification`.
+/// `name` as a phrase, and again with its last word made singular for each
+/// candidate singular: `notifications` gives `notifications` and
+/// `notification`, and `caches` gives `caches`, `cach` and `cache`.
 pub fn forms(name: &str) -> Vec<Vec<String>> {
     let plural = phrase(name);
     let mut forms = vec![plural.clone()];
 
-    if let Some((last, rest)) = plural.split_last()
-        && let Some(single) = singular(last)
-    {
-        let mut form = rest.to_vec();
+    if let Some((last, rest)) = plural.split_last() {
+        for single in singulars(last) {
+            let mut form = rest.to_vec();
 
-        form.push(single);
-        forms.push(form);
+            form.push(single);
+
+            if !forms.contains(&form) {
+                forms.push(form);
+            }
+        }
     }
 
     forms.retain(|form| !form.is_empty());
     forms
 }
 
-/// The singular of an English plural, or `None` when `word` does not read as
-/// one: `policies` is `policy`, `addresses` is `address`, `access` stays.
-fn singular(word: &str) -> Option<String> {
+/// Every plausible singular of an English plural, or none when `word` does
+/// not read as one: `policies` gives `policy` and `policie`, `cookies` gives
+/// `cooky` and `cookie`, `addresses` gives `address`, and `access` gives none.
+/// A wrong candidate costs nothing, because a prefix must match whole words.
+fn singulars(word: &str) -> Vec<String> {
+    let mut found = Vec::new();
+
     if word.len() > 3
         && let Some(stem) = word.strip_suffix("ies")
     {
-        return Some(format!("{stem}y"));
+        found.push(format!("{stem}y"));
+        found.push(format!("{stem}ie"));
     }
 
     for suffix in ["sses", "xes", "ches", "shes", "zes"] {
         if word.len() > suffix.len() && word.ends_with(suffix) {
-            return Some(word[..word.len() - 2].to_owned());
+            found.push(word[..word.len() - 2].to_owned());
+
+            // `caches` and `sizes` drop only the `s`; `addresses` does not.
+            if suffix != "sses" {
+                found.push(word[..word.len() - 1].to_owned());
+            }
         }
     }
 
-    if word.len() > 1 && word.ends_with('s') && !["ss", "us", "is"].iter().any(|suffix| word.ends_with(suffix)) {
-        return Some(word[..word.len() - 1].to_owned());
+    if found.is_empty() && word.len() > 1 && word.ends_with('s') && !["ss", "us", "is"].iter().any(|suffix| word.ends_with(suffix)) {
+        found.push(word[..word.len() - 1].to_owned());
     }
 
-    None
+    found
 }
 
 /// Whether `words`, from `at`, start with `prefix`.

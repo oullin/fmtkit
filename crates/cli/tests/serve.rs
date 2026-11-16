@@ -5,9 +5,9 @@
 mod common;
 
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, SystemTime};
@@ -33,7 +33,9 @@ impl Server {
     }
 
     fn start_with(mut command: Command) -> Self {
-        let mut child = command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().unwrap();
+        command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
+
+        let mut child = while_busy(|| command.spawn());
         let stderr = child.stderr.take().unwrap();
         let (send, lines) = mpsc::channel();
 
@@ -263,13 +265,13 @@ fn a_server_whose_executable_changed_refuses_and_stops() {
 
     let server = Server::start_with(fixture.command_with(&exe, &["serve"]));
 
-    assert_exit(&fixture.command_with(&exe, &["check"]).output().unwrap(), 1);
+    assert_exit(&output(fixture.command_with(&exe, &["check"])), 1);
     assert!(server.next().contains("answered"));
 
     // An upgrade replaces the file; the server notices on the next call.
     install(&exe, SystemTime::UNIX_EPOCH + Duration::from_secs(2_000_000));
 
-    assert_exit(&fixture.command_with(&exe, &["check"]).output().unwrap(), 1);
+    assert_exit(&output(fixture.command_with(&exe, &["check"])), 1);
     assert!(server.next().contains("refused a call: the server's executable changed"));
     assert!(server.next().contains("stopping"));
 }
@@ -308,6 +310,25 @@ fn a_watching_server_follows_each_change() {
 }
 
 /// Copy the built binary to `exe` by replacing it, dated `modified`.
+/// Runs `command` to completion, as [`while_busy`] allows.
+fn output(mut command: Command) -> Output {
+    while_busy(|| command.output())
+}
+
+/// Retries `run` while the executable is busy. Linux refuses to execute a file
+/// that a process holds open for writing, and a child another test forks while
+/// [`install`] writes the copy inherits that descriptor until it calls exec.
+fn while_busy<T>(mut run: impl FnMut() -> io::Result<T>) -> T {
+    for _ in 0..100 {
+        match run() {
+            Err(error) if error.kind() == io::ErrorKind::ExecutableFileBusy => thread::sleep(Duration::from_millis(20)),
+            result => return result.unwrap(),
+        }
+    }
+
+    run().unwrap()
+}
+
 fn install(exe: &Path, modified: SystemTime) {
     let staged = exe.with_extension("new");
 

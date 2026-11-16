@@ -77,15 +77,23 @@ pub fn run(config: &Config, options: &Options, progress: &Progress) -> Result<Re
     report
 }
 
-/// What a process that runs fmtkit many times keeps between runs: the
-/// outcome cache and directory memory of the last root, the linter for the
-/// last configuration, the worker pool, and the git repository. A run with
-/// another root, configuration, or cache setting starts them over.
+/// What a process that runs fmtkit many times keeps between runs. For each
+/// root it has run (every work tree of a repository is one): the outcome
+/// cache, the directory memory, and the git repository; a run with another
+/// configuration or cache setting starts the root's stores over. Across
+/// roots: the linter for the last configuration and the worker pool.
 #[derive(Default)]
 pub struct Session {
-    stores: Option<Stores>,
-    linter: Option<Linter>,
+    roots: Vec<Root>,
+    /// The linter, with the hash of the configuration it was built for.
+    linter: Option<([u8; 32], Linter)>,
     pool: Option<(usize, rayon::ThreadPool)>,
+    /// Whether every root is watched (see [`Session::watch`]).
+    watching: bool,
+}
+
+struct Root {
+    stores: Stores,
     repository: Repository,
 }
 
@@ -104,17 +112,31 @@ impl Session {
         let config_hash = config.hash();
         let lints = selected_lanes(&options.scope).contains(&Lane::Ts);
 
-        let stores = match self.stores.take() {
-            Some(stores) if (&stores.root, stores.config_hash, stores.enabled) == (&options.root, config_hash, options.cache) => self.stores.insert(stores),
-            other => {
-                if let Some(mut stores) = other {
-                    stores.persist();
-                }
+        if self.linter.as_ref().is_some_and(|(built_for, _)| *built_for != config_hash) {
+            self.linter = None;
+        }
 
-                self.linter = None;
-                self.stores.insert(Stores::open(&options.root, config_hash, options.cache))
+        let at = if let Some(at) = self.roots.iter().position(|root| root.stores.root == options.root) {
+            let stores = &mut self.roots[at].stores;
+
+            if (stores.config_hash, stores.enabled) != (config_hash, options.cache) {
+                stores.persist();
+                *stores = Stores::open(&options.root, config_hash, options.cache);
             }
+
+            at
+        } else {
+            let mut repository = Repository::default();
+
+            if self.watching {
+                repository.watch();
+            }
+
+            self.roots.push(Root { stores: Stores::open(&options.root, config_hash, options.cache), repository });
+            self.roots.len() - 1
         };
+
+        let Root { stores, repository } = &mut self.roots[at];
 
         stores.cache.next_run();
 
@@ -124,7 +146,7 @@ impl Session {
             memory.next_run(now);
         }
 
-        self.repository.next_run(now);
+        repository.next_run(now);
 
         let Stores { cache, memory, .. } = &*stores;
 
@@ -139,7 +161,7 @@ impl Session {
                 s.spawn(|| memory.load());
             }
 
-            let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref(), &mut self.repository);
+            let discovery = fmtkit_discover::discover_with(&options.root, &options.scope, &config.files, memory.as_ref(), repository);
 
             (discovery, linter.map(join))
         });
@@ -153,7 +175,7 @@ impl Session {
         // one matters only to a run that needs it.
         let failed = match built {
             Some(Ok(linter)) => {
-                self.linter = Some(linter);
+                self.linter = Some((config_hash, linter));
 
                 None
             }
@@ -162,10 +184,13 @@ impl Session {
         };
 
         if script_files.iter().any(|f| f.lang.is_lintable()) && self.linter.is_none() {
-            self.linter = Some(match failed {
-                Some(e) => return Err(e.into()),
-                None => Linter::new(&config.lint)?,
-            });
+            self.linter = Some((
+                config_hash,
+                match failed {
+                    Some(e) => return Err(e.into()),
+                    None => Linter::new(&config.lint)?,
+                },
+            ));
         }
 
         let jobs = options.jobs.max(1);
@@ -176,7 +201,7 @@ impl Session {
         };
         let pool = &*pool;
 
-        let linter = self.linter.as_ref().filter(|_| script_files.iter().any(|f| f.lang.is_lintable()));
+        let linter = self.linter.as_ref().map(|(_, linter)| linter).filter(|_| script_files.iter().any(|f| f.lang.is_lintable()));
         let state = Run { config, mode: options.mode, cache, linter, progress };
 
         let (scripts, go, vet) = thread::scope(|s| {
@@ -203,21 +228,42 @@ impl Session {
         Ok(Report { schema: REPORT_SCHEMA, mode: options.mode, result, files, complexity, vet, missing: discovery.missing })
     }
 
-    /// Watch the repository between runs, so each run looks only at what
-    /// changed since the one before (see [`Repository::watch`]).
+    /// Watch every root between runs, the ones to come included, so each run
+    /// looks only at what changed since the one before (see
+    /// [`Repository::watch`]).
     pub fn watch(&mut self) {
-        self.repository.watch();
+        self.watching = true;
+
+        for root in &mut self.roots {
+            root.repository.watch();
+        }
     }
 
-    /// Why watching stopped, once.
+    /// Why watching a root stopped, once per failure.
     pub fn watch_failure(&mut self) -> Option<String> {
-        self.repository.watch_failure()
+        self.roots.iter_mut().find_map(|root| root.repository.watch_failure())
+    }
+
+    /// Forget the roots that are no longer directories (a work tree that was
+    /// removed), after writing what their runs learned, and release their
+    /// watches; the roots forgotten.
+    pub fn forget_missing(&mut self) -> Vec<PathBuf> {
+        let (gone, kept): (Vec<Root>, Vec<Root>) = self.roots.drain(..).partition(|root| !root.stores.root.is_dir());
+
+        self.roots = kept;
+
+        gone.into_iter()
+            .map(|mut root| {
+                root.stores.persist();
+                root.stores.root
+            })
+            .collect()
     }
 
     /// Write what the runs since the last call learned.
     pub fn persist(&mut self) {
-        if let Some(stores) = &mut self.stores {
-            stores.persist();
+        for root in &mut self.roots {
+            root.stores.persist();
         }
     }
 }
@@ -285,7 +331,7 @@ fn vet_for(config: &Config, options: &Options, cache: &Cache, discovery: &Discov
 
     let memo = cache.is_enabled().then_some(Marks(cache));
 
-    fmtkit_go::vet(&options.root, &targets, memo.as_ref().map(|memo| memo as &dyn VetMemo))
+    fmtkit_go::vet(&options.root, &targets, memo.as_ref().map(|memo| memo as &dyn VetMemo), options.jobs.max(1))
 }
 
 /// Vet passes kept as cache marks.

@@ -4,15 +4,19 @@
 //! directory, because `./...` stops at nested module boundaries. Under
 //! [`VetTargets::Modules`] each module gets `./...`; under [`VetTargets::Files`]
 //! only the packages holding the listed files are named. Modules run in
-//! parallel; the output is parsed into `go/vet` diagnostics. With a
-//! [`VetMemo`], a module whose inputs match a run that passed is not vetted
-//! again (see [`inputs`]).
+//! parallel, within a budget of build processes shared across them, so a
+//! run never starts more than the worker count it was given: `go` itself
+//! would start one per CPU for every module; the output is parsed into
+//! `go/vet` diagnostics. With a [`VetMemo`], a module whose inputs match a
+//! run that passed is not vetted again (see [`inputs`]).
 
 mod inputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use fmtkit_core::{Diagnostic, Severity, VetOutcome};
 
@@ -34,7 +38,7 @@ struct ModuleRun {
     outside_workspace: bool,
 }
 
-pub fn run(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> VetOutcome {
+pub fn run(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>, jobs: usize) -> VetOutcome {
     let Some(go) = which("go") else {
         return skipped("go is not on PATH");
     };
@@ -53,15 +57,38 @@ pub fn run(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> Vet
 
     let gowork_set = std::env::var_os("GOWORK").is_some_and(|value| !value.is_empty());
 
-    let found: Vec<Vec<Diagnostic>> = std::thread::scope(|scope| {
-        let handles: Vec<_> = modules.iter().map(|module| scope.spawn(|| vet_module(&go, root, module, gowork_set, memo))).collect();
+    let (at_once, share) = budget(modules.len(), jobs);
+    let next = AtomicUsize::new(0);
+    let found: Vec<OnceLock<Vec<Diagnostic>>> = modules.iter().map(|_| OnceLock::new()).collect();
 
-        handles
-            .into_iter()
-            .zip(&modules)
-            .map(|(handle, module)| handle.join().unwrap_or_else(|_| diagnostics(root, &module.dir, Err(std::io::Error::other("go vet thread panicked")))))
-            .collect()
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..at_once)
+            .map(|_| {
+                scope.spawn(|| {
+                    loop {
+                        let at = next.fetch_add(1, Ordering::Relaxed);
+
+                        let Some(module) = modules.get(at) else {
+                            break;
+                        };
+
+                        let _ = found[at].set(vet_module(&go, root, module, gowork_set, share, memo));
+                    }
+                })
+            })
+            .collect();
+
+        // A worker that panicked leaves its module unset; the others go on.
+        for worker in workers {
+            let _ = worker.join();
+        }
     });
+
+    let found: Vec<Vec<Diagnostic>> = found
+        .into_iter()
+        .zip(&modules)
+        .map(|(slot, module)| slot.into_inner().unwrap_or_else(|| diagnostics(root, &module.dir, Err(std::io::Error::other("go vet thread panicked")))))
+        .collect();
 
     let mut outcome = VetOutcome::default();
 
@@ -76,13 +103,21 @@ pub fn run(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> Vet
     outcome
 }
 
+/// How many of `modules` run at once, and how many build processes each may
+/// start (`-p`), so that `jobs` run in all.
+fn budget(modules: usize, jobs: usize) -> (usize, usize) {
+    let at_once = modules.min(jobs).max(1);
+
+    (at_once, (jobs / at_once).max(1))
+}
+
 fn skipped(reason: &str) -> VetOutcome {
     VetOutcome { skipped: Some(reason.to_owned()), ..VetOutcome::default() }
 }
 
 /// Vet one module, unless `memo` holds a pass for exactly its inputs. A clean
 /// run over settled inputs is remembered.
-fn vet_module(go: &Path, root: &Path, module: &ModuleRun, gowork_set: bool, memo: Option<&dyn VetMemo>) -> Vec<Diagnostic> {
+fn vet_module(go: &Path, root: &Path, module: &ModuleRun, gowork_set: bool, share: usize, memo: Option<&dyn VetMemo>) -> Vec<Diagnostic> {
     let inputs = memo.and_then(|memo| Some((memo, inputs::fingerprint(go, module)?)));
 
     if let Some((memo, inputs)) = &inputs
@@ -91,7 +126,7 @@ fn vet_module(go: &Path, root: &Path, module: &ModuleRun, gowork_set: bool, memo
         return Vec::new();
     }
 
-    let output = invoke(go, module, gowork_set);
+    let output = invoke(go, module, gowork_set, share);
 
     if let Some((memo, inputs)) = inputs
         && inputs.settled
@@ -103,10 +138,12 @@ fn vet_module(go: &Path, root: &Path, module: &ModuleRun, gowork_set: bool, memo
     diagnostics(root, &module.dir, output)
 }
 
-fn invoke(go: &Path, module: &ModuleRun, gowork_set: bool) -> std::io::Result<Output> {
+/// `go vet` over the module's packages, running at most `share` build
+/// processes (`-p`), where `go` would default to one per CPU.
+fn invoke(go: &Path, module: &ModuleRun, gowork_set: bool, share: usize) -> std::io::Result<Output> {
     let mut command = Command::new(go);
 
-    command.arg("vet").args(&module.packages).current_dir(&module.dir).stdin(Stdio::null());
+    command.arg("vet").arg("-p").arg(share.to_string()).args(&module.packages).current_dir(&module.dir).stdin(Stdio::null());
 
     if module.outside_workspace && !gowork_set {
         command.env("GOWORK", "off");
@@ -387,6 +424,18 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
+    use super::budget;
+
+    #[test]
+    fn the_build_budget_is_shared_across_modules() {
+        assert_eq!(budget(1, 8), (1, 8));
+        assert_eq!(budget(2, 8), (2, 4));
+        assert_eq!(budget(3, 8), (3, 2));
+        assert_eq!(budget(16, 8), (8, 1));
+        assert_eq!(budget(0, 8), (1, 8));
+        assert_eq!(budget(4, 0), (1, 1));
+    }
+
     use std::sync::Mutex;
     use std::time::{Duration, SystemTime};
 
@@ -556,7 +605,7 @@ mod tests {
         write(&root.join("bad/bad.go"), "package bad\n\nimport \"fmt\"\n\nfunc Run() {\n\tfmt.Printf(\"%d\", \"not-a-number\")\n}\n");
         write(&root.join("good/good.go"), "package good\n\nfunc Run() {}\n");
 
-        let all = run(&root, &VetTargets::Modules(vec![String::new()]), None);
+        let all = run(&root, &VetTargets::Modules(vec![String::new()]), None, 2);
 
         assert_eq!(all.skipped, None);
         assert_eq!(all.targets, ["./..."]);
@@ -564,12 +613,12 @@ mod tests {
         assert_eq!((all.errors[0].file.as_str(), all.errors[0].line), ("bad/bad.go", 6));
         assert!(all.errors[0].message.contains("wrong type"), "{}", all.errors[0].message);
 
-        let scoped = run(&root, &VetTargets::Files(vec!["good/good.go".into()]), None);
+        let scoped = run(&root, &VetTargets::Files(vec!["good/good.go".into()]), None, 2);
 
         assert_eq!(scoped.targets, ["./good"]);
         assert!(scoped.errors.is_empty(), "{:?}", scoped.errors);
 
-        let nothing = run(&root, &VetTargets::Files(vec!["README.md".into()]), None);
+        let nothing = run(&root, &VetTargets::Files(vec!["README.md".into()]), None, 2);
 
         assert!(nothing.skipped.is_some());
     }
@@ -594,14 +643,14 @@ mod tests {
         let memo = Memo::default();
 
         // Only the clean module is remembered.
-        assert_eq!(run(&root, &modules, Some(&memo)).errors.len(), 1);
+        assert_eq!(run(&root, &modules, Some(&memo), 2).errors.len(), 1);
         assert_eq!(memo.passes.lock().unwrap().len(), 1);
-        assert_eq!(run(&root, &modules, Some(&memo)).errors.len(), 1);
+        assert_eq!(run(&root, &modules, Some(&memo), 2).errors.len(), 1);
         assert_eq!(memo.passes.lock().unwrap().len(), 1);
 
         // A remembered pass is answered without running vet.
         let claims = Memo { everything: true, ..Memo::default() };
-        let skipped = run(&root, &modules, Some(&claims));
+        let skipped = run(&root, &modules, Some(&claims), 2);
 
         assert!(skipped.errors.is_empty(), "{:?}", skipped.errors);
         assert_eq!(skipped.targets, ["./bad/...", "./good/..."]);
@@ -611,7 +660,7 @@ mod tests {
 
         let fresh = Memo::default();
 
-        assert_eq!(run(&root, &VetTargets::Modules(vec!["good".into()]), Some(&fresh)).errors.len(), 0);
+        assert_eq!(run(&root, &VetTargets::Modules(vec!["good".into()]), Some(&fresh), 2).errors.len(), 0);
         assert!(fresh.passes.lock().unwrap().is_empty());
     }
 
@@ -629,7 +678,7 @@ mod tests {
         write(&root.join("go.mod"), "this is not a go.mod\n");
         write(&root.join("a.go"), "package a\n");
 
-        let outcome = run(&root, &VetTargets::Modules(vec![String::new()]), None);
+        let outcome = run(&root, &VetTargets::Modules(vec![String::new()]), None, 2);
 
         assert_eq!(outcome.errors.len(), 1, "{:?}", outcome.errors);
         assert_eq!(outcome.errors[0].file, "go.mod");

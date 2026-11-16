@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use common::{Fixture, strings};
 use fmtkit_config::Files;
 use fmtkit_core::{Lane, Lang};
-use fmtkit_discover::{DiscoverError, Scope, discover, find_root};
+use fmtkit_discover::{DiscoverError, Scope, discover, find_root, locate};
 
 /// A repository with one of every kind of change on top of a first commit.
 fn busy_repo() -> Fixture {
@@ -269,6 +269,24 @@ fn linked_worktrees_are_their_own_root() {
     let rels: Vec<_> = found.files.iter().map(|file| file.rel.as_str()).collect();
 
     assert_eq!(rels, ["b.ts"]);
+}
+
+#[test]
+fn every_work_tree_of_a_repository_shares_its_common_directory() {
+    let repo = Fixture::git();
+
+    repo.write("a.ts", "1\n").commit("init");
+
+    let linked = repo.linked_worktree();
+    let main = locate(repo.root());
+    let other = locate(linked.root());
+    let plain = Fixture::plain();
+
+    assert_eq!(main.root.canonicalize().unwrap(), repo.root().canonicalize().unwrap());
+    assert_eq!(main.common, repo.path(".git").canonicalize().unwrap());
+    assert_eq!(other.root.canonicalize().unwrap(), linked.root().canonicalize().unwrap());
+    assert_eq!(other.common, main.common);
+    assert_eq!(locate(plain.root()), fmtkit_discover::Location { root: plain.root().to_path_buf(), common: plain.root().to_path_buf() });
 }
 
 #[test]

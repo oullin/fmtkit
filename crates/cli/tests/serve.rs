@@ -143,6 +143,117 @@ fn one_server_per_repository_and_a_dead_ones_socket_is_replaced() {
 }
 
 #[test]
+fn a_relative_path_in_the_environment_counts_from_the_callers_directory() {
+    let fixture = Fixture::new(&[("sub/app.ts", UNFORMATTED)]);
+    let mut serve = fixture.command(&["serve"]);
+
+    serve.env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper");
+
+    let server = Server::start_with(serve);
+
+    // Named from the server's directory, it is the same file.
+    let same = fixture.command(&["check"]).env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper").output().unwrap();
+
+    assert_exit(&same, 1);
+    assert!(server.next().contains("answered"));
+
+    // Named from another directory, the same text is another file.
+    let other = fixture.command(&["check"]).env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper").current_dir(fixture.path().join("sub")).output().unwrap();
+
+    assert_exit(&other, 1);
+    assert!(server.next().contains("refused a call: the server runs with another environment"));
+}
+
+#[test]
+fn a_relative_configuration_path_counts_from_the_root_of_the_call() {
+    let fixture = Fixture::new(&[("sub/app.ts", UNFORMATTED), ("alt.toml", "[files]\nexclude = [\"sub/app.ts\"]\n")]);
+    let mut serve = fixture.command(&["serve"]);
+
+    serve.env("FMTKIT_CONFIG", "alt.toml");
+
+    let server = Server::start_with(serve);
+
+    // From a subdirectory, the same relative value still names <root>/alt.toml.
+    let excluded = fixture.command(&["check"]).env("FMTKIT_CONFIG", "alt.toml").current_dir(fixture.path().join("sub")).output().unwrap();
+
+    assert_exit(&excluded, 0);
+    assert!(server.next().contains("with exit 0"));
+
+    // An absolute path is not the same value, even when it names the same file.
+    let absolute = fixture.command(&["check"]).env("FMTKIT_CONFIG", fixture.path().join("alt.toml")).output().unwrap();
+
+    assert_exit(&absolute, 0);
+    assert!(server.next().contains("refused a call: the server runs with another environment"));
+}
+
+#[test]
+fn one_server_answers_every_work_tree_of_its_repository() {
+    let fixture = Fixture::new(&[("app.ts", "export const app = 1;\n")]);
+
+    common::git(fixture.path(), &["add", "-A"]);
+    common::git(fixture.path(), &["-c", "user.name=fmtkit", "-c", "user.email=fmtkit@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"]);
+
+    let linked = tempfile::tempdir().unwrap();
+    let worktree = linked.path().join("wt");
+
+    common::git(fixture.path(), &["worktree", "add", "-q", "--detach", worktree.to_str().unwrap()]);
+
+    let server = Server::start_with(fixture.command(&["serve", "--watch"]));
+    let from_worktree = |args: &[&str]| fixture.command(args).current_dir(&worktree).output().unwrap();
+
+    // The work tree's server is this one: a second refuses to start there.
+    let second = from_worktree(&["serve"]);
+
+    assert_exit(&second, 2);
+    assert!(text(&second).contains("another fmtkit serve is running"), "{}", text(&second));
+
+    // Each work tree is judged on its own files.
+    fs::write(worktree.join("other.ts"), UNFORMATTED).unwrap();
+
+    let answer = from_worktree(&["check", "--format", "agent"]);
+
+    assert_exit(&answer, 1);
+
+    let logged = server.next();
+
+    assert!(logged.contains("with exit 1"), "{logged}");
+    assert!(text(&answer).contains("other.ts"), "{}", text(&answer));
+
+    assert_exit(&fixture.run(&["check", "--format", "agent"]), 0);
+    assert!(server.next().contains("with exit 0"));
+
+    assert_exit(&from_worktree(&["format"]), 0);
+    assert!(server.next().contains("with exit 0"));
+    assert_eq!(fs::read_to_string(worktree.join("other.ts")).unwrap(), "const a = 1;\n\nexport default a;\n");
+
+    // A removed work tree is dropped, and the server goes on serving the rest.
+    common::git(fixture.path(), &["worktree", "remove", "--force", worktree.to_str().unwrap()]);
+
+    assert!(server.next().contains("was removed; forgetting it"));
+
+    fixture.write("new.ts", UNFORMATTED);
+    assert_exit(&fixture.run(&["check"]), 1);
+    assert!(server.next().contains("with exit 1"));
+}
+
+#[test]
+fn an_idle_server_stops_after_the_time_it_was_given() {
+    let fixture = Fixture::new(&[("app.ts", UNFORMATTED)]);
+    let mut server = Server::start_with(fixture.command(&["serve", "--idle", "1s"]));
+
+    assert_exit(&fixture.run(&["check"]), 1);
+    assert!(server.next().contains("answered"));
+    assert!(server.next().contains("no call for 1s; stopping"));
+
+    let status = server.child.wait().unwrap();
+
+    assert!(status.success(), "{status}");
+
+    // The socket is gone, so the next call runs locally.
+    assert_exit(&fixture.run(&["check"]), 1);
+}
+
+#[test]
 fn a_server_whose_executable_changed_refuses_and_stops() {
     let fixture = Fixture::new(&[("app.ts", UNFORMATTED)]);
     let bin = tempfile::tempdir().unwrap();

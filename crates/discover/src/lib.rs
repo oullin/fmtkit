@@ -20,7 +20,7 @@ mod watch;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::{env, io};
+use std::{env, fs, io};
 
 use fmtkit_core::{Lane, Lang};
 
@@ -83,21 +83,53 @@ pub enum DiscoverError {
     Outside { path: PathBuf, root: PathBuf },
 }
 
+/// Where `cwd` lies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Location {
+    /// The repository root: the enclosing git work tree, else `cwd`.
+    pub root: PathBuf,
+    /// What every work tree of the repository shares: the common git
+    /// directory (a linked worktree's `commondir`), canonical when it can be;
+    /// `root` itself outside git. One `fmtkit serve` serves every work tree
+    /// with the same `common`.
+    pub common: PathBuf,
+}
+
 /// The repository root for `cwd`: the enclosing git work tree, else `cwd`.
 ///
 /// The work tree is found by walking up from `cwd` (a linked worktree's root
 /// is its own directory). A bare repository, or no repository at all, yields
 /// `cwd`. A relative `cwd` yields a relative root.
 pub fn find_root(cwd: &Path) -> PathBuf {
+    locate(cwd).root
+}
+
+/// [`find_root`], with what the repository's work trees share.
+pub fn locate(cwd: &Path) -> Location {
+    let alone = || Location { root: cwd.to_path_buf(), common: cwd.to_path_buf() };
+
     let Ok((path, _trust)) = gix::discover::upwards(cwd) else {
-        return cwd.to_path_buf();
+        return alone();
     };
 
-    match path.into_repository_and_work_tree_directories().1 {
-        Some(work_tree) if work_tree.is_absolute() || cwd.is_relative() => work_tree,
-        Some(work_tree) => cwd.join(work_tree),
-        None => cwd.to_path_buf(),
+    let (git_dir, work_tree) = path.into_repository_and_work_tree_directories();
+    let absolute = |path: PathBuf| if path.is_absolute() || cwd.is_relative() { path } else { cwd.join(path) };
+
+    match work_tree {
+        Some(work_tree) => Location { root: absolute(work_tree), common: common_dir(absolute(git_dir)) },
+        None => alone(),
     }
+}
+
+/// `git_dir`, or the directory its `commondir` file names: a linked
+/// worktree's private git directory points at the one it shares.
+fn common_dir(git_dir: PathBuf) -> PathBuf {
+    let common = match fs::read_to_string(git_dir.join("commondir")) {
+        Ok(target) => git_dir.join(target.trim_end()),
+        Err(_) => git_dir,
+    };
+
+    common.canonicalize().unwrap_or(common)
 }
 
 /// Resolve `scope` under `root` into the files to process.

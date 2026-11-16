@@ -91,18 +91,18 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 `format` and `check` share these flags:
 
-| Flag                      | Meaning                                                  |
-| ------------------------- | -------------------------------------------------------- |
-| `[PATHS]...`              | Cover these files or directories, changed or not.        |
-| `--all`                   | Cover every tracked and untracked, non-ignored file.     |
-| `--go` / `--ts`           | Run only one lane (`--ts` includes Vue, HTML, Markdown). |
-| `-j`, `--jobs <N>`        | Worker threads; 0 means one per CPU.                     |
-| `--no-cache`              | Skip the cache.                                          |
-| `--format <FORMAT>`       | `text` (default), `json`, or `agent`.                    |
-| `-q`, `--quiet`           | Print only findings and the summary.                     |
-| `--color <WHEN>`          | `auto` (default), `always`, or `never`.                  |
-| `--stdin-filepath <PATH>` | Format stdin as if it were at `PATH`, for editors.       |
-| `--resolve-imports`       | Let goimports add and remove imports (slow).             |
+| Flag                      | Meaning                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `[PATHS]...`              | Cover these files or directories, changed or not.                                       |
+| `--all`                   | Cover every tracked and untracked, non-ignored file.                                    |
+| `--go` / `--ts`           | Run only one lane (`--ts` includes Vue, HTML, Markdown).                                |
+| `-j`, `--jobs <N>`        | Worker threads, and the build processes `go vet` may start in all; 0 means one per CPU. |
+| `--no-cache`              | Skip the cache.                                                                         |
+| `--format <FORMAT>`       | `text` (default), `json`, or `agent`.                                                   |
+| `-q`, `--quiet`           | Print only findings and the summary.                                                    |
+| `--color <WHEN>`          | `auto` (default), `always`, or `never`.                                                 |
+| `--stdin-filepath <PATH>` | Format stdin as if it were at `PATH`, for editors.                                      |
+| `--resolve-imports`       | Let goimports add and remove imports (slow).                                            |
 
 Outside Git, the root is the current directory and the default scope is every non-ignored file. A path outside the root is a usage error; a missing path fails the run.
 
@@ -133,11 +133,14 @@ fmtkit caches each file's outcome, keyed by its bytes, path, the fmtkit version,
 ```sh
 fmtkit serve           # in its own terminal
 fmtkit serve --watch   # also watch the tree (kqueue on macOS, inotify on Linux)
+fmtkit serve --idle 30m   # stop after half an hour without a call
 ```
+
+- One server covers every work tree of its repository (`git worktree`): start it in any of them, and calls from the others reach it. It keeps each work tree's cache and git state apart, shares one worker pool and one linter, and forgets a work tree once it is removed.
 
 - With `--watch`, each run looks only at what changed since the previous one. A flood of changes or dropped kernel events makes the next run look at everything. If the watch hits the open-file limit (macOS) or `fs.inotify.max_user_watches` (Linux), the server logs why and continues without it.
 - The server runs one request at a time, and refuses requests from another fmtkit version or a shell whose relevant environment differs (`FMTKIT_*`, `GIT_*`, `GO*`, `CGO_*`, `HOME`, `PATH`, `XDG_*`). Refused runs simply run locally.
-- It stops when its executable is replaced. `--no-cache` and `--stdin-filepath` always run locally.
+- It stops when its executable is replaced, when the repository is removed, or with `--idle`, after that long without a call. `--no-cache` and `--stdin-filepath` always run locally.
 - It listens on an owner-only Unix socket beside the cache. A second server for the same repository exits with code 2. Not available on Windows.
 
 ## Configuration
@@ -145,7 +148,7 @@ fmtkit serve --watch   # also watch the tree (kqueue on macOS, inotify on Linux)
 fmtkit reads `fmtkit.toml` at the repository root (or `FMTKIT_CONFIG`). Every key is optional; unknown keys are errors. These are the defaults:
 
 ```toml
-jobs = 0                              # 0 = one worker per CPU
+jobs = 0                              # 0 = one worker per CPU; also caps the build processes go vet starts
 
 [files]
 exclude = ["node_modules/", "vendor/"] # gitignore-style; replaces the default list

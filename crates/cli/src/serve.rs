@@ -66,6 +66,11 @@ const PROBE: &str = "nothing was sent";
 const PREFIXES: [&str; 4] = ["FMTKIT_", "GIT_", "GO", "CGO_"];
 const NAMES: [&str; 9] = ["AR", "CC", "CXX", "FC", "HOME", "PATH", "PKG_CONFIG", "XDG_CACHE_HOME", "XDG_CONFIG_HOME"];
 
+/// The variables that name one path, which a process resolves against its
+/// own directory: the same relative value means another file to a caller
+/// in another directory (another work tree, say), so it is compared absolute.
+const PATHS: [&str; 3] = ["FMTKIT_CACHE_DIR", "FMTKIT_CONFIG", "FMTKIT_GO_HELPER"];
+
 #[derive(Serialize, Deserialize)]
 struct Request<C> {
     proto: u32,
@@ -142,47 +147,52 @@ pub(crate) fn serve(cwd: &Path, watch: bool, idle: Option<Duration>) -> ExitCode
 
     let mut last_call = Instant::now();
 
+    // Each turn takes one connection, or the tick, then looks around: a
+    // steady stream of probes cannot put off the idle time or the checks.
     let why = loop {
         let stream = match calls.recv_timeout(TICK) {
-            Ok(stream) => stream,
-            Err(RecvTimeoutError::Timeout) => {
-                forget_missing(&mut session);
-
-                if !common.exists() {
-                    break "the repository was removed".to_owned();
-                }
-
-                match idle {
-                    Some(idle) if last_call.elapsed() >= idle => break format!("no call for {}", display_duration(idle)),
-                    _ => continue,
-                }
-            }
+            Ok(stream) => Some(stream),
+            Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => break "the socket stopped accepting".to_owned(),
         };
 
-        let started = Instant::now();
-        let changed = executable().as_ref() != Some(&me);
-        let answered = answer(&mut session, &stream, &me.path, &env, changed);
+        if let Some(stream) = stream {
+            let started = Instant::now();
+            let changed = executable().as_ref() != Some(&me);
+            let answered = answer(&mut session, &stream, &me.path, &env, changed);
 
-        drop(stream);
+            drop(stream);
 
-        match answered {
-            Ok(code) => eprintln!("fmtkit: answered in {:.1} ms with exit {code}", started.elapsed().as_secs_f64() * 1000.0),
-            Err(PROBE) => continue,
-            Err(reason) => eprintln!("fmtkit: refused a call: {reason}"),
-        }
+            if answered != Err(PROBE) {
+                match answered {
+                    Ok(code) => eprintln!("fmtkit: answered in {:.1} ms with exit {code}", started.elapsed().as_secs_f64() * 1000.0),
+                    Err(reason) => eprintln!("fmtkit: refused a call: {reason}"),
+                }
 
-        if let Some(reason) = session.watch_failure() {
-            eprintln!("fmtkit: stopped watching: {reason}");
+                if let Some(reason) = session.watch_failure() {
+                    eprintln!("fmtkit: stopped watching: {reason}");
+                }
+
+                session.persist();
+
+                last_call = Instant::now();
+
+                if changed {
+                    break "the fmtkit executable changed".to_owned();
+                }
+            }
         }
 
         forget_missing(&mut session);
-        session.persist();
 
-        last_call = Instant::now();
+        if !common.exists() {
+            break "the repository was removed".to_owned();
+        }
 
-        if changed {
-            break "the fmtkit executable changed".to_owned();
+        if let Some(idle) = idle
+            && last_call.elapsed() >= idle
+        {
+            break format!("no call for {}", display_duration(idle));
         }
     };
 
@@ -351,13 +361,19 @@ fn executable() -> Option<Executable> {
     Some(Executable { path, len: meta.len(), modified: meta.modified().ok() })
 }
 
-/// The variables a run reads, sorted by name.
+/// The variables a run reads, sorted by name, with [`PATHS`] made absolute
+/// against this process's directory.
 fn environment() -> Vec<(OsString, OsString)> {
+    let cwd = std::env::current_dir().ok();
     let mut vars: Vec<(OsString, OsString)> = std::env::vars_os()
         .filter(|(name, _)| {
             let name = name.to_string_lossy();
 
             PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || NAMES.contains(&name.as_ref())
+        })
+        .map(|(name, value)| match &cwd {
+            Some(cwd) if PATHS.contains(&name.to_string_lossy().as_ref()) && !value.is_empty() => (name, cwd.join(&value).into_os_string()),
+            _ => (name, value),
         })
         .collect();
 

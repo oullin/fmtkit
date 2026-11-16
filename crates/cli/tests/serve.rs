@@ -143,6 +143,28 @@ fn one_server_per_repository_and_a_dead_ones_socket_is_replaced() {
 }
 
 #[test]
+fn a_relative_path_in_the_environment_counts_from_the_callers_directory() {
+    let fixture = Fixture::new(&[("sub/app.ts", UNFORMATTED)]);
+    let mut serve = fixture.command(&["serve"]);
+
+    serve.env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper");
+
+    let server = Server::start_with(serve);
+
+    // Named from the server's directory, it is the same file.
+    let same = fixture.command(&["check"]).env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper").output().unwrap();
+
+    assert_exit(&same, 1);
+    assert!(server.next().contains("answered"));
+
+    // Named from another directory, the same text is another file.
+    let other = fixture.command(&["check"]).env("FMTKIT_GO_HELPER", "./tools/fmtkit-go-helper").current_dir(fixture.path().join("sub")).output().unwrap();
+
+    assert_exit(&other, 1);
+    assert!(server.next().contains("refused a call: the server runs with another environment"));
+}
+
+#[test]
 fn one_server_answers_every_work_tree_of_its_repository() {
     let fixture = Fixture::new(&[("app.ts", "export const app = 1;\n")]);
 

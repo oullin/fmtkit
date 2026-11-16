@@ -91,18 +91,18 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 `format` and `check` share these flags:
 
-| Flag                      | Meaning                                                  |
-| ------------------------- | -------------------------------------------------------- |
-| `[PATHS]...`              | Cover these files or directories, changed or not.        |
-| `--all`                   | Cover every tracked and untracked, non-ignored file.     |
-| `--go` / `--ts`           | Run only one lane (`--ts` includes Vue, HTML, Markdown). |
+| Flag                      | Meaning                                                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| `[PATHS]...`              | Cover these files or directories, changed or not.                                       |
+| `--all`                   | Cover every tracked and untracked, non-ignored file.                                    |
+| `--go` / `--ts`           | Run only one lane (`--ts` includes Vue, HTML, Markdown).                                |
 | `-j`, `--jobs <N>`        | Worker threads, and the build processes `go vet` may start in all; 0 means one per CPU. |
-| `--no-cache`              | Skip the cache.                                          |
-| `--format <FORMAT>`       | `text` (default), `json`, or `agent`.                    |
-| `-q`, `--quiet`           | Print only findings and the summary.                     |
-| `--color <WHEN>`          | `auto` (default), `always`, or `never`.                  |
-| `--stdin-filepath <PATH>` | Format stdin as if it were at `PATH`, for editors.       |
-| `--resolve-imports`       | Let goimports add and remove imports (slow).             |
+| `--no-cache`              | Skip the cache.                                                                         |
+| `--format <FORMAT>`       | `text` (default), `json`, or `agent`.                                                   |
+| `-q`, `--quiet`           | Print only findings and the summary.                                                    |
+| `--color <WHEN>`          | `auto` (default), `always`, or `never`.                                                 |
+| `--stdin-filepath <PATH>` | Format stdin as if it were at `PATH`, for editors.                                      |
+| `--resolve-imports`       | Let goimports add and remove imports (slow).                                            |
 
 Outside Git, the root is the current directory and the default scope is every non-ignored file. A path outside the root is a usage error; a missing path fails the run.
 

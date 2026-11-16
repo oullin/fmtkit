@@ -29,3 +29,7 @@ github-build-setup = "../build-setup.yml"
 # Releases start from tag.yml through workflow_dispatch: a tag pushed with
 # GITHUB_TOKEN would not trigger a tag-push workflow.
 dispatch-releases = true
+
+# GitHub retired the macos-14 image dist 0.32 picks for Apple silicon.
+[dist.github-custom-runners]
+aarch64-apple-darwin = "macos-15"

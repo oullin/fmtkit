@@ -4,6 +4,7 @@
 //! type) and no `FormalParameters` node. These helpers hide the same nodes so
 //! the ported logic sees the tree v1 saw.
 
+pub mod array_method;
 pub mod lexical;
 pub mod params;
 pub mod testing;

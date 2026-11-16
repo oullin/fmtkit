@@ -64,16 +64,6 @@ impl<'a> Param<'a> {
         }
     }
 
-    /// The name of the innermost binding, through a default, a rest element
-    /// or a parameter property, when it is a plain identifier.
-    fn inner_name(self) -> Option<&'a str> {
-        match self {
-            Self::This(_) => Some("this"),
-            Self::Formal(it) => binding_name(&it.pattern),
-            Self::Rest(it) => binding_name(&it.rest.argument),
-        }
-    }
-
     /// The source range of the ESTree parameter node.
     fn estree_span(self) -> Span {
         match self {
@@ -99,10 +89,25 @@ impl<'a> Param<'a> {
         self.bare_name().unwrap_or_else(|| without_annotation(self.estree_span().source_text(source), keyword))
     }
 
-    /// v1's display name in `no-unknown-parameters`, which looks through
-    /// defaults, rest elements and parameter properties first.
-    pub fn inner_display_name(self, source: &'a str, keyword: &str) -> &'a str {
-        self.inner_name().unwrap_or_else(|| without_annotation(self.estree_span().source_text(source), keyword))
+    /// Upstream's `functionParameterBindingName`: the local binding, through a
+    /// default, a rest element or a parameter property; a destructuring
+    /// pattern is its text up to its own annotation.
+    pub fn binding_display_name(self, source: &'a str) -> &'a str {
+        let (pattern, annotation) = match self {
+            Self::This(_) => return "this",
+            Self::Formal(it) => (&it.pattern, it.type_annotation.as_deref()),
+            // ESTree hangs a rest parameter's annotation on the rest element, not its argument.
+            Self::Rest(it) => (&it.rest.argument, None),
+        };
+
+        if let Some(name) = binding_name(pattern) {
+            return name;
+        }
+
+        let span = pattern.span();
+        let end = annotation.map_or(span.end, |annotation| annotation.span.start);
+
+        source.get(span.start as usize..end as usize).map_or("", |text| text.trim_end_matches(is_js_space))
     }
 }
 

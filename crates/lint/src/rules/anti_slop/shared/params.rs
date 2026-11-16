@@ -65,7 +65,7 @@ impl<'a> Param<'a> {
     }
 
     /// The source range of the ESTree parameter node.
-    fn estree_span(self) -> Span {
+    pub fn estree_span(self) -> Span {
         match self {
             Self::This(it) => it.span,
             Self::Formal(it) if it.initializer.is_some() || is_parameter_property(it) => it.span,

@@ -4,7 +4,8 @@
 //! error, 3 internal failure.
 //!
 //! `format` and `check` hand the run to a `fmtkit serve` for the repository
-//! when one is listening and agrees to it, and run it themselves otherwise.
+//! (one serves every work tree of it) when one is listening and agrees to
+//! it, and run it themselves otherwise.
 
 #[cfg(unix)]
 mod serve;
@@ -42,8 +43,8 @@ enum Command {
     Format(RunArgs),
     /// Report what `format` would change and every finding; write nothing.
     Check(RunArgs),
-    /// Keep running for this repository, so `format` and `check` here start
-    /// warm: they hand their runs to it while it runs.
+    /// Keep running for this repository, so `format` and `check` in any of
+    /// its work trees start warm: they hand their runs to it while it runs.
     Serve(ServeArgs),
     /// Print the version.
     Version,
@@ -54,6 +55,10 @@ struct ServeArgs {
     /// Watch the repository between calls (kqueue on macOS, inotify on Linux), so a call looks only at what changed since the last.
     #[arg(long)]
     watch: bool,
+
+    /// Stop after this long without a call: a number of seconds, minutes, or hours, as in `90s`, `30m`, or `2h`.
+    #[arg(long, value_name = "DURATION", value_parser = parse_duration)]
+    idle: Option<std::time::Duration>,
 }
 
 #[derive(Args, Serialize, Deserialize)]
@@ -127,6 +132,8 @@ struct Call {
     cwd: PathBuf,
     /// The repository root that contains `cwd`.
     root: PathBuf,
+    /// What the repository's work trees share; names the server to ask.
+    common: PathBuf,
     color: bool,
     /// Draw a progress bar on stderr.
     interactive: bool,
@@ -153,7 +160,7 @@ fn main() -> ExitCode {
 #[cfg(unix)]
 fn serve(args: &ServeArgs) -> ExitCode {
     match std::env::current_dir() {
-        Ok(cwd) => serve::serve(&cwd, args.watch),
+        Ok(cwd) => serve::serve(&cwd, args.watch, args.idle),
         Err(e) => fail(EXIT_INTERNAL, &format!("current directory: {e}")),
     }
 }
@@ -180,8 +187,8 @@ fn run(mode: Mode, args: RunArgs) -> ExitCode {
     };
 
     let interactive = io::stderr().is_terminal() && matches!(args.format, OutputFormat::Text) && !args.quiet;
-    let root = fmtkit_discover::find_root(&cwd);
-    let call = Call { mode, args, cwd, root, color, interactive };
+    let fmtkit_discover::Location { root, common } = fmtkit_discover::locate(&cwd);
+    let call = Call { mode, args, cwd, root, common, color, interactive };
 
     // A run without the cache is asked for a cold start, so it stays local.
     #[cfg(unix)]
@@ -338,8 +345,41 @@ fn progress_bar() -> impl Fn(usize, usize) + Send + Sync + 'static {
     }
 }
 
+/// A whole number of seconds, minutes, or hours: `90s`, `30m`, `2h`.
+fn parse_duration(text: &str) -> Result<std::time::Duration, String> {
+    let (count, unit) = text.split_at(text.len() - text.chars().last().map_or(0, char::len_utf8));
+    let per_unit = match unit {
+        "s" => 1,
+        "m" => 60,
+        "h" => 3600,
+        _ => return Err(format!("`{text}` needs a unit: s, m, or h")),
+    };
+
+    match count.parse::<u64>() {
+        Ok(count) if count > 0 => Ok(std::time::Duration::from_secs(count.saturating_mul(per_unit))),
+        _ => Err(format!("`{text}` is not a whole number of {unit}")),
+    }
+}
+
 fn fail(code: u8, message: &str) -> ExitCode {
     eprintln!("fmtkit: {message}");
 
     ExitCode::from(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_duration;
+    use std::time::Duration;
+
+    #[test]
+    fn durations_take_a_count_and_a_unit() {
+        assert_eq!(parse_duration("90s"), Ok(Duration::from_secs(90)));
+        assert_eq!(parse_duration("30m"), Ok(Duration::from_mins(30)));
+        assert_eq!(parse_duration("2h"), Ok(Duration::from_hours(2)));
+
+        for bad in ["", "30", "m", "0s", "-1m", "1.5h", "1d"] {
+            assert!(parse_duration(bad).is_err(), "{bad}");
+        }
+    }
 }

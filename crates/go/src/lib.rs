@@ -89,8 +89,9 @@ pub enum VetTargets {
 /// repository-relative paths. Vet is skipped, with the reason recorded, when
 /// `go` is not on `PATH` or nothing in scope belongs to a module. With a
 /// `memo`, a module whose inputs match a run that passed is not vetted again.
-pub fn vet(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>) -> VetOutcome {
-    vet::run(root, targets, memo)
+/// At most `jobs` build processes run at once across every module.
+pub fn vet(root: &Path, targets: &VetTargets, memo: Option<&dyn VetMemo>, jobs: usize) -> VetOutcome {
+    vet::run(root, targets, memo, jobs)
 }
 
 /// Remembers the `go vet` runs that passed, by the digest of everything the

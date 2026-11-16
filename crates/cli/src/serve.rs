@@ -1,8 +1,11 @@
 //! `fmtkit serve`: a process that keeps one repository's [`Session`] warm and
 //! runs the `format` and `check` calls other fmtkit processes hand it.
 //!
-//! The server listens on [`fmtkit_cache::socket`] for its repository root,
-//! readable and writable only by its owner, and runs one call at a time.
+//! The server listens on [`fmtkit_cache::socket`] for what the repository's
+//! work trees share (its common git directory), so one server answers every
+//! work tree, and a linked worktree started and removed in passing never
+//! gets a server of its own. The socket is readable and writable only by its
+//! owner, and the server runs one call at a time.
 //! Each message is a frame: a little-endian `u32` length, then a `postcard`
 //! value. A caller sends one [`Request`]; the server answers with progress
 //! while the run goes, then the exit code and the bytes to print, and writes
@@ -11,7 +14,9 @@
 //! The server refuses a call from another fmtkit version or executable, or
 //! made with different values of the variables a run reads, and the caller
 //! runs the call itself. Once its own executable has changed on disk, the
-//! server refuses every call and stops. The server logs each call it
+//! server refuses every call and stops. It also stops once the repository
+//! is gone, or after the idle time it was given passes without a call, and
+//! it forgets a work tree once that is gone. The server logs each call it
 //! answers or refuses on stderr.
 
 use std::ffi::OsString;
@@ -22,13 +27,16 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Mutex, PoisonError};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use fmtkit_core::VERSION;
+use fmtkit_discover::Location;
 use fmtkit_engine::{Progress, Session};
 
 use crate::{Call, EXIT_INTERNAL, EXIT_USAGE, execute, fail, progress_bar};
@@ -43,6 +51,14 @@ const MAX_FRAME: usize = 1 << 30;
 /// a reply, before moving on to the next caller.
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// How often an idle server looks for its repository and work trees, and
+/// at the idle time.
+const TICK: Duration = Duration::from_secs(1);
+
+/// The refusal of a connection that sent nothing: another `fmtkit serve`
+/// finding out whether this one is alive (see [`listen`]). Not a call.
+const PROBE: &str = "nothing was sent";
 
 /// The variables a run reads, directly or through git, go, the C toolchain,
 /// and the cache and configuration lookups: every variable with one of
@@ -77,12 +93,14 @@ struct Executable {
     modified: Option<SystemTime>,
 }
 
-/// Serve the repository that contains `cwd` until stopped, or until this
-/// executable changes; with `watch`, watch it between calls.
-pub(crate) fn serve(cwd: &Path, watch: bool) -> ExitCode {
-    let root = fmtkit_discover::find_root(cwd);
+/// Serve the repository that contains `cwd`, every work tree of it, until
+/// stopped: by a signal, this executable changing, the repository being
+/// removed, or `idle` passing without a call. With `watch`, watch each work
+/// tree between calls.
+pub(crate) fn serve(cwd: &Path, watch: bool, idle: Option<Duration>) -> ExitCode {
+    let Location { root, common } = fmtkit_discover::locate(cwd);
 
-    let Some(socket) = fmtkit_cache::socket(&root) else {
+    let Some(socket) = fmtkit_cache::socket(&common) else {
         return fail(EXIT_USAGE, "serve needs a cache directory to hold its socket");
     };
 
@@ -104,9 +122,42 @@ pub(crate) fn serve(cwd: &Path, watch: bool) -> ExitCode {
 
     eprintln!("fmtkit: serving {} on {}{}", root.display(), socket.display(), if watch { ", watching it" } else { "" });
 
-    for stream in listener.incoming() {
-        let Ok(stream) = stream else {
-            continue;
+    // Accepting runs on its own thread so this one can look up between calls.
+    let (accepted, calls) = mpsc::channel();
+    let accepting = thread::Builder::new().name("fmtkit-accept".into()).spawn(move || {
+        for stream in listener.incoming() {
+            if let Ok(stream) = stream
+                && accepted.send(stream).is_err()
+            {
+                break;
+            }
+        }
+    });
+
+    if let Err(e) = accepting {
+        let _ = fs::remove_file(&socket);
+
+        return fail(EXIT_INTERNAL, &format!("cannot start the accept thread: {e}"));
+    }
+
+    let mut last_call = Instant::now();
+
+    let why = loop {
+        let stream = match calls.recv_timeout(TICK) {
+            Ok(stream) => stream,
+            Err(RecvTimeoutError::Timeout) => {
+                forget_missing(&mut session);
+
+                if !common.exists() {
+                    break "the repository was removed".to_owned();
+                }
+
+                match idle {
+                    Some(idle) if last_call.elapsed() >= idle => break format!("no call for {}", display_duration(idle)),
+                    _ => continue,
+                }
+            }
+            Err(RecvTimeoutError::Disconnected) => break "the socket stopped accepting".to_owned(),
         };
 
         let started = Instant::now();
@@ -117,6 +168,7 @@ pub(crate) fn serve(cwd: &Path, watch: bool) -> ExitCode {
 
         match answered {
             Ok(code) => eprintln!("fmtkit: answered in {:.1} ms with exit {code}", started.elapsed().as_secs_f64() * 1000.0),
+            Err(PROBE) => continue,
             Err(reason) => eprintln!("fmtkit: refused a call: {reason}"),
         }
 
@@ -124,25 +176,47 @@ pub(crate) fn serve(cwd: &Path, watch: bool) -> ExitCode {
             eprintln!("fmtkit: stopped watching: {reason}");
         }
 
+        forget_missing(&mut session);
         session.persist();
 
-        if changed {
-            eprintln!("fmtkit: the fmtkit executable changed; stopping");
+        last_call = Instant::now();
 
-            break;
+        if changed {
+            break "the fmtkit executable changed".to_owned();
         }
-    }
+    };
+
+    eprintln!("fmtkit: {why}; stopping");
 
     let _ = fs::remove_file(&socket);
 
     ExitCode::SUCCESS
 }
 
-/// Hand `call` to the server for its repository; the exit code, after
-/// printing what the server answered. `None` when no server is listening or
-/// the server refused, and the caller should run `call` itself.
+/// Drop what the session keeps for work trees that no longer exist.
+fn forget_missing(session: &mut Session) {
+    for root in session.forget_missing() {
+        eprintln!("fmtkit: {} was removed; forgetting it", root.display());
+    }
+}
+
+/// `idle` in the unit it was given in, as the user wrote it: `90s`, `30m`, `2h`.
+fn display_duration(duration: Duration) -> String {
+    let seconds = duration.as_secs();
+
+    match seconds {
+        s if s % 3600 == 0 => format!("{}h", s / 3600),
+        s if s % 60 == 0 => format!("{}m", s / 60),
+        s => format!("{s}s"),
+    }
+}
+
+/// Hand `call` to the server for its repository, whichever work tree of it
+/// `call` is in; the exit code, after printing what the server answered.
+/// `None` when no server is listening or the server refused, and the caller
+/// should run `call` itself.
 pub(crate) fn ask(call: &Call) -> Option<u8> {
-    let stream = UnixStream::connect(fmtkit_cache::socket(&call.root)?).ok()?;
+    let stream = UnixStream::connect(fmtkit_cache::socket(&call.common)?).ok()?;
     let request = Request { proto: PROTO, version: VERSION.to_owned(), exe: executable().map(|exe| exe.path), env: environment(), call };
 
     write(&stream, &request).ok()?;
@@ -150,13 +224,13 @@ pub(crate) fn ask(call: &Call) -> Option<u8> {
     let bar = call.interactive.then(progress_bar);
     let reply = loop {
         match read::<Reply>(&stream) {
-            Ok(Reply::Progress { done, total }) => {
+            Ok(Some(Reply::Progress { done, total })) => {
                 if let Some(bar) = &bar {
                     bar(done, total);
                 }
             }
-            Ok(Reply::Done { code, stdout, stderr }) => break Some((code, stdout, stderr)),
-            Ok(Reply::Refused(_)) | Err(_) => break None,
+            Ok(Some(Reply::Done { code, stdout, stderr })) => break Some((code, stdout, stderr)),
+            Ok(Some(Reply::Refused(_)) | None) | Err(_) => break None,
         }
     };
 
@@ -183,9 +257,10 @@ pub(crate) fn ask(call: &Call) -> Option<u8> {
     Some(code)
 }
 
-/// Bind `socket`, replacing one that nothing answers on. The socket is bound
-/// in a directory only its owner can enter, made private there, and then
-/// moved into place, so no one else can connect to it in between.
+/// Bind `socket`, replacing one that nothing answers on: a server that
+/// answers takes the connection as a [`PROBE`]. The socket is bound in a
+/// directory only its owner can enter, made private there, and then moved
+/// into place, so no one else can connect to it in between.
 fn listen(socket: &Path) -> io::Result<UnixListener> {
     if let Some(dir) = socket.parent() {
         fs::create_dir_all(dir)?;
@@ -222,12 +297,13 @@ fn answer(session: &mut Session, stream: &UnixStream, exe: &Path, env: &[(OsStri
     let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
 
     let refusal = match read::<Request<Call>>(stream) {
+        Ok(None) => return Err(PROBE),
         Err(_) => Err("the request could not be read"),
-        Ok(_) if stopping => Err("the server's executable changed"),
-        Ok(request) if request.proto != PROTO || request.version != VERSION => Err("the server runs another fmtkit version"),
-        Ok(request) if request.exe.as_deref() != Some(exe) => Err("the server runs another fmtkit executable"),
-        Ok(request) if request.env != env => Err("the server runs with another environment"),
-        Ok(request) => Ok(request.call),
+        Ok(Some(_)) if stopping => Err("the server's executable changed"),
+        Ok(Some(request)) if request.proto != PROTO || request.version != VERSION => Err("the server runs another fmtkit version"),
+        Ok(Some(request)) if request.exe.as_deref() != Some(exe) => Err("the server runs another fmtkit executable"),
+        Ok(Some(request)) if request.env != env => Err("the server runs with another environment"),
+        Ok(Some(request)) => Ok(request.call),
     };
 
     let call = match refusal {
@@ -297,10 +373,15 @@ fn write<T: Serialize>(mut stream: &UnixStream, value: &T) -> io::Result<()> {
     stream.write_all(&frame)
 }
 
-fn read<T: DeserializeOwned>(mut stream: &UnixStream) -> io::Result<T> {
+/// The next frame, or `None` when the peer closed without sending one.
+fn read<T: DeserializeOwned>(mut stream: &UnixStream) -> io::Result<Option<T>> {
     let mut len = [0; 4];
 
-    stream.read_exact(&mut len)?;
+    if stream.read(&mut len[..1])? == 0 {
+        return Ok(None);
+    }
+
+    stream.read_exact(&mut len[1..])?;
 
     let len = usize::try_from(u32::from_le_bytes(len)).map_err(io::Error::other)?;
 
@@ -311,5 +392,5 @@ fn read<T: DeserializeOwned>(mut stream: &UnixStream) -> io::Result<T> {
     let mut frame = vec![0; len];
 
     stream.read_exact(&mut frame)?;
-    postcard::from_bytes(&frame).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    postcard::from_bytes(&frame).map(Some).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }

@@ -14,6 +14,8 @@ use rustc_hash::FxHashMap;
 use fmtkit_core::Edit;
 
 pub mod anti_slop;
+pub mod anti_slop_effect;
+pub mod anti_slop_martinfowler;
 pub mod boundaries;
 pub mod naming;
 pub mod nkzw;
@@ -104,6 +106,8 @@ pub type Factory = fn(&[serde_json::Value]) -> Result<Box<dyn Rule>, String>;
 pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
     anti_slop::RULES
         .iter()
+        .chain(anti_slop_effect::RULES)
+        .chain(anti_slop_martinfowler::RULES)
         .chain(boundaries::RULES)
         .chain(naming::RULES)
         .chain(nkzw::RULES)

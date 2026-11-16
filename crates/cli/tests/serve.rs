@@ -165,6 +165,28 @@ fn a_relative_path_in_the_environment_counts_from_the_callers_directory() {
 }
 
 #[test]
+fn a_relative_configuration_path_counts_from_the_root_of_the_call() {
+    let fixture = Fixture::new(&[("sub/app.ts", UNFORMATTED), ("alt.toml", "[files]\nexclude = [\"sub/app.ts\"]\n")]);
+    let mut serve = fixture.command(&["serve"]);
+
+    serve.env("FMTKIT_CONFIG", "alt.toml");
+
+    let server = Server::start_with(serve);
+
+    // From a subdirectory, the same relative value still names <root>/alt.toml.
+    let excluded = fixture.command(&["check"]).env("FMTKIT_CONFIG", "alt.toml").current_dir(fixture.path().join("sub")).output().unwrap();
+
+    assert_exit(&excluded, 0);
+    assert!(server.next().contains("with exit 0"));
+
+    // An absolute path is not the same value, even when it names the same file.
+    let absolute = fixture.command(&["check"]).env("FMTKIT_CONFIG", fixture.path().join("alt.toml")).output().unwrap();
+
+    assert_exit(&absolute, 0);
+    assert!(server.next().contains("refused a call: the server runs with another environment"));
+}
+
+#[test]
 fn one_server_answers_every_work_tree_of_its_repository() {
     let fixture = Fixture::new(&[("app.ts", "export const app = 1;\n")]);
 

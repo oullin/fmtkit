@@ -17,36 +17,36 @@ The rules read one file at a time and do not use the type checker, so they canno
 
 ## Core (`anti-slop/*`)
 
-| Rule | What it reports |
-| --- | --- |
-| `max-ternary-depth` | A ternary chain deeper than `maxDepth` (default 2), counted through parentheses, `as`, `!` and `satisfies`. Use a lookup table, a `switch`, or a named decision function. |
-| `no-array-filter-map` | `.filter(…).map(…)` or `.map(…).filter(…)` on a value the file shows is an array. Use one pass or lazy iterator helpers. |
-| `no-chained-type-assertions` | Nested `as` or angle-bracket assertions, unless every link is `as const`. |
-| `no-conditional-empty-object-spread` | `...(flag ? value : {})` used to omit a property. |
-| `no-conditional-spread` | Spreading any ternary or logical expression (`&&`, `\|\|`, `??`) in objects, arrays, call arguments and JSX attributes. Build the value in separate statements. |
-| `no-disabled-type-assertion-rules` | An inline disable comment for a rule that keeps type assertions out, or one that names no rule. A reason does not make it acceptable. `additionalRules` adds rule names to protect. |
-| `no-known-value-widening` | A value the file already knows flowing into an explicitly broad or anonymous type. |
-| `no-module-mocking` | Vitest or Jest module mocking. |
-| `no-object-parameters` | Parameters typed `object`, directly or through an alias. |
-| `no-reduce-accumulator-copy` | Copying a reducer's growing accumulator on every iteration with `Object.assign`, `Array.from` or array copy methods. Spreads are `oxc/no-accumulating-spread`'s job. |
-| `no-reflect-apply`, `no-reflect-get` | `Reflect.apply` and `Reflect.get`. |
-| `no-reprovide-ambient-service` | An Effect service read with `yield* Service` and handed straight back with `Effect.provideService(Service, service)`. |
-| `no-runtime-typeof` | Runtime `typeof` checks. Decode external values at their I/O boundary. |
-| `no-shape-in-symbol-names` | "shape" anywhere in a symbol name, in any letter case. |
-| `no-unknown-parameters` | Parameters typed `unknown`, or a union containing it. `cause` and the subject of a type predicate or assertion (`value is T`, `asserts value`) are allowed. |
-| `no-unknown-returns` | An explicit `unknown` or `Promise<unknown>` return type. |
-| `no-unknown-type-aliases` | A module-level alias that resolves to `unknown`. |
-| `no-unsafe-dictionary-type` | A dictionary whose value type is `unknown`, `any`, `object` or `{}`, or a union or alias that holds one of them. |
-| `no-widen-then-assert` | A local `const` that widens a known value and is later asserted back to a narrower type. |
-| `require-readable-spacing` | A missing blank line around imports, top-level statements, declarations, multiline variables, control flow, and after block-like statements. Fixable. |
-| `require-safety-comment-for-type-assertion` | A type assertion, other than `as const`, without a nearby `SAFETY:` comment stating its invariant. |
-| `require-suppression-reason` | A suppression that does not name its rules or say why after `--`, and directives for other linters. |
-| `no-ambient-nondeterminism` | Reading the clock or the entropy source outside a mock. |
-| `no-hookless-use-function` | A React `use*` function that calls no hook. |
-| `no-low-value-comments` | Comments that repeat the code, divide a file into sections, label test steps, or keep dead code. |
-| `no-polling-loop-in-tests`, `no-real-time-wait-in-tests` | Tests that spin until something becomes true, or sleep on the real clock. |
-| `no-test-in-loop` | Tests registered inside a `for` loop. Use `.each`. |
-| `no-unreasoned-test-skip` | A skipped or to-do test without a comment that links its issue. |
+| Rule                                                     | What it reports                                                                                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `max-ternary-depth`                                      | A ternary chain deeper than `maxDepth` (default 2), counted through parentheses, `as`, `!` and `satisfies`. Use a lookup table, a `switch`, or a named decision function.           |
+| `no-array-filter-map`                                    | `.filter(…).map(…)` or `.map(…).filter(…)` on a value the file shows is an array. Use one pass or lazy iterator helpers.                                                            |
+| `no-chained-type-assertions`                             | Nested `as` or angle-bracket assertions, unless every link is `as const`.                                                                                                           |
+| `no-conditional-empty-object-spread`                     | `...(flag ? value : {})` used to omit a property.                                                                                                                                   |
+| `no-conditional-spread`                                  | Spreading any ternary or logical expression (`&&`, `\|\|`, `??`) in objects, arrays, call arguments and JSX attributes. Build the value in separate statements.                     |
+| `no-disabled-type-assertion-rules`                       | An inline disable comment for a rule that keeps type assertions out, or one that names no rule. A reason does not make it acceptable. `additionalRules` adds rule names to protect. |
+| `no-known-value-widening`                                | A value the file already knows flowing into an explicitly broad or anonymous type.                                                                                                  |
+| `no-module-mocking`                                      | Vitest or Jest module mocking.                                                                                                                                                      |
+| `no-object-parameters`                                   | Parameters typed `object`, directly or through an alias.                                                                                                                            |
+| `no-reduce-accumulator-copy`                             | Copying a reducer's growing accumulator on every iteration with `Object.assign`, `Array.from` or array copy methods. Spreads are `oxc/no-accumulating-spread`'s job.                |
+| `no-reflect-apply`, `no-reflect-get`                     | `Reflect.apply` and `Reflect.get`.                                                                                                                                                  |
+| `no-reprovide-ambient-service`                           | An Effect service read with `yield* Service` and handed straight back with `Effect.provideService(Service, service)`.                                                               |
+| `no-runtime-typeof`                                      | Runtime `typeof` checks. Decode external values at their I/O boundary.                                                                                                              |
+| `no-shape-in-symbol-names`                               | "shape" anywhere in a symbol name, in any letter case.                                                                                                                              |
+| `no-unknown-parameters`                                  | Parameters typed `unknown`, or a union containing it. `cause` and the subject of a type predicate or assertion (`value is T`, `asserts value`) are allowed.                         |
+| `no-unknown-returns`                                     | An explicit `unknown` or `Promise<unknown>` return type.                                                                                                                            |
+| `no-unknown-type-aliases`                                | A module-level alias that resolves to `unknown`.                                                                                                                                    |
+| `no-unsafe-dictionary-type`                              | A dictionary whose value type is `unknown`, `any`, `object` or `{}`, or a union or alias that holds one of them.                                                                    |
+| `no-widen-then-assert`                                   | A local `const` that widens a known value and is later asserted back to a narrower type.                                                                                            |
+| `require-readable-spacing`                               | A missing blank line around imports, top-level statements, declarations, multiline variables, control flow, and after block-like statements. Fixable.                               |
+| `require-safety-comment-for-type-assertion`              | A type assertion, other than `as const`, without a nearby `SAFETY:` comment stating its invariant.                                                                                  |
+| `require-suppression-reason`                             | A suppression that does not name its rules or say why after `--`, and directives for other linters.                                                                                 |
+| `no-ambient-nondeterminism`                              | Reading the clock or the entropy source outside a mock.                                                                                                                             |
+| `no-hookless-use-function`                               | A React `use*` function that calls no hook.                                                                                                                                         |
+| `no-low-value-comments`                                  | Comments that repeat the code, divide a file into sections, label test steps, or keep dead code.                                                                                    |
+| `no-polling-loop-in-tests`, `no-real-time-wait-in-tests` | Tests that spin until something becomes true, or sleep on the real clock.                                                                                                           |
+| `no-test-in-loop`                                        | Tests registered inside a `for` loop. Use `.each`.                                                                                                                                  |
+| `no-unreasoned-test-skip`                                | A skipped or to-do test without a comment that links its issue.                                                                                                                     |
 
 `require-readable-spacing` and the formatter agree. `fmtkit format` applies lint fixes before formatting, and the formatted result never triggers the rule again. The formatter's own spacing is looser, though, so `fmtkit check` can still report this rule on code the formatter produced, for example two consecutive top-level statements.
 

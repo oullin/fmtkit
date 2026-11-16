@@ -4,6 +4,8 @@ These native rules reject the low-evidence code that coding agents tend to write
 
 Most of them are ports of the Oxlint plugin [anti-slop](https://github.com/k-mistele/anti-slop) (Dillon Mulroy's original, maintained in Kyle Mistele's fork). The rest are adapted from t3code's Oxlint plugin. The ported rules report what the upstream plugin reports under Oxlint 1.86, at the same byte spans and with the same messages: their tests replay the upstream test cases with the findings the upstream plugin produced for them.
 
+Besides the core `anti-slop/*` rules, the [`anti-slop-martinfowler/*` group](#code-smells-anti-slop-martinfowler) flags code smells from Martin Fowler's _Refactoring_.
+
 Every rule is off in the bundled policy. Enable the ones you want in `fmtkit.toml`:
 
 ```toml
@@ -54,3 +56,31 @@ The rules read one file at a time and do not use the type checker, so they canno
 
 - `no-reprovide-ambient-service`: upstream keeps the Effect names it has seen imported for the whole run, so a name imported in one file can trigger findings in later files. fmtkit judges each file on its own imports.
 - `require-readable-spacing`: inside an `export =` the rule skips, a multiline template literal counts its own blank lines, where upstream reads it as one token.
+
+## Code smells (`anti-slop-martinfowler/*`)
+
+These rules flag smells from Martin Fowler's _Refactoring_ that a syntax tree can show. A smell is a reason to look, not proof of a problem, so enable them at `warn`. Upstream leaves `message-chains` off by default.
+
+```toml
+[lint.rules]
+"anti-slop-martinfowler/global-data" = "warn"
+"anti-slop-martinfowler/long-function" = ["warn", { maxStatements = 30, maxLines = 80 }]
+"anti-slop-martinfowler/long-parameter-list" = ["warn", { max = 4 }]
+"anti-slop-martinfowler/loops" = "warn"
+"anti-slop-martinfowler/mutable-data" = "warn"
+"anti-slop-martinfowler/mysterious-name" = ["warn", { allowNames = ["fetch", "layer", "lookup", "make", "of"] }]
+"anti-slop-martinfowler/repeated-switches" = "warn"
+```
+
+| Rule                  | What it reports                                                                                                                                                                        | Options (defaults)                                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `global-data`         | An exported `let` or `var`, or an exported object, array, `Map` or `Set` that the file mutates.                                                                                        | —                                                                                                                                                         |
+| `long-function`       | A function whose own statements or lines, leaving out nested functions, exceed a limit.                                                                                                | `maxStatements` (30), `maxLines` (80)                                                                                                                     |
+| `long-parameter-list` | A function with more positional parameters than `max`. Rest parameters and `this` do not count.                                                                                        | `max` (4)                                                                                                                                                 |
+| `loops`               | A `for` loop that builds an array, object, `Map` or `Set` declared outside it. Loops that exit early, write other outer state, or update a buffer in place are skipped.                | `includeWhile` (false)                                                                                                                                    |
+| `message-chains`      | Property reads and zero-argument `getX()` calls that navigate through more than `maxDepth` objects. Builders, `.pipe(…)` chains and global roots are skipped.                          | `maxDepth` (3), `ignoreRoots` (`console`, `document`, `globalThis`, `location`, `navigator`, `process`, `self`, `window`), `ignorePascalCaseRoots` (true) |
+| `mutable-data`        | A module-level `let` or `var` that functions reassign, with the number of functions that write it. Exported bindings are left to `global-data`.                                        | —                                                                                                                                                         |
+| `mysterious-name`     | A top-level function named with a bare generic verb (`run`, `handle`, `process`) or a generic verb and a vague noun (`processData`), and a `const` that only aliases another function. | `verbs`, `vagueNouns`, `allowNames`, `checkAliases` (true)                                                                                                |
+| `repeated-switches`   | One value branched on over the same cases in several places in a file, whether by `switch`, `if` chains or nested ternaries.                                                           | `minOccurrences` (2), `minSharedCases` (2)                                                                                                                |
+
+Every rule also takes `ignoreTests` (default true), which skips files in `__tests__`, `__mocks__`, `test` or `tests` directories and `*.test.*` or `*.spec.*` scripts. Upstream matches those directories anywhere in the absolute path; fmtkit matches them within the repository.

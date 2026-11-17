@@ -209,7 +209,7 @@ The same entries may also be written inline as `[[lint.exempt]]` in `fmtkit.toml
 - `paths` are gitignore-style patterns matched against repository-relative paths, as `[lint] ignore` is: a pattern without a slash matches at any depth, and a directory covers everything below it.
 - An unknown rule, or a rule that is off, is a configuration error (exit 2). So is an exemptions file that is missing or does not parse; the message names the file and the line.
 - A finding the entry exempts is dropped together with its fix.
-- A run over the whole repository (`--all` with no paths) reports each exact path (a pattern with no `*`, `?`, `[` or `!`) that does not exist as a `lint/exempt` error, so the list only shrinks. Glob patterns are not judged.
+- A run over the whole repository (`--all` with no paths) reports each exact path that does not exist as a `lint/exempt` error, so the list only shrinks. An exact path contains a slash before its last segment, as `apps/api/src/worker/fetch.ts` or `/fetch.ts` do, and no `*`, `?`, `[`, `{`, `\` or leading `!`. Glob patterns and slash-free names, which match at any depth, are not judged.
 
 ## Complexity
 

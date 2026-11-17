@@ -166,10 +166,16 @@ pub struct Exemption {
 }
 
 impl Exemption {
-    /// The patterns that name one path rather than a glob: no wildcard, no
-    /// character class, no negation.
+    /// The patterns that name one root-relative path: anchored by a slash
+    /// before the last segment, with no wildcard, character class, brace
+    /// alternative, escape or negation. A slash-free pattern matches at any
+    /// depth, so it names no single path.
     pub fn exact_paths(&self) -> impl Iterator<Item = &str> {
-        self.paths.iter().filter(|p| !p.starts_with('!') && !p.contains(['*', '?', '[', '\\'])).map(|p| p.trim_start_matches('/').trim_end_matches('/'))
+        self.paths
+            .iter()
+            .map(|p| p.trim_end_matches('/'))
+            .filter(|p| p.contains('/') && !p.starts_with('!') && !p.contains(['*', '?', '[', '{', '\\']))
+            .map(|p| p.trim_start_matches('/'))
     }
 }
 
@@ -488,6 +494,13 @@ reason = "later"
         assert_eq!(config.lint.exempt[0].rule, "eslint/require-await");
         assert_eq!(config.lint.exempt[0].paths, ["**/*.test.ts", "src/a.ts"]);
         assert_eq!(config.lint.exempt[0].exact_paths().collect::<Vec<_>>(), ["src/a.ts"]);
+
+        let entry = Exemption {
+            paths: ["a.ts", "/b.ts", "c/", "src/{a,b}.ts", "!src/d.ts", "e2e/", "src/f.ts"].map(String::from).into(),
+            ..config.lint.exempt[0].clone()
+        };
+
+        assert_eq!(entry.exact_paths().collect::<Vec<_>>(), ["b.ts", "src/f.ts"]);
     }
 
     #[test]

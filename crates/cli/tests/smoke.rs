@@ -170,7 +170,7 @@ fn exemptions_drop_one_rule_per_file_and_report_stale_paths() {
         ("fmtkit.toml", "[lint]\nexemptions = \"lint-exempt.toml\"\n"),
         (
             "lint-exempt.toml",
-            "[[exempt]]\nrule = \"eslint/require-await\"\nreason = \"Keeps the Promise contract.\"\npaths = [\"**/*.test.ts\", \"local.ts\", \"gone.ts\"]\n",
+            "[[exempt]]\nrule = \"eslint/require-await\"\nreason = \"Keeps the Promise contract.\"\npaths = [\"**/*.test.ts\", \"local.ts\", \"spec/gone.ts\", \"elsewhere.ts\"]\n",
         ),
         ("local.ts", ASYNC),
         ("spec/a.test.ts", ASYNC),
@@ -184,12 +184,13 @@ fn exemptions_drop_one_rule_per_file_and_report_stale_paths() {
     assert_exit(&output, 1);
     assert!(lines("other.ts").iter().any(|line| line.contains("require-await")), "{report}");
     assert!(lines("local.ts").is_empty() && lines("spec/a.test.ts").is_empty(), "{report}");
-    assert!(lines("gone.ts").iter().any(|line| line.contains("lint/exempt")), "{report}");
+    assert!(lines("spec/gone.ts").iter().any(|line| line.contains("lint/exempt")), "{report}");
+    assert!(lines("elsewhere.ts").is_empty(), "a slash-free pattern names no single path:\n{report}");
 
     let scoped = fixture.run(&["check", "local.ts", "--format", "agent"]);
 
     assert_exit(&scoped, 0);
-    assert!(!text(&scoped).contains("gone.ts"), "{}", text(&scoped));
+    assert!(!text(&scoped).contains("spec/gone.ts"), "{}", text(&scoped));
 }
 
 #[test]

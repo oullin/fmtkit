@@ -172,6 +172,7 @@ arrow_parens = "always"               # "always", "avoid"
 [lint]
 bundled = true                        # false = start from no rules
 ignore = []                           # files lint skips (still formatted)
+# exemptions = "lint-exempt.toml"     # [[exempt]] entries, relative to this file
 
 [lint.rules]
 eqeqeq = ["error", "always"]          # severity, or [severity, options...]
@@ -183,6 +184,32 @@ cognitive = 20
 ```
 
 A rule setting replaces the bundled one entirely, options included, so repeat the options when you only change the severity. Severities are `off`/`allow`, `warn`, and `error`/`deny`.
+
+## Lint exemptions
+
+An exemption turns one rule off for the files its patterns match; every other rule still applies to those files. It replaces a disable comment above each finding when a rule does not fit a whole set of files. List the entries in a file named by `[lint] exemptions`, resolved relative to the directory of the configuration file:
+
+```toml
+# fmtkit.toml
+[lint]
+exemptions = "lint-exempt.toml"
+```
+
+```toml
+# lint-exempt.toml
+[[exempt]]
+rule = "eslint/require-await"
+reason = "`async` keeps the Promise contract, so a throw reaches the caller as a rejection."
+paths = ["**/*.test.ts", "e2e/**", "apps/api/src/worker/fetch.ts"]
+```
+
+The same entries may also be written inline as `[[lint.exempt]]` in `fmtkit.toml`; both lists apply.
+
+- `rule` is a rule name as `[lint.rules]` accepts it, for oxlint rules and fmtkit's own rules alike. `reason` and `paths` are required and must not be empty, and unknown keys are errors.
+- `paths` are gitignore-style patterns matched against repository-relative paths, as `[lint] ignore` is: a pattern without a slash matches at any depth, and a directory covers everything below it.
+- An unknown rule, or a rule that is off, is a configuration error (exit 2). So is an exemptions file that is missing or does not parse; the message names the file and the line.
+- A finding the entry exempts is dropped together with its fix.
+- A run over the whole repository (`--all` with no paths) reports each exact path (a pattern with no `*`, `?`, `[` or `!`) that does not exist as a `lint/exempt` error, so the list only shrinks. Glob patterns are not judged.
 
 ## Complexity
 

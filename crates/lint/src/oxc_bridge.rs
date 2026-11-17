@@ -13,18 +13,19 @@ use oxc_allocator::Allocator;
 use oxc_diagnostics::{OxcDiagnostic, Severity as OxcSeverity};
 use oxc_linter::loader::{JavaScriptSource, PartialLoader};
 use oxc_linter::{
-    ConfigStore, ConfigStoreBuilder, ContextSubHost, ContextSubHostOptions, ExternalPluginStore, FixKind, LintOptions, LintPlugins, Message, ModuleRecord,
-    Oxlintrc, PossibleFixes, normalize_plugin_name, normalize_rule_name,
+    AllowWarnDeny, ConfigStore, ConfigStoreBuilder, ContextSubHost, ContextSubHostOptions, ExternalPluginStore, FixKind, LintOptions, LintPlugins, Message,
+    ModuleRecord, Oxlintrc, PossibleFixes, normalize_plugin_name, normalize_rule_name,
 };
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::{LabeledSpan, SourceType, Span};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde_json::{Map, Value, json};
 
 use fmtkit_core::{Diagnostic, Edit, Lang, LineIndex, Severity};
 
 use crate::LintError;
+use crate::exempt::{self, Exempt};
 use crate::rules::{self, Factory, Rule};
 
 /// The bundled policy: v1's `.oxlintrc.json` without `jsPlugins` (those rules
@@ -34,11 +35,13 @@ pub const POLICY: &str = include_str!("../policy/oxlintrc.json");
 /// The rule name used for parse and semantic errors, which stop a file from being linted.
 pub const SYNTAX_RULE: &str = "syntax";
 
-/// The enabled native rules, with the severity each was configured at.
+/// The enabled native rules, with the severity each was configured at, and
+/// the files each rule, native or not, does not apply to.
 #[derive(Default)]
 pub struct Natives {
     pub rules: Vec<Box<dyn Rule>>,
     pub severities: FxHashMap<&'static str, Severity>,
+    pub exempt: Exempt,
 }
 
 /// The configuration both linters are built from.
@@ -105,7 +108,82 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
 
     let store = build_store(&base).map_err(|message| attribute_error(&base, &oxc_rules, message))?;
 
+    natives.exempt = exemptions(&config.exempt, &registry, &natives, &store, &base)?;
+
     Ok(Built { store, natives })
+}
+
+/// Check every exemption names a rule that exists and is enabled, and build
+/// its matcher. Exempting a rule that is off is refused, as it is a mistake.
+fn exemptions(
+    entries: &[fmtkit_config::Exemption],
+    registry: &FxHashMap<&'static str, Factory>,
+    natives: &Natives,
+    store: &ConfigStore,
+    base: &Map<String, Value>,
+) -> Result<Exempt, LintError> {
+    let mut exempt = Exempt::default();
+
+    if entries.is_empty() {
+        return Ok(exempt);
+    }
+
+    let enabled = enabled_rules(natives, store, base);
+
+    for entry in entries {
+        let fail = |message: &str| LintError::Exempt { rule: entry.rule.clone(), message: message.to_owned() };
+        let named = rule_key(&entry.rule, registry);
+
+        if !registry.contains_key(named.as_str()) && (matches!(owner(&named), Owner::Unknown) || !known_oxc_rule(&named)) {
+            return Err(fail("unknown rule"));
+        }
+
+        // An ESLint rule may also be named `typescript/<rule>`; oxc_linter reports it as `eslint/<rule>`.
+        let alias = named.strip_prefix("typescript/").filter(|rule| !enabled.contains(&named) && enabled.contains(*rule)).map(str::to_owned);
+        let key = alias.unwrap_or(named);
+
+        if !enabled.contains(&key) {
+            return Err(fail("the rule is off, so there is nothing to exempt"));
+        }
+
+        let matcher = exempt::matcher(&entry.paths).map_err(|(pattern, message)| fail(&format!("{pattern}: {message}")))?;
+
+        exempt.push(key, matcher);
+    }
+
+    Ok(exempt)
+}
+
+/// The keys of every rule that reports somewhere: the enabled native rules,
+/// the oxc_linter rules the store enables (categories included), and the
+/// rules an override enables for some files.
+fn enabled_rules(natives: &Natives, store: &ConfigStore, base: &Map<String, Value>) -> FxHashSet<String> {
+    let mut enabled: FxHashSet<String> = natives.severities.keys().map(|name| (*name).to_owned()).collect();
+
+    for (rule, severity) in store.rules().iter() {
+        if severity.is_warn_deny() {
+            enabled.insert(normalize_rule_name(&format!("{}/{}", rule.plugin_name(), rule.name())));
+        }
+    }
+
+    let overrides = base.get("overrides").and_then(Value::as_array).into_iter().flatten();
+
+    for rules in overrides.filter_map(|o| o.get("rules").and_then(Value::as_object)) {
+        for (name, setting) in rules {
+            let on = match setting {
+                Value::Array(items) => items.first(),
+                other => Some(other),
+            }
+            .and_then(|severity| AllowWarnDeny::try_from(severity).ok())
+            .is_some_and(AllowWarnDeny::is_warn_deny);
+
+            if on {
+                enabled.insert(normalize_rule_name(name));
+            }
+        }
+    }
+
+    enabled
 }
 
 /// The key a rule is merged under: native names as written, oxc names normalized
@@ -248,6 +326,7 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
     let sections = sections(path, lang, text);
     let mut pass = Pass { diagnostics: Vec::new(), fixes: Vec::new(), syntax_error: false };
     let mut hosts = Vec::with_capacity(sections.len());
+    let exempt = natives.exempt.for_file(rel);
 
     for section in sections {
         let source_text = allocator.alloc_str(section.source_text);
@@ -281,7 +360,7 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
         let host = ContextSubHost::new(semantic, record, section.start, options);
 
         for finding in rules::run_all(&natives.rules, host.semantic(), rel) {
-            if host.disable_directives().contains(finding.rule, finding.span) {
+            if exempt.native(finding.rule) || host.disable_directives().contains(finding.rule, finding.span) {
                 continue;
             }
 
@@ -313,6 +392,10 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
     }
 
     for message in oxc.run(path, hosts, allocator) {
+        if exempt.oxc(&rule_code(&message.error)) {
+            continue;
+        }
+
         if fix && let Some(unit) = oxc_fix(&message) {
             pass.fixes.push(unit);
         }
@@ -359,13 +442,18 @@ fn oxc_fix(message: &Message) -> Option<FixUnit> {
     FixUnit::new(vec![Edit::new(fix.span.start, fix.span.end, fix.content.to_string())])
 }
 
-fn to_diagnostic(rel: &str, index: &LineIndex, error: &OxcDiagnostic, span: Span) -> Diagnostic {
-    let rule = match (&error.code.scope, &error.code.number) {
+/// The `plugin/rule` code an oxc_linter diagnostic is reported under.
+fn rule_code(error: &OxcDiagnostic) -> String {
+    match (&error.code.scope, &error.code.number) {
         (Some(scope), Some(number)) => format!("{scope}/{number}"),
         (None, Some(number)) => number.to_string(),
         (Some(scope), None) => scope.to_string(),
         (None, None) => SYNTAX_RULE.to_owned(),
-    };
+    }
+}
+
+fn to_diagnostic(rel: &str, index: &LineIndex, error: &OxcDiagnostic, span: Span) -> Diagnostic {
+    let rule = rule_code(error);
     let (line, column) = index.line_col(span.start);
     let severity = if matches!(error.severity, OxcSeverity::Error) { Severity::Error } else { Severity::Warning };
 

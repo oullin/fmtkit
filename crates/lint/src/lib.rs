@@ -2,10 +2,11 @@
 //! (`@nkzw/*`, `perfectionist/*`, `no-only-tests/*`, `anti-slop/*`,
 //! `observability/*`) run as one visitor over the same semantic model.
 
+mod exempt;
 mod oxc_bridge;
 pub mod rules;
 
-use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use ignore::gitignore::Gitignore;
 use oxc_allocator::Allocator;
 
 use fmtkit_core::{Diagnostic, EditSet, Lang};
@@ -21,6 +22,8 @@ pub enum LintError {
     Rule { rule: String, message: String },
     #[error("lint.ignore: {pattern}: {message}")]
     Ignore { pattern: String, message: String },
+    #[error("lint.exempt: {rule}: {message}")]
+    Exempt { rule: String, message: String },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -57,7 +60,7 @@ impl Linter {
 
     /// Whether `[lint] ignore` excludes this repository-relative path.
     pub fn ignores(&self, rel: &str) -> bool {
-        self.ignore.as_ref().is_some_and(|matcher| matcher.matched_path_or_any_parents(rel, false).is_ignore())
+        self.ignore.as_ref().is_some_and(|matcher| exempt::matched(matcher, rel))
     }
 
     /// Lint one file. Vue files lint their `<script>` blocks.
@@ -137,13 +140,7 @@ fn ignore_matcher(patterns: &[String]) -> Result<Option<Gitignore>, LintError> {
         return Ok(None);
     }
 
-    let mut builder = GitignoreBuilder::new("");
-
-    for pattern in patterns {
-        builder.add_line(None, pattern).map_err(|e| LintError::Ignore { pattern: pattern.clone(), message: e.to_string() })?;
-    }
-
-    let matcher = builder.build().map_err(|e| LintError::Ignore { pattern: patterns.join(", "), message: e.to_string() })?;
+    let matcher = exempt::matcher(patterns).map_err(|(pattern, message)| LintError::Ignore { pattern, message })?;
 
     Ok(Some(matcher))
 }

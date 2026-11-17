@@ -222,9 +222,14 @@ export const d = (s: string) => [...s.matchAll(/,/g)];
 #[test]
 fn prefer_shared_pattern_validates_its_options() {
     let error = |options: Value| {
-        fmtkit_lint::Linter::new(&fmtkit_config::Lint { bundled: false, rules: [(SHARED.to_owned(), json!(["error", options]))].into(), ignore: Vec::new() })
-            .err()
-            .map(|e| e.to_string())
+        fmtkit_lint::Linter::new(&fmtkit_config::Lint {
+            bundled: false,
+            rules: [(SHARED.to_owned(), json!(["error", options]))].into(),
+            ignore: Vec::new(),
+            ..Default::default()
+        })
+        .err()
+        .map(|e| e.to_string())
     };
 
     assert!(error(json!({ "patterns": { "A": "/a/" } })).is_some_and(|e| e.contains("\"module\" is required")));

@@ -163,6 +163,50 @@ fn toml_overrides_the_bundled_policy() {
 }
 
 #[test]
+fn exemptions_drop_one_rule_per_file_and_report_stale_paths() {
+    const ASYNC: &str = "export async function localException(): Promise<number> {\n\treturn 1;\n}\n";
+
+    let fixture = Fixture::new(&[
+        ("fmtkit.toml", "[lint]\nexemptions = \"lint-exempt.toml\"\n"),
+        (
+            "lint-exempt.toml",
+            "[[exempt]]\nrule = \"eslint/require-await\"\nreason = \"Keeps the Promise contract.\"\npaths = [\"**/*.test.ts\", \"local.ts\", \"spec/gone.ts\", \"elsewhere.ts\"]\n",
+        ),
+        ("local.ts", ASYNC),
+        ("spec/a.test.ts", ASYNC),
+        ("other.ts", ASYNC),
+    ]);
+
+    let output = fixture.run(&["check", "--all", "--format", "agent"]);
+    let report = text(&output);
+    let lines = |file: &str| report.lines().filter(|line| line.starts_with(file)).map(str::to_owned).collect::<Vec<_>>();
+
+    assert_exit(&output, 1);
+    assert!(lines("other.ts").iter().any(|line| line.contains("require-await")), "{report}");
+    assert!(lines("local.ts").is_empty() && lines("spec/a.test.ts").is_empty(), "{report}");
+    assert!(lines("spec/gone.ts").iter().any(|line| line.contains("lint/exempt")), "{report}");
+    assert!(lines("elsewhere.ts").is_empty(), "a slash-free pattern names no single path:\n{report}");
+
+    let scoped = fixture.run(&["check", "local.ts", "--format", "agent"]);
+
+    assert_exit(&scoped, 0);
+    assert!(!text(&scoped).contains("spec/gone.ts"), "{}", text(&scoped));
+}
+
+#[test]
+fn exempting_a_rule_that_is_off_is_a_usage_error() {
+    let fixture = Fixture::new(&[
+        ("fmtkit.toml", "[lint.rules]\n\"require-await\" = \"off\"\n\n[[lint.exempt]]\nrule = \"require-await\"\nreason = \"r\"\npaths = [\"a.ts\"]\n"),
+        ("a.ts", "export const a = 1;\n"),
+    ]);
+
+    let output = fixture.run(&["check", "--all"]);
+
+    assert_exit(&output, 2);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("lint.exempt: require-await"), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
+#[test]
 fn unknown_config_is_a_usage_error() {
     let fixture = Fixture::new(&[("fmtkit.toml", "[lint]\nmystery = true\n")]);
 

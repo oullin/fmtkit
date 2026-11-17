@@ -13,7 +13,7 @@ pub fn only(rule: &str, options: &[Value]) -> Linter {
 
     setting.extend(options.iter().cloned());
 
-    let config = Lint { bundled: false, rules: [(rule.to_owned(), Value::Array(setting))].into(), ignore: Vec::new() };
+    let config = Lint { bundled: false, rules: [(rule.to_owned(), Value::Array(setting))].into(), ignore: Vec::new(), ..Default::default() };
 
     Linter::new(&config).unwrap_or_else(|e| panic!("{rule}: {e}"))
 }

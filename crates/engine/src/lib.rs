@@ -16,7 +16,7 @@ use rayon::prelude::*;
 
 use fmtkit_cache::{Cache, Key};
 use fmtkit_config::Config;
-use fmtkit_core::{FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
+use fmtkit_core::{Diagnostic, FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
 use fmtkit_discover::{Discovery, Memory, Repository, Scope, SourceFile};
 use fmtkit_go::{GoError, Helper, VetMemo, VetTargets};
 use fmtkit_lint::{LintError, Linter};
@@ -213,11 +213,13 @@ impl Session {
         });
 
         let go = go.transpose()?.unwrap_or_default();
-        let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).collect();
+        let lanes = selected_lanes(&options.scope);
+        let whole = options.scope.all && options.scope.paths.is_empty() && lanes.contains(&Lane::Ts);
+        let orphans = if whole { stale_exemptions(&options.root, &config.lint) } else { Vec::new() };
+        let mut files: Vec<FileOutcome> = scripts.into_iter().chain(go).chain(orphans).collect();
 
         files.sort_unstable_by(|a, b| a.file.cmp(&b.file));
 
-        let lanes = selected_lanes(&options.scope);
         let complexity = complexity::evaluate(&options.root, &config.complexity, &lanes, &discovery.files, &files);
 
         progress.finish();
@@ -347,6 +349,31 @@ impl VetMemo for Marks<'_> {
     }
 }
 
+/// The rule a stale `[[lint.exempt]]` path is reported under.
+const STALE_EXEMPTION_RULE: &str = "lint/exempt";
+
+/// One error per exact exemption path (a pattern with no glob) that names
+/// nothing in the repository, so the list only shrinks. Glob patterns are not
+/// judged.
+fn stale_exemptions(root: &Path, lint: &fmtkit_config::Lint) -> Vec<FileOutcome> {
+    let mut stale: std::collections::BTreeMap<&str, Vec<Diagnostic>> = std::collections::BTreeMap::new();
+
+    for entry in &lint.exempt {
+        for path in entry.exact_paths().filter(|path| !path.is_empty() && !root.join(path).exists()) {
+            stale.entry(path).or_default().push(Diagnostic {
+                rule: STALE_EXEMPTION_RULE.to_owned(),
+                file: path.to_owned(),
+                line: 0,
+                column: 0,
+                message: format!("exempt entry for {:?} names a path that does not exist", entry.rule),
+                severity: Severity::Error,
+            });
+        }
+    }
+
+    stale.into_iter().map(|(path, lint)| FileOutcome { lint, ..FileOutcome::new(path, Lang::from_path(Path::new(path))) }).collect()
+}
+
 /// Join a scoped thread, re-raising its panic here.
 fn join<T>(handle: thread::ScopedJoinHandle<'_, T>) -> T {
     handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))
@@ -376,7 +403,6 @@ fn verdict(mode: Mode, files: &[FileOutcome], complexity_clean: bool, vet: &VetO
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fmtkit_core::Diagnostic;
 
     fn changed() -> FileOutcome {
         FileOutcome { changed: true, ..FileOutcome::new("a.ts", Some(Lang::Ts)) }

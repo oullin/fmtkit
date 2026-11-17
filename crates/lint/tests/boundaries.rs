@@ -193,6 +193,7 @@ fn named_specifier_findings_keep_severity_and_token_backed_suppression() {
         bundled: false,
         rules: [("boundaries/reserved-specifier".to_owned(), json!(["warn", specifier_options()]))].into(),
         ignore: Vec::new(),
+        ..Lint::default()
     })
     .unwrap();
     let code = "const text = 'eslint-disable boundaries/reserved-specifier';\nimport value from 'effect';\n// eslint-disable-next-line boundaries/reserved-specifier\nimport next from 'effect';";
@@ -228,6 +229,7 @@ fn ordered_exemptions_are_scoped_to_each_rule() {
         rules: [("boundaries/nullable-union".to_owned(), json!(["error", {"exempt": ["src/**"]}])), ("boundaries/explicit-any".to_owned(), json!("error"))]
             .into(),
         ignore: Vec::new(),
+        ..Lint::default()
     })
     .unwrap();
 
@@ -462,7 +464,7 @@ fn options_reject_unknown_keys_wrong_types_and_unexpanded_packages() {
 fn assert_invalid(name: &str, options: Vec<Value>) {
     let mut setting = vec![json!("error")];
     setting.extend(options);
-    let config = Lint { bundled: false, rules: [(name.to_owned(), json!(setting))].into(), ignore: Vec::new() };
+    let config = Lint { bundled: false, rules: [(name.to_owned(), json!(setting))].into(), ignore: Vec::new(), ..Default::default() };
     let error = Linter::new(&config).err().unwrap_or_else(|| panic!("accepted {name}: {setting:?}"));
 
     assert!(error.to_string().contains(name), "{error}");

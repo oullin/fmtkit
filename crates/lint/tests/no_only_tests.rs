@@ -165,7 +165,7 @@ fn assert_invalid(cases: &[(Value, &str, &str, Option<&str>)]) {
 #[test]
 fn options_follow_the_schema() {
     for bad in [json!("x"), json!({ "block": "it" }), json!({ "block": ["it", "it"] }), json!({ "fix": 1 }), json!({ "other": true })] {
-        let config = fmtkit_config::Lint { bundled: false, rules: [(RULE.to_owned(), json!(["error", bad]))].into(), ignore: Vec::new() };
+        let config = fmtkit_config::Lint { bundled: false, rules: [(RULE.to_owned(), json!(["error", bad]))].into(), ignore: Vec::new(), ..Default::default() };
 
         assert!(fmtkit_lint::Linter::new(&config).is_err(), "{bad}");
     }

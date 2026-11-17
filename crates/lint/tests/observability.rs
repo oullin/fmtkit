@@ -19,9 +19,13 @@ type Fixture = (&'static str, &'static str, &'static [FindingSite]);
 
 #[test]
 fn reference_fixtures() {
-    let linter =
-        Linter::new(&Lint { bundled: false, rules: [(CLAUSE.to_owned(), json!("error")), (PROMISE.to_owned(), json!("error"))].into(), ignore: Vec::new() })
-            .unwrap();
+    let linter = Linter::new(&Lint {
+        bundled: false,
+        rules: [(CLAUSE.to_owned(), json!("error")), (PROMISE.to_owned(), json!("error"))].into(),
+        ignore: Vec::new(),
+        ..Default::default()
+    })
+    .unwrap();
     let fixtures: &[Fixture] = &[
         (
             "clauses.ts",
@@ -227,6 +231,7 @@ fn ignore_is_per_rule_and_matches_repository_relative_globs() {
         bundled: false,
         rules: [(CLAUSE.to_owned(), json!(["error", { "ignore": ["src/**"] }])), (PROMISE.to_owned(), json!("error"))].into(),
         ignore: Vec::new(),
+        ..Lint::default()
     })
     .unwrap();
     let result = lint(&linter, "src/a.ts", "try {} catch {}\nrequest.catch(() => {});", false);
@@ -284,7 +289,7 @@ fn assert_invalid_options(rule: &str, options: Vec<Value>) {
 
     setting.extend(options);
 
-    let config = Lint { bundled: false, rules: [(rule.to_owned(), json!(setting))].into(), ignore: Vec::new() };
+    let config = Lint { bundled: false, rules: [(rule.to_owned(), json!(setting))].into(), ignore: Vec::new(), ..Default::default() };
 
     assert!(Linter::new(&config).is_err(), "{rule}: {setting:?}");
 }

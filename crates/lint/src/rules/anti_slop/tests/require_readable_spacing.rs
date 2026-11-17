@@ -735,7 +735,12 @@ fn edges() {
 /// `oxlint --fix` with the upstream plugin made of every `edges` case.
 #[test]
 fn fixes() {
-    let config = Lint { bundled: false, rules: BTreeMap::from([("anti-slop/require-readable-spacing".to_owned(), json!("error"))]), ignore: Vec::new() };
+    let config = Lint {
+        bundled: false,
+        rules: BTreeMap::from([("anti-slop/require-readable-spacing".to_owned(), json!("error"))]),
+        ignore: Vec::new(),
+        ..Default::default()
+    };
     let linter = Linter::new(&config).expect("the rule builds");
     let mut failures = String::new();
 

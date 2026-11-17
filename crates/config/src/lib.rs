@@ -137,12 +137,53 @@ pub struct Lint {
     pub rules: BTreeMap<String, RuleSetting>,
     /// gitignore-style patterns the linter skips.
     pub ignore: Vec<String>,
+    /// A TOML file of `[[exempt]]` entries, relative to the directory of the
+    /// configuration file. [`Config::load_from`] appends its entries to `exempt`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exemptions: Option<String>,
+    /// Rules that do not apply to some files.
+    pub exempt: Vec<Exemption>,
 }
 
 impl Default for Lint {
     fn default() -> Self {
-        Self { bundled: true, rules: BTreeMap::new(), ignore: Vec::new() }
+        Self { bundled: true, rules: BTreeMap::new(), ignore: Vec::new(), exemptions: None, exempt: Vec::new() }
     }
+}
+
+/// One rule that does not apply to the files `paths` matches. Every other rule
+/// still applies to them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Exemption {
+    /// A rule name as `[lint.rules]` accepts it.
+    pub rule: String,
+    /// Why the rule does not apply; required, never read by the check.
+    pub reason: String,
+    /// gitignore-style patterns, matched against repository-relative paths as
+    /// `ignore` is.
+    pub paths: Vec<String>,
+}
+
+impl Exemption {
+    /// The patterns that name one root-relative path: anchored by a slash
+    /// before the last segment, with no wildcard, character class, brace
+    /// alternative, escape or negation. A slash-free pattern matches at any
+    /// depth, so it names no single path.
+    pub fn exact_paths(&self) -> impl Iterator<Item = &str> {
+        self.paths
+            .iter()
+            .map(|p| p.trim_end_matches('/'))
+            .filter(|p| p.contains('/') && !p.starts_with('!') && !p.contains(['*', '?', '[', '{', '\\']))
+            .map(|p| p.trim_start_matches('/'))
+    }
+}
+
+/// The exemptions file named by `lint.exemptions`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct ExemptionFile {
+    exempt: Vec<Exemption>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,7 +262,14 @@ impl Config {
         };
 
         let text = fs::read_to_string(&path).map_err(|source| ConfigError::Read { path: path.clone(), source })?;
-        let config = Self::parse(&text, &path)?;
+        let mut config = Self::parse(&text, &path)?;
+
+        if let Some(file) = &config.lint.exemptions {
+            let file = path.parent().unwrap_or(Path::new("")).join(file);
+            let mut entries = read_exemptions(&file)?;
+
+            config.lint.exempt.append(&mut entries);
+        }
 
         Ok(Loaded { config, path: Some(path) })
     }
@@ -255,7 +303,11 @@ impl Config {
             }
         }
 
-        Ok(())
+        if self.lint.exemptions.as_deref().is_some_and(|file| file.trim().is_empty()) {
+            return invalid("lint.exemptions must name a file".into());
+        }
+
+        validate_exemptions(&self.lint.exempt, "lint.exempt", path)
     }
 
     /// The worker count from the first setting given: the CLI flag, then
@@ -281,6 +333,40 @@ impl Config {
 
         *blake3::hash(&bytes).as_bytes()
     }
+}
+
+/// Read and check the exemptions file at `path`.
+fn read_exemptions(path: &Path) -> Result<Vec<Exemption>, ConfigError> {
+    let text = fs::read_to_string(path).map_err(|source| ConfigError::Read { path: path.to_path_buf(), source })?;
+    let file: ExemptionFile = toml::from_str(&text).map_err(|source| ConfigError::Parse { path: path.to_path_buf(), source: Box::new(source) })?;
+
+    validate_exemptions(&file.exempt, "exempt", path)?;
+
+    Ok(file.exempt)
+}
+
+/// Every entry names a rule, gives a reason, and lists at least one pattern.
+/// Whether the rule exists and is enabled is the linter's to judge.
+fn validate_exemptions(entries: &[Exemption], table: &str, path: &Path) -> Result<(), ConfigError> {
+    for (at, entry) in entries.iter().enumerate() {
+        let problem = if entry.rule.trim().is_empty() {
+            Some("rule is empty")
+        } else if entry.reason.trim().is_empty() {
+            Some("reason is empty")
+        } else if entry.paths.is_empty() {
+            Some("paths is empty")
+        } else if entry.paths.iter().any(|p| p.trim().is_empty()) {
+            Some("paths has an empty pattern")
+        } else {
+            None
+        };
+
+        if let Some(problem) = problem {
+            return Err(ConfigError::Invalid { path: path.to_path_buf(), message: format!("{table}[{at}] ({:?}): {problem}", entry.rule) });
+        }
+    }
+
+    Ok(())
 }
 
 /// The severity of a rule setting, `off` / `warn` / `error`, if it is well formed.
@@ -396,5 +482,72 @@ reason = "later"
         let loaded = Config::load_from(dir.path(), Some(Path::new("custom.toml"))).unwrap();
 
         assert_eq!(loaded.config.jobs, 2);
+    }
+
+    const ENTRY: &str = "rule = \"eslint/require-await\"\nreason = \"Keeps the Promise contract.\"\npaths = [\"**/*.test.ts\", \"src/a.ts\"]\n";
+
+    #[test]
+    fn reads_inline_exemptions() {
+        let config = parse(&format!("[[lint.exempt]]\n{ENTRY}")).unwrap();
+
+        assert_eq!(config.lint.exempt.len(), 1);
+        assert_eq!(config.lint.exempt[0].rule, "eslint/require-await");
+        assert_eq!(config.lint.exempt[0].paths, ["**/*.test.ts", "src/a.ts"]);
+        assert_eq!(config.lint.exempt[0].exact_paths().collect::<Vec<_>>(), ["src/a.ts"]);
+
+        let entry = Exemption {
+            paths: ["a.ts", "/b.ts", "c/", "src/{a,b}.ts", "!src/d.ts", "e2e/", "src/f.ts"].map(String::from).into(),
+            ..config.lint.exempt[0].clone()
+        };
+
+        assert_eq!(entry.exact_paths().collect::<Vec<_>>(), ["b.ts", "src/f.ts"]);
+    }
+
+    #[test]
+    fn rejects_incomplete_exemptions() {
+        let entry = |body: &str| parse(&format!("[[lint.exempt]]\n{body}"));
+
+        assert!(entry("rule = \"curly\"\nreason = \"r\"\npaths = [\"a.ts\"]\nnote = \"x\"").is_err());
+        assert!(entry("rule = \"curly\"\npaths = [\"a.ts\"]").is_err());
+        assert!(entry("rule = \"curly\"\nreason = \" \"\npaths = [\"a.ts\"]").is_err());
+        assert!(entry("rule = \"curly\"\nreason = \"r\"\npaths = []").is_err());
+        assert!(entry("rule = \"\"\nreason = \"r\"\npaths = [\"a.ts\"]").is_err());
+        assert!(parse("[lint]\nexemptions = \"\"").is_err());
+    }
+
+    #[test]
+    fn merges_the_exemptions_file_beside_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+
+        fs::create_dir(dir.path().join("config")).unwrap();
+        fs::write(
+            dir.path().join("config/fmtkit.toml"),
+            "[lint]\nexemptions = \"exempt.toml\"\n\n[[lint.exempt]]\nrule = \"curly\"\nreason = \"r\"\npaths = [\"b.ts\"]\n",
+        )
+        .unwrap();
+        fs::write(dir.path().join("config/exempt.toml"), format!("[[exempt]]\n{ENTRY}")).unwrap();
+
+        let loaded = Config::load_from(dir.path(), Some(Path::new("config/fmtkit.toml"))).unwrap();
+        let rules: Vec<&str> = loaded.config.lint.exempt.iter().map(|e| e.rule.as_str()).collect();
+
+        assert_eq!(rules, ["curly", "eslint/require-await"]);
+    }
+
+    #[test]
+    fn exemptions_file_errors_name_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let load = || Config::load_from(dir.path(), None).unwrap_err().to_string();
+
+        fs::write(dir.path().join(FILE_NAME), "[lint]\nexemptions = \"exempt.toml\"\n").unwrap();
+
+        assert!(load().contains("exempt.toml"), "{}", load());
+
+        fs::write(dir.path().join("exempt.toml"), "[[exempt]]\nrule = \"curly\"\nreason = \"r\"\npaths = [\"a.ts\"]\nwhy = 1\n").unwrap();
+
+        assert!(load().contains("exempt.toml") && load().contains("line 5"), "{}", load());
+
+        fs::write(dir.path().join("exempt.toml"), "[[exempt]]\nrule = \"curly\"\nreason = \"\"\npaths = [\"a.ts\"]\n").unwrap();
+
+        assert!(load().contains("exempt.toml") && load().contains("reason is empty"), "{}", load());
     }
 }

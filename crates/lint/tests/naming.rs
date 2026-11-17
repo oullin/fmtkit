@@ -242,7 +242,7 @@ fn declaration_files_and_index_barrels_are_left_alone() {
 #[test]
 fn options_are_validated() {
     let build = |options: Value| {
-        let config = Lint { bundled: false, rules: [(RULE.to_owned(), json!(["error", options]))].into(), ignore: Vec::new() };
+        let config = Lint { bundled: false, rules: [(RULE.to_owned(), json!(["error", options]))].into(), ignore: Vec::new(), ..Default::default() };
 
         Linter::new(&config).err().map(|error| error.to_string())
     };

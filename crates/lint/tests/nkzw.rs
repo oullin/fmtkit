@@ -79,7 +79,12 @@ fn ensure_relay_types() {
 #[test]
 fn rules_take_no_options() {
     for rule in ["@nkzw/no-instanceof", "@nkzw/require-use-effect-arguments", "@nkzw/ensure-relay-types"] {
-        let config = fmtkit_config::Lint { bundled: false, rules: [(rule.to_owned(), serde_json::json!(["error", {}]))].into(), ignore: Vec::new() };
+        let config = fmtkit_config::Lint {
+            bundled: false,
+            rules: [(rule.to_owned(), serde_json::json!(["error", {}]))].into(),
+            ignore: Vec::new(),
+            ..Default::default()
+        };
 
         assert!(fmtkit_lint::Linter::new(&config).is_err(), "{rule}");
     }

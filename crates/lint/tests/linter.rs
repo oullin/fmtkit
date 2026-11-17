@@ -8,7 +8,12 @@ use fmtkit_lint::{LintError, Linter, SYNTAX_RULE};
 use serde_json::{Value, json};
 
 fn only(rules: &[(&str, Value)]) -> Lint {
-    Lint { bundled: false, rules: rules.iter().map(|(name, value)| ((*name).to_owned(), value.clone())).collect::<BTreeMap<_, _>>(), ignore: Vec::new() }
+    Lint {
+        bundled: false,
+        rules: rules.iter().map(|(name, value)| ((*name).to_owned(), value.clone())).collect::<BTreeMap<_, _>>(),
+        ignore: Vec::new(),
+        ..Default::default()
+    }
 }
 
 fn linter(rules: &[(&str, Value)]) -> Linter {
@@ -189,4 +194,75 @@ fn linter_is_shareable_across_threads() {
             scope.spawn(|| assert_eq!(rules_of(&linter, "a.js", Lang::Js, "if (a == 1) {}\n").len(), 1));
         }
     });
+}
+
+fn exempt(rule: &str, paths: &[&str]) -> fmtkit_config::Exemption {
+    fmtkit_config::Exemption { rule: rule.into(), reason: "test".into(), paths: paths.iter().map(|p| (*p).to_owned()).collect() }
+}
+
+#[test]
+fn exemptions_drop_one_oxc_rule_in_matching_files_only() {
+    let config = Lint {
+        exempt: vec![exempt("eslint/require-await", &["**/*.test.ts", "src/keep.ts"])],
+        ..only(&[("require-await", json!("error")), ("eqeqeq", json!("error"))])
+    };
+    let linter = Linter::new(&config).unwrap();
+    let source = "export async function a() { return 1; }\nif (a == 1) {}\n";
+    let rules = |rel: &str| rules_of(&linter, rel, Lang::Ts, source).into_iter().map(|(rule, ..)| rule).collect::<Vec<_>>();
+
+    assert_eq!(rules("src/a.ts"), ["eslint/require-await", "eslint/eqeqeq"]);
+    assert_eq!(rules("src/deep/a.test.ts"), ["eslint/eqeqeq"]);
+    assert_eq!(rules("src/keep.ts"), ["eslint/eqeqeq"]);
+    assert_eq!(rules("other/src/keep.ts"), ["eslint/require-await", "eslint/eqeqeq"]);
+}
+
+#[test]
+fn exemptions_drop_the_fixes_of_the_rule_they_exempt() {
+    let config = Lint { exempt: vec![exempt("prefer-const", &["a.ts"])], ..only(&[("prefer-const", json!("error"))]) };
+    let linter = Linter::new(&config).unwrap();
+    let source = "let a = 1;\nexport { a };\n";
+
+    assert_eq!(linter.lint("a.ts", Lang::Ts, source, true), fmtkit_lint::Linted::default());
+    assert!(linter.lint("b.ts", Lang::Ts, source, true).fixed.is_some());
+}
+
+#[test]
+fn exemptions_drop_native_rules() {
+    let rule = "no-only-tests/no-only-tests";
+    let config = Lint { exempt: vec![exempt(rule, &["e2e/"])], ..only(&[(rule, json!("error"))]) };
+    let linter = Linter::new(&config).unwrap();
+    let source = "describe.only('a', () => {});\n";
+
+    assert_eq!(rules_of(&linter, "src/a.test.ts", Lang::Ts, source).len(), 1);
+    assert_eq!(rules_of(&linter, "e2e/flows/a.test.ts", Lang::Ts, source), []);
+}
+
+#[test]
+fn exemptions_accept_rules_the_bundled_policy_enables() {
+    let config = Lint { exempt: vec![exempt("@typescript-eslint/no-explicit-any", &["a.ts"]), exempt("eslint/require-await", &["a.ts"])], ..Lint::default() };
+
+    assert!(Linter::new(&config).is_ok());
+}
+
+#[test]
+fn exemptions_of_unknown_or_disabled_rules_are_config_errors() {
+    let refused = |rule: &str, rules: &[(&str, Value)]| {
+        let config = Lint { exempt: vec![exempt(rule, &["a.ts"])], ..only(rules) };
+
+        match Linter::new(&config) {
+            Err(LintError::Exempt { rule: named, message }) if named == rule => message,
+            other => panic!("{rule}: {:?}", other.err().map(|e| e.to_string())),
+        }
+    };
+
+    assert_eq!(refused("eslint/not-a-rule", &[]), "unknown rule");
+    assert_eq!(refused("some-plugin/rule", &[]), "unknown rule");
+    assert!(refused("eqeqeq", &[]).contains("off"));
+    assert!(refused("eqeqeq", &[("eqeqeq", json!("off"))]).contains("off"));
+    assert!(refused("no-only-tests/no-only-tests", &[]).contains("off"));
+    assert!(refused("eqeqeq", &[("curly", json!("error"))]).contains("off"));
+
+    let config = Lint { exempt: vec![exempt("eqeqeq", &["a{b,c"])], ..only(&[("eqeqeq", json!("error"))]) };
+
+    assert!(matches!(Linter::new(&config), Err(LintError::Exempt { .. })));
 }

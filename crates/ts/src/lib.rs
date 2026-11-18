@@ -1,7 +1,7 @@
 //! The TypeScript and JavaScript lane: one in-memory pipeline per file.
 //!
 //! parse → segment passes (BodyWrap until stable, ClassReorder,
-//! DeclarationReorder, BlankLine) → oxc_formatter → fluent passes (FluentChain,
+//! DeclarationReorder, BlankLine) → ObjectItems → oxc_formatter → fluent passes (FluentChain,
 //! DrizzleQuery, ExpandedCall) → segment passes → validate → complexity.
 //! Lint fixes are applied by the caller before this pipeline runs.
 

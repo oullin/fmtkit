@@ -47,7 +47,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Go:** fmtkit's [spacing rule](docs/spacing.md) (blank lines around control flow and declarations, one item per line in multi-line composite literals, types moved to the top, `//go:embed` repair), then `gofmt`, then `goimports` (grouping and sorting only, unless `resolve_imports` is on), then complexity scoring, then `go vet` on the packages in scope (`./...` per module under `--all`).
 
-**TypeScript and JavaScript:** Oxlint fixes, braces on unbraced bodies, class members ordered (properties, constructor, methods), short declarations before multiline ones, statement blank lines, the oxc formatter, one call per line in fluent chains, a fixed layout for Drizzle queries, and one argument per line in calls with nested calls, objects, or arrays. The schedule repeats until the file stops changing.
+**TypeScript and JavaScript:** Oxlint fixes, braces on unbraced bodies, class members ordered (properties, constructor, methods), short declarations before multiline ones, statement blank lines, one property per line in objects with two or more properties (outside template literals), the oxc formatter, one call per line in fluent chains, a fixed layout for Drizzle queries, and one argument per line in calls with nested calls, objects, or arrays. The schedule repeats until the file stops changing.
 
 ```diff
 -const rows = await db.select().from(users).where(eq(users.id, id));

@@ -67,7 +67,12 @@ Parses in opposite arms of one `if` or `?:` never both run, so they don't match,
 `perf/no-select-all` reports Drizzle's `select()` and `selectDistinct()` before `.from(…)`, and `returning()` after `insert`, `update` or `delete`, when they're called with no column map. Without a map they read every column, including large `jsonb` and `text` columns the caller never reads. Pass the columns the caller uses:
 
 ```ts
-await db.select({ id: users.id, email: users.email }).from(users);
+await db
+	.select({
+		id: users.id,
+		email: users.email,
+	})
+	.from(users);
 ```
 
 `perf/no-query-in-loop` reports an awaited query inside the body of a `for`, `for…in`, `for…of`, `while` or `do…while` loop: the N+1 pattern. Here a query is an awaited call chain that starts from a receiver (`tx.select()…`) or from a receiver read off `this` (`this.db.update(t)…`). Read every item in one query before the loop, with `inArray`, a join, or one `sql` statement. These aren't reported:

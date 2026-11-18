@@ -45,6 +45,13 @@ pub struct Steps {
     pub resolve_imports: bool,
     /// Score the final text.
     pub complexity: bool,
+    /// `naming/max-name-words`' limit for package-level names, methods,
+    /// fields and interface methods; 0 turns the check off.
+    pub max_words: u32,
+    /// Its limit for locals and parameters; 0 means `max_words`.
+    pub max_local_words: u32,
+    /// Report `naming/no-package-stutter`.
+    pub package_stutter: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +73,8 @@ pub struct Reply {
     /// Spacing rule findings against the input.
     pub violations: Vec<Diagnostic>,
     pub complexity: Vec<ComplexityScore>,
+    /// `naming/*` findings against the final text, as errors.
+    pub lint: Vec<Diagnostic>,
     /// The file could not be processed (a syntax error, usually).
     pub error: Option<String>,
 }

@@ -271,3 +271,208 @@ fn suggestions_keep_the_name_casing() {
         ]
     );
 }
+
+const WORDS: &str = "naming/max-name-words";
+
+/// The names `naming/max-name-words` reports in `code`, linted as `file`.
+fn long_names(options: Value, file: &str, code: &str) -> Vec<String> {
+    let result = lint(&only(WORDS, &[options]), file, code, false);
+
+    assert!(result.diagnostics.iter().all(|d| d.rule == WORDS), "{:?}", result.diagnostics);
+    result.diagnostics.into_iter().map(|d| d.message.split(" has ").next().unwrap_or_default().to_owned()).collect()
+}
+
+/// The names from the request: two words pass, three or more are reported,
+/// whatever the casing.
+#[test]
+fn names_over_two_words_are_reported() {
+    let code = "\
+export class QueueRouter {}
+const correlationId = 1;
+function workerEnv() {}
+export class BackgroundExceptionBoundary {}
+type ObservedExecutionContext = string;
+export function runWithAuthBackgroundScope() {}
+const readBookingProposalTtlMs = () => 1;
+export const DEFAULT_AUTH_SESSION_LIFETIME_SECONDS = 60;
+";
+
+    assert_eq!(
+        long_names(json!({}), "src/a.ts", code),
+        [
+            "\"BackgroundExceptionBoundary\"",
+            "\"ObservedExecutionContext\"",
+            "\"runWithAuthBackgroundScope\"",
+            "\"readBookingProposalTtlMs\"",
+            "\"DEFAULT_AUTH_SESSION_LIFETIME_SECONDS\"",
+        ]
+    );
+}
+
+#[test]
+fn the_message_counts_the_words_and_points_at_an_abstraction() {
+    let result = lint(&only(WORDS, &[json!({})]), "src/a.ts", "const readBookingProposalTtlMs = 1;\n", false);
+
+    assert_eq!(
+        result.diagnostics.iter().map(|d| d.message.as_str()).collect::<Vec<_>>(),
+        [
+            "\"readBookingProposalTtlMs\" has 5 words, more than 2; use a shorter name, or an abstraction that carries the context: a module, namespace or class whose name makes the long name unnecessary"
+        ]
+    );
+}
+
+/// An acronym run is one word and ends before the word it leads; digits stay
+/// with their word.
+#[test]
+fn acronyms_and_digits_split_like_the_prefix_rule() {
+    assert_clean_words(json!({}), "src/a.ts", "const HTTPServer = 1;\nconst oauth2Client = 2;\nconst userID = 3;\nconst _privateCache = 4;\n");
+    assert_eq!(long_names(json!({}), "src/a.ts", "const HTTPServerPool = 1;\n"), ["\"HTTPServerPool\""]);
+}
+
+fn assert_clean_words(options: Value, file: &str, code: &str) {
+    assert_eq!(long_names(options, file, code), Vec::<String>::new(), "{file}");
+}
+
+/// Every kind of declaration is judged, at any depth.
+#[test]
+fn every_declaration_kind_is_judged() {
+    let code = "\
+interface RetryPolicyShape { someLongMemberName: string }
+enum RetryBackoffKind { LinearWithJitter, Fixed }
+namespace RetryPolicyTools {}
+class Scheduler {
+    pendingJobCount = 0;
+    #lastRunAt = 0;
+    static accessor nextRunHint = 1;
+    scheduleNextRun(retryDelayMs: number) {
+        const firstFailedJob = 1;
+        try {} catch (lastSeenError) {}
+        for (const queuedJobId of []) {}
+        const [primaryWorkerSlot, ...otherWorkerSlots] = [];
+        const { slot: chosenWorkerSlot } = {};
+        return function innerRetryLoop() {};
+    }
+}
+";
+
+    assert_eq!(
+        long_names(json!({}), "src/a.ts", code),
+        [
+            "\"RetryPolicyShape\"",
+            "\"RetryBackoffKind\"",
+            "\"LinearWithJitter\"",
+            "\"RetryPolicyTools\"",
+            "\"pendingJobCount\"",
+            "\"lastRunAt\"",
+            "\"nextRunHint\"",
+            "\"scheduleNextRun\"",
+            "\"retryDelayMs\"",
+            "\"firstFailedJob\"",
+            "\"lastSeenError\"",
+            "\"queuedJobId\"",
+            "\"primaryWorkerSlot\"",
+            "\"otherWorkerSlots\"",
+            "\"chosenWorkerSlot\"",
+            "\"innerRetryLoop\"",
+        ]
+    );
+}
+
+/// Names a module, a property or a parent type dictates are not the author's
+/// to shorten.
+#[test]
+fn dictated_names_are_left_alone() {
+    let code = "\
+import { someImportedHelper } from './helpers';
+import defaultExportedThing, * as wholeNamespaceImport from './things';
+const { bindingNameHere, withDefaultValue = 1 } = someImportedHelper;
+const config = { someObjectKey: 1, someObjectMethod() {} };
+function identity<TResultValue>(value: TResultValue) { return value; }
+class ConcreteSink extends Base {
+    flushPendingWrites() {}
+    pendingWriteCount = 0;
+    constructor(private readonly writeBufferSize: number) { super(); }
+}
+class PolicySink implements Sink {
+    flushPendingWrites() {}
+}
+";
+
+    assert_clean_words(json!({}), "src/a.ts", code);
+}
+
+/// Ambient declarations describe code written elsewhere.
+#[test]
+fn ambient_declarations_and_declaration_files_are_left_alone() {
+    let code = "\
+declare const injectedBuildVersion: string;
+declare function externalBridgeCall(argumentList: string[]): void;
+declare class ExternalWidgetHost { mountWidgetHere(): void }
+declare module 'some-module' { export const moduleLevelThing: number; }
+declare global { interface WindowWithBridge {} }
+declare namespace LegacyGlobalApi { const innerLegacyThing: number; }
+declare enum ExternalStatusCode { NotFoundHere }
+class Widget { declare injectedHostValue: number; }
+";
+
+    assert_clean_words(json!({}), "src/a.ts", code);
+    assert_clean_words(json!({}), "src/env-type-defs.d.ts", "export const someDeclaredConstant: number;\n");
+}
+
+/// Overloads, merged declarations and accessor pairs are one name.
+#[test]
+fn a_name_declared_twice_is_reported_once() {
+    let code = "\
+function parseRetryWindow(value: string): string;
+function parseRetryWindow(value: number): number;
+function parseRetryWindow(value: unknown): unknown { return value; }
+interface RetryWindowShape { a: 1 }
+interface RetryWindowShape { b: 2 }
+class Clock {
+    get currentTickCount() { return 1; }
+    set currentTickCount(value) {}
+}
+";
+
+    assert_eq!(long_names(json!({}), "src/a.ts", code), ["\"parseRetryWindow\"", "\"RetryWindowShape\"", "\"currentTickCount\""]);
+}
+
+/// The file name is judged without its extensions, for scripts only.
+#[test]
+fn file_names_are_judged_without_extensions() {
+    assert_eq!(long_names(json!({}), "src/booking-proposal-ttl.ts", ""), ["file name booking-proposal-ttl.ts"]);
+    assert_eq!(long_names(json!({}), "src/queueRouterImpl.ts", ""), ["file name queueRouterImpl.ts"]);
+    assert_clean_words(json!({ "ignoreTests": false }), "src/queue-router.test.ts", "");
+    assert_clean_words(json!({}), "src/queue_router.mjs", "");
+}
+
+/// `max`, `allow`, `exempt` and `ignoreTests` come from the options.
+#[test]
+fn options_change_what_is_reported() {
+    let code = "const correlationId = 1;\nconst requestCorrelationId = 2;\nexport class LivingServiceProvider {}\n";
+
+    assert_eq!(long_names(json!({ "max": 1 }), "src/a.ts", code), ["\"correlationId\"", "\"requestCorrelationId\"", "\"LivingServiceProvider\""]);
+    assert_eq!(long_names(json!({ "max": 3 }), "src/a.ts", code), Vec::<String>::new());
+    assert_eq!(long_names(json!({ "allow": ["*ServiceProvider"] }), "src/a.ts", code), ["\"requestCorrelationId\""]);
+    assert_clean_words(json!({ "exempt": ["src/generated/**"] }), "src/generated/a.ts", code);
+
+    // Test files are skipped unless `ignoreTests` is false.
+    assert_clean_words(json!({}), "src/a.test.ts", code);
+    assert_eq!(long_names(json!({ "ignoreTests": false }), "src/a.test.ts", code).len(), 2);
+}
+
+#[test]
+fn word_options_are_validated() {
+    let build = |options: Value| {
+        let config = Lint { bundled: false, rules: [(WORDS.to_owned(), json!(["error", options]))].into(), ignore: Vec::new(), ..Default::default() };
+
+        Linter::new(&config).err().map(|error| error.to_string())
+    };
+    let bare = Lint { bundled: false, rules: [(WORDS.to_owned(), json!("error"))].into(), ignore: Vec::new(), ..Default::default() };
+
+    assert!(Linter::new(&bare).is_ok());
+    assert!(build(json!({ "max": 1, "allow": ["*Id"], "exempt": ["src/**"], "ignoreTests": false })).is_none());
+    assert!(build(json!({ "max": 0 })).is_some_and(|error| error.contains("at least 1")));
+    assert!(build(json!({ "allow": [""] })).is_some_and(|error| error.contains("non-blank")));
+    assert!(build(json!({ "workspaces": [] })).is_some_and(|error| error.contains("unknown option")));
+}

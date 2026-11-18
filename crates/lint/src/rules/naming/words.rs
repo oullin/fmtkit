@@ -139,3 +139,25 @@ pub fn rest(name: &str, words: &[Word], from: usize) -> String {
 
     format!("{lead}{first}{after}")
 }
+
+/// Whether `name` matches `pattern`, where `*` stands for any run of characters.
+pub fn wildcard(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = name.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<_> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        return rest.is_empty();
+    };
+
+    for part in middle {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+
+    rest.ends_with(last)
+}

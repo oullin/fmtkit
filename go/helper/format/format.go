@@ -1,5 +1,6 @@
 // Package format runs the Go formatting pipeline on one file held in memory:
-// the spacing rule, gofmt, goimports, and complexity scoring of the result.
+// the spacing rule, gofmt, goimports, then the naming checks and complexity
+// scoring of the result.
 package format
 
 import (
@@ -8,6 +9,7 @@ import (
 	goformat "go/format"
 
 	"go.ollin.sh/fmtkit/go/helper/complexity"
+	"go.ollin.sh/fmtkit/go/helper/naming"
 	"go.ollin.sh/fmtkit/go/helper/proto"
 	"go.ollin.sh/fmtkit/go/helper/spacing"
 	"golang.org/x/tools/imports"
@@ -29,7 +31,7 @@ var formatOnly = imports.Options{FormatOnly: true, Comments: true, TabIndent: tr
 var resolving = imports.Options{Comments: true, TabIndent: true, TabWidth: 8}
 
 // Process runs the steps req selects, in v1's order: spacing, gofmt,
-// goimports, then complexity on the final text. A step that fails stops the
+// goimports, then the naming checks and complexity on the final text. A step that fails stops the
 // pipeline; the reply then carries the error as "<step>: <cause>", the
 // original source as its output, and whatever earlier steps reported.
 func Process(req proto.Request) proto.Reply {
@@ -79,6 +81,14 @@ func Process(req proto.Request) proto.Reply {
 		}
 	}
 
+	lint, err := names(req, current)
+
+	if err != nil {
+		return failed(reply, req, "naming", err)
+	}
+
+	reply.Lint = lint
+
 	if req.Steps.Complexity {
 		functions, err := complexity.Score(req.Rel, current)
 
@@ -100,6 +110,34 @@ func Process(req proto.Request) proto.Reply {
 	reply.Output = current
 
 	return reply
+}
+
+// names runs the naming checks req turns on against src, the final text.
+func names(req proto.Request, src []byte) ([]proto.Violation, error) {
+	options := naming.Options{
+		MaxWords:       int(req.Steps.MaxWords),
+		MaxLocalWords:  int(req.Steps.MaxLocalWords),
+		PackageStutter: req.Steps.PackageStutter,
+	}
+
+	findings, err := naming.Check(req.Rel, src, options)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var lint []proto.Violation
+
+	for _, f := range findings {
+		lint = append(lint, proto.Violation{
+			Rule:    f.Rule,
+			Line:    wireUint(f.Line),
+			Column:  wireUint(f.Column),
+			Message: f.Message,
+		})
+	}
+
+	return lint, nil
 }
 
 // goimports returns the goimports pass for req: format-only unless the request
@@ -126,6 +164,7 @@ func failed(reply proto.Reply, req proto.Request, step string, err error) proto.
 	reply.Error = fmt.Sprintf("%s: %v", step, err)
 	reply.Output = req.Source
 	reply.Complexity = nil
+	reply.Lint = nil
 
 	return reply
 }

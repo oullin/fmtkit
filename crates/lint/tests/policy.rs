@@ -144,8 +144,8 @@ fn perf_rules_are_opt_in() {
     assert!(result.diagnostics.iter().all(|diagnostic| !diagnostic.rule.starts_with("perf/")));
 }
 
-/// The `naming/*` rules need a repository's workspace layout, so the bundled
-/// policy leaves them out.
+/// The `naming/*` rules need a repository's workspace layout or a naming
+/// budget it chose, so the bundled policy leaves them out.
 #[test]
 fn naming_rules_are_opt_in() {
     let (_, _, shipped) = load();

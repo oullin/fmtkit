@@ -56,9 +56,20 @@ fn request(rel: &str, source: impl Into<Vec<u8>>, steps: Steps) -> Request {
     Request { rel: rel.into(), abs: PathBuf::from("/nonexistent").join(rel), source: source.into(), steps }
 }
 
-const SPACING: Steps = Steps { spacing: true, gofmt: false, goimports: false, resolve_imports: false, complexity: false };
+const SPACING: Steps = Steps { spacing: true, gofmt: false, goimports: false, resolve_imports: false, complexity: false, ..NAMING_OFF };
 
-const ALL: Steps = Steps { spacing: true, gofmt: true, goimports: true, resolve_imports: false, complexity: true };
+const ALL: Steps = Steps { spacing: true, gofmt: true, goimports: true, resolve_imports: false, complexity: true, ..NAMING_OFF };
+
+const NAMING_OFF: Steps = Steps {
+    spacing: false,
+    gofmt: false,
+    goimports: false,
+    resolve_imports: false,
+    complexity: false,
+    max_words: 0,
+    max_local_words: 0,
+    package_stutter: false,
+};
 
 #[test]
 fn handshakes_and_reports_its_version() {
@@ -118,6 +129,34 @@ fn runs_the_whole_pipeline() {
     assert_eq!(reply.complexity.len(), 1);
     assert_eq!((reply.complexity[0].key.as_str(), reply.complexity[0].line), ("pkg/sample.go#run", 9));
     assert_eq!((reply.complexity[0].cyclomatic, reply.complexity[0].cognitive), (2, 1));
+
+    helper.shutdown().unwrap();
+}
+
+/// The naming checks travel over the wire and come back as lint, judged on
+/// the formatted text, with locals held to their own limit.
+#[test]
+fn checks_names_when_asked() {
+    let Some(helper) = spawn() else { return };
+    let source = "package worker
+func WorkerSpec(queueName string) {}
+
+
+
+func StartPool() {}
+";
+    let steps = Steps { gofmt: true, max_words: 2, max_local_words: 1, package_stutter: true, ..Steps::default() };
+    let reply = helper.submit(request("pkg/worker.go", source, steps)).unwrap().wait().unwrap();
+    let lint: Vec<_> = reply.lint.iter().map(|d| (d.rule.as_str(), d.line, d.column)).collect();
+
+    assert_eq!(reply.error, None);
+    assert_eq!(reply.violations, [] as [fmtkit_core::Diagnostic; 0]);
+    assert_eq!(lint, [("naming/no-package-stutter", 3, 6), ("naming/max-name-words", 3, 17)]);
+    assert!(reply.lint.iter().all(|d| d.file == "pkg/worker.go"));
+
+    let off = helper.submit(request("pkg/worker.go", source, Steps { gofmt: true, ..Steps::default() })).unwrap().wait().unwrap();
+
+    assert_eq!(off.lint, [] as [fmtkit_core::Diagnostic; 0]);
 
     helper.shutdown().unwrap();
 }

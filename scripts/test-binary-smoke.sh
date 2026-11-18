@@ -50,7 +50,7 @@ unset FMTKIT_GO_HELPER
 export FMTKIT_CACHE_DIR="${tmp_root}/cache"
 
 expected_version="fmtkit ${VERSION}"
-expected_ts=$'const a = { s: \'hi\', x: 1 };\n\nexport default a;\n'
+expected_ts=$'const a = {\n\ts: \'hi\',\n\tx: 1,\n};\n\nexport default a;\n'
 expected_go=$'package p\n\nfunc f() {\n\tdefer println("d")\n\n\treturn\n}\n'
 
 fail() {

@@ -56,7 +56,7 @@ printf 'module fixture\n\ngo 1.27.1\n' > "${fixture}/go.mod"
 # still read it.
 docker run --rm -v "${fixture}:/work" fmtkit:smoke format --all
 
-expected_ts=$'const a = { s: \'hi\', x: 1 };\n\nexport default a;\n'
+expected_ts=$'const a = {\n\ts: \'hi\',\n\tx: 1,\n};\n\nexport default a;\n'
 expected_go=$'package p\n\nfunc f() {\n\tdefer println("d")\n\n\treturn\n}\n'
 
 if ! diff <(printf '%s' "$expected_ts") "${fixture}/app.ts"; then

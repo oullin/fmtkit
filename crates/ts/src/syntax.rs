@@ -116,11 +116,19 @@ pub(crate) fn contains_comment_opener(text: &str) -> bool {
 /// parenthesis inside the type argument.
 pub(crate) fn call_parens(text: &str, call: &CallExpression<'_>, callee_end: u32) -> Option<(u32, u32)> {
     let type_arguments_end = call.type_arguments.as_ref().map_or(0, |args| args.span.end);
-    let from = callee_end.max(type_arguments_end) as usize;
-    let open = to_u32(from + text.get(from..)?.find('(')?);
-    let close = call.span.end.checked_sub(1)?;
 
-    (open < call.span.end && text.as_bytes().get(close as usize) == Some(&b')')).then_some((open, close))
+    argument_parens(text, call.span, callee_end.max(type_arguments_end))
+}
+
+/// The opening and closing offsets of the argument parentheses of a call or
+/// `new` expression spanning `span`, searching for `(` from `from`: the end of
+/// its callee and type arguments. `new Foo` without parentheses has none.
+pub(crate) fn argument_parens(text: &str, span: Span, from: u32) -> Option<(u32, u32)> {
+    let from = from as usize;
+    let open = to_u32(from + text.get(from..)?.find('(')?);
+    let close = span.end.checked_sub(1)?;
+
+    (open < span.end && text.as_bytes().get(close as usize) == Some(&b')')).then_some((open, close))
 }
 
 /// An expression seen through one `ChainExpression` wrapper, as the v1

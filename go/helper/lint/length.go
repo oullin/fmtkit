@@ -258,8 +258,8 @@ func importSpans(tokens *token.File, file *ast.File) [][2]int {
 }
 
 // imported reports whether a line's overflow, from byte cut of the line at
-// offset at, is an import spec: it starts inside one, and only blanks, a
-// semicolon or a comment follow that spec on the line.
+// offset at, is all import spec: it starts inside one, and only blanks or a
+// semicolon follow that spec on the line. A trailing comment can move above.
 func (w *lineWalker) imported(at int, text []byte, cut int) bool {
 	offset := at + cut
 
@@ -270,7 +270,7 @@ func (w *lineWalker) imported(at int, text []byte, cut int) bool {
 
 		rest := bytes.TrimLeft(text[min(span[1]-at, len(text)):], " \t;")
 
-		return len(rest) == 0 || bytes.HasPrefix(rest, []byte("//")) || bytes.HasPrefix(rest, []byte("/*"))
+		return len(rest) == 0
 	}
 
 	return false

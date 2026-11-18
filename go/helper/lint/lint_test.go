@@ -341,9 +341,12 @@ var _ = fmt.Sprint
 
 func TestLineLengthChecksADeclarationSharingAnImportLine(t *testing.T) {
 	long := strings.Repeat("x", 130)
-	src := "package a\n\nimport alias \"example.com/" + long + "\" // why\n\nimport \"os\"; var " + long + " = os.Args\n"
+	src := "package a\n\nimport alias \"example.com/" + long + "\" // why\n\n" +
+		"import \"io\"; var " + long + " = io.EOF\n"
+	spill := "package a\n\nimport alias \"example.com/" + long + "\"; var y" + long + " = alias.X\n"
 
 	expect(t, src, only(lint.RuleLineLength), at{lint.RuleLineLength, 5, 121})
+	expect(t, spill, only(lint.RuleLineLength), at{lint.RuleLineLength, 3, 121})
 }
 
 func TestFindingsUsePhysicalPositionsUnderLineDirectives(t *testing.T) {

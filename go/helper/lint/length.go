@@ -87,7 +87,7 @@ func (w *lineWalker) line(number, at int, text []byte) (Finding, bool) {
 
 	width, cut := measure(text, w.limits.TabWidth, limit)
 
-	if width <= limit || w.imported(at+cut) {
+	if width <= limit || w.imported(at, text, cut) {
 		return Finding{}, false
 	}
 
@@ -257,13 +257,20 @@ func importSpans(tokens *token.File, file *ast.File) [][2]int {
 	return spans
 }
 
-// imported reports whether byte offset, where a line's overflow starts, lies
-// inside an import spec.
-func (w *lineWalker) imported(offset int) bool {
+// imported reports whether a line's overflow, from byte cut of the line at
+// offset at, is an import spec: it starts inside one, and only blanks, a
+// semicolon or a comment follow that spec on the line.
+func (w *lineWalker) imported(at int, text []byte, cut int) bool {
+	offset := at + cut
+
 	for _, span := range w.imports {
-		if span[0] <= offset && offset < span[1] {
-			return true
+		if span[0] > offset || offset >= span[1] {
+			continue
 		}
+
+		rest := bytes.TrimLeft(text[min(span[1]-at, len(text)):], " \t;")
+
+		return len(rest) == 0 || bytes.HasPrefix(rest, []byte("//")) || bytes.HasPrefix(rest, []byte("/*"))
 	}
 
 	return false

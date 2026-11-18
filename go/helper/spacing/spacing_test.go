@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -431,6 +432,96 @@ func helper(t *testing.T) {
 
 	if !strings.Contains(string(formatted), "t.Helper()\n\n\tvalue := 1") {
 		t.Fatalf("expected blank line after t.Helper call, got:\n%s", formatted)
+	}
+}
+
+func TestApplyFormatsBlankLinesBetweenSubtests(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "testing"
+
+func TestReader(t *testing.T) {
+	cases := load()
+	t.Run("absent", func(t *testing.T) {
+		_ = cases
+	})
+	t.Run("configured", func(t *testing.T) {})
+	b.Run("bench", func(b *testing.B) {})
+	cleanup()
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	messages := make([]string, 0, len(violations))
+
+	for _, violation := range violations {
+		messages = append(messages, violation.Message)
+	}
+
+	want := []string{
+		"missing blank line before subtest",
+		"missing blank line before subtest",
+		"missing blank line before subtest",
+		"missing blank line after subtest",
+	}
+
+	if !slices.Equal(messages, want) {
+		t.Fatalf("unexpected messages %q", messages)
+	}
+
+	for _, expected := range []string{
+		"cases := load()\n\n\tt.Run(\"absent\"",
+		"})\n\n\tt.Run(\"configured\", func(t *testing.T) {})\n\n\tb.Run(\"bench\"",
+		"func(b *testing.B) {})\n\n\tcleanup()",
+	} {
+		if !strings.Contains(string(formatted), expected) {
+			t.Fatalf("expected %q in:\n%s", expected, formatted)
+		}
+	}
+
+	again, reformatted, err := New().Apply(path, formatted)
+
+	if err != nil {
+		t.Fatalf("reapply: %v", err)
+	}
+
+	if len(again) != 0 || string(reformatted) != string(formatted) {
+		t.Fatalf("expected a fixed point, got %d violations:\n%s", len(again), reformatted)
+	}
+}
+
+func TestApplyIgnoresRunCallsThatAreNotSubtests(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+import "testing"
+
+func TestRunner(t *testing.T) {
+	t.Run("named", check)
+	server.Run()
+	pool.Run(ctx, func() {}, extra)
+	Run("free", func() {})
+	wrap(t.Run("nested", func(t *testing.T) {}))
+}
+`)
+
+	original := string(mustReadFile(t, path))
+	violations, formatted, err := New().Apply(path, []byte(original))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations, got %v", violations)
+	}
+
+	if string(formatted) != original {
+		t.Fatalf("expected unchanged output, got:\n%s", formatted)
 	}
 }
 

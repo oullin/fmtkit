@@ -261,4 +261,92 @@ mod tests {
 
         assert_eq!(apply_once(Pass::BlankLine, "fixture.ts", &source), expected);
     }
+
+    #[test]
+    fn separates_consecutive_test_blocks_including_curried_and_member_forms() {
+        let source = [
+            "describe('env reader', () => {",
+            "\tbeforeEach(() => bind());",
+            "\tit.each([undefined, ''])('reads an absent list as unrestricted: %s', (value) => {",
+            "\t\tbind({ EMAIL_RECIPIENT_DOMAINS: value });",
+            "\t});",
+            "\tit('normalises the configured lists', () => {",
+            "\t\texpect(env().emailRecipientDomains()).toEqual(['example.test']);",
+            "\t});",
+            "\tit.skip('is skipped', function () {});",
+            "\tdescribe.only('nested', () => {});",
+            "\ttest.concurrent.fails('fails', async () => {});",
+            "\tit.each`",
+            "\t\ta    | b",
+            "\t\t${1} | ${2}",
+            "\t`('tabled', ({ a, b }) => {});",
+            "\tconst value = 1;",
+            "\tafterAll(() => {});",
+            "});",
+            "",
+        ]
+        .join("\n");
+
+        let expected = [
+            "describe('env reader', () => {",
+            "\tbeforeEach(() => bind());",
+            "",
+            "\tit.each([undefined, ''])('reads an absent list as unrestricted: %s', (value) => {",
+            "\t\tbind({ EMAIL_RECIPIENT_DOMAINS: value });",
+            "\t});",
+            "",
+            "\tit('normalises the configured lists', () => {",
+            "\t\texpect(env().emailRecipientDomains()).toEqual(['example.test']);",
+            "\t});",
+            "",
+            "\tit.skip('is skipped', function () {});",
+            "",
+            "\tdescribe.only('nested', () => {});",
+            "",
+            "\ttest.concurrent.fails('fails', async () => {});",
+            "",
+            "\tit.each`",
+            "\t\ta    | b",
+            "\t\t${1} | ${2}",
+            "\t`('tabled', ({ a, b }) => {});",
+            "",
+            "\tconst value = 1;",
+            "",
+            "\tafterAll(() => {});",
+            "});",
+            "",
+        ]
+        .join("\n");
+
+        let output = apply_once(Pass::BlankLine, "env.test.ts", &source);
+
+        assert_eq!(output, expected);
+        assert!(compute(Pass::BlankLine, "env.test.ts", &output).is_empty());
+    }
+
+    #[test]
+    fn spaces_a_test_block_from_the_statements_around_it() {
+        let source = "function run() {\n\tprepare();\n\ttest('name', () => {});\n\tcleanup();\n}\n";
+
+        assert_eq!(apply_once(Pass::BlankLine, "fixture.ts", source), "function run() {\n\tprepare();\n\n\ttest('name', () => {});\n\n\tcleanup();\n}\n");
+    }
+
+    #[test]
+    fn spaces_a_mocha_test_with_a_chained_modifier() {
+        let source = "describe('suite', function () {\n\tit('slow', function () {}).timeout(5000);\n\tit('fast', function () {});\n});\n";
+
+        assert_eq!(apply_once(Pass::BlankLine, "fixture.js", source), source.replace(".timeout(5000);\n", ".timeout(5000);\n\n"));
+    }
+
+    #[test]
+    fn does_not_treat_a_call_without_a_function_argument_as_a_test_block() {
+        for source in [
+            "function run() {\n\ttest(value);\n\ttest(other);\n}\n",
+            "function run() {\n\tit.todo('later');\n\tit.todo('much later');\n}\n",
+            "function run() {\n\tregister(() => {});\n\tdescribeRoute(() => {});\n}\n",
+            "function run() {\n\tsuite.add(task);\n\tit.next();\n}\n",
+        ] {
+            assert!(compute(Pass::BlankLine, "fixture.ts", source).is_empty(), "{source}");
+        }
+    }
 }

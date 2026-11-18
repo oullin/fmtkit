@@ -178,6 +178,10 @@ func (b *blankLineInserter) statementGapRule(current ast.Stmt, next ast.Stmt) (s
 // requiresTrailingBlankLine reports whether current must be followed by a blank
 // line, returning the label used in the violation message.
 func (b *blankLineInserter) requiresTrailingBlankLine(current ast.Stmt, next ast.Stmt) (string, bool) {
+	if isSubtestCall(current) {
+		return "subtest", true
+	}
+
 	if isTestingHelperCall(current) {
 		return "t.Helper call", true
 	}
@@ -211,6 +215,10 @@ func (b *blankLineInserter) requiresTrailingBlankLine(current ast.Stmt, next ast
 // requiresLeadingBlankLine reports whether stmt must be preceded by a blank
 // line, returning the label used in the violation message.
 func (b *blankLineInserter) requiresLeadingBlankLine(stmt ast.Stmt) (string, bool) {
+	if isSubtestCall(stmt) {
+		return "subtest", true
+	}
+
 	if label, ok := routeRegistryCallLabel(stmt); ok {
 		return label, true
 	}
@@ -250,6 +258,34 @@ func routeRegistryCallLabel(stmt ast.Stmt) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// isSubtestCall reports whether stmt registers a subtest or sub-benchmark:
+// a call to a `.Run` selector with two arguments, the second a function
+// literal, such as t.Run("name", func(t *testing.T) { ... }). The helper has
+// no type information, so the receiver is not checked.
+func isSubtestCall(stmt ast.Stmt) bool {
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+
+	if !ok {
+		return false
+	}
+
+	call, ok := exprStmt.X.(*ast.CallExpr)
+
+	if !ok || len(call.Args) != 2 {
+		return false
+	}
+
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+
+	if !ok || selector.Sel.Name != "Run" {
+		return false
+	}
+
+	_, ok = call.Args[1].(*ast.FuncLit)
+
+	return ok
 }
 
 func isTestingHelperCall(stmt ast.Stmt) bool {

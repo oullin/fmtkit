@@ -339,6 +339,13 @@ var _ = fmt.Sprint
 	)
 }
 
+func TestLineLengthChecksADeclarationSharingAnImportLine(t *testing.T) {
+	long := strings.Repeat("x", 130)
+	src := "package a\n\nimport alias \"example.com/" + long + "\" // why\n\nimport \"os\"; var " + long + " = os.Args\n"
+
+	expect(t, src, only(lint.RuleLineLength), at{lint.RuleLineLength, 5, 121})
+}
+
 func TestFindingsUsePhysicalPositionsUnderLineDirectives(t *testing.T) {
 	src := "package a\n\n//line template.go:500\nfunc f(x int) {\n\tif x > 0 {\n\t\tif x > 1 {\n\t\t}\n\t}\n}\n"
 

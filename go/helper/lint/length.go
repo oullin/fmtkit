@@ -48,7 +48,7 @@ func lineLength(fset *token.FileSet, file *ast.File, src []byte, limits Limits, 
 		file:    file,
 		tokens:  tokens,
 		strings: strings,
-		imports: importLines(tokens, file),
+		imports: importSpans(tokens, file),
 		limits:  limits,
 	}
 
@@ -87,7 +87,7 @@ func (w *lineWalker) line(number, at int, text []byte) (Finding, bool) {
 
 	width, cut := measure(text, w.limits.TabWidth, limit)
 
-	if width <= limit || w.imported(number) {
+	if width <= limit || w.imported(at+cut) {
 		return Finding{}, false
 	}
 
@@ -244,22 +244,24 @@ func notBlank(r rune) bool {
 	return r != ' ' && r != '\t'
 }
 
-// importLines returns the first and last line of every import spec. A comment
-// on its own line inside import ( ... ) belongs to no spec, so it is checked.
-func importLines(tokens *token.File, file *ast.File) [][2]int {
-	lines := make([][2]int, 0, len(file.Imports))
+// importSpans returns the byte range of every import spec. A comment on its
+// own line inside import ( ... ), or a declaration after one on the same line,
+// lies outside every spec, so it is checked.
+func importSpans(tokens *token.File, file *ast.File) [][2]int {
+	spans := make([][2]int, 0, len(file.Imports))
 
 	for _, spec := range file.Imports {
-		lines = append(lines, [2]int{tokens.Line(spec.Pos()), tokens.Line(spec.End())})
+		spans = append(spans, [2]int{tokens.Offset(spec.Pos()), tokens.Offset(spec.End())})
 	}
 
-	return lines
+	return spans
 }
 
-// imported reports whether line number belongs to an import spec.
-func (w *lineWalker) imported(number int) bool {
-	for _, lines := range w.imports {
-		if lines[0] <= number && number <= lines[1] {
+// imported reports whether byte offset, where a line's overflow starts, lies
+// inside an import spec.
+func (w *lineWalker) imported(offset int) bool {
+	for _, span := range w.imports {
+		if span[0] <= offset && offset < span[1] {
 			return true
 		}
 	}

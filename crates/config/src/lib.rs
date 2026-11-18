@@ -70,11 +70,41 @@ pub struct Go {
     /// Off, goimports only groups and sorts the import block.
     pub resolve_imports: bool,
     pub vet: bool,
+    /// Report declared names with more words than `max_words`
+    /// (`naming/max-name-words`).
+    pub max_name_words: bool,
+    /// The word limit for package-level names, methods, struct fields and
+    /// interface methods.
+    pub max_words: u32,
+    /// The word limit for locals and parameters; unset, `max_words`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_local_words: Option<u32>,
+    /// Report exported names that start with their package name
+    /// (`naming/no-package-stutter`).
+    pub no_package_stutter: bool,
 }
 
 impl Default for Go {
     fn default() -> Self {
-        Self { spacing: true, gofmt: true, goimports: true, resolve_imports: false, vet: true }
+        Self {
+            spacing: true,
+            gofmt: true,
+            goimports: true,
+            resolve_imports: false,
+            vet: true,
+            max_name_words: false,
+            max_words: 2,
+            max_local_words: None,
+            no_package_stutter: false,
+        }
+    }
+}
+
+impl Go {
+    /// The word limits `naming/max-name-words` applies, package-level then
+    /// local, or `None` when the check is off.
+    pub fn word_limits(&self) -> Option<(u32, u32)> {
+        self.max_name_words.then(|| (self.max_words, self.max_local_words.unwrap_or(self.max_words)))
     }
 }
 
@@ -284,6 +314,14 @@ impl Config {
 
         if self.ts.format.print_width == 0 {
             return invalid("ts.format.print_width must be at least 1".into());
+        }
+
+        if self.go.max_words == 0 {
+            return invalid("go.max_words must be at least 1".into());
+        }
+
+        if self.go.max_local_words == Some(0) {
+            return invalid("go.max_local_words must be at least 1".into());
         }
 
         let mut keys = std::collections::BTreeSet::new();
@@ -550,5 +588,23 @@ reason = "later"
         fs::write(dir.path().join("exempt.toml"), "[[exempt]]\nrule = \"curly\"\nreason = \"\"\npaths = [\"a.ts\"]\n").unwrap();
 
         assert!(load().contains("exempt.toml") && load().contains("reason is empty"), "{}", load());
+    }
+
+    /// The Go naming checks are off by default; locals fall back to
+    /// `max_words` unless `max_local_words` is set.
+    #[test]
+    fn go_naming_limits() {
+        let defaults = parse("").unwrap().go;
+
+        assert_eq!(defaults.word_limits(), None);
+        assert!(!defaults.no_package_stutter);
+        assert_eq!(parse("[go]\nmax_words = 1\n").unwrap().go.word_limits(), None);
+        assert_eq!(parse("[go]\nmax_name_words = true\n").unwrap().go.word_limits(), Some((2, 2)));
+        assert_eq!(parse("[go]\nmax_name_words = true\nmax_words = 1\n").unwrap().go.word_limits(), Some((1, 1)));
+        assert_eq!(parse("[go]\nmax_name_words = true\nmax_local_words = 1\n").unwrap().go.word_limits(), Some((2, 1)));
+        assert!(parse("[go]\nno_package_stutter = true\n").unwrap().go.no_package_stutter);
+        assert!(parse("[go]\nmax_words = 0\n").unwrap_err().to_string().contains("go.max_words must be at least 1"));
+        assert!(parse("[go]\nmax_local_words = 0\n").unwrap_err().to_string().contains("go.max_local_words must be at least 1"));
+        assert_ne!(parse("[go]\nmax_name_words = true\n").unwrap().hash(), parse("").unwrap().hash());
     }
 }

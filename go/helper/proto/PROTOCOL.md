@@ -4,7 +4,7 @@
 helper's stdin (requests) and stdout (replies). The helper's stderr is free-form
 diagnostics; fmtkit shows its tail only when the helper dies.
 
-Protocol version: **1** (`proto.Version` in Go, `proto::PROTOCOL_VERSION` in
+Protocol version: **2** (`proto.Version` in Go, `proto::PROTOCOL_VERSION` in
 `crates/go`). Bump it on any change to this document's layouts.
 
 ## Frames
@@ -59,6 +59,10 @@ bool   gofmt            run go/format
 bool   goimports        run goimports
 bool   resolve_imports  let goimports add and remove imports
 bool   complexity       score the final text
+u32    max_words        naming/max-name-words limit for package-level names,
+                        methods, fields and interface methods; 0 = off
+u32    max_local_words  its limit for locals and parameters; 0 = max_words
+bool   package_stutter  run naming/no-package-stutter
 ```
 
 ### ProcessReply
@@ -69,6 +73,7 @@ bytes                output       the final text (the input when nothing changed
 list<string>         applied      steps that changed the text, in order
 list<Violation>      violations   spacing findings against the input
 list<Score>          complexity   one per function declaration with a body
+list<Violation>      lint         naming findings against the final text
 ```
 
 ```
@@ -96,7 +101,9 @@ receiver-qualified method name, `(*T).Method`.
 ## Steps and errors
 
 The helper runs the selected steps in this order, each on the previous one's
-output: `spacing`, `gofmt`, `goimports`, then `complexity` on the final text.
+output: `spacing`, `gofmt`, `goimports`, then the naming checks and
+`complexity` on the final text. The naming checks run when `max_words` is
+non-zero or `package_stutter` is set, and never change the text.
 A step's name is appended to `applied` when it changed the text.
 
 - `goimports` is format-only (`imports.Options{FormatOnly: true, Comments:
@@ -106,7 +113,7 @@ A step's name is appended to `applied` when it changed the text.
   reads the filesystem.
 - A failing step stops the pipeline. `error` is `"<step>: <cause>"`, `output`
   is the original source, `applied` and `violations` keep what earlier steps
-  reported, and `complexity` is empty.
+  reported, and `complexity` and `lint` are empty.
 - A panic while processing a request becomes `error = "internal error: ..."`
   for that request only; the stack goes to stderr.
 
@@ -125,10 +132,10 @@ byte, then decode the files back. Regenerate with
 `go test ./proto -run TestGoldenFrames -update` and update the Rust values to
 match.
 
-| file              | kind     | id         | contents                                      |
-| ----------------- | -------- | ---------- | --------------------------------------------- |
-| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                      |
-| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity      |
-| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores |
-| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                |
-| `shutdown.bin`    | Shutdown | 0          | empty                                         |
+| file              | kind     | id         | contents                                                                  |
+| ----------------- | -------- | ---------- | ------------------------------------------------------------------------- |
+| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                                                  |
+| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity, max words 2 (locals 1), stutter |
+| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores, one lint finding           |
+| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                                            |
+| `shutdown.bin`    | Shutdown | 0          | empty                                                                     |

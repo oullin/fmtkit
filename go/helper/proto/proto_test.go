@@ -31,7 +31,7 @@ var requestFixture = proto.Request{
 	Rel:    "pkg/a.go",
 	Abs:    "/repo/pkg/a.go",
 	Source: []byte("package a\n"),
-	Steps:  proto.Steps{Spacing: true, Gofmt: true, Complexity: true},
+	Steps:  proto.Steps{Spacing: true, Gofmt: true, Complexity: true, MaxWords: 2, MaxLocalWords: 1, PackageStutter: true},
 }
 
 var replyFixture = proto.Reply{
@@ -44,6 +44,9 @@ var replyFixture = proto.Reply{
 	Complexity: []proto.Score{
 		{Key: "pkg/a.go#f", Name: "f", Line: 3, Cyclomatic: 1},
 		{Key: "pkg/a.go#(*T).M", Name: "(*T).M", Line: 5, Cyclomatic: 4, Cognitive: 6},
+	},
+	Lint: []proto.Violation{
+		{Rule: "naming/no-package-stutter", Line: 3, Column: 6, Message: "stutters"},
 	},
 }
 
@@ -97,7 +100,7 @@ func fixtures() []fixture {
 			check: func(t *testing.T, payload []byte) {
 				got, err := proto.DecodeReply(payload)
 
-				if err != nil || got.Error != errorReplyFixture.Error || len(got.Output) != 0 || got.Applied != nil || got.Violations != nil || got.Complexity != nil {
+				if err != nil || got.Error != errorReplyFixture.Error || len(got.Output) != 0 || got.Applied != nil || got.Violations != nil || got.Complexity != nil || got.Lint != nil {
 					t.Fatalf("reply = %#v, %v", got, err)
 				}
 			},

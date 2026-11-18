@@ -55,12 +55,12 @@ fn collect(run: &Run<'_>, helper: Option<&Helper>, pending: Vec<Pending<'_>>) ->
                 let outcome = finish(run, file, &fresh, ticket.wait()?);
 
                 // Check mode reports against the text on disk, as lint does;
-                // the helper scored the formatted text, whose lines moved. The
-                // outcome is stored once it is final.
+                // the helper scored and named the formatted text, whose lines
+                // moved. The outcome is stored once it is final.
                 if run.mode == Mode::Check && outcome.changed && outcome.error.is_none() {
                     match helper {
-                        Some(helper) if !outcome.complexity.is_empty() => {
-                            let steps = Steps { complexity: true, ..Steps::default() };
+                        Some(helper) if !outcome.complexity.is_empty() || !outcome.lint.is_empty() => {
+                            let steps = Steps { complexity: !outcome.complexity.is_empty(), ..naming(run.config) };
                             let request = Request { rel: file.rel.clone(), abs: file.abs.clone(), source: std::mem::take(&mut fresh.bytes), steps };
 
                             rescores.push((outcomes.len(), fresh, helper.submit(request)?));
@@ -82,6 +82,7 @@ fn collect(run: &Run<'_>, helper: Option<&Helper>, pending: Vec<Pending<'_>>) ->
 
         if reply.error.is_none() {
             outcomes[index].complexity = reply.complexity;
+            outcomes[index].lint = reply.lint;
             run.cache.put_fresh(&fresh, &outcomes[index]);
         }
     }
@@ -127,6 +128,7 @@ fn finish(run: &Run<'_>, file: &SourceFile, fresh: &Fresh, reply: Reply) -> File
     outcome.applied = reply.applied;
     outcome.violations = reply.violations;
     outcome.complexity = reply.complexity;
+    outcome.lint = reply.lint;
 
     if !outcome.changed {
         run.cache.put_fresh(fresh, &outcome);
@@ -141,6 +143,8 @@ fn finish(run: &Run<'_>, file: &SourceFile, fresh: &Fresh, reply: Reply) -> File
             return outcome;
         }
 
+        // The written text is clean of spacing violations; naming findings
+        // were judged on it and stay.
         let clean = FileOutcome { applied: Vec::new(), changed: false, violations: Vec::new(), ..outcome.clone() };
 
         run.cache.put(run.cache.key(run.mode, &file.rel, &reply.output), &clean);
@@ -156,12 +160,21 @@ fn steps(config: &Config, abs: &Path) -> Steps {
         goimports: config.go.goimports,
         resolve_imports: config.go.resolve_imports,
         complexity: !is_test_file(abs),
+        ..naming(config)
     }
 }
 
-/// Format one Go source without touching disk.
+/// Only the `naming/*` checks `config` turns on.
+fn naming(config: &Config) -> Steps {
+    let (max_words, max_local_words) = config.go.word_limits().unwrap_or_default();
+
+    Steps { max_words, max_local_words, package_stutter: config.go.no_package_stutter, ..Steps::default() }
+}
+
+/// Format one Go source without touching disk. Only the text is wanted, so
+/// nothing is scored or named.
 pub fn format_one(helper: &Helper, config: &Config, rel: &str, abs: &Path, source: Vec<u8>) -> Result<Reply, GoError> {
-    let steps = Steps { complexity: false, ..steps(config, abs) };
+    let steps = Steps { complexity: false, max_words: 0, max_local_words: 0, package_stutter: false, ..steps(config, abs) };
 
     helper.submit(Request { rel: rel.to_owned(), abs: abs.to_path_buf(), source, steps })?.wait()
 }

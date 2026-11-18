@@ -45,7 +45,7 @@ Changed means different from `HEAD` in the work tree or index, or untracked and 
 
 fmtkit changes layout and applies safe lint fixes; it does not change behaviour on purpose. A file whose syntax tree changes unexpectedly, that fails to parse, or that does not reach a fixed point is reported and left untouched.
 
-**Go:** fmtkit's [spacing rule](docs/spacing.md) (blank lines around control flow and declarations, one item per line in multi-line composite literals, types moved to the top, `//go:embed` repair), then `gofmt`, then `goimports` (grouping and sorting only, unless `resolve_imports` is on), then complexity scoring, then `go vet` on the packages in scope (`./...` per module under `--all`).
+**Go:** fmtkit's [spacing rule](docs/spacing.md) (blank lines around control flow and declarations, one item per line in multi-line composite literals, types moved to the top, `//go:embed` repair), then `gofmt`, then `goimports` (grouping and sorting only, unless `resolve_imports` is on), then the opt-in [naming checks](docs/naming.md#go), then complexity scoring, then `go vet` on the packages in scope (`./...` per module under `--all`).
 
 **TypeScript and JavaScript:** Oxlint fixes, braces on unbraced bodies, class members ordered (properties, constructor, methods), short declarations before multiline ones, statement blank lines (including one between consecutive test blocks such as `describe`, `it`, and `beforeEach` calls), one property per line in objects with two or more properties (outside template literals), the oxc formatter, one call per line in fluent chains, a fixed layout for Drizzle queries, and one argument per line in calls and `new` expressions with a nested call, object, or array, or a ternary with one of those in a branch. The schedule repeats until the file stops changing.
 
@@ -70,7 +70,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Vue, HTML, Markdown:** formatted as whole documents. Scripts inside them go through the script pipeline; styles and CSS fences through the oxc CSS formatter. Markdown prose is not rewrapped.
 
-**Lint:** Oxlint (pinned to `oxlint_v1.86.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/no-redundant-name-prefix` rule](docs/naming.md) reports folders, files and declarations whose names start with what their path already says.
+**Lint:** Oxlint (pinned to `oxlint_v1.86.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
 
 ### What it leaves alone
 
@@ -159,6 +159,10 @@ gofmt = true
 goimports = true
 resolve_imports = false
 vet = true
+max_name_words = false                # naming/max-name-words for Go declarations
+max_words = 2                         # its limit for package-level names, methods and fields
+# max_local_words = 1                 # its limit for locals and parameters; unset = max_words
+no_package_stutter = false            # naming/no-package-stutter: worker.WorkerSpec
 
 [ts.format]                           # also applies to Vue, HTML, Markdown, CSS
 use_tabs = true

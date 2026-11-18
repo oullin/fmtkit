@@ -19,7 +19,7 @@ use crossbeam_channel::{Receiver, Sender};
 use fmtkit_core::{Diagnostic, Severity, VERSION};
 use rustc_hash::FxHashMap;
 
-use crate::proto::{self, Frame, Hello, MAX_FRAME, Message, PROTOCOL_VERSION, ReadError, WireReply};
+use crate::proto::{self, Frame, Hello, MAX_FRAME, Message, PROTOCOL_VERSION, ReadError, WireReply, WireViolation};
 use crate::{GoError, Reply, Request, locate};
 
 /// The version an unstamped helper build reports.
@@ -385,13 +385,21 @@ impl Shared {
 }
 
 fn into_reply(rel: &str, wire: WireReply) -> Reply {
-    let violations = wire
-        .violations
-        .into_iter()
-        .map(|v| Diagnostic { rule: v.rule, file: rel.to_owned(), line: v.line, column: v.column, message: v.message, severity: Severity::Error })
-        .collect();
+    let diagnostics = |found: Vec<WireViolation>| -> Vec<Diagnostic> {
+        found
+            .into_iter()
+            .map(|v| Diagnostic { rule: v.rule, file: rel.to_owned(), line: v.line, column: v.column, message: v.message, severity: Severity::Error })
+            .collect()
+    };
 
-    Reply { output: wire.output, applied: wire.applied, violations, complexity: wire.complexity, error: (!wire.error.is_empty()).then_some(wire.error) }
+    Reply {
+        output: wire.output,
+        applied: wire.applied,
+        violations: diagnostics(wire.violations),
+        complexity: wire.complexity,
+        lint: diagnostics(wire.lint),
+        error: (!wire.error.is_empty()).then_some(wire.error),
+    }
 }
 
 fn write_loop(stdin: &ChildStdin, inbox: &Receiver<Vec<u8>>, shared: &Shared) {
@@ -513,7 +521,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 mod tests {
     use super::{DEV_VERSION, Failure, State, compatible, into_reply};
     use crate::proto::{Hello, PROTOCOL_VERSION, WireReply, WireViolation};
-    use fmtkit_core::VERSION;
+    use fmtkit_core::{Severity, VERSION};
 
     fn hello(proto: u32, version: &str) -> Hello {
         Hello { proto, version: version.into() }
@@ -559,6 +567,16 @@ mod tests {
         assert_eq!(reply.error, None);
         assert_eq!(reply.violations[0].file, "pkg/a.go");
         assert_eq!(reply.violations[0].line, 4);
+        assert_eq!(reply.lint, [] as [fmtkit_core::Diagnostic; 0]);
+
+        let named = into_reply(
+            "pkg/a.go",
+            WireReply { lint: vec![WireViolation { rule: "naming/max-name-words".into(), line: 2, column: 6, message: "m".into() }], ..WireReply::default() },
+        );
+
+        assert_eq!(named.violations, [] as [fmtkit_core::Diagnostic; 0]);
+        assert_eq!((named.lint[0].file.as_str(), named.lint[0].line, named.lint[0].column), ("pkg/a.go", 2, 6));
+        assert_eq!(named.lint[0].severity, Severity::Error);
 
         let failed = into_reply("pkg/a.go", WireReply { error: "gofmt: boom".into(), ..WireReply::default() });
 

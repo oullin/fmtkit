@@ -15,7 +15,7 @@ use fmtkit_core::ComplexityScore;
 use crate::{Request, Steps};
 
 /// The protocol version exchanged in the handshake.
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 /// The largest accepted value of a frame's length field (256 MiB).
 pub const MAX_FRAME: u32 = 256 << 20;
@@ -54,7 +54,8 @@ pub struct Hello {
     pub version: String,
 }
 
-/// One spacing finding as the helper sends it, before it is tied to a file.
+/// One spacing or naming finding as the helper sends it, before it is tied
+/// to a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WireViolation {
     pub rule: String,
@@ -72,6 +73,8 @@ pub struct WireReply {
     pub applied: Vec<String>,
     pub violations: Vec<WireViolation>,
     pub complexity: Vec<ComplexityScore>,
+    /// Naming findings against the final text.
+    pub lint: Vec<WireViolation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,11 +151,11 @@ pub fn encode(frame: &Frame, out: &mut Vec<u8>) {
 
 /// The encoded size of a frame carrying `request`, without encoding it.
 pub fn request_frame_len(request: &Request) -> usize {
-    4 + HEADER_LEN as usize + 3 * 4 + request.rel.len() + abs_bytes(&request.abs).len() + request.source.len() + 5
+    4 + HEADER_LEN as usize + 3 * 4 + request.rel.len() + abs_bytes(&request.abs).len() + request.source.len() + 5 + 2 * 4 + 1
 }
 
 fn encode_request(request: &Request, out: &mut Vec<u8>) {
-    let Steps { spacing, gofmt, goimports, resolve_imports, complexity } = request.steps;
+    let Steps { spacing, gofmt, goimports, resolve_imports, complexity, max_words, max_local_words, package_stutter } = request.steps;
 
     put_bytes(out, request.rel.as_bytes());
     put_bytes(out, &abs_bytes(&request.abs));
@@ -161,6 +164,10 @@ fn encode_request(request: &Request, out: &mut Vec<u8>) {
     for flag in [spacing, gofmt, goimports, resolve_imports, complexity] {
         out.push(u8::from(flag));
     }
+
+    put_u32(out, max_words);
+    put_u32(out, max_local_words);
+    out.push(u8::from(package_stutter));
 }
 
 fn encode_reply(reply: &WireReply, out: &mut Vec<u8>) {
@@ -172,14 +179,7 @@ fn encode_reply(reply: &WireReply, out: &mut Vec<u8>) {
         put_bytes(out, name.as_bytes());
     }
 
-    put_u32(out, len_u32(reply.violations.len()));
-
-    for v in &reply.violations {
-        put_bytes(out, v.rule.as_bytes());
-        put_u32(out, v.line);
-        put_u32(out, v.column);
-        put_bytes(out, v.message.as_bytes());
-    }
+    put_violations(out, &reply.violations);
 
     put_u32(out, len_u32(reply.complexity.len()));
 
@@ -189,6 +189,19 @@ fn encode_reply(reply: &WireReply, out: &mut Vec<u8>) {
         put_u32(out, s.line);
         put_u32(out, s.cyclomatic);
         put_u32(out, s.cognitive);
+    }
+
+    put_violations(out, &reply.lint);
+}
+
+fn put_violations(out: &mut Vec<u8>, violations: &[WireViolation]) {
+    put_u32(out, len_u32(violations.len()));
+
+    for v in violations {
+        put_bytes(out, v.rule.as_bytes());
+        put_u32(out, v.line);
+        put_u32(out, v.column);
+        put_bytes(out, v.message.as_bytes());
     }
 }
 
@@ -315,8 +328,16 @@ fn decode_request(cursor: &mut Cursor<'_>) -> Result<Request, DecodeError> {
     let abs = path_from_bytes(cursor.bytes()?);
     let source = cursor.bytes()?.to_vec();
 
-    let steps =
-        Steps { spacing: cursor.bool()?, gofmt: cursor.bool()?, goimports: cursor.bool()?, resolve_imports: cursor.bool()?, complexity: cursor.bool()? };
+    let steps = Steps {
+        spacing: cursor.bool()?,
+        gofmt: cursor.bool()?,
+        goimports: cursor.bool()?,
+        resolve_imports: cursor.bool()?,
+        complexity: cursor.bool()?,
+        max_words: cursor.u32()?,
+        max_local_words: cursor.u32()?,
+        package_stutter: cursor.bool()?,
+    };
 
     Ok(Request { rel, abs, source, steps })
 }
@@ -331,12 +352,7 @@ fn decode_reply(cursor: &mut Cursor<'_>) -> Result<WireReply, DecodeError> {
         applied.push(cursor.string()?);
     }
 
-    let count = cursor.count(16)?;
-    let mut violations = Vec::with_capacity(count);
-
-    for _ in 0..count {
-        violations.push(WireViolation { rule: cursor.string()?, line: cursor.u32()?, column: cursor.u32()?, message: cursor.string()? });
-    }
+    let violations = decode_violations(cursor)?;
 
     let count = cursor.count(20)?;
     let mut complexity = Vec::with_capacity(count);
@@ -351,7 +367,20 @@ fn decode_reply(cursor: &mut Cursor<'_>) -> Result<WireReply, DecodeError> {
         });
     }
 
-    Ok(WireReply { error, output, applied, violations, complexity })
+    let lint = decode_violations(cursor)?;
+
+    Ok(WireReply { error, output, applied, violations, complexity, lint })
+}
+
+fn decode_violations(cursor: &mut Cursor<'_>) -> Result<Vec<WireViolation>, DecodeError> {
+    let count = cursor.count(16)?;
+    let mut violations = Vec::with_capacity(count);
+
+    for _ in 0..count {
+        violations.push(WireViolation { rule: cursor.string()?, line: cursor.u32()?, column: cursor.u32()?, message: cursor.string()? });
+    }
+
+    Ok(violations)
 }
 
 struct Cursor<'a> {
@@ -443,7 +472,16 @@ mod tests {
             rel: "pkg/a.go".into(),
             abs: PathBuf::from("/repo/pkg/a.go"),
             source: b"package a\n".to_vec(),
-            steps: Steps { spacing: true, gofmt: true, goimports: false, resolve_imports: false, complexity: true },
+            steps: Steps {
+                spacing: true,
+                gofmt: true,
+                goimports: false,
+                resolve_imports: false,
+                complexity: true,
+                max_words: 2,
+                max_local_words: 1,
+                package_stutter: true,
+            },
         };
 
         let reply = WireReply {
@@ -455,6 +493,7 @@ mod tests {
                 WireViolation { rule: "spacing".into(), line: 10, column: 2, message: "ünïcode ✓".into() },
             ],
             complexity: vec![score("pkg/a.go#f", "f", 3, 1, 0), score("pkg/a.go#(*T).M", "(*T).M", 5, 4, 6)],
+            lint: vec![WireViolation { rule: "naming/no-package-stutter".into(), line: 3, column: 6, message: "stutters".into() }],
         };
 
         let error = WireReply { error: "gofmt: 1:1: expected 'package', found 'EOF'".into(), ..WireReply::default() };
@@ -567,9 +606,11 @@ mod tests {
         prop::string::string_regex(".{0,12}").unwrap()
     }
 
+    fn arb_violation() -> impl Strategy<Value = WireViolation> {
+        (arb_string(), any::<u32>(), any::<u32>(), arb_string()).prop_map(|(rule, line, column, message)| WireViolation { rule, line, column, message })
+    }
+
     fn arb_reply() -> impl Strategy<Value = WireReply> {
-        let violation =
-            (arb_string(), any::<u32>(), any::<u32>(), arb_string()).prop_map(|(rule, line, column, message)| WireViolation { rule, line, column, message });
         let score = (arb_string(), arb_string(), any::<u32>(), any::<u32>(), any::<u32>())
             .prop_map(|(key, name, line, cyclomatic, cognitive)| ComplexityScore { key, name, line, cyclomatic, cognitive });
 
@@ -577,19 +618,31 @@ mod tests {
             arb_string(),
             prop::collection::vec(any::<u8>(), 0..64),
             prop::collection::vec(arb_string(), 0..4),
-            prop::collection::vec(violation, 0..4),
+            prop::collection::vec(arb_violation(), 0..4),
             prop::collection::vec(score, 0..4),
+            prop::collection::vec(arb_violation(), 0..4),
         )
-            .prop_map(|(error, output, applied, violations, complexity)| WireReply { error, output, applied, violations, complexity })
+            .prop_map(|(error, output, applied, violations, complexity, lint)| WireReply { error, output, applied, violations, complexity, lint })
     }
 
     fn arb_request() -> impl Strategy<Value = Request> {
-        (arb_string(), "/[a-z/]{0,12}", prop::collection::vec(any::<u8>(), 0..64), any::<[bool; 5]>()).prop_map(|(rel, abs, source, flags)| Request {
-            rel,
-            abs: PathBuf::from(abs),
-            source,
-            steps: Steps { spacing: flags[0], gofmt: flags[1], goimports: flags[2], resolve_imports: flags[3], complexity: flags[4] },
-        })
+        (arb_string(), "/[a-z/]{0,12}", prop::collection::vec(any::<u8>(), 0..64), any::<[bool; 6]>(), any::<[u32; 2]>()).prop_map(
+            |(rel, abs, source, flags, limits)| Request {
+                rel,
+                abs: PathBuf::from(abs),
+                source,
+                steps: Steps {
+                    spacing: flags[0],
+                    gofmt: flags[1],
+                    goimports: flags[2],
+                    resolve_imports: flags[3],
+                    complexity: flags[4],
+                    max_words: limits[0],
+                    max_local_words: limits[1],
+                    package_stutter: flags[5],
+                },
+            },
+        )
     }
 
     fn arb_frame() -> impl Strategy<Value = Frame> {

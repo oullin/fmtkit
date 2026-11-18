@@ -1,6 +1,7 @@
 package format_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -181,5 +182,37 @@ func TestProcessWithNoStepsEchoesTheSource(t *testing.T) {
 
 	if reply.Error != "" || string(reply.Output) != "not go at all" || reply.Applied != nil {
 		t.Fatalf("reply = %#v", reply)
+	}
+}
+
+// The naming checks judge the final text, so their lines match the file
+// fmtkit writes, and report into Lint rather than Violations.
+func TestProcessChecksNamesOnTheFinalText(t *testing.T) {
+	steps := proto.Steps{Gofmt: true, MaxWords: 1, MaxLocalWords: 1, PackageStutter: true}
+	reply := process("package sample\nfunc run( ) {}\n\n\n\nfunc SampleRunner() {}\n", steps)
+
+	if reply.Error != "" {
+		t.Fatalf("error: %s", reply.Error)
+	}
+
+	// gofmt drops two of the blank lines, so the input's line 6 is line 5.
+	want := []string{"naming/max-name-words 5", "naming/no-package-stutter 5"}
+
+	var got []string
+
+	for _, v := range reply.Lint {
+		got = append(got, fmt.Sprintf("%s %d", v.Rule, v.Line))
+	}
+
+	if !slices.Equal(got, want) || len(reply.Violations) != 0 {
+		t.Fatalf("lint = %#v, violations = %#v", reply.Lint, reply.Violations)
+	}
+
+	if off := process("package sample\n\nfunc SampleRunner() {}\n", proto.Steps{Gofmt: true}); off.Lint != nil {
+		t.Fatalf("naming ran while off: %#v", off.Lint)
+	}
+
+	if broken := process("package sample\nfunc {", proto.Steps{MaxWords: 2}); !strings.HasPrefix(broken.Error, "naming: ") || broken.Lint != nil {
+		t.Fatalf("broken = %#v", broken)
 	}
 }

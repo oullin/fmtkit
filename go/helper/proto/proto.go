@@ -33,6 +33,13 @@ type Steps struct {
 	Goimports      bool
 	ResolveImports bool
 	Complexity     bool
+	// MaxWords is naming/max-name-words' limit for package-level names,
+	// methods, fields and interface methods; 0 turns the check off.
+	MaxWords uint32
+	// MaxLocalWords is its limit for locals and parameters; 0 means MaxWords.
+	MaxLocalWords uint32
+	// PackageStutter turns naming/no-package-stutter on.
+	PackageStutter bool
 }
 
 // Request asks the helper to process one file.
@@ -61,12 +68,15 @@ type Score struct {
 }
 
 // Reply answers one Request. Error is empty when the file was processed.
+// Violations are spacing findings against the input; Lint holds the naming
+// findings against the final text.
 type Reply struct {
 	Error      string
 	Output     []byte
 	Applied    []string
 	Violations []Violation
 	Complexity []Score
+	Lint       []Violation
 }
 
 type encoder struct {
@@ -82,7 +92,7 @@ type decoder struct {
 
 // Version is the protocol version exchanged in the Hello handshake. Bump it on
 // any change to the frame or payload layout.
-const Version uint32 = 1
+const Version uint32 = 2
 
 // MaxFrame caps the length field of a frame, so a corrupt length cannot make
 // either side allocate without bound.
@@ -189,6 +199,9 @@ func EncodeRequest(req Request) []byte {
 	e.boolean(req.Steps.Goimports)
 	e.boolean(req.Steps.ResolveImports)
 	e.boolean(req.Steps.Complexity)
+	e.u32(req.Steps.MaxWords)
+	e.u32(req.Steps.MaxLocalWords)
+	e.boolean(req.Steps.PackageStutter)
 
 	return e.buf
 }
@@ -209,6 +222,9 @@ func DecodeRequest(payload []byte) (Request, error) {
 		Goimports:      d.boolean(),
 		ResolveImports: d.boolean(),
 		Complexity:     d.boolean(),
+		MaxWords:       d.u32(),
+		MaxLocalWords:  d.u32(),
+		PackageStutter: d.boolean(),
 	}
 
 	return req, d.finish("process request")
@@ -245,6 +261,15 @@ func EncodeReply(reply Reply) []byte {
 		e.u32(s.Cognitive)
 	}
 
+	e.count(len(reply.Lint))
+
+	for _, v := range reply.Lint {
+		e.str(v.Rule)
+		e.u32(v.Line)
+		e.u32(v.Column)
+		e.str(v.Message)
+	}
+
 	return e.buf
 }
 
@@ -273,6 +298,15 @@ func DecodeReply(payload []byte) (Reply, error) {
 			Line:       d.u32(),
 			Cyclomatic: d.u32(),
 			Cognitive:  d.u32(),
+		})
+	}
+
+	for range d.count(16) {
+		reply.Lint = append(reply.Lint, Violation{
+			Rule:    d.str(),
+			Line:    d.u32(),
+			Column:  d.u32(),
+			Message: d.str(),
 		})
 	}
 

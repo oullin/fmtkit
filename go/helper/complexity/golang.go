@@ -33,6 +33,12 @@ func Score(rel string, src []byte) ([]Function, error) {
 		return nil, err
 	}
 
+	return ScoreFile(rel, fset, parsed), nil
+}
+
+// ScoreFile is Score on a file already parsed, so a caller that parses it
+// anyway does not parse it twice.
+func ScoreFile(rel string, fset *token.FileSet, parsed *ast.File) []Function {
 	var out []Function
 
 	for _, decl := range parsed.Decls {
@@ -53,7 +59,7 @@ func Score(rel string, src []byte) ([]Function, error) {
 		})
 	}
 
-	return out, nil
+	return out
 }
 
 // FunctionName is a declaration's key name: the plain identifier for a

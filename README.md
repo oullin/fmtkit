@@ -45,7 +45,7 @@ Changed means different from `HEAD` in the work tree or index, or untracked and 
 
 fmtkit changes layout and applies safe lint fixes; it does not change behaviour on purpose. A file whose syntax tree changes unexpectedly, that fails to parse, or that does not reach a fixed point is reported and left untouched.
 
-**Go:** fmtkit's [spacing rule](docs/spacing.md) (blank lines around control flow and declarations, one item per line in multi-line composite literals, types moved to the top, `//go:embed` repair), then `gofmt`, then `goimports` (grouping and sorting only, unless `resolve_imports` is on), then the opt-in [naming checks](docs/naming.md#go), then complexity scoring, then `go vet` on the packages in scope (`./...` per module under `--all`).
+**Go:** fmtkit's [spacing rule](docs/spacing.md) (blank lines around control flow and declarations, one item per line in multi-line composite literals, types moved to the top, `//go:embed` repair), then `gofmt`, then `goimports` (grouping and sorting only, unless `resolve_imports` is on), then the opt-in [naming checks](docs/naming.md#go), then complexity scoring and the [report-only nesting and line-length checks](#go-nesting-and-line-length), then `go vet` on the packages in scope (`./...` per module under `--all`).
 
 **TypeScript and JavaScript:** Oxlint fixes, braces on unbraced bodies, class members ordered (properties, constructor, methods), short declarations before multiline ones, statement blank lines (including one between consecutive test blocks such as `describe`, `it`, and `beforeEach` calls), one property per line in objects with two or more properties (outside template literals), the oxc formatter, one call per line in fluent chains, a fixed layout for Drizzle queries, and one argument per line in calls and `new` expressions with a nested call, object, or array, or a ternary with one of those in a branch. The schedule repeats until the file stops changing.
 
@@ -163,6 +163,9 @@ max_name_words = false                # naming/max-name-words for Go declaration
 max_words = 2                         # its limit for package-level names, methods and fields
 # max_local_words = 1                 # its limit for locals and parameters; unset = max_words
 no_package_stutter = false            # naming/no-package-stutter: worker.WorkerSpec
+max_depth = 4                         # go/max-depth; 0 disables
+max_nested_funcs = 3                  # go/max-nested-funcs; 0 disables
+max_line_length = 120                 # go/line-length; a tab counts as ts.format.tab_width; 0 disables
 
 [ts.format]                           # also applies to Vue, HTML, Markdown, CSS
 use_tabs = true
@@ -234,6 +237,24 @@ reason = "One branch per grade band; becomes a lookup table."
 ```
 
 An entry that matches no function fails the run, so the list only shrinks. The bundled `eslint/complexity` rule (max 12) is separate; turn it off under `[lint.rules]` if you want one limit.
+
+### Go nesting and line length
+
+The bundled script policy enforces `max-depth` 4 and `max-nested-callbacks` 3, and the script printer wraps long lines. `gofmt` never wraps, so the Go lane reports three lint findings instead. They never change the text and fail file-based `check` and `format` runs, as script lint errors do. They apply to test files too. Stdin runs (`--stdin-filepath`, for editors) skip them. In `check`, a file that formatting would change is checked again on the text on disk only when the formatted text had findings, so a long line that formatting would shorten isn't reported.
+
+```text
+[go/max-depth] line 12:6: Blocks are nested too deeply (5). Maximum allowed is 4.
+[go/max-nested-funcs] line 4:53: Too many nested function literals (4). Maximum allowed is 3.
+[go/line-length] line 30:121: This line has a length of 131. Maximum allowed is 120.
+```
+
+- **`go/max-depth`** (`[go] max_depth`, default 4) counts levels as ESLint's `max-depth` does. Each `if`, `for`, `range`, `switch`, type switch, and `select` opens one level; their `case` clauses belong to it, and an `else if` stays on the level of the `if` it continues. A function literal starts its own count. Every statement past the limit is reported.
+- **`go/max-nested-funcs`** (`[go] max_nested_funcs`, default 3) mirrors `max-nested-callbacks`. A function literal passed as a call argument has depth 1 plus the number of such literals around it, so `run(func() { scope(func() { metrics(func() { route(func() {}) }) }) })` reports the literal passed to `route`. Literals that are not arguments, such as `defer func() { … }()` and `go func() { … }()`, neither count nor reset the count.
+- **`go/line-length`** (`[go] max_line_length`, default 120) counts runes, and a tab advances to the next multiple of `[ts.format] tab_width` (default 4), so both lanes measure a line alike. The column points at the first character past the limit. It skips lines that cannot reasonably be shortened: `import` lines whose overflow is the import itself (a declaration or comment after it on the same line is still checked), `//go:` directives, comment lines whose overflow is one URL, and lines whose overflow sits inside one string literal or struct tag, followed by nothing but `)`, `]`, `}`, `,` or `;`.
+
+Set a limit to 0 to turn its check off. In check mode the findings point at the file on disk; in format mode, at the formatted text that was written.
+
+All three are on by default since 2.6.0, so a Go repository that passed on 2.5 can fail after upgrading. Raise the limits, or set them to 0, to stay green while the code catches up.
 
 ## Output
 

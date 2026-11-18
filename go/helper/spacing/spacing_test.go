@@ -714,7 +714,9 @@ func run() {
 		t.Fatalf("unexpected message %q", violations[0].Message)
 	}
 
-	if !strings.Contains(string(formatted), "routes.Add(\"dashboard\", \"GET\", \"/dashboard\")\n\n\troutes.Group(\"contacts\", \"/contacts\", func(g group) {") {
+	want := "routes.Add(\"dashboard\", \"GET\", \"/dashboard\")\n\n\troutes.Group(\"contacts\", \"/contacts\", func(g group) {"
+
+	if !strings.Contains(string(formatted), want) {
 		t.Fatalf("expected blank line before top-level routes.Group call, got:\n%s", formatted)
 	}
 }
@@ -742,7 +744,9 @@ func run() {
 		t.Fatalf("expected 1 violation, got %d", len(violations))
 	}
 
-	if !strings.Contains(string(formatted), "\n\t})\n\n\troutes.Group(\"organizations\", \"/organizations\", func(g group) {") {
+	want := "\n\t})\n\n\troutes.Group(\"organizations\", \"/organizations\", func(g group) {"
+
+	if !strings.Contains(string(formatted), want) {
 		t.Fatalf("expected blank line before second top-level routes.Group call, got:\n%s", formatted)
 	}
 }

@@ -115,7 +115,9 @@ func (s *session) finish() error {
 }
 
 func request(src string) []byte {
-	return proto.EncodeRequest(proto.Request{Rel: "a.go", Abs: "/tmp/a.go", Source: []byte(src), Steps: proto.Steps{Spacing: true, Gofmt: true, Complexity: true}})
+	steps := proto.Steps{Spacing: true, Gofmt: true, Complexity: true}
+
+	return proto.EncodeRequest(proto.Request{Rel: "a.go", Abs: "/tmp/a.go", Source: []byte(src), Steps: steps})
 }
 
 func TestServeFormatsRequests(t *testing.T) {

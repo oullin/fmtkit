@@ -52,6 +52,26 @@ pub struct Steps {
     pub max_local_words: u32,
     /// Report `naming/no-package-stutter`.
     pub package_stutter: bool,
+    /// The `go/*` nesting and line-length checks; all off by default.
+    pub lint: Limits,
+}
+
+/// Limits for the report-only `go/*` checks. A zero limit turns its check off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Limits {
+    /// `go/max-depth`: blocks nested inside one function.
+    pub max_depth: u32,
+    /// `go/max-nested-funcs`: function literals passed as call arguments, nested.
+    pub max_nested_funcs: u32,
+    /// `go/line-length`: columns per line.
+    pub max_line_length: u32,
+    /// Columns a tab advances to; 0 lets the helper count 4.
+    pub tab_width: u32,
+}
+
+impl Limits {
+    /// Every check off.
+    pub const OFF: Self = Self { max_depth: 0, max_nested_funcs: 0, max_line_length: 0, tab_width: 0 };
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +93,7 @@ pub struct Reply {
     /// Spacing rule findings against the input.
     pub violations: Vec<Diagnostic>,
     pub complexity: Vec<ComplexityScore>,
-    /// `naming/*` findings against the final text, as errors.
+    /// `naming/*` and `go/*` findings against the final text, as errors.
     pub lint: Vec<Diagnostic>,
     /// The file could not be processed (a syntax error, usually).
     pub error: Option<String>,

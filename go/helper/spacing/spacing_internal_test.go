@@ -273,7 +273,8 @@ func TestIsVarDeclStartEdges(t *testing.T) {
 func firstStmt(t *testing.T, stmt string) ast.Stmt {
 	t.Helper()
 
-	file, err := parser.ParseFile(token.NewFileSet(), "sample.go", "package sample\n\nfunc run(values []int, value any) {\n"+stmt+"\n}\n", 0)
+	src := "package sample\n\nfunc run(values []int, value any) {\n" + stmt + "\n}\n"
+	file, err := parser.ParseFile(token.NewFileSet(), "sample.go", src, 0)
 
 	if err != nil {
 		t.Fatalf("parse %q: %v", stmt, err)

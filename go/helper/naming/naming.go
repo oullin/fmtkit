@@ -171,6 +171,16 @@ func Check(rel string, src []byte, options Options) ([]Finding, error) {
 		return nil, err
 	}
 
+	return CheckFile(fset, file, options), nil
+}
+
+// CheckFile is Check on a file already parsed, so a caller that parses it
+// anyway does not parse it twice.
+func CheckFile(fset *token.FileSet, file *ast.File, options Options) []Finding {
+	if !options.Enabled() {
+		return nil
+	}
+
 	c := &checker{fset: fset, pkg: file.Name.Name, options: options}
 
 	for _, decl := range file.Decls {
@@ -184,7 +194,7 @@ func Check(rel string, src []byte, options Options) ([]Finding, error) {
 		}
 	}
 
-	return c.findings, nil
+	return c.findings
 }
 
 func (c *checker) funcDecl(fn *ast.FuncDecl) {
@@ -363,13 +373,23 @@ func (c *checker) judge(n name) {
 
 	if c.options.MaxWords > 0 {
 		if message, ok := c.maxWords(n); ok {
-			c.findings = append(c.findings, Finding{Rule: MaxWordsRule, Line: pos.Line, Column: pos.Column, Message: message})
+			c.findings = append(c.findings, Finding{
+				Rule:    MaxWordsRule,
+				Line:    pos.Line,
+				Column:  pos.Column,
+				Message: message,
+			})
 		}
 	}
 
 	if c.options.PackageStutter && n.kind == kindPackage {
 		if message, ok := c.stutter(n.ident.Name); ok {
-			c.findings = append(c.findings, Finding{Rule: StutterRule, Line: pos.Line, Column: pos.Column, Message: message})
+			c.findings = append(c.findings, Finding{
+				Rule:    StutterRule,
+				Line:    pos.Line,
+				Column:  pos.Column,
+				Message: message,
+			})
 		}
 	}
 }
@@ -395,19 +415,33 @@ func (c *checker) maxWords(n name) (string, bool) {
 
 	switch n.kind {
 	case kindMethod:
-		return head + fmt.Sprintf("; let the receiver type carry the context: callers read (%s).%s, so drop what %s already says, or give the extra words a type of their own, as (*Archive).Limit instead of MaxArchiveBytes", n.owner, n.ident.Name, n.owner), true
+		return head + fmt.Sprintf(
+			"; let the receiver type carry the context: callers read (%s).%s, so drop what %s already says, "+
+				"or give the extra words a type of their own, as (*Archive).Limit instead of MaxArchiveBytes",
+			n.owner, n.ident.Name, n.owner,
+		), true
 	case kindField:
 		if n.owner == "" {
-			return head + "; let the struct carry the context: drop what its type already says, or group related fields under a field of their own type", true
+			return head + "; let the struct carry the context: drop what its type already says, " +
+				"or group related fields under a field of their own type", true
 		}
 
-		return head + fmt.Sprintf("; let the struct carry the context: drop what %s already says, or group related fields under a field of their own type", n.owner), true
+		return head + fmt.Sprintf(
+			"; let the struct carry the context: drop what %s already says, "+
+				"or group related fields under a field of their own type",
+			n.owner,
+		), true
 	case kindInterfaceMethod:
 		return head + fmt.Sprintf("; let the interface carry the context: drop what %s already says", n.owner), true
 	case kindLocal:
-		return head + " for a local or parameter; it lives in a short scope, where the function, its receiver and its package already say the rest", true
+		return head + " for a local or parameter; it lives in a short scope, " +
+			"where the function, its receiver and its package already say the rest", true
 	default:
-		return head + fmt.Sprintf("; let the package name carry the context: drop what package %s already says, or move the name to a package or type named for it, as archive.Pack instead of release.PackDirectory", c.pkg), true
+		return head + fmt.Sprintf(
+			"; let the package name carry the context: drop what package %s already says, "+
+				"or move the name to a package or type named for it, as archive.Pack instead of release.PackDirectory",
+			c.pkg,
+		), true
 	}
 }
 
@@ -456,7 +490,10 @@ func (c *checker) stutter(ident string) (string, bool) {
 		if joined == pkg {
 			rest := strings.TrimLeftFunc(ident[end:], func(r rune) bool { return keepAlphanumeric(r) < 0 })
 
-			return fmt.Sprintf("%q starts with its package name: callers read %s.%s; name it %s, read as %s.%s", ident, c.pkg, ident, rest, c.pkg, rest), true
+			return fmt.Sprintf(
+				"%q starts with its package name: callers read %s.%s; name it %s, read as %s.%s",
+				ident, c.pkg, ident, rest, c.pkg, rest,
+			), true
 		}
 	}
 

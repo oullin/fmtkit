@@ -141,7 +141,8 @@ func TestMaxOneEverywhere(t *testing.T) {
 // TestMaxTwoEverywhere pins MaxWords 2: only names of three or more words.
 func TestMaxTwoEverywhere(t *testing.T) {
 	expect(t, words(t, calibration, naming.Options{MaxWords: 2}),
-		"RetryDelayMillis", "RunWithTimeout", "DefaultQueueDepth", "StartPoolWorkers", "ValidateQueueName", "maxRetryCount", "pendingJobCount",
+		"RetryDelayMillis", "RunWithTimeout", "DefaultQueueDepth", "StartPoolWorkers", "ValidateQueueName",
+		"maxRetryCount", "pendingJobCount",
 	)
 }
 
@@ -310,6 +311,7 @@ func (receiverName *T) m() {}
 }
 
 func TestPackageStutter(t *testing.T) {
+	stutter := naming.Options{PackageStutter: true}
 	src := `package worker
 
 type Worker struct{}
@@ -327,11 +329,12 @@ func (w *Worker) WorkerID() {}
 func f() { WorkerLocal := 1; _ = WorkerLocal }
 `
 
-	expect(t, reported(t, src, naming.Options{PackageStutter: true}, naming.StutterRule), "WorkerSpec", "WorkerLimit", "WORKER_POOL_SIZE", "WorkerFor")
+	expect(t, reported(t, src, stutter, naming.StutterRule), "WorkerSpec", "WorkerLimit", "WORKER_POOL_SIZE", "WorkerFor")
 
-	findings, _ := naming.Check("a.go", []byte(src), naming.Options{PackageStutter: true})
+	findings, _ := naming.Check("a.go", []byte(src), stutter)
+	want := `"WorkerSpec" starts with its package name: callers read worker.WorkerSpec; name it Spec, read as worker.Spec`
 
-	if want := `"WorkerSpec" starts with its package name: callers read worker.WorkerSpec; name it Spec, read as worker.Spec`; findings[0].Message != want {
+	if findings[0].Message != want {
 		t.Fatalf("message = %s", findings[0].Message)
 	}
 
@@ -340,18 +343,20 @@ func f() { WorkerLocal := 1; _ = WorkerLocal }
 	}
 
 	// A package name of several words, without case.
-	expect(t, reported(t, "package httputil\n\nfunc HTTPUtilProxy() {}\nfunc HTTPProxy() {}\n", naming.Options{PackageStutter: true}, naming.StutterRule), "HTTPUtilProxy")
+	multi := "package httputil\n\nfunc HTTPUtilProxy() {}\nfunc HTTPProxy() {}\n"
+	expect(t, reported(t, multi, stutter, naming.StutterRule), "HTTPUtilProxy")
 
 	// Package main and external test packages are not judged.
-	expect(t, reported(t, "package main\n\nfunc MainLoop() {}\n", naming.Options{PackageStutter: true}, naming.StutterRule))
-	expect(t, reported(t, "package worker_test\n\nfunc WorkerHelper() {}\n", naming.Options{PackageStutter: true}, naming.StutterRule))
+	expect(t, reported(t, "package main\n\nfunc MainLoop() {}\n", stutter, naming.StutterRule))
+	expect(t, reported(t, "package worker_test\n\nfunc WorkerHelper() {}\n", stutter, naming.StutterRule))
 }
 
 func TestBothChecksReportTheSameName(t *testing.T) {
 	src := "package worker\n\ntype WorkerQueueSpec struct{}\n"
 	findings, err := naming.Check("a.go", []byte(src), naming.Options{MaxWords: 2, PackageStutter: true})
 
-	if err != nil || len(findings) != 2 || findings[0].Rule != naming.MaxWordsRule || findings[1].Rule != naming.StutterRule {
+	if err != nil || len(findings) != 2 ||
+		findings[0].Rule != naming.MaxWordsRule || findings[1].Rule != naming.StutterRule {
 		t.Fatalf("findings = %+v, %v", findings, err)
 	}
 }

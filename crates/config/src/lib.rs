@@ -82,6 +82,15 @@ pub struct Go {
     /// Report exported names that start with their package name
     /// (`naming/no-package-stutter`).
     pub no_package_stutter: bool,
+    /// `go/max-depth`: blocks nested more than this deep inside one function,
+    /// as the bundled TS policy's `max-depth`. 0 turns the check off.
+    pub max_depth: u32,
+    /// `go/max-nested-funcs`: function literals passed as call arguments nested
+    /// more than this deep, as `max-nested-callbacks`. 0 turns the check off.
+    pub max_nested_funcs: u32,
+    /// `go/line-length`: lines wider than this many columns, a tab counting
+    /// to the next multiple of `ts.format.tab_width`. 0 turns the check off.
+    pub max_line_length: u32,
 }
 
 impl Default for Go {
@@ -96,6 +105,9 @@ impl Default for Go {
             max_words: 2,
             max_local_words: None,
             no_package_stutter: false,
+            max_depth: 4,
+            max_nested_funcs: 3,
+            max_line_length: 120,
         }
     }
 }
@@ -443,6 +455,8 @@ exclude = ["dist/"]
 
 [go]
 resolve_imports = true
+max_depth = 6
+max_line_length = 0
 
 [ts.format]
 print_width = 120
@@ -465,6 +479,7 @@ reason = "later"
         assert_eq!(config.jobs, 4);
         assert_eq!(config.files.exclude, ["dist/"]);
         assert!(config.go.resolve_imports && config.go.gofmt);
+        assert_eq!((config.go.max_depth, config.go.max_nested_funcs, config.go.max_line_length), (6, 3, 0));
         assert_eq!(config.ts.format.print_width, 120);
         assert_eq!(config.ts.format.trailing_comma, TrailingComma::Es5);
         assert_eq!(config.lint.rules["eqeqeq"], serde_json::json!(["error", "always"]));
@@ -480,6 +495,21 @@ reason = "later"
         assert!(parse("[[complexity.allow]]\nkey = \"a#b\"\n[[complexity.allow]]\nkey = \"a#b\"").is_err());
         assert!(parse("[lint.rules]\ncurly = \"loud\"").is_err());
         assert!(parse("[ts.format]\ntab_width = 0").is_err());
+    }
+
+    #[test]
+    fn go_checks_default_to_the_bundled_ts_policy() {
+        let go = Config::default().go;
+
+        assert_eq!((go.max_depth, go.max_nested_funcs, go.max_line_length), (4, 3, 120));
+        assert!(parse("[go]\nmax_depth = -1").is_err());
+        assert!(parse("[go]\nmax_line_length = \"wide\"").is_err());
+
+        let mut longer = Config::default();
+
+        longer.go.max_line_length = 160;
+
+        assert_ne!(Config::default().hash(), longer.hash());
     }
 
     #[test]

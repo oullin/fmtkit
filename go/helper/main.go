@@ -68,7 +68,9 @@ func serve(in io.Reader, out io.Writer, workers int, handle handler) error {
 	}
 
 	// The caller judges compatibility; the helper only states what it is.
-	if err := proto.WriteFrame(out, proto.KindHello, 0, proto.EncodeHello(proto.Hello{Proto: proto.Version, Version: version})); err != nil {
+	hello := proto.EncodeHello(proto.Hello{Proto: proto.Version, Version: version})
+
+	if err := proto.WriteFrame(out, proto.KindHello, 0, hello); err != nil {
 		return fmt.Errorf("write hello: %w", err)
 	}
 

@@ -61,7 +61,8 @@ impl Default for Files {
 #[serde(default, deny_unknown_fields)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Go {
-    /// The blank-line spacing rule, type ordering, and `//go:embed` repair.
+    /// The blank-line spacing rule, one item per line in multi-line composite
+    /// literals, type ordering, and `//go:embed` repair.
     pub spacing: bool,
     pub gofmt: bool,
     pub goimports: bool,

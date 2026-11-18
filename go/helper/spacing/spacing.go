@@ -1,5 +1,7 @@
 package spacing
 
+import "go/format"
+
 // Violation reports a single spacing finding. Line is 1-based.
 type Violation struct {
 	Rule    string
@@ -8,7 +10,7 @@ type Violation struct {
 	Message string
 }
 
-// Rule enforces blank-line and type-order spacing rules.
+// Rule enforces blank-line, literal-item, and type-order spacing rules.
 type Rule struct{}
 
 // New returns the built-in spacing rule.
@@ -21,11 +23,14 @@ func (Rule) Name() string {
 	return "spacing"
 }
 
-// Apply parses the source once into a shared fileContext, then runs the three
+// Apply parses the source once into a shared fileContext, then runs the four
 // spacing analyzers over it in a fixed order: the blank-line inserter, the
-// type-order rewriter, and the embed-directive repairer. Analysis collects every
-// violation up front; the rewrite phase only runs when at least one violation
-// was reported, and preserves the current sequencing of insertions, type
+// literal-item splitter, the type-order rewriter, and the embed-directive
+// repairer. Analysis collects every violation up front. The blank lines and
+// literal splits are applied together, as edits to the original source; split
+// literals are then run through gofmt, since a split leaves the new lines
+// unindented. The rest of the rewrite phase only runs when at least one
+// violation was reported, and preserves the current sequencing of type
 // reordering, embed repair, and embed collapse.
 func (r Rule) Apply(path string, src []byte) ([]Violation, []byte, error) {
 	ctx, err := newFileContext(path, src)
@@ -35,16 +40,26 @@ func (r Rule) Apply(path string, src []byte) ([]Violation, []byte, error) {
 	}
 
 	inserter := newBlankLineInserter(ctx)
+	literals := newLiteralItemSplitter(ctx)
 	typeOrder := newTypeOrderRewriter(ctx)
 	embeds := newEmbedDirectiveRepairer(ctx)
 
 	var violations []Violation
 
 	violations = append(violations, inserter.analyze(path)...)
+	violations = append(violations, literals.analyze(path)...)
 	violations = append(violations, typeOrder.analyze(path)...)
 	violations = append(violations, embeds.analyze(path)...)
 
-	formatted := inserter.apply()
+	formatted := applyEdits(ctx.src, inserter.edits(), literals.edits)
+
+	if len(literals.edits) > 0 {
+		formatted, err = format.Source(formatted)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	if len(violations) > 0 {
 		reordered, changed, err := typeOrder.rewrite(path, formatted)

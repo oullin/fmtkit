@@ -101,14 +101,16 @@ func (b *blankLineInserter) analyze(filename string) []Violation {
 	return violations
 }
 
-// apply returns the source with the recorded blank-line insertions applied, or
-// the source unchanged when the analysis recorded none.
-func (b *blankLineInserter) apply() []byte {
-	if len(b.insertions) == 0 {
-		return b.ctx.src
+// edits returns the recorded blank-line insertions as text edits keyed by byte
+// offset in the original source.
+func (b *blankLineInserter) edits() map[int]string {
+	edits := make(map[int]string, len(b.insertions))
+
+	for offset := range b.insertions {
+		edits[offset] = "\n"
 	}
 
-	return applyInsertions(b.ctx.src, b.insertions)
+	return edits
 }
 
 // inspectStmtLists visits every statement list in the file: block bodies, case
@@ -565,15 +567,29 @@ func lineStartOffset(starts []int, line int) int {
 	return starts[line]
 }
 
-func applyInsertions(src []byte, insertions map[int]struct{}) []byte {
-	offsets := slices.Sorted(maps.Keys(insertions))
+// applyEdits returns src with each edit's text inserted at its byte offset in
+// src. Edit sets are merged in the order given, so text that lands on the same
+// offset keeps that order; src itself is returned when there is nothing to
+// insert.
+func applyEdits(src []byte, sets ...map[int]string) []byte {
+	edits := map[int]string{}
+
+	for _, set := range sets {
+		for offset, text := range set {
+			edits[offset] += text
+		}
+	}
+
+	if len(edits) == 0 {
+		return src
+	}
 
 	var out bytes.Buffer
 	last := 0
 
-	for _, offset := range offsets {
+	for _, offset := range slices.Sorted(maps.Keys(edits)) {
 		out.Write(src[last:offset])
-		out.WriteByte('\n')
+		out.WriteString(edits[offset])
 		last = offset
 	}
 

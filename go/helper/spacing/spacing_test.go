@@ -1757,3 +1757,83 @@ func mustReadFile(t *testing.T, path string) []byte {
 
 	return content
 }
+
+func TestApplySplitsMultiLineCompositeLiteralItems(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+type pair struct {
+	A int
+	B int
+}
+
+func run() pair {
+	return pair{A: 1,
+		B: 2}
+}
+`)
+
+	violations, formatted, err := New().Apply(path, mustReadFile(t, path))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 1 || violations[0].Line != 9 {
+		t.Fatalf("expected 1 violation on line 9, got %+v", violations)
+	}
+
+	want := "\treturn pair{\n\t\tA: 1,\n\t\tB: 2,\n\t}\n"
+
+	if !strings.Contains(string(formatted), want) {
+		t.Fatalf("expected each item on its own line, got:\n%s", formatted)
+	}
+}
+
+func TestApplyKeepsSingleLineAndSplitCompositeLiterals(t *testing.T) {
+	path := writeTempGoFile(t, `package sample
+
+func run() ([]int, map[string]int) {
+	short := []int{1, 2, 3}
+	long := map[string]int{
+		"a": 1, // first
+		"b": 2,
+	}
+
+	return short, long
+}
+`)
+
+	original := string(mustReadFile(t, path))
+	violations, formatted, err := New().Apply(path, []byte(original))
+
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations, got %+v", violations)
+	}
+
+	if string(formatted) != original {
+		t.Fatalf("expected unchanged output, got:\n%s", formatted)
+	}
+}
+
+func TestHasCommaSkipsBlockComments(t *testing.T) {
+	cases := map[string]bool{
+		"":                 false,
+		" ":                false,
+		",":                true,
+		" /* , */ ":        false,
+		" /* a */ , ":      true,
+		", /* a */":        true,
+		" /* a */ /* , ":   false,
+		" /* , */ /* , */": false,
+	}
+
+	for gap, want := range cases {
+		if got := hasComma([]byte(gap)); got != want {
+			t.Errorf("hasComma(%q) = %v, want %v", gap, got, want)
+		}
+	}
+}

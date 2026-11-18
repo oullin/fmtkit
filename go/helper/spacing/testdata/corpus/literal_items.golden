@@ -1,0 +1,39 @@
+package sample
+
+func held(b built, options Options) *check {
+	return &check{
+		workers:  b.held,
+		progress: orDiscard(options.Progress),
+		unchanged: codeCheck{
+			plugins:     byID(b.rows, b.plugins),
+			configs:     byID(b.rows, b.configs),
+			environment: options.Environment,
+		}.unchanged,
+	}
+}
+
+func lists() {
+	_ = []int{1, 2, 3}
+	_ = []string{
+		"a",
+		"b", /* c, */
+		"d", /* e */
+	}
+	_ = map[string][]int{
+		"x": {
+			1,
+			2,
+			3,
+		},
+		"y": {4},
+	}
+	_ = task{
+		Run: func() {
+			work()
+		},
+	}
+	_ = task{
+		A: 1, // one
+		B: 2,
+	}
+}

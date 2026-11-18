@@ -175,6 +175,28 @@ func defineRoutes() {
 }
 ```
 
+## One item per line in multi-line composite literals
+
+A composite literal whose braces sit on different lines puts each item on its own line: the opening brace ends its line, every item starts one, and the closing brace gets its own line after a trailing comma. A literal that fits on one line is left alone. The formatter reports this as `multi-line composite literal needs each item on its own line`, and runs `gofmt` over the result so the split items are indented and aligned.
+
+```go
+// before
+return &check{workers: held, progress: orDiscard(options.Progress),
+    unchanged: codeCheck{plugins: byID(rows, plugins), configs: byID(rows, configs),
+        environment: options.Environment}.unchanged}
+
+// after
+return &check{
+    workers:  held,
+    progress: orDiscard(options.Progress),
+    unchanged: codeCheck{
+        plugins:     byID(rows, plugins),
+        configs:     byID(rows, configs),
+        environment: options.Environment,
+    }.unchanged,
+}
+```
+
 ## Blank lines around type declarations
 
 `type` declarations are separated from surrounding code with a blank line. The formatter reports this as `missing blank line around type definition`.

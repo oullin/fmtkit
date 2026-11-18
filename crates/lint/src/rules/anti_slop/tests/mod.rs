@@ -9,6 +9,7 @@
 //! tables are fmtkit's own. Like v1's rule tester, each case runs one rule
 //! alone, and the snippet's own `oxlint-disable` directives apply.
 
+mod max_doc_comment_lines;
 mod max_ternary_depth;
 mod no_ambient_nondeterminism;
 mod no_array_filter_map;
@@ -113,6 +114,7 @@ fn every_rule_is_registered() {
     assert_eq!(
         names,
         [
+            "anti-slop/max-doc-comment-lines",
             "anti-slop/max-ternary-depth",
             "anti-slop/no-ambient-nondeterminism",
             "anti-slop/no-array-filter-map",

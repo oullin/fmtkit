@@ -10,6 +10,7 @@
 
 pub mod shared;
 
+mod max_doc_comment_lines;
 mod max_ternary_depth;
 mod no_ambient_nondeterminism;
 mod no_array_filter_map;
@@ -47,11 +48,12 @@ pub(crate) mod tests;
 
 use super::Factory;
 
-/// Every rule, by full name. `max-ternary-depth`,
+/// Every rule, by full name. `max-doc-comment-lines`, `max-ternary-depth`,
 /// `no-disabled-type-assertion-rules` and `no-runtime-typeof` take options,
 /// and `require-readable-spacing` rejects any; the others ignore any they are
 /// given, as v1 did.
 pub const RULES: &[(&str, Factory)] = &[
+    (max_doc_comment_lines::NAME, max_doc_comment_lines::build),
     (max_ternary_depth::NAME, max_ternary_depth::build),
     (no_ambient_nondeterminism::NAME, |_| Ok(Box::new(no_ambient_nondeterminism::NoAmbientNondeterminism))),
     (no_array_filter_map::NAME, |_| Ok(Box::new(no_array_filter_map::NoArrayFilterMap))),

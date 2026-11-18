@@ -11,9 +11,12 @@ pub mod testing;
 pub mod timers;
 pub mod types;
 
+use std::sync::LazyLock;
+
 use oxc_ast::AstKind;
 use oxc_ast::ast::{Comment, Expression, FunctionType, TSType};
 use oxc_semantic::{AstNode, AstNodes, NodeId, Semantic};
+use regress::Regex;
 
 use super::super::Context;
 
@@ -147,4 +150,21 @@ pub fn comment_value<'a>(source: &'a str, comment: &Comment) -> &'a str {
 /// Whether `text` holds an issue reference: `#123` or an `http(s)://` link.
 pub fn links_issue(text: &str) -> bool {
     text.contains("http://") || text.contains("https://") || text.match_indices('#').any(|(at, _)| text[at + 1..].starts_with(|c: char| c.is_ascii_digit()))
+}
+
+/// Comments that instruct a tool rather than a reader: suppressions, type
+/// checker and formatter directives, coverage hints, bundler annotations,
+/// preserved (`/*!`) and license comments, regions and triple-slash
+/// references.
+static DIRECTIVE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::with_flags(
+        r"^\s*(?:!|(?:oxlint|eslint|tslint|deno-lint)-|@ts-|@effect-diagnostics|(?:prettier|oxfmt|biome)-ignore|fallow-ignore|c8 |v8 |istanbul |#(?:end)?region|[@#]__(?:PURE|NO_SIDE_EFFECTS)__|@vite-ignore|webpack[A-Z]|@jsx|@license|@preserve|@vitest-environment|@jest-environment|\/?\s*<reference\s)",
+        "u",
+    )
+    .expect("a valid pattern")
+});
+
+/// Whether a comment's text, as [`comment_value`], is a tool directive.
+pub fn is_directive(value: &str) -> bool {
+    DIRECTIVE.find(value).is_some()
 }

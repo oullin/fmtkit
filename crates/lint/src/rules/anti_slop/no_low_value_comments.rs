@@ -9,7 +9,7 @@ use oxc_span::Span;
 use regress::Regex;
 
 use super::super::{Context, Rule};
-use super::shared::{comment_value, links_issue};
+use super::shared::{comment_value, is_directive, links_issue};
 
 pub const NAME: &str = "anti-slop/no-low-value-comments";
 
@@ -17,13 +17,6 @@ fn regex(pattern: &str, flags: &str) -> Regex {
     Regex::with_flags(pattern, flags).expect("a valid pattern")
 }
 
-/// Comments that instruct a tool rather than a reader.
-static DIRECTIVE: LazyLock<Regex> = LazyLock::new(|| {
-    regex(
-        r"^\s*(?:!|(?:oxlint|eslint|tslint|deno-lint)-|@ts-|@effect-diagnostics|prettier-ignore|biome-ignore|c8 |v8 |istanbul |#(?:end)?region|[@#]__(?:PURE|NO_SIDE_EFFECTS)__|@vite-ignore|webpack[A-Z]|@jsx|@license|@preserve|@vitest-environment|@jest-environment|\/?\s*<reference\s)",
-        "u",
-    )
-});
 static DIVIDER_LINE: LazyLock<Regex> = LazyLock::new(|| regex(r"^(?:[-=*#~_/+]{3,}.*|.*[-=*#~_]{3,})$", "u"));
 static TEST_STEP: LazyLock<Regex> = LazyLock::new(|| regex(r"^(?:arrange|act|assert|given|when|then)\s*[:.]?$", "iu"));
 static TASK_MARKER: LazyLock<Regex> = LazyLock::new(|| regex(r"\b(?:TODO|FIXME|XXX|HACK)\b", "u"));
@@ -146,7 +139,7 @@ fn matches(regex: &Regex, text: &str) -> bool {
 fn problem(source: &str, lines: &Lines, typescript: bool, group: &[&Comment], text: &[&str]) -> Option<&'static str> {
     let content = content_lines(text);
 
-    if content.is_empty() || text.iter().any(|value| matches(&DIRECTIVE, value)) {
+    if content.is_empty() || text.iter().any(|value| is_directive(value)) {
         return None;
     }
 

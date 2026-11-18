@@ -13,7 +13,7 @@ mod message_chains;
 mod mutable_data;
 mod mysterious_name;
 mod repeated_switches;
-mod shared;
+pub(super) mod shared;
 #[cfg(test)]
 #[allow(clippy::too_many_lines, reason = "the generated tables keep one test per upstream option set")]
 mod tests;

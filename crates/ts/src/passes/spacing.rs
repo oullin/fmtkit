@@ -3,7 +3,7 @@
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    AccessorPropertyType, ArrowFunctionExpression, AwaitExpression, ClassElement, Declaration, ExportDefaultDeclarationKind, Expression, Function,
+    AccessorPropertyType, Argument, ArrowFunctionExpression, AwaitExpression, ClassElement, Declaration, ExportDefaultDeclarationKind, Expression, Function,
     FunctionType, MethodDefinitionKind, Statement, VariableDeclarationKind,
 };
 use oxc_ast_visit::Visit;
@@ -36,6 +36,10 @@ const VUE_PRIMITIVES: [&str; 21] = [
     "watch",
     "watchEffect",
 ];
+
+/// The test-runner globals whose calls register a suite, a test, or a hook
+/// (Vitest, Jest, Mocha, `node:test`).
+const TEST_REGISTRARS: [&str; 9] = ["afterAll", "afterEach", "beforeAll", "beforeEach", "bench", "describe", "it", "suite", "test"];
 
 /// Where a class member sorts: properties, then constructors, then methods.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -96,6 +100,10 @@ pub(crate) fn needs_blank_line(previous: Item<'_>, next: Item<'_>) -> bool {
         && case.consequent.is_empty()
     {
         return false;
+    }
+
+    if is_test_registration(previous) || is_test_registration(next) {
+        return true;
     }
 
     if contains_await(previous) || contains_await(next) || needs_blank_line_above(next) {
@@ -261,6 +269,41 @@ fn is_binding_call(item: Item<'_>) -> bool {
         Expression::StaticMemberExpression(receiver) => receiver.property.name == "bindings",
         _ => false,
     }
+}
+
+/// A test-registration call as an expression statement: `it('name', fn)`,
+/// `describe.skip(...)`, `it.each(table)('name', fn)`, a tagged
+/// `it.each`, or a Mocha `it(...).timeout(ms)`. The callee chain must lead to
+/// one of [`TEST_REGISTRARS`], and some call along it must take a function, so
+/// an unrelated helper named `test(value)` does not count.
+fn is_test_registration(item: Item<'_>) -> bool {
+    let Some(Statement::ExpressionStatement(statement)) = item.statement() else {
+        return false;
+    };
+
+    let Expression::CallExpression(call) = statement.expression.without_parentheses() else {
+        return false;
+    };
+
+    let mut takes_function = takes_a_function(&call.arguments);
+    let mut expression = &call.callee;
+
+    loop {
+        match expression.without_parentheses() {
+            Expression::Identifier(identifier) => return takes_function && TEST_REGISTRARS.contains(&identifier.name.as_str()),
+            Expression::StaticMemberExpression(member) => expression = &member.object,
+            Expression::TaggedTemplateExpression(tagged) => expression = &tagged.tag,
+            Expression::CallExpression(inner) => {
+                takes_function |= takes_a_function(&inner.arguments);
+                expression = &inner.callee;
+            }
+            _ => return false,
+        }
+    }
+}
+
+fn takes_a_function(arguments: &[Argument<'_>]) -> bool {
+    arguments.iter().any(|argument| matches!(argument, Argument::FunctionExpression(_) | Argument::ArrowFunctionExpression(_)))
 }
 
 fn is_vue_primitive_call(expression: &Expression<'_>) -> bool {

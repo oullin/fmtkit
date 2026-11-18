@@ -1,0 +1,30 @@
+package sample
+
+import "testing"
+
+func TestReader(t *testing.T) {
+	t.Helper()
+
+	cases := load()
+
+	t.Run("absent", func(t *testing.T) {
+		_ = cases
+	})
+
+	t.Run("configured", func(t *testing.T) {
+		t.Run("nested", func(t *testing.T) {})
+
+		t.Run("sibling", func(t *testing.T) {})
+	})
+
+	t.Run("already spaced", func(t *testing.T) {})
+
+	t.Run("named", check)
+	cleanup()
+}
+
+func BenchmarkReader(b *testing.B) {
+	b.Run("small", func(b *testing.B) {})
+
+	b.Run("large", func(b *testing.B) {})
+}

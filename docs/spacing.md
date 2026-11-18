@@ -156,6 +156,35 @@ func helper(t *testing.T) {
 }
 ```
 
+## Blank lines around subtests
+
+A subtest call is separated from the statements before and after it, so consecutive subtests each get a blank line between them. A subtest call is a standalone call to a `.Run` selector with two arguments, the second a function literal, such as `t.Run("name", func(t *testing.T) { ... })` or `b.Run("name", func(b *testing.B) { ... })`. The helper has no type information, so the receiver is not checked; `t.Run("name", check)` with a named function does not count. The formatter reports this as `missing blank line before subtest` or `missing blank line after subtest`.
+
+```go
+// before
+func TestReader(t *testing.T) {
+    cases := load()
+    t.Run("absent", func(t *testing.T) {
+        check(t, cases)
+    })
+    t.Run("configured", func(t *testing.T) {})
+    cleanup()
+}
+
+// after
+func TestReader(t *testing.T) {
+    cases := load()
+
+    t.Run("absent", func(t *testing.T) {
+        check(t, cases)
+    })
+
+    t.Run("configured", func(t *testing.T) {})
+
+    cleanup()
+}
+```
+
 ## Blank lines before top-level `routes.*` calls
 
 Top-level route registration calls on a `routes` registry are separated with a blank line before each later `routes.Add(...)` or `routes.Group(...)` call.

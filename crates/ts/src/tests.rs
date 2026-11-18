@@ -488,6 +488,32 @@ mod blank_lines_cli {
     }
 
     #[test]
+    fn separates_consecutive_test_blocks_through_the_whole_pipeline() {
+        let input = lines(&[
+            "describe('env reader', () => {",
+            "\tit.each([undefined, ''])('reads an absent list as unrestricted: %s', (value) => {",
+            "\t\tbind({ EMAIL_RECIPIENT_DOMAINS: value });",
+            "\t\texpect(env().emailRecipientDomains()).toEqual([]);",
+            "\t});",
+            "\tit('normalises the configured lists', () => {",
+            "\t\texpect(env().emailRecipientDomains()).toEqual(['example.test']);",
+            "\t});",
+            "\tit('configures Knock email', () => {",
+            "\t\tbind();",
+            "\t});",
+            "});",
+            "",
+        ]);
+        let output = full(&input);
+
+        for expected in ["\t});\n\n\tit('normalises the configured lists', () => {", "\t});\n\n\tit('configures Knock email', () => {"] {
+            assert!(output.contains(expected), "missing {expected:?} in\n{output}");
+        }
+
+        assert!(assert_idempotent("env.test.ts", &input));
+    }
+
+    #[test]
     fn uses_the_modular_formatter_for_body_wrapping_and_declaration_ordering() {
         let input = lines(&["import {", "\ta,", "} from \"a\";", "import { b } from \"b\";", "function run() {", "\tif (ready) done();", "}", ""]);
         let output = segment(&input, "tracked.ts");

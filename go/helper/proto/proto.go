@@ -40,6 +40,17 @@ type Steps struct {
 	MaxLocalWords uint32
 	// PackageStutter turns naming/no-package-stutter on.
 	PackageStutter bool
+	// Lint sets the go/* nesting and line-length checks.
+	Lint Limits
+}
+
+// Limits sets the report-only go/* checks run on the final text. A zero limit
+// turns its check off; TabWidth is how many columns a tab advances to.
+type Limits struct {
+	MaxDepth       uint32
+	MaxNestedFuncs uint32
+	MaxLineLength  uint32
+	TabWidth       uint32
 }
 
 // Request asks the helper to process one file.
@@ -69,7 +80,7 @@ type Score struct {
 
 // Reply answers one Request. Error is empty when the file was processed.
 // Violations are spacing findings against the input; Lint holds the naming
-// findings against the final text.
+// and go/* findings against the final text.
 type Reply struct {
 	Error      string
 	Output     []byte
@@ -92,7 +103,7 @@ type decoder struct {
 
 // Version is the protocol version exchanged in the Hello handshake. Bump it on
 // any change to the frame or payload layout.
-const Version uint32 = 2
+const Version uint32 = 3
 
 // MaxFrame caps the length field of a frame, so a corrupt length cannot make
 // either side allocate without bound.
@@ -202,6 +213,10 @@ func EncodeRequest(req Request) []byte {
 	e.u32(req.Steps.MaxWords)
 	e.u32(req.Steps.MaxLocalWords)
 	e.boolean(req.Steps.PackageStutter)
+	e.u32(req.Steps.Lint.MaxDepth)
+	e.u32(req.Steps.Lint.MaxNestedFuncs)
+	e.u32(req.Steps.Lint.MaxLineLength)
+	e.u32(req.Steps.Lint.TabWidth)
 
 	return e.buf
 }
@@ -225,6 +240,12 @@ func DecodeRequest(payload []byte) (Request, error) {
 		MaxWords:       d.u32(),
 		MaxLocalWords:  d.u32(),
 		PackageStutter: d.boolean(),
+		Lint: Limits{
+			MaxDepth:       d.u32(),
+			MaxNestedFuncs: d.u32(),
+			MaxLineLength:  d.u32(),
+			TabWidth:       d.u32(),
+		},
 	}
 
 	return req, d.finish("process request")

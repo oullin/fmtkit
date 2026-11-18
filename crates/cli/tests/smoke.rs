@@ -89,6 +89,38 @@ fn check_reports_complexity_on_the_lines_on_disk() {
 }
 
 #[test]
+fn reports_go_nesting_and_long_lines_where_they_are() {
+    if go_helper().is_none() {
+        eprintln!("skipped: go is not installed");
+
+        return;
+    }
+
+    let fixture = Fixture::new(&[
+        ("fmtkit.toml", "[go]\nmax_depth = 1\nmax_line_length = 40\n"),
+        ("go.mod", "module fixture\n\ngo 1.27.1\n"),
+        ("a.go", "package p\nfunc f(xs []int) {\n\tfor range xs {\n\t\tif len(xs) > 0 { println(xs, xs, xs, xs, xs) }\n\t}\n}\n"),
+    ]);
+
+    // Check reports against the file on disk, where both sit on line 4.
+    let check = fixture.run(&["check", "--all", "--format", "agent"]);
+    let report = text(&check);
+
+    assert_exit(&check, 1);
+    assert!(report.contains("a.go:4:3 go/max-depth"), "{report}");
+    assert!(report.contains("a.go:4:35 go/line-length"), "{report}");
+
+    // Format splits the if over three lines, so only the depth finding is
+    // left, on the line it moved to, and it still fails the run.
+    let format = fixture.run(&["format", "--all", "--format", "agent"]);
+    let report = text(&format);
+
+    assert_exit(&format, 1);
+    assert!(report.contains("a.go:5:3 go/max-depth"), "{report}");
+    assert!(!report.contains("go/line-length"), "{report}");
+}
+
+#[test]
 fn check_reports_catch_rules_on_the_lines_on_disk() {
     let fixture = Fixture::new(&[
         (

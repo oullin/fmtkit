@@ -9,7 +9,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::thread;
 
-use fmtkit_go::{GoError, Helper, Reply, Request, Steps};
+use fmtkit_go::{GoError, Helper, Limits, Reply, Request, Steps};
 
 fn helper_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../go/helper")
@@ -69,6 +69,7 @@ const NAMING_OFF: Steps = Steps {
     max_words: 0,
     max_local_words: 0,
     package_stutter: false,
+    lint: Limits::OFF,
 };
 
 #[test]
@@ -157,6 +158,28 @@ func StartPool() {}
     let off = helper.submit(request("pkg/worker.go", source, Steps { gofmt: true, ..Steps::default() })).unwrap().wait().unwrap();
 
     assert_eq!(off.lint, [] as [fmtkit_core::Diagnostic; 0]);
+
+    helper.shutdown().unwrap();
+}
+
+#[test]
+fn reports_nesting_and_long_lines_against_the_final_text() {
+    let Some(helper) = spawn() else { return };
+    let long = "x".repeat(120);
+    let source = format!(
+        "package sample\nfunc run(xs []int) {{\n\tfor range xs {{\n\t\tif true {{\n\t\t\tgo1(func() {{ go1(func() {{}}) }})\n\t\t}}\n\t}}\n}}\nvar s = \"{long}\"\nfunc go1(f func()) {{ f() }}\n"
+    );
+    let lint = Limits { max_depth: 1, max_nested_funcs: 1, max_line_length: 120, tab_width: 4 };
+    let reply = helper.submit(request("pkg/sample.go", source, Steps { gofmt: true, lint, ..Steps::default() })).unwrap().wait().unwrap();
+    let found: Vec<_> = reply.lint.iter().map(|d| (d.file.as_str(), d.rule.as_str(), d.line, d.column)).collect();
+
+    assert_eq!(reply.error, None);
+    assert_eq!(reply.violations, []);
+    assert_eq!(found, [("pkg/sample.go", "go/max-depth", 5, 3), ("pkg/sample.go", "go/max-nested-funcs", 6, 21)]);
+
+    let off = helper.submit(request("pkg/sample.go", "package sample\n", Steps { lint: Limits::OFF, ..Steps::default() })).unwrap().wait().unwrap();
+
+    assert_eq!(off.lint, []);
 
     helper.shutdown().unwrap();
 }

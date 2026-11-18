@@ -31,7 +31,15 @@ var requestFixture = proto.Request{
 	Rel:    "pkg/a.go",
 	Abs:    "/repo/pkg/a.go",
 	Source: []byte("package a\n"),
-	Steps:  proto.Steps{Spacing: true, Gofmt: true, Complexity: true, MaxWords: 2, MaxLocalWords: 1, PackageStutter: true},
+	Steps: proto.Steps{
+		Spacing:        true,
+		Gofmt:          true,
+		Complexity:     true,
+		MaxWords:       2,
+		MaxLocalWords:  1,
+		PackageStutter: true,
+		Lint:           proto.Limits{MaxDepth: 4, MaxNestedFuncs: 3, MaxLineLength: 120, TabWidth: 4},
+	},
 }
 
 var replyFixture = proto.Reply{
@@ -47,6 +55,7 @@ var replyFixture = proto.Reply{
 	},
 	Lint: []proto.Violation{
 		{Rule: "naming/no-package-stutter", Line: 3, Column: 6, Message: "stutters"},
+		{Rule: "go/line-length", Line: 4, Column: 121, Message: "This line has a length of 130. Maximum allowed is 120."},
 	},
 }
 
@@ -100,7 +109,9 @@ func fixtures() []fixture {
 			check: func(t *testing.T, payload []byte) {
 				got, err := proto.DecodeReply(payload)
 
-				if err != nil || got.Error != errorReplyFixture.Error || len(got.Output) != 0 || got.Applied != nil || got.Violations != nil || got.Complexity != nil || got.Lint != nil {
+				empty := got.Applied == nil && got.Violations == nil && got.Complexity == nil && got.Lint == nil
+
+				if err != nil || got.Error != errorReplyFixture.Error || len(got.Output) != 0 || !empty {
 					t.Fatalf("reply = %#v, %v", got, err)
 				}
 			},
@@ -193,7 +204,8 @@ func TestReadFrameRejectsBadInput(t *testing.T) {
 func TestDecodersRejectBadPayloads(t *testing.T) {
 	request := proto.EncodeRequest(requestFixture)
 	badBool := bytes.Clone(request)
-	badBool[len(badBool)-1] = 2
+	// The last bool, package_stutter, sits before the four u32 go/* limits.
+	badBool[len(badBool)-17] = 2
 	reply := proto.EncodeReply(replyFixture)
 
 	hello := func(payload []byte) error {

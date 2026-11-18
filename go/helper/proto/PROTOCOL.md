@@ -4,7 +4,7 @@
 helper's stdin (requests) and stdout (replies). The helper's stderr is free-form
 diagnostics; fmtkit shows its tail only when the helper dies.
 
-Protocol version: **2** (`proto.Version` in Go, `proto::PROTOCOL_VERSION` in
+Protocol version: **3** (`proto.Version` in Go, `proto::PROTOCOL_VERSION` in
 `crates/go`). Bump it on any change to this document's layouts.
 
 ## Frames
@@ -63,6 +63,10 @@ u32    max_words        naming/max-name-words limit for package-level names,
                         methods, fields and interface methods; 0 = off
 u32    max_local_words  its limit for locals and parameters; 0 = max_words
 bool   package_stutter  run naming/no-package-stutter
+u32    max_depth        go/max-depth limit; 0 = off
+u32    max_nested_funcs go/max-nested-funcs limit; 0 = off
+u32    max_line_length  go/line-length limit; 0 = off
+u32    tab_width        columns a tab advances to; 0 = 4
 ```
 
 ### ProcessReply
@@ -73,7 +77,7 @@ bytes                output       the final text (the input when nothing changed
 list<string>         applied      steps that changed the text, in order
 list<Violation>      violations   spacing findings against the input
 list<Score>          complexity   one per function declaration with a body
-list<Violation>      lint         naming findings against the final text
+list<Violation>      lint         naming, then go/* findings against the final text
 ```
 
 ```
@@ -101,9 +105,10 @@ receiver-qualified method name, `(*T).Method`.
 ## Steps and errors
 
 The helper runs the selected steps in this order, each on the previous one's
-output: `spacing`, `gofmt`, `goimports`, then the naming checks and
-`complexity` on the final text. The naming checks run when `max_words` is
-non-zero or `package_stutter` is set, and never change the text.
+output: `spacing`, `gofmt`, `goimports`, then the naming checks, the `go/*`
+checks and `complexity` on the final text. The naming checks run when
+`max_words` is non-zero or `package_stutter` is set, the `go/*` checks when
+any of their three limits is non-zero, and neither changes the text.
 A step's name is appended to `applied` when it changed the text.
 
 - `goimports` is format-only (`imports.Options{FormatOnly: true, Comments:
@@ -132,10 +137,10 @@ byte, then decode the files back. Regenerate with
 `go test ./proto -run TestGoldenFrames -update` and update the Rust values to
 match.
 
-| file              | kind     | id         | contents                                                                  |
-| ----------------- | -------- | ---------- | ------------------------------------------------------------------------- |
-| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                                                  |
-| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity, max words 2 (locals 1), stutter |
-| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores, one lint finding           |
-| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                                            |
-| `shutdown.bin`    | Shutdown | 0          | empty                                                                     |
+| file              | kind     | id         | contents                                                                                               |
+| ----------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                                                                               |
+| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity, max words 2 (locals 1), stutter, go/* limits 4 / 3 / 120 / 4 |
+| `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores, two lint findings                                       |
+| `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                                                                         |
+| `shutdown.bin`    | Shutdown | 0          | empty                                                                                                  |

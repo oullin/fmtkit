@@ -81,7 +81,8 @@ func Split(name string) []string {
 
 		prev := runes[i-1]
 		lowerToUpper := (unicode.IsLower(prev) || unicode.IsDigit(prev)) && unicode.IsUpper(r)
-		acronymEnd := unicode.IsUpper(prev) && unicode.IsUpper(r) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) && !pluralInitialism(runes, start, i)
+		acronymEnd := unicode.IsUpper(prev) && unicode.IsUpper(r) &&
+			i+1 < len(runes) && unicode.IsLower(runes[i+1]) && !pluralInitialism(runes, start, i)
 
 		if lowerToUpper || acronymEnd {
 			words = append(words, string(runes[start:i]))

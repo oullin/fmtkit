@@ -195,7 +195,8 @@ func (b *blankLineInserter) requiresTrailingBlankLine(current ast.Stmt, next ast
 	}
 
 	switch current.(type) {
-	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt, *ast.DeferStmt, *ast.BranchStmt:
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt,
+		*ast.DeferStmt, *ast.BranchStmt:
 		return statementLabel(current, b.ctx.aliases), true
 	case *ast.DeclStmt:
 		if isTypeDeclStmt(current) {
@@ -228,7 +229,8 @@ func (b *blankLineInserter) requiresLeadingBlankLine(stmt ast.Stmt) (string, boo
 	}
 
 	switch stmt.(type) {
-	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt, *ast.DeferStmt, *ast.ReturnStmt, *ast.BranchStmt:
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt,
+		*ast.DeferStmt, *ast.ReturnStmt, *ast.BranchStmt:
 		return statementLabel(stmt, b.ctx.aliases), true
 	case *ast.DeclStmt:
 		if isTypeDeclStmt(stmt) || isVarDeclStmt(stmt) {

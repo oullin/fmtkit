@@ -12,10 +12,10 @@ use std::path::PathBuf;
 
 use fmtkit_core::ComplexityScore;
 
-use crate::{Request, Steps};
+use crate::{Limits, Request, Steps};
 
 /// The protocol version exchanged in the handshake.
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 /// The largest accepted value of a frame's length field (256 MiB).
 pub const MAX_FRAME: u32 = 256 << 20;
@@ -151,11 +151,11 @@ pub fn encode(frame: &Frame, out: &mut Vec<u8>) {
 
 /// The encoded size of a frame carrying `request`, without encoding it.
 pub fn request_frame_len(request: &Request) -> usize {
-    4 + HEADER_LEN as usize + 3 * 4 + request.rel.len() + abs_bytes(&request.abs).len() + request.source.len() + 5 + 2 * 4 + 1
+    4 + HEADER_LEN as usize + 3 * 4 + request.rel.len() + abs_bytes(&request.abs).len() + request.source.len() + 5 + 2 * 4 + 1 + 4 * 4
 }
 
 fn encode_request(request: &Request, out: &mut Vec<u8>) {
-    let Steps { spacing, gofmt, goimports, resolve_imports, complexity, max_words, max_local_words, package_stutter } = request.steps;
+    let Steps { spacing, gofmt, goimports, resolve_imports, complexity, max_words, max_local_words, package_stutter, lint } = request.steps;
 
     put_bytes(out, request.rel.as_bytes());
     put_bytes(out, &abs_bytes(&request.abs));
@@ -168,6 +168,10 @@ fn encode_request(request: &Request, out: &mut Vec<u8>) {
     put_u32(out, max_words);
     put_u32(out, max_local_words);
     out.push(u8::from(package_stutter));
+
+    for limit in [lint.max_depth, lint.max_nested_funcs, lint.max_line_length, lint.tab_width] {
+        put_u32(out, limit);
+    }
 }
 
 fn encode_reply(reply: &WireReply, out: &mut Vec<u8>) {
@@ -337,6 +341,7 @@ fn decode_request(cursor: &mut Cursor<'_>) -> Result<Request, DecodeError> {
         max_words: cursor.u32()?,
         max_local_words: cursor.u32()?,
         package_stutter: cursor.bool()?,
+        lint: Limits { max_depth: cursor.u32()?, max_nested_funcs: cursor.u32()?, max_line_length: cursor.u32()?, tab_width: cursor.u32()? },
     };
 
     Ok(Request { rel, abs, source, steps })
@@ -454,7 +459,7 @@ mod tests {
     use proptest::prelude::*;
 
     use super::{Frame, Hello, Message, WireReply, WireViolation, decode, encode, read_frame, request_frame_len};
-    use crate::{Request, Steps};
+    use crate::{Limits, Request, Steps};
 
     fn fixture(name: &str) -> Vec<u8> {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../go/helper/proto/testdata").join(format!("{name}.bin"));
@@ -481,6 +486,7 @@ mod tests {
                 max_words: 2,
                 max_local_words: 1,
                 package_stutter: true,
+                lint: Limits { max_depth: 4, max_nested_funcs: 3, max_line_length: 120, tab_width: 4 },
             },
         };
 
@@ -493,7 +499,10 @@ mod tests {
                 WireViolation { rule: "spacing".into(), line: 10, column: 2, message: "ünïcode ✓".into() },
             ],
             complexity: vec![score("pkg/a.go#f", "f", 3, 1, 0), score("pkg/a.go#(*T).M", "(*T).M", 5, 4, 6)],
-            lint: vec![WireViolation { rule: "naming/no-package-stutter".into(), line: 3, column: 6, message: "stutters".into() }],
+            lint: vec![
+                WireViolation { rule: "naming/no-package-stutter".into(), line: 3, column: 6, message: "stutters".into() },
+                WireViolation { rule: "go/line-length".into(), line: 4, column: 121, message: "This line has a length of 130. Maximum allowed is 120.".into() },
+            ],
         };
 
         let error = WireReply { error: "gofmt: 1:1: expected 'package', found 'EOF'".into(), ..WireReply::default() };
@@ -568,7 +577,8 @@ mod tests {
         trailing.push(0);
 
         let mut bad_bool = fixture("process");
-        let last = bad_bool.len() - 1;
+        // The last bool, package_stutter, sits before the four u32 go/* limits.
+        let last = bad_bool.len() - 17;
 
         bad_bool[last] = 2;
 
@@ -626,7 +636,7 @@ mod tests {
     }
 
     fn arb_request() -> impl Strategy<Value = Request> {
-        (arb_string(), "/[a-z/]{0,12}", prop::collection::vec(any::<u8>(), 0..64), any::<[bool; 6]>(), any::<[u32; 2]>()).prop_map(
+        (arb_string(), "/[a-z/]{0,12}", prop::collection::vec(any::<u8>(), 0..64), any::<[bool; 6]>(), any::<[u32; 6]>()).prop_map(
             |(rel, abs, source, flags, limits)| Request {
                 rel,
                 abs: PathBuf::from(abs),
@@ -640,6 +650,7 @@ mod tests {
                     max_words: limits[0],
                     max_local_words: limits[1],
                     package_stutter: flags[5],
+                    lint: Limits { max_depth: limits[2], max_nested_funcs: limits[3], max_line_length: limits[4], tab_width: limits[5] },
                 },
             },
         )

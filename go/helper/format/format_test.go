@@ -14,7 +14,9 @@ import (
 var allSteps = proto.Steps{Spacing: true, Gofmt: true, Goimports: true, Complexity: true}
 
 func process(src string, steps proto.Steps) proto.Reply {
-	return format.Process(proto.Request{Rel: "pkg/sample.go", Abs: "/repo/pkg/sample.go", Source: []byte(src), Steps: steps})
+	req := proto.Request{Rel: "pkg/sample.go", Abs: "/repo/pkg/sample.go", Source: []byte(src), Steps: steps}
+
+	return format.Process(req)
 }
 
 func TestProcessRunsStepsInOrderAndNamesTheOnesThatChanged(t *testing.T) {
@@ -34,8 +36,10 @@ func TestProcessRunsStepsInOrderAndNamesTheOnesThatChanged(t *testing.T) {
 		t.Fatalf("output:\n%s", reply.Output)
 	}
 
-	if len(reply.Violations) != 1 || reply.Violations[0].Rule != "spacing" || reply.Violations[0].Line != 4 || reply.Violations[0].Column != 0 {
-		t.Fatalf("violations = %#v", reply.Violations)
+	found := reply.Violations
+
+	if len(found) != 1 || found[0].Rule != "spacing" || found[0].Line != 4 || found[0].Column != 0 {
+		t.Fatalf("violations = %#v", found)
 	}
 }
 
@@ -212,7 +216,63 @@ func TestProcessChecksNamesOnTheFinalText(t *testing.T) {
 		t.Fatalf("naming ran while off: %#v", off.Lint)
 	}
 
-	if broken := process("package sample\nfunc {", proto.Steps{MaxWords: 2}); !strings.HasPrefix(broken.Error, "naming: ") || broken.Lint != nil {
+	broken := process("package sample\nfunc {", proto.Steps{MaxWords: 2})
+
+	if !strings.HasPrefix(broken.Error, "naming: ") || broken.Lint != nil {
 		t.Fatalf("broken = %#v", broken)
+	}
+}
+
+func TestProcessLintsTheFinalTextAndDropsFindingsOnFailure(t *testing.T) {
+	limits := proto.Limits{MaxDepth: 1, MaxNestedFuncs: 3, MaxLineLength: 40, TabWidth: 4}
+	src := "package sample\nfunc run(xs []int) {\n    for range xs {\n        if true { println(xs, xs, xs, xs, xs, xs) }\n    }\n}\n"
+	reply := process(src, proto.Steps{Gofmt: true, Lint: limits})
+
+	if reply.Error != "" {
+		t.Fatalf("error: %s", reply.Error)
+	}
+
+	var got []string
+
+	for _, f := range reply.Lint {
+		got = append(got, fmt.Sprintf("%s %d:%d", f.Rule, f.Line, f.Column))
+	}
+
+	// gofmt splits the if onto its own lines, so only the formatted text's
+	// positions are right; its tabs count 4 columns, not the input's 8 spaces.
+	want := []string{"go/max-depth 5:3", "go/line-length 6:32"}
+
+	if !slices.Equal(got, want) {
+		t.Fatalf("lint = %v, want %v\n%s", got, want, reply.Output)
+	}
+
+	if off := process(src, proto.Steps{Gofmt: true}); off.Lint != nil {
+		t.Fatalf("lint with every limit off = %v", off.Lint)
+	}
+
+	failed := process("package sample\nfunc (", proto.Steps{Lint: limits})
+
+	if !strings.HasPrefix(failed.Error, "lint: ") || failed.Lint != nil {
+		t.Fatalf("reply = %#v", failed)
+	}
+}
+
+// The checks share one parse of the final text: a text that does not parse
+// fails the first step that needs it, and sharing changes no score.
+func TestProcessParsesTheFinalTextOnceForEveryCheck(t *testing.T) {
+	limits := proto.Limits{MaxDepth: 4, MaxNestedFuncs: 3, MaxLineLength: 120, TabWidth: 4}
+	every := proto.Steps{MaxWords: 2, Complexity: true, Lint: limits}
+
+	if broken := process("package sample\nfunc (", every); !strings.HasPrefix(broken.Error, "naming: ") {
+		t.Fatalf("error = %q", broken.Error)
+	}
+
+	src := "package sample\n\n// run loops.\nfunc run(xs []int) {\n\tfor range xs {\n\t\tif len(xs) > 1 {\n\t\t\treturn\n\t\t}\n\t}\n}\n"
+	alone := process(src, proto.Steps{Complexity: true})
+	shared := process(src, every)
+
+	if alone.Error != "" || shared.Error != "" || !slices.Equal(alone.Complexity, shared.Complexity) {
+		t.Fatalf("complexity alone = %+v, with the other checks = %+v (%q)",
+			alone.Complexity, shared.Complexity, shared.Error)
 	}
 }

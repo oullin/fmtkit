@@ -30,10 +30,10 @@ fn formats_scripts_and_vue_then_settles() {
     ]);
 
     assert_exit(&fixture.run(&["format", "--all"]), 0);
-    assert_eq!(fixture.read("app.ts"), "const a = { s: 'hi', x: 1 };\n\nexport default a;\n");
+    assert_eq!(fixture.read("app.ts"), "const a = {\n\ts: 'hi',\n\tx: 1,\n};\n\nexport default a;\n");
     assert_eq!(
         fixture.read("app.vue"),
-        "<script setup lang=\"ts\">\nconst a = { s: 'hi', x: 1 };\n</script>\n\n<template>\n\t<div><p>{{ a.s }}</p></div>\n</template>\n\n<style scoped>\n.box {\n\tcolor: red;\n\tpadding: 0;\n}\n</style>\n"
+        "<script setup lang=\"ts\">\nconst a = {\n\ts: 'hi',\n\tx: 1,\n};\n</script>\n\n<template>\n\t<div><p>{{ a.s }}</p></div>\n</template>\n\n<style scoped>\n.box {\n\tcolor: red;\n\tpadding: 0;\n}\n</style>\n"
     );
 
     let settled = fixture.snapshot();
@@ -334,7 +334,7 @@ fn stdin_filepath_formats_without_touching_disk() {
     let output = child.wait_with_output().unwrap();
 
     assert_exit(&output, 0);
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "const a = { s: 'hi', x: 1 };\n\nexport default a;\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "const a = {\n\ts: 'hi',\n\tx: 1,\n};\n\nexport default a;\n");
     assert_eq!(walk(fixture.path()), Vec::<PathBuf>::new());
 }
 

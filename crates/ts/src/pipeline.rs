@@ -81,12 +81,14 @@ pub(crate) const SEGMENT: [Stage; 4] = [
 pub(crate) const FLUENT: [Stage; 3] =
     [Stage::once(Step::Pass(Pass::FluentChain)), Stage::once(Step::Pass(Pass::DrizzleQuery)), Stage::once(Step::Pass(Pass::ExpandedCall))];
 
-/// v1's `format-all` schedule: segment, oxfmt, fluent, segment.
-pub(crate) const FULL: [Stage; 12] = [
+/// v1's `format-all` schedule: segment, oxfmt, fluent, segment. Object items
+/// run just before oxfmt, which lays out the objects they break open.
+pub(crate) const FULL: [Stage; 13] = [
     SEGMENT[0],
     SEGMENT[1],
     SEGMENT[2],
     SEGMENT[3],
+    Stage::once(Step::Pass(Pass::ObjectItems)),
     Stage::once(Step::Format),
     Stage::once(Step::Pass(Pass::FluentChain)),
     Stage::once(Step::Pass(Pass::DrizzleQuery)),

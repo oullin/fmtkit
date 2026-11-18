@@ -9,6 +9,7 @@ mod drizzle;
 mod expanded_call;
 mod fluent_chain;
 mod lists;
+mod object_items;
 pub(crate) mod spacing;
 
 use fmtkit_core::EditSet;
@@ -24,6 +25,7 @@ pub(crate) enum Pass {
     FluentChain,
     DrizzleQuery,
     ExpandedCall,
+    ObjectItems,
 }
 
 impl Pass {
@@ -36,6 +38,7 @@ impl Pass {
             Self::FluentChain => "fluent-chains",
             Self::DrizzleQuery => "drizzle-queries",
             Self::ExpandedCall => "expanded-calls",
+            Self::ObjectItems => "object-items",
         }
     }
 
@@ -52,6 +55,7 @@ impl Pass {
             Self::FluentChain => fluent_chain::edits(text, program),
             Self::DrizzleQuery => drizzle::edits(text, program),
             Self::ExpandedCall => expanded_call::edits(text, program),
+            Self::ObjectItems => object_items::edits(text, program),
         };
 
         edits.normalize(text);

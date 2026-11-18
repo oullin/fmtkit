@@ -124,6 +124,11 @@ func (w *lineWalker) directive(at int, text []byte) bool {
 // unbreakable reports whether the overflow of a line, the bytes from cut on,
 // is one URL in a comment line or sits inside one string literal.
 func (w *lineWalker) unbreakable(at int, text []byte, cut int) bool {
+	// Trailing blanks alone past the limit can always go.
+	if len(bytes.TrimRight(text, " \t")) <= cut {
+		return false
+	}
+
 	// The whole overflow sits inside a string that runs past the line, such
 	// as a line inside a multi-line raw string, whatever its characters are.
 	if s := w.spanAt(at + cut); s != nil && !s.comment && s.end >= at+len(text) {
@@ -258,8 +263,9 @@ func importSpans(tokens *token.File, file *ast.File) [][2]int {
 }
 
 // imported reports whether a line's overflow, from byte cut of the line at
-// offset at, is all import spec: it starts inside one, and only blanks or a
-// semicolon follow that spec on the line. A trailing comment can move above.
+// offset at, is all import spec: it starts inside one, and only blanks, a
+// semicolon or the group's closing parenthesis follow that spec on the line.
+// A trailing comment can move above.
 func (w *lineWalker) imported(at int, text []byte, cut int) bool {
 	offset := at + cut
 
@@ -268,7 +274,7 @@ func (w *lineWalker) imported(at int, text []byte, cut int) bool {
 			continue
 		}
 
-		rest := bytes.TrimLeft(text[min(span[1]-at, len(text)):], " \t;")
+		rest := bytes.TrimLeft(text[min(span[1]-at, len(text)):], " \t;)")
 
 		return len(rest) == 0
 	}

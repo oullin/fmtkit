@@ -349,6 +349,12 @@ func TestLineLengthChecksADeclarationSharingAnImportLine(t *testing.T) {
 	expect(t, src, only(lint.RuleLineLength), at{lint.RuleLineLength, 5, 121})
 	expect(t, spill, only(lint.RuleLineLength), at{lint.RuleLineLength, 3, 121})
 	expect(t, comment, only(lint.RuleLineLength), at{lint.RuleLineLength, 3, 121})
+
+	grouped := "package a\n\nimport (\n\t" + long + " \"fmt\")\n\nvar _ = " + long + ".Sprint\n"
+	blanks := "package a\n\nvar s = \"abc\"" + strings.Repeat(" ", 130) + "\n"
+
+	expect(t, grouped, only(lint.RuleLineLength), at{lint.RuleLineLength, 6, 121})
+	expect(t, blanks, only(lint.RuleLineLength), at{lint.RuleLineLength, 3, 121})
 }
 
 func TestFindingsUsePhysicalPositionsUnderLineDirectives(t *testing.T) {

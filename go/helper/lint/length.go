@@ -87,7 +87,7 @@ func (w *lineWalker) line(number, at int, text []byte) (Finding, bool) {
 
 	width, cut := measure(text, w.limits.TabWidth, limit)
 
-	if width <= limit || w.imported(number) || bytes.HasPrefix(bytes.TrimLeft(text, " \t"), []byte("//go:")) {
+	if width <= limit || w.imported(number) {
 		return Finding{}, false
 	}
 
@@ -95,7 +95,7 @@ func (w *lineWalker) line(number, at int, text []byte) (Finding, bool) {
 		w.spans, w.built = literals(w.tokens, w.file, w.src, w.strings), true
 	}
 
-	if w.unbreakable(at, text, cut) {
+	if w.directive(at, text) || w.unbreakable(at, text, cut) {
 		return Finding{}, false
 	}
 
@@ -107,9 +107,29 @@ func (w *lineWalker) line(number, at int, text []byte) (Finding, bool) {
 	}, true
 }
 
+// directive reports whether a line is a //go: comment, such as
+// //go:generate. A raw string line that only starts with //go: is not one.
+func (w *lineWalker) directive(at int, text []byte) bool {
+	indent := bytes.IndexFunc(text, notBlank)
+
+	if indent < 0 || !bytes.HasPrefix(text[indent:], []byte("//go:")) {
+		return false
+	}
+
+	s := w.spanAt(at + indent)
+
+	return s != nil && s.comment && s.start == at+indent
+}
+
 // unbreakable reports whether the overflow of a line, the bytes from cut on,
 // is one URL in a comment line or sits inside one string literal.
 func (w *lineWalker) unbreakable(at int, text []byte, cut int) bool {
+	// The whole overflow sits inside a string that runs past the line, such
+	// as a line inside a multi-line raw string, whatever its characters are.
+	if s := w.spanAt(at + cut); s != nil && !s.comment && s.end >= at+len(text) {
+		return true
+	}
+
 	first, last := significant(text, cut)
 
 	if last < 0 {
@@ -181,36 +201,62 @@ func significant(text []byte, cut int) (first, last int) {
 }
 
 // url reports whether the word at byte first runs to the end of the line and
-// is a URL.
+// is a URL: a scheme, then ://, then at least one byte. Punctuation such as
+// ( or < may open the word.
 func url(text []byte, first int) bool {
 	start := bytes.LastIndexAny(text[:first], " \t") + 1
 	rest := bytes.TrimRight(text[start:], " \t")
 
-	return !bytes.ContainsAny(rest, " \t") && bytes.Contains(rest, []byte("://"))
+	if bytes.ContainsAny(rest, " \t") {
+		return false
+	}
+
+	sep := bytes.Index(rest, []byte("://"))
+
+	if sep < 0 || sep+3 == len(rest) {
+		return false
+	}
+
+	return scheme(bytes.TrimLeft(rest[:sep], "([<{'\"`"))
+}
+
+// scheme reports whether s is a URL scheme: a letter, then letters, digits,
+// +, - or . (RFC 3986, section 3.1).
+func scheme(s []byte) bool {
+	if len(s) == 0 || !isLetter(s[0]) {
+		return false
+	}
+
+	for _, c := range s[1:] {
+		if !isLetter(c) && !('0' <= c && c <= '9') && c != '+' && c != '-' && c != '.' {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isLetter(c byte) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }
 
 func notBlank(r rune) bool {
 	return r != ' ' && r != '\t'
 }
 
-// importLines returns the first and last line of every import declaration.
+// importLines returns the first and last line of every import spec. A comment
+// on its own line inside import ( ... ) belongs to no spec, so it is checked.
 func importLines(tokens *token.File, file *ast.File) [][2]int {
-	var lines [][2]int
+	lines := make([][2]int, 0, len(file.Imports))
 
-	for _, decl := range file.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-
-		if !ok || gen.Tok != token.IMPORT {
-			continue
-		}
-
-		lines = append(lines, [2]int{tokens.Line(gen.Pos()), tokens.Line(gen.End())})
+	for _, spec := range file.Imports {
+		lines = append(lines, [2]int{tokens.Line(spec.Pos()), tokens.Line(spec.End())})
 	}
 
 	return lines
 }
 
-// imported reports whether line number belongs to an import declaration.
+// imported reports whether line number belongs to an import spec.
 func (w *lineWalker) imported(number int) bool {
 	for _, lines := range w.imports {
 		if lines[0] <= number && number <= lines[1] {

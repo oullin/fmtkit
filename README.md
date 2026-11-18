@@ -240,7 +240,7 @@ An entry that matches no function fails the run, so the list only shrinks. The b
 
 ### Go nesting and line length
 
-The bundled script policy enforces `max-depth` 4 and `max-nested-callbacks` 3, and the script printer wraps long lines. `gofmt` never wraps, so the Go lane reports three lint findings instead. They never change the text and fail the run in every mode, as script lint errors do. They apply to test files too.
+The bundled script policy enforces `max-depth` 4 and `max-nested-callbacks` 3, and the script printer wraps long lines. `gofmt` never wraps, so the Go lane reports three lint findings instead. They never change the text and fail file-based `check` and `format` runs, as script lint errors do. They apply to test files too. Stdin runs (`--stdin-filepath`, for editors) skip them. In `check`, a file that formatting would change is checked again on the text on disk only when the formatted text had findings, so a long line that formatting would shorten isn't reported.
 
 ```text
 [go/max-depth] line 12:6: Blocks are nested too deeply (5). Maximum allowed is 4.

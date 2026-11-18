@@ -309,6 +309,42 @@ func fmt(string, ...any) string { return "" }
 	)
 }
 
+func TestLineLengthChecksWhatOnlyLooksExempt(t *testing.T) {
+	long := strings.Repeat("x", 130)
+	src := `package a
+
+import (
+	// ` + strings.Repeat("prose ", 22) + `
+	"fmt"
+)
+
+var a = ` + "`" + `
+//go:` + "`" + ` + ` + long + `
+
+// ://` + long + `
+// see example.com/` + long + `
+
+var b = ` + "`" + `
+` + strings.Repeat(")", 130) + `
+` + "`" + `
+
+var _ = fmt.Sprint
+`
+
+	expect(t, src, only(lint.RuleLineLength),
+		at{lint.RuleLineLength, 4, 118},
+		at{lint.RuleLineLength, 9, 121},
+		at{lint.RuleLineLength, 11, 121},
+		at{lint.RuleLineLength, 12, 121},
+	)
+}
+
+func TestFindingsUsePhysicalPositionsUnderLineDirectives(t *testing.T) {
+	src := "package a\n\n//line template.go:500\nfunc f(x int) {\n\tif x > 0 {\n\t\tif x > 1 {\n\t\t}\n\t}\n}\n"
+
+	expect(t, src, lint.Limits{MaxDepth: 1}, at{lint.RuleMaxDepth, 6, 3})
+}
+
 func TestLineLengthHandlesCarriageReturns(t *testing.T) {
 	line := strings.Repeat("a", 117)
 	raw := "var y = `" + strings.Repeat("b", 100) + "\r\n" + strings.Repeat("b", 130) + "`\r\n"

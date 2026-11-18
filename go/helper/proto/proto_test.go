@@ -38,7 +38,7 @@ var requestFixture = proto.Request{
 		MaxWords:       2,
 		MaxLocalWords:  1,
 		PackageStutter: true,
-		Lint:           proto.Limits{MaxDepth: 4, MaxNestedFuncs: 3, MaxLineLength: 120, TabWidth: 4},
+		Lint:           proto.Limits{MaxDepth: 6, MaxNestedFuncs: 3, MaxLineLength: 120, TabWidth: 8},
 	},
 }
 

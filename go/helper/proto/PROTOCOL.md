@@ -140,7 +140,7 @@ match.
 | file              | kind     | id         | contents                                                                                               |
 | ----------------- | -------- | ---------- | ------------------------------------------------------------------------------------------------------ |
 | `hello.bin`       | Hello    | 0          | proto 1, version `2.0.0`                                                                               |
-| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity, max words 2 (locals 1), stutter, go/* limits 4 / 3 / 120 / 4 |
+| `process.bin`     | Process  | 7          | `pkg/a.go`, spacing + gofmt + complexity, max words 2 (locals 1), stutter, go/* limits 6 / 3 / 120 / 8 |
 | `reply.bin`       | Reply    | 7          | two applied steps, two violations, two scores, two lint findings                                       |
 | `reply_error.bin` | Reply    | 4294967295 | a gofmt error and nothing else                                                                         |
 | `shutdown.bin`    | Shutdown | 0          | empty                                                                                                  |

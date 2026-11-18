@@ -486,7 +486,7 @@ mod tests {
                 max_words: 2,
                 max_local_words: 1,
                 package_stutter: true,
-                lint: Limits { max_depth: 4, max_nested_funcs: 3, max_line_length: 120, tab_width: 4 },
+                lint: Limits { max_depth: 6, max_nested_funcs: 3, max_line_length: 120, tab_width: 8 },
             },
         };
 

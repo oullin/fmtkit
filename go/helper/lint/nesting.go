@@ -128,7 +128,8 @@ func (w *walker) call(call *ast.CallExpr) {
 }
 
 func (w *walker) report(rule string, pos token.Pos, format string, level, limit int) {
-	at := w.fset.Position(pos)
+	// Physical positions: a //line directive must not move a finding.
+	at := w.fset.PositionFor(pos, false)
 
 	w.out = append(w.out, Finding{
 		Rule:    rule,

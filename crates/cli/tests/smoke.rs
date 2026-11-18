@@ -118,6 +118,10 @@ fn reports_go_nesting_and_long_lines_where_they_are() {
     assert_exit(&format, 1);
     assert!(report.contains("a.go:5:3 go/max-depth"), "{report}");
     assert!(!report.contains("go/line-length"), "{report}");
+    assert_eq!(
+        fixture.read("a.go"),
+        "package p\n\nfunc f(xs []int) {\n\tfor range xs {\n\t\tif len(xs) > 0 {\n\t\t\tprintln(xs, xs, xs, xs, xs)\n\t\t}\n\t}\n}\n"
+    );
 }
 
 #[test]

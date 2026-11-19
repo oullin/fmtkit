@@ -13,8 +13,9 @@ use oxc_allocator::Allocator;
 use oxc_diagnostics::{OxcDiagnostic, Severity as OxcSeverity};
 use oxc_linter::loader::{JavaScriptSource, PartialLoader};
 use oxc_linter::{
-    AllowWarnDeny, ConfigStore, ConfigStoreBuilder, ContextSubHost, ContextSubHostOptions, ExternalPluginStore, FixKind, LintOptions, LintPlugins, Message,
-    ModuleRecord, Oxlintrc, PossibleFixes, create_unused_directives_messages, normalize_plugin_name, normalize_rule_name,
+    AllowWarnDeny, ConfigStore, ConfigStoreBuilder, ContextSubHost, ContextSubHostOptions, DisableDirectives, ExternalPluginStore, FixKind, LintOptions,
+    LintPlugins, Message, ModuleRecord, Oxlintrc, PossibleFixes, RuleCommentType, create_unused_directives_messages, normalize_plugin_name,
+    normalize_rule_name,
 };
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
@@ -27,10 +28,18 @@ use fmtkit_core::{Diagnostic, Edit, Lang, LineIndex, Severity};
 use crate::LintError;
 use crate::exempt::{self, Exempt};
 use crate::rules::{self, Factory, Rule};
+use crate::type_aware::{Finding, TsRule};
 
 /// The bundled policy: v1's `.oxlintrc.json` without `jsPlugins` (those rules
 /// are native here) and without `ignorePatterns`.
 pub const POLICY: &str = include_str!("../policy/oxlintrc.json");
+
+/// `[lint] type_aware = "nkzw"`: the type-aware rules `@nkzw/oxlint-config`
+/// 3.0 enables, with its options, in the same shape as the policy.
+pub const NKZW_TYPE_AWARE: &str = include_str!("../policy/type-aware-nkzw.json");
+
+/// The rule program diagnostics from tsrs (a tsconfig error) are reported under.
+pub const PROGRAM_RULE: &str = "typescript/program";
 
 /// The rule name used for parse and semantic errors, which stop a file from being linted.
 pub const SYNTAX_RULE: &str = "syntax";
@@ -56,6 +65,13 @@ pub struct Built {
     pub store: ConfigStore,
     pub natives: Natives,
     pub unused_directives: Option<AllowWarnDeny>,
+    /// The type-aware rules named on for some file, normalized
+    /// (`typescript/no-floating-promises`), sorted.
+    pub type_aware: Vec<String>,
+    /// Those rules alone, overrides included, to resolve per file. The main
+    /// store also enables the type-aware rules of the `correctness`
+    /// category, which run only when named, as in oxlint without `typeAware`.
+    pub type_store: Option<ConfigStore>,
 }
 
 /// Merge the bundled policy (when asked for) with `[lint.rules]`, route native
@@ -71,6 +87,10 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
         for (name, setting) in policy_rules {
             merged.insert(rule_key(&name, &registry), (name, setting));
         }
+    }
+
+    if config.type_aware == Some(fmtkit_config::TypeAwarePreset::Nkzw) {
+        preset(&mut base, &mut merged, config, &registry);
     }
 
     for (name, setting) in &config.rules {
@@ -117,8 +137,8 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
             return Err(LintError::Rule { rule: name, message: "unknown rule".into() });
         }
 
-        if severity.is_some() && type_aware(&key) {
-            return Err(LintError::Rule { rule: name, message: "a type-aware rule, which needs type information that fmtkit does not have".into() });
+        if type_aware(&key) && options.len() > 1 {
+            return Err(LintError::Rule { rule: name, message: "a type-aware rule takes at most one option".into() });
         }
 
         if let Owner::Plugin(plugin) = owner
@@ -130,6 +150,10 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
         oxc_rules.insert(key, setting);
     }
 
+    if config.type_aware.is_some() && !plugins.iter().any(|p| LintPlugins::try_from(p.as_str()).is_ok_and(|known| known == LintPlugins::TYPESCRIPT)) {
+        plugins.push(<&'static str>::from(LintPlugins::TYPESCRIPT).to_owned());
+    }
+
     base.insert("plugins".into(), json!(plugins));
     base.insert("rules".into(), Value::Object(oxc_rules.clone()));
 
@@ -138,8 +162,86 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
     natives.exempt = exemptions(&config.exempt, &registry, &natives, &store, &base)?;
 
     let unused_directives = natives.unused_directives;
+    let (type_aware, type_store) = type_aware_store(&base, &oxc_rules);
 
-    Ok(Built { store, natives, unused_directives })
+    Ok(Built { store, natives, unused_directives, type_aware, type_store })
+}
+
+/// The type-aware rules that are named and on, at the top level or in an
+/// override, and a store of only those rules; `None` when there are none.
+fn type_aware_store(base: &Map<String, Value>, oxc_rules: &Map<String, Value>) -> (Vec<String>, Option<ConfigStore>) {
+    let on = |setting: &Value| {
+        match setting {
+            Value::Array(items) => items.first(),
+            other => Some(other),
+        }
+        .and_then(|severity| AllowWarnDeny::try_from(severity).ok())
+        .is_some_and(AllowWarnDeny::is_warn_deny)
+    };
+    let typed = |rules: &Map<String, Value>| -> Map<String, Value> {
+        rules.iter().filter(|(name, _)| type_aware(&normalize_rule_name(name))).map(|(n, v)| (n.clone(), v.clone())).collect()
+    };
+
+    let rules = typed(oxc_rules);
+    let mut named: Vec<String> = rules.iter().filter(|(_, setting)| on(setting)).map(|(name, _)| normalize_rule_name(name)).collect();
+    let mut overrides = Vec::new();
+
+    for entry in base.get("overrides").and_then(Value::as_array).into_iter().flatten() {
+        let Some(own) = entry.get("rules").and_then(Value::as_object).map(typed).filter(|own| !own.is_empty()) else { continue };
+        let mut entry = entry.clone();
+
+        named.extend(own.iter().filter(|(_, setting)| on(setting)).map(|(name, _)| normalize_rule_name(name)));
+        entry["rules"] = Value::Object(own);
+        overrides.push(entry);
+    }
+
+    named.sort();
+    named.dedup();
+
+    if named.is_empty() {
+        return (named, None);
+    }
+
+    let rc = json!({ "plugins": ["typescript"], "categories": {}, "rules": rules, "overrides": overrides });
+    let store = build_store(rc.as_object().expect("an object")).expect("type-aware rules that built once build again");
+
+    (named, Some(store))
+}
+
+/// Add the nkzw type-aware preset under the policy: its rules before
+/// `[lint.rules]`, which may replace any of them, and its overrides without
+/// the rules `[lint.rules]` sets, so a setting there applies to every file.
+fn preset(
+    base: &mut Map<String, Value>,
+    merged: &mut BTreeMap<String, (String, Value)>,
+    config: &fmtkit_config::Lint,
+    registry: &FxHashMap<&'static str, Factory>,
+) {
+    let preset: Map<String, Value> = serde_json::from_str(NKZW_TYPE_AWARE).expect("the bundled preset is valid JSON");
+    let configured: FxHashSet<String> = config.rules.keys().map(|name| rule_key(name, registry)).collect();
+
+    if let Some(Value::Object(rules)) = preset.get("rules") {
+        for (name, setting) in rules {
+            merged.insert(rule_key(name, registry), (name.clone(), setting.clone()));
+        }
+    }
+
+    for entry in preset.get("overrides").and_then(Value::as_array).into_iter().flatten() {
+        let mut entry = entry.clone();
+
+        if let Some(Value::Object(rules)) = entry.get_mut("rules") {
+            rules.retain(|name, _| !configured.contains(&rule_key(name, registry)));
+
+            if rules.is_empty() {
+                continue;
+            }
+        }
+
+        match base.entry("overrides").or_insert_with(|| json!([])) {
+            Value::Array(overrides) => overrides.push(entry),
+            other => *other = json!([entry]),
+        }
+    }
 }
 
 /// Check every exemption names a rule that exists and is enabled, and build
@@ -300,8 +402,8 @@ fn known_oxc_rule(key: &str) -> bool {
 }
 
 /// Whether oxc_linter runs this normalized rule only with type information
-/// (a tsgolint rule), which fmtkit's single-file lint does not have.
-fn type_aware(key: &str) -> bool {
+/// (a tsgolint rule): fmtkit's single-file lint does not run it, and tsrs does.
+pub fn type_aware(key: &str) -> bool {
     let Some(rule) = key.strip_prefix("typescript/").or_else(|| key.strip_prefix("@typescript-eslint/")) else { return false };
 
     oxc_linter::rules::RULES.iter().any(|r| r.plugin_name() == "typescript" && r.name() == rule && r.is_tsgolint_rule())
@@ -458,8 +560,9 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
         let unused = natives.unused_directives.is_some() && message.error.code.scope.is_none() && message.error.code.number.is_none();
         let mut message = message;
 
-        // A directive for a type-aware rule serves a type-aware linter that
-        // runs beside fmtkit, so fmtkit cannot tell whether it is used.
+        // A directive for a type-aware rule is judged against what tsrs
+        // reports (see `judge_type_aware`), or, when the rule is off, serves
+        // a type-aware linter beside fmtkit; either way not here.
         if unused {
             match type_aware_names(text, message.span) {
                 TypeAwareNames::None => {}
@@ -482,6 +585,142 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
     }
 
     pass
+}
+
+/// The type-aware rules on for one file, with the severity each runs at,
+/// sorted by name. Overrides apply, as they do to every other rule.
+pub fn type_aware_rules_for(store: &ConfigStore, rel: &str) -> Vec<(TsRule, Severity)> {
+    let resolved = store.resolve(Path::new(rel));
+    let mut rules: Vec<(TsRule, Severity)> = resolved
+        .rules
+        .iter()
+        .filter(|(rule, config)| config.severity.is_warn_deny() && rule.is_tsgolint_rule())
+        .map(|(rule, config)| {
+            let options = rule.to_configuration().and_then(Result::ok);
+            let severity = if config.severity == AllowWarnDeny::Deny { Severity::Error } else { Severity::Warning };
+
+            (TsRule { name: rule.name().to_owned(), options }, severity)
+        })
+        .collect();
+
+    rules.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+    rules
+}
+
+/// Judge what tsrs reported for one file as `run` judges in-process findings:
+/// a disable directive suppresses a finding, an `[[exempt]]` entry drops it,
+/// and each finding is reported as `typescript/<rule>` at its configured
+/// severity.
+///
+/// It also judges the directives that name a type-aware rule which is on for
+/// this file, which `run` leaves alone: such a directive is unused when it
+/// suppressed no finding of that rule here. A directive for a type-aware rule
+/// that is off may serve a type-aware linter beside fmtkit, so it is never
+/// reported. The unused-directive findings carry no fix.
+pub fn judge_type_aware(natives: &Natives, rel: &str, text: &str, findings: &[Finding], rules: &[(TsRule, Severity)]) -> Vec<Diagnostic> {
+    let index = LineIndex::new(text);
+    let exempt = natives.exempt.for_file(rel);
+    let unused = natives.unused_directives.filter(|_| !exempt.oxc(UNUSED_DIRECTIVE_RULE));
+    let mut out = Vec::new();
+    let allocator = Allocator::default();
+    let directives = text.contains("-disable").then(|| disable_directives(&allocator, rel, text)).flatten();
+
+    if findings.is_empty() && (unused.is_none() || directives.is_none()) {
+        return out;
+    }
+
+    for finding in findings {
+        let at = |rule: String, severity: Severity| {
+            let (line, column) = index.line_col(finding.start);
+
+            Diagnostic { rule, file: rel.to_owned(), line, column, message: finding.message.clone(), severity }
+        };
+
+        let Some(name) = &finding.rule else {
+            out.push(at(PROGRAM_RULE.to_owned(), Severity::Error));
+            continue;
+        };
+
+        let rule = format!("typescript/{name}");
+        let suppressed = directives.as_ref().is_some_and(|host| host.disable_directives().contains(name, Span::new(finding.start, finding.end)));
+
+        if suppressed || exempt.oxc(&rule) {
+            continue;
+        }
+
+        let severity = rules.iter().find(|(r, _)| r.name == *name).map_or(Severity::Error, |(_, severity)| *severity);
+
+        out.push(at(rule, severity));
+    }
+
+    if let (Some(severity), Some(host)) = (unused, &directives) {
+        let severity = if severity == AllowWarnDeny::Deny { Severity::Error } else { Severity::Warning };
+
+        for (span, message) in unused_type_aware_directives(host.disable_directives(), rules) {
+            let (line, column) = index.line_col(span.start);
+
+            out.push(Diagnostic { rule: UNUSED_DIRECTIVE_RULE.to_owned(), file: rel.to_owned(), line, column, message, severity });
+        }
+    }
+
+    out
+}
+
+/// The names in disable directives that name a type-aware rule in `rules`
+/// and suppressed nothing, with the message for each.
+fn unused_type_aware_directives(directives: &DisableDirectives, rules: &[(TsRule, Severity)]) -> Vec<(Span, String)> {
+    let unused = directives.collect_unused_disable_comments();
+    let mut names: FxHashSet<Span> = FxHashSet::default();
+    let mut comments: Vec<Span> = Vec::new();
+
+    for comment in &unused {
+        match &comment.r#type {
+            RuleCommentType::All => comments.push(comment.span),
+            RuleCommentType::Single(listed) => names.extend(listed.iter().map(|rule| rule.name_span)),
+        }
+    }
+
+    let mut out = Vec::new();
+
+    for comment in directives.disable_rule_comments() {
+        let RuleCommentType::Single(entries) = &comment.r#type else { continue };
+
+        for rule in entries {
+            let key = normalize_rule_name(&rule.rule_name);
+            let on = type_aware(&key) && key.rsplit_once('/').is_some_and(|(_, bare)| rules.iter().any(|(r, _)| r.name == bare));
+            let span = rule.name_span;
+
+            if on && (names.contains(&span) || comments.iter().any(|c| c.start <= span.start && span.end <= c.end)) {
+                out.push((span, rule.directive_prefix.unused_disable_rule_message(&rule.rule_name)));
+            }
+        }
+    }
+
+    out
+}
+
+/// Parse `text` far enough to read its disable directives. `None` when it
+/// does not parse; its syntax errors are reported by `run`.
+fn disable_directives<'a>(allocator: &'a Allocator, rel: &str, text: &'a str) -> Option<ContextSubHost<'a>> {
+    let path = Path::new(rel);
+    let source_type = SourceType::from_path(path).ok()?;
+    let parsed = Parser::new(allocator, text, source_type)
+        .with_options(ParseOptions { parse_regular_expression: true, allow_return_outside_function: true, ..ParseOptions::default() })
+        .parse();
+
+    if !parsed.diagnostics.is_empty() {
+        return None;
+    }
+
+    let built = SemanticBuilder::new_linter().build(allocator.alloc(parsed.program));
+
+    if !built.diagnostics.is_empty() {
+        return None;
+    }
+
+    let record = Arc::new(ModuleRecord::new(path, &parsed.module_record, &built.semantic));
+
+    Some(ContextSubHost::new(built.semantic, record, 0, ContextSubHostOptions::default()))
 }
 
 enum TypeAwareNames {

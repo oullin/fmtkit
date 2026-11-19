@@ -186,12 +186,28 @@ pub struct Lint {
     pub exemptions: Option<String>,
     /// Rules that do not apply to some files.
     pub exempt: Vec<Exemption>,
+    /// Turn on a set of type-aware rules, which run through `tsrs`. A
+    /// `rules` entry for one of them replaces the preset's setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_aware: Option<TypeAwarePreset>,
+    /// The `tsrs` executable that runs type-aware rules, relative to the
+    /// repository root. `FMTKIT_TSRS` takes precedence over it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tsrs: Option<String>,
 }
 
 impl Default for Lint {
     fn default() -> Self {
-        Self { bundled: true, rules: BTreeMap::new(), ignore: Vec::new(), exemptions: None, exempt: Vec::new() }
+        Self { bundled: true, rules: BTreeMap::new(), ignore: Vec::new(), exemptions: None, exempt: Vec::new(), type_aware: None, tsrs: None }
     }
+}
+
+/// A named set of type-aware rules for `[lint] type_aware`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TypeAwarePreset {
+    /// The ten type-aware rules `@nkzw/oxlint-config` 3.0 enables, with its options.
+    Nkzw,
 }
 
 /// One rule that does not apply to the files `paths` matches. Every other rule
@@ -356,6 +372,10 @@ impl Config {
 
         if self.lint.exemptions.as_deref().is_some_and(|file| file.trim().is_empty()) {
             return invalid("lint.exemptions must name a file".into());
+        }
+
+        if self.lint.tsrs.as_deref().is_some_and(|file| file.trim().is_empty()) {
+            return invalid("lint.tsrs must name a file".into());
         }
 
         validate_exemptions(&self.lint.exempt, "lint.exempt", path)
@@ -618,6 +638,19 @@ reason = "later"
         fs::write(dir.path().join("exempt.toml"), "[[exempt]]\nrule = \"curly\"\nreason = \"\"\npaths = [\"a.ts\"]\n").unwrap();
 
         assert!(load().contains("exempt.toml") && load().contains("reason is empty"), "{}", load());
+    }
+
+    #[test]
+    fn reads_the_type_aware_settings() {
+        let config = parse("[lint]\ntype_aware = \"nkzw\"\ntsrs = \"tools/tsrs\"\n").unwrap();
+
+        assert_eq!(config.lint.type_aware, Some(TypeAwarePreset::Nkzw));
+        assert_eq!(config.lint.tsrs.as_deref(), Some("tools/tsrs"));
+        assert_eq!(parse("").unwrap().lint.type_aware, None);
+        assert!(parse("[lint]\ntype_aware = \"strict\"\n").is_err());
+        assert!(parse("[lint]\ntype_aware = true\n").is_err());
+        assert!(parse("[lint]\ntsrs = \" \"\n").unwrap_err().to_string().contains("lint.tsrs must name a file"));
+        assert_ne!(parse("[lint]\ntype_aware = \"nkzw\"\n").unwrap().hash(), Config::default().hash());
     }
 
     /// The Go naming checks are off by default; locals fall back to

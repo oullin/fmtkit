@@ -34,5 +34,6 @@ postcard.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+fmtkit-lint.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

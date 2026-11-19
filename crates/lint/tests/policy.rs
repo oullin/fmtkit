@@ -18,7 +18,7 @@ fn normalize(name: &str) -> String {
 }
 
 /// Whether oxc_linter runs this normalized rule only with type information,
-/// which fmtkit does not have; the bundled policy leaves these rules out.
+/// which takes `tsrs`; the bundled policy leaves these rules out.
 fn type_aware(name: &str) -> bool {
     let Some(rule) = name.strip_prefix("typescript/") else { return false };
 
@@ -153,6 +153,41 @@ fn only_type_aware_rules_are_left_out() {
             "typescript/return-await",
         ]
     );
+}
+
+/// `[lint] type_aware = "nkzw"` turns on exactly the rules the bundled
+/// policy leaves out, with nkzw's options and its TypeScript-only override.
+#[test]
+fn the_type_aware_preset_is_what_the_policy_leaves_out() {
+    let (_, upstream, shipped) = load();
+    let preset: Map<String, Value> = serde_json::from_str(fmtkit_lint::NKZW_TYPE_AWARE).expect("preset is JSON");
+    let upstream_rules: Map<String, Value> =
+        normalize_rules(&upstream["rules"]).as_object().unwrap().iter().filter(|(name, _)| type_aware(name)).map(|(n, v)| (n.clone(), v.clone())).collect();
+
+    assert_eq!(preset["rules"], Value::Object(upstream_rules));
+
+    let overrides: Vec<Value> = upstream["overrides"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| {
+            let rules: Map<String, Value> = normalize_rules(&entry["rules"])
+                .as_object()
+                .unwrap()
+                .iter()
+                .filter(|(name, _)| type_aware(name))
+                .map(|(n, v)| (n.clone(), v.clone()))
+                .collect();
+
+            (!rules.is_empty()).then(|| json!({ "files": entry["files"], "rules": rules }))
+        })
+        .collect();
+
+    assert_eq!(preset["overrides"], Value::Array(overrides));
+
+    for name in preset["rules"].as_object().unwrap().keys() {
+        assert!(shipped["rules"].get(name).is_none(), "{name} must stay out of the bundled policy");
+    }
 }
 
 #[test]

@@ -71,7 +71,7 @@ const NAMES: [&str; 9] = ["AR", "CC", "CXX", "FC", "HOME", "PATH", "PKG_CONFIG",
 /// in another directory (another work tree, say), so it is compared absolute.
 /// `FMTKIT_CONFIG` is not one: it is resolved against the root of the call,
 /// so the same relative value means the same thing to both.
-const PATHS: [&str; 2] = ["FMTKIT_CACHE_DIR", "FMTKIT_GO_HELPER"];
+const PATHS: [&str; 3] = ["FMTKIT_CACHE_DIR", "FMTKIT_GO_HELPER", "FMTKIT_TSRS"];
 
 #[derive(Serialize, Deserialize)]
 struct Request<C> {

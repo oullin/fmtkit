@@ -788,8 +788,10 @@ enum TypeAwareNames {
 fn type_aware_names(text: &str, span: Span) -> TypeAwareNames {
     let Some(covered) = text.get(span.start as usize..span.end as usize) else { return TypeAwareNames::None };
     let body = covered.trim_start_matches("//").trim_start_matches("/*").trim_end_matches("*/").trim();
-    let names = match body.split_once(char::is_whitespace) {
-        Some((directive, names)) if directive.starts_with("eslint-") || directive.starts_with("oxlint-") => names,
+    // The names keep the whitespace after the directive, as oxc_linter's do,
+    // so a ` - ` description right after it still ends the list.
+    let names = match body.find(char::is_whitespace) {
+        Some(at) if body[..at].starts_with("eslint-") || body[..at].starts_with("oxlint-") => &body[at..],
         None if body.starts_with("eslint-") || body.starts_with("oxlint-") => "",
         _ => body,
     };

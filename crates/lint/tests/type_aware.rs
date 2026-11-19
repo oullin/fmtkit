@@ -167,6 +167,8 @@ export function go(): void {
 \tvoid save('b');
 \t/* oxlint-disable-next-line */
 \tsave('c');
+\t// oxlint-disable-next-line - handled elsewhere
+\tsave('d');
 }
 ";
 
@@ -185,12 +187,12 @@ fn a_ruleless_directive_that_suppresses_a_tsrs_finding_is_kept() {
     let unused: Vec<(u32, u32)> = linted.diagnostics.iter().filter(|d| d.rule == UNUSED_DIRECTIVE_RULE).map(|d| (d.line, d.column)).collect();
 
     assert_eq!(linted.fixed, None);
-    assert_eq!(unused, [(4, 2), (6, 2), (8, 2)]);
+    assert_eq!(unused, [(4, 2), (6, 2), (8, 2), (10, 2)]);
 
     let found = linter.lint_types(project.root(), &project.tsrs, &["src/ruleless.ts".to_owned()], &[]).unwrap();
 
     assert_eq!(found.diagnostics, []);
-    assert_eq!(found.used_directives, [("src/ruleless.ts".to_owned(), 4, 2), ("src/ruleless.ts".to_owned(), 8, 2)]);
+    assert_eq!(found.used_directives, [("src/ruleless.ts".to_owned(), 4, 2), ("src/ruleless.ts".to_owned(), 8, 2), ("src/ruleless.ts".to_owned(), 10, 2)]);
 }
 
 #[test]

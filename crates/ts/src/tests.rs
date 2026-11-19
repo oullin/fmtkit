@@ -955,14 +955,15 @@ mod fixed_point {
         assert_eq!(calls.get(), EXTRA_ROUNDS + 1);
     }
 
+    /// oxfmt 0.71 needed a second round for this call; 0.79 settles in one.
     #[test]
-    fn a_graphql_call_that_needs_a_second_round_is_formatted_in_one_call() {
+    fn a_graphql_call_settles_in_one_round() {
         let source = "export const x = graphql(`{a}`)";
         let source_type = crate::syntax::source_type(Lang::Ts, "a.ts").expect("a script");
         let first = run_round("a.ts", source_type, source, &FULL).expect("the round succeeds");
         let fixed = lines(&["export const x = graphql(`", "\t{", "\t\ta", "\t}", "`);", ""]);
 
-        assert_ne!(first.output, fixed, "oxfmt reaches the fixed point in one round now; this test no longer covers the loop");
+        assert_eq!(first.output, fixed);
 
         let formatted = format_source("a.ts", Lang::Ts, source, &TsFormat::default(), false).expect("succeeds");
 
@@ -1020,6 +1021,21 @@ mod fuzz_findings {
         assert!(assert_idempotent("fuzz.ts", "function f() { return a && (b && c) || (d ?? (e ?? f)); }"));
     }
 
+    /// oxfmt 0.71 printed `a < a > (a % a) % a`, which TypeScript reads as a generic call.
+    #[test]
+    fn a_comparison_chain_keeps_its_parentheses() {
+        assert_eq!(format("fuzz.ts", "a<a>a%a%a").expect("succeeds").output, "(a < a) > (a % a) % a;\n");
+    }
+
+    /// oxfmt 0.71 broke the line after `n<v>`, which TypeScript then reads as an instantiation expression.
+    #[test]
+    fn a_comparison_before_a_call_keeps_its_parentheses() {
+        let output = format("fuzz.ts", "n<v>t({e:`\n`})").expect("succeeds").output;
+
+        assert_eq!(output, "(n < v) >\n\tt(\n\t\t{\n\t\t\te: `\n`,\n\t\t},\n\t);\n");
+        assert!(assert_idempotent("fuzz.ts", "n<v>t({e:`\n`})"));
+    }
+
     #[test]
     fn not_idempotent_comment_in_comparison() {
         assert!(assert_idempotent("fuzz.ts", "a<a//\n<a>"));
@@ -1029,9 +1045,7 @@ mod fuzz_findings {
     /// lists them. A failure here means oxfmt fixed one: update the document.
     #[test]
     fn upstream_oxfmt_bugs_stay_refused() {
-        for (rel, source) in
-            [("fuzz.ts", "a//\n<a//"), ("fuzz.ts", "a<a>a%a%a"), ("fuzz.tsx", "await 1e3.a"), ("fuzz.ts", "await//\nawait b"), ("fuzz.ts", "n<v>t({e:`\n`})")]
-        {
+        for (rel, source) in [("fuzz.ts", "a//\n<a//"), ("fuzz.tsx", "await 1e3.a"), ("fuzz.ts", "await//\nawait b")] {
             let result = format(rel, source);
 
             assert!(matches!(result, Err(TsError::Invariant { step: "oxfmt", .. })), "{rel} {source:?}: {result:?}");

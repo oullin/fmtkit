@@ -65,7 +65,7 @@ pub fn member<'s, 'a>(expression: &'s Expression<'a>) -> Option<(&'s Expression<
     match unwrap(expression) {
         Expression::StaticMemberExpression(member) => Some((&member.object, member.property.name.as_str(), member.property.span)),
         Expression::ComputedMemberExpression(member) => match &member.expression {
-            Expression::StringLiteral(key) => Some((&member.object, key.value.as_str(), key.span)),
+            Expression::StringLiteral(key) => key.value.as_str().map(|name| (&member.object, name, key.span)),
             _ => None,
         },
         _ => None,
@@ -145,7 +145,7 @@ impl Imports {
                 if let ImportDeclarationSpecifier::ImportSpecifier(specifier) = specifier
                     && specifier.import_kind == ImportOrExportKind::Value
                 {
-                    imports.push((import.source.value.to_string(), specifier.imported.name().to_string()));
+                    imports.push((crate::rules::lossy(import.source.value).into_owned(), specifier.imported.name().to_string()));
                 }
             }
         }

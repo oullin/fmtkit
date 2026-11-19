@@ -131,15 +131,15 @@ impl Rule for NoTestCodeInSrc {
                     );
                 }
             }
-            AstKind::ImportDeclaration(import) => self.check_source(ctx, import.source.value.as_str(), import.source.span),
+            AstKind::ImportDeclaration(import) => self.check_source(ctx, &crate::rules::lossy(import.source.value), import.source.span),
             AstKind::ImportExpression(import) => {
                 if let Expression::StringLiteral(source) = strip_parens(&import.source) {
-                    self.check_source(ctx, source.value.as_str(), source.span);
+                    self.check_source(ctx, &crate::rules::lossy(source.value), source.span);
                 }
             }
-            AstKind::ExportAllDeclaration(export) => self.check_source(ctx, export.source.value.as_str(), export.source.span),
+            AstKind::ExportAllDeclaration(export) => self.check_source(ctx, &crate::rules::lossy(export.source.value), export.source.span),
             AstKind::ExportFromDeclaration(export) => {
-                self.check_source(ctx, export.source.value.as_str(), export.source.span);
+                self.check_source(ctx, &crate::rules::lossy(export.source.value), export.source.span);
 
                 for specifier in &export.specifiers {
                     self.report_name(ctx, specifier.span, &specifier.exported.name());

@@ -166,7 +166,7 @@ fn sort<'a>(ctx: &Context<'_, 'a>, file: &File, options: &Options, declaration: 
 /// `computeNodeName`: a string literal's value, else the source text.
 fn member_name(source: &str, id: &TSEnumMemberName<'_>) -> String {
     match id {
-        TSEnumMemberName::String(literal) | TSEnumMemberName::ComputedString(literal) => literal.value.to_string(),
+        TSEnumMemberName::String(literal) | TSEnumMemberName::ComputedString(literal) => crate::rules::lossy(literal.value).into_owned(),
         TSEnumMemberName::Identifier(identifier) => identifier.name.to_string(),
         TSEnumMemberName::ComputedTemplateString(template) => {
             source.get(template.span.start as usize..template.span.end as usize).unwrap_or_default().to_owned()
@@ -221,7 +221,7 @@ fn member_expression_names(nodes: &AstNodes<'_>, identifier: NodeId) -> Vec<Stri
             AstKind::StaticMemberExpression(expression) => names.push(expression.property.name.to_string()),
             AstKind::ComputedMemberExpression(expression) => match unparenthesized(&expression.expression) {
                 Expression::Identifier(identifier) => names.push(identifier.name.to_string()),
-                Expression::StringLiteral(literal) => names.push(literal.value.to_string()),
+                Expression::StringLiteral(literal) => names.push(crate::rules::lossy(literal.value).into_owned()),
                 _ => {}
             },
             AstKind::PrivateFieldExpression(_) => {}
@@ -252,7 +252,7 @@ fn legacy_dependencies(expression: &Expression<'_>, enum_name: &str, out: &mut V
             if matches!(unparenthesized(&member.object), Expression::Identifier(object) if object.name == enum_name) {
                 match unparenthesized(&member.expression) {
                     Expression::Identifier(identifier) => out.push(identifier.name.to_string()),
-                    Expression::StringLiteral(literal) => out.push(literal.value.to_string()),
+                    Expression::StringLiteral(literal) => out.push(crate::rules::lossy(literal.value).into_owned()),
                     _ => {}
                 }
             }
@@ -358,7 +358,7 @@ fn simple_target(target: &SimpleAssignmentTarget<'_>, enum_name: &str, out: &mut
                 let is_enum = matches!(unparenthesized(object), Expression::Identifier(found) if found.name == enum_name);
 
                 if is_enum && let Some(name) = member.static_property_name() {
-                    out.push(name.to_string());
+                    out.push(crate::rules::lossy(name).into_owned());
                 }
 
                 legacy_dependencies(object, enum_name, out);

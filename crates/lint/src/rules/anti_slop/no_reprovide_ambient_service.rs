@@ -37,7 +37,9 @@ impl EffectNamespaces {
                 continue;
             };
 
-            let source = import.source.value.as_str();
+            let Some(source) = import.source.value.as_str() else {
+                continue;
+            };
 
             for specifier in import.specifiers.iter().flatten() {
                 let local = match (source, specifier) {

@@ -2,9 +2,9 @@
 
 The fuzz targets in `fuzz/` found the defects below in the formatters that fmtkit builds on. Each one lives in a dependency rather than in fmtkit, so fmtkit contains or refuses its effect instead of fixing it. The versions are:
 
-- `oxc_formatter`, `oxc_formatter_css`, and `oxc_formatter_markdown` from the oxc tag `oxlint_v1.86.0` (the release that shipped oxfmt 0.71.0);
-- `oxc-css-parser` 0.0.15, the parser behind `oxc_formatter_css`;
-- `markup_fmt` 0.27.5.
+- `oxc_formatter`, `oxc_formatter_css`, and `oxc_formatter_markdown` from the oxc tag `oxlint_v1.94.0` (the release that shipped oxfmt 0.79.0);
+- `oxc-css-parser` 0.0.22, the parser behind `oxc_formatter_css`;
+- `markup_fmt` 0.28.0.
 
 This document writes every input as a Rust string literal. In a saved fuzz input, the first byte selects the dialect or host (see `fuzz/fuzz_targets/`); the literal is the rest of the file. Unless a section says otherwise, the outputs use fmtkit's default `[ts.format]` options (tabs, single quotes, a print width of 200).
 
@@ -24,13 +24,6 @@ Re-run the regression tests after every oxc or markup_fmt upgrade. `upstream_oxf
 - Observed: `"a < a; // //\n"`. The formatter moves the first comment to the end of the statement and appends the second comment to it as text. The same happens when the continuation operator is `.`, `^`, `*`, `-`, `/`, or `?` instead of `<`.
 - Expected: output that keeps two separate line comments.
 - fmtkit: the fingerprint counts comments, so the invariant check refuses the output.
-
-### Parentheses turn a comparison chain into a generic call
-
-- Input (`.ts`): `"a<a>a%a%a"`, which parses as the binary expression `(a < a) > ((a % a) % a)`.
-- Observed: `"a < a > (a % a) % a;\n"`. TypeScript parses that output as the call `a<a>(a % a)` with the type argument `a`, followed by `% a`. A second run prints `"a<a>(a % a) % a;\n"`.
-- Expected: output that parses to the same binary expression, for example `"(a < a) > (a % a) % a;\n"`.
-- fmtkit: the invariant check refuses the output.
 
 ### Parentheses turn `await` into a call in a file of unambiguous module kind
 
@@ -53,26 +46,12 @@ Re-run the regression tests after every oxc or markup_fmt upgrade. `upstream_oxf
 - Expected: the second output from the first run.
 - fmtkit: the fixed-point loop absorbs the extra run.
 
-### A `graphql()` call in a variable initializer needs two runs
-
-- Input (`.ts`): ``"export const x = graphql(`{a}`)"``
-- Observed: with the embedded GraphQL formatter, the first run breaks the declaration after `=` (`"export const x =\n\tgraphql(`\n\t\t{\n\t\t\ta\n\t\t}\n\t`);\n"`), and the second run, which sees the expanded template, keeps the call on the first line (``"export const x = graphql(`\n\t{\n\t\ta\n\t}\n`);\n"``).
-- Expected: the second output from the first run.
-- fmtkit: the fixed-point loop absorbs the extra run.
-
 ### A line comment after `await` duplicates the next line
 
 - Input (`.ts`): `"await//\nawait b"`, which parses as the single statement `await (await b)`.
 - Observed: `"await //\nawait b;\nawait b;\n"`, which holds two statements. Every further run adds one more `await b;` line.
 - Expected: output that holds one statement, for example `"await //\nawait b;\n"`.
 - fmtkit: the fingerprint counts statements, so the invariant check refuses the output.
-
-### A line break after type-like arguments turns a comparison into an instantiation expression
-
-- Input (`.ts`): ``"n<v>t({e:`\n`})"``, which parses as the binary expression `(n < v) > t({ e: `\n` })`.
-- Observed, with oxfmt's default options: ``"n <\n  v >\n  t({\n    e: `\n`,\n  });\n"``. TypeScript reads `n<v>` before a line break as an instantiation expression, so the output holds the two statements `n<v>;` and `t({ e: `\n` });`, which a second run prints as such.
-- Expected: output that parses to the same binary expression, for example ``"(n < v) > t({ e: `\n` });\n"``.
-- fmtkit: the invariant check refuses the output.
 
 ## oxc_formatter_css
 
@@ -88,7 +67,7 @@ Re-run the regression tests after every oxc or markup_fmt upgrade. `upstream_oxf
 ### A hyphen before a character that cannot start an identifier panics
 
 - Input (CSS): `".- "`. fmtkit reaches it through the Markdown fence `"```css\n.- o"` and through the HTML element `"<style>.- o</style>"`.
-- Observed: the tokenizer panics in `scan_ident_sequence` at `src/tokenizer/mod.rs:535` with "internal error: entered unreachable code". The function expects an identifier character, an escape, or the end of the input after a leading hyphen, and treats every other character as unreachable.
+- Observed: the tokenizer panics in `scan_ident_sequence` at `src/tokenizer/mod.rs` with "internal error: entered unreachable code". The function expects an identifier character, an escape, or the end of the input after a leading hyphen, and treats every other character as unreachable.
 - Expected: a syntax error, which fmtkit already handles by keeping the style as written.
 - fmtkit: the engine catches a panic per file, so the document fails with "internal error, please report it: internal error: entered unreachable code", is left as written, and every other file is still processed. The release profile unwinds rather than aborts for this reason. The panic message itself still reaches standard error. The `hosts` fuzz target calls the formatter directly and reports the panic as a crash.
 
@@ -100,20 +79,6 @@ Re-run the regression tests after every oxc or markup_fmt upgrade. `upstream_oxf
 - Observed: each run indents the lazy line `}}` by two more spaces: `"- a\n\n    {{\n  }}\n"`, then `"- a\n\n    {{\n    }}\n"`, then `"- a\n\n    {{\n      }}\n"`, without end.
 - Expected: output that a second run leaves unchanged.
 - fmtkit: `format_host` returns the `idempotency` error and leaves the document as written.
-
-### A block quote inside a list item multiplies its markers on every run
-
-- Input: ``"- d\n  >`d\n`"``. The input `"- d\n  ><C\na"` behaves the same way.
-- Observed: the first run prints ``"- d\n    > `d\n\t\t> `\n"``, the second run prints ``"- d\n    > `d\n\t\t>   \t> `\n"``, and every further run adds one more `>   \t` to the lazy line.
-- Expected: output that a second run leaves unchanged.
-- fmtkit: `format_host` returns the `idempotency` error and leaves the document as written.
-
-### A tab-indented lazy line loses part of its indentation on every run
-
-- Input: ``"- `\n\t\t`\n<m>\n"``. The input `"- <D\n\t\tm>\n<t>\n"` behaves the same way, and `"- ;\n<e>\n\t\t\u{b}"` oscillates between two indentations without settling.
-- Observed: each run removes two columns from the indentation of the lazy line: ``"- `\n  \t`\n<m>\n"``, then ``"- `\n\t`\n<m>\n"``, then ``"- `\n  `\n<m>\n"``, then ``"- `\n`\n<m>\n"``, which a further run leaves unchanged.
-- Expected: one stable output from the first run.
-- fmtkit: the document needs four changing runs, one more than the fixed-point loop allows, so `format_host` returns the `idempotency` error and leaves the document as written.
 
 ### A math block splits on the second run
 
@@ -154,8 +119,8 @@ Re-run the regression tests after every oxc or markup_fmt upgrade. `upstream_oxf
 
 ### An unformatted multi-line Vue interpolation drifts right on every run
 
-- Input (`.vue`): ``"{{a\n`\n}}"``. The inputs ``"{{`\n`\n\0}"`` and ``"{{{;}\n`\n`}"`` behave the same way.
-- Observed: the expression does not parse, so fmtkit hands it back to markup_fmt as written. Each run then indents one line by one more tab: ``"{{\n\ta\n\t`\n}\n}}\n"``, then ``"{{\n\ta\n\t\t`\n}\n}}\n"``, and so on. `reflow_with_indent` in `src/printer.rs` removes the indentation that `detect_indent` in `src/helpers.rs` measures, but `detect_indent` also measures the lines inside a template literal, which `reflow_with_indent` keeps as written. A template line at column 0 makes the measured indentation 0, so no run removes the indentation that the previous run added.
+- Input (`.vue`): ``"{{`\n`\n\0}"``. The input ``"{{{;}\n`\n`}"`` behaves the same way. (``"{{a\n`\n}}"`` drifted the same way under markup_fmt 0.27; 0.28 reports it as a syntax error, and fmtkit keeps it as written.)
+- Observed: the expression does not parse, so fmtkit hands it back to markup_fmt as written. Each run then indents one line of the template literal by one more tab. `reflow_with_indent` in `src/printer.rs` removes the indentation that `detect_indent` in `src/helpers.rs` measures, but `detect_indent` also measures the lines inside a template literal, which `reflow_with_indent` keeps as written. A template line at column 0 makes the measured indentation 0, so no run removes the indentation that the previous run added.
 - Expected: output that a second run leaves unchanged.
 - fmtkit: `format_host` returns the `idempotency` error and leaves the document as written. The TypeScript pipeline prints an interpolation that parses, and that output settles.
 
@@ -180,6 +145,6 @@ These are gaps in fmtkit itself rather than in a dependency.
 ### `import/export` does not follow `export *`
 
 - Input: a module that re-exports two modules with `export * from './a'` and `export * from './b'`, where both declare the same export name.
-- Observed: no finding. oxlint 1.86.0 reports `import/export` here, because its CLI builds a module graph and resolves every `export *`. fmtkit lints each file on its own, without a module graph or a resolver, so the rule sees only the names that the file itself declares.
+- Observed: no finding. oxlint 1.94.0 reports `import/export` here, because its CLI builds a module graph and resolves every `export *`. fmtkit lints each file on its own, without a module graph or a resolver, so the rule sees only the names that the file itself declares.
 - Expected: the duplicate export is reported.
 - fmtkit: the rule still reports duplicates within a single file. Cross-module duplicates surface at type-check time (`tsc` reports TS2308).

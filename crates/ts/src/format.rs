@@ -2,7 +2,7 @@
 //! oxfmt maps `.oxfmtrc.json`.
 //!
 //! The formatter runs on a session carrying the [embedded-language
-//! dispatcher](crate::embed), as oxfmt 0.71.0 did, so tagged CSS, GraphQL,
+//! dispatcher](crate::embed), as oxfmt 0.79.0 does, so tagged CSS, GraphQL,
 //! HTML, and Markdown templates are formatted too.
 
 use std::borrow::Cow;

@@ -67,10 +67,10 @@ impl Facts {
                         facts.reflect_calls.push(call.span);
                     }
                 }
-                AstKind::StringLiteral(literal) => facts.strings.push((literal.span, literal.value.to_string())),
+                AstKind::StringLiteral(literal) => facts.strings.push((literal.span, crate::rules::lossy(literal.value).into_owned())),
                 AstKind::TemplateLiteral(template) => {
-                    if let Some(head) = template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()) {
-                        facts.strings.push((template.span, head.to_string()));
+                    if let Some(head) = template.quasis.first().and_then(|quasi| quasi.value.cooked) {
+                        facts.strings.push((template.span, crate::rules::lossy(head).into_owned()));
                     }
                 }
                 AstKind::TSAnyKeyword(keyword) => facts.anys.push(keyword.span),
@@ -119,9 +119,9 @@ impl Facts {
             Expression::StringLiteral(literal) => self.literal_specifier(literal),
             Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
                 if let Some(quasi) = template.quasis.first()
-                    && let Some(value) = &quasi.value.cooked
+                    && let Some(value) = quasi.value.cooked
                 {
-                    self.specifiers.push((template.span, module_text(value, quasi.lone_surrogates)));
+                    self.specifiers.push((template.span, crate::rules::lossy(value).into_owned()));
                 }
             }
             _ => {}
@@ -129,7 +129,7 @@ impl Facts {
     }
 
     fn literal_specifier(&mut self, literal: &StringLiteral<'_>) {
-        self.specifiers.push((literal.span, module_text(&literal.value, literal.lone_surrogates)));
+        self.specifiers.push((literal.span, crate::rules::lossy(literal.value).into_owned()));
     }
 
     fn layout(&mut self, program: &Program<'_>) {
@@ -169,26 +169,4 @@ impl Facts {
 /// Rust's full mapping expands U+0130 to an i followed by a combining dot.
 pub fn simple_lowercase(value: &str) -> String {
     value.chars().filter_map(|character| character.to_lowercase().next()).collect()
-}
-
-/// The extractor's JSON reaches Go as lossy Unicode. Decode oxc's surrogate
-/// escape representation to that same text before comparing module names.
-fn module_text(value: &str, lone_surrogates: bool) -> String {
-    if !lone_surrogates {
-        return value.to_owned();
-    }
-
-    let mut text = String::new();
-    let mut characters = value.chars();
-
-    while let Some(character) = characters.next() {
-        text.push(character);
-        if character == '\u{fffd}' {
-            for _ in 0..4 {
-                characters.next();
-            }
-        }
-    }
-
-    text
 }

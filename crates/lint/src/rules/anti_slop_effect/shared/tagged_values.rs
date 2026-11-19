@@ -95,7 +95,7 @@ pub fn property_name<'a>(property: &ObjectProperty<'a>) -> Option<&'a str> {
     match &property.key {
         PropertyKey::StaticIdentifier(identifier) if !property.computed => Some(identifier.name.as_str()),
         key => match key.as_expression().map(strip_parens) {
-            Some(Expression::StringLiteral(literal)) => Some(literal.value.as_str()),
+            Some(Expression::StringLiteral(literal)) => literal.value.as_str(),
             _ => None,
         },
     }

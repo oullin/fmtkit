@@ -62,7 +62,9 @@ impl Modules {
             let Some(specifiers) = &import.specifiers else {
                 continue;
             };
-            let source = import.source.value.as_str();
+            let Some(source) = import.source.value.as_str() else {
+                continue;
+            };
 
             if source == "effect" {
                 for specifier in specifiers {
@@ -234,7 +236,7 @@ pub fn key_name<'a>(key: &PropertyKey<'a>) -> Option<&'a str> {
     match key {
         PropertyKey::StaticIdentifier(identifier) => Some(identifier.name.as_str()),
         PropertyKey::PrivateIdentifier(identifier) => Some(identifier.name.as_str()),
-        PropertyKey::StringLiteral(literal) => Some(literal.value.as_str()),
+        PropertyKey::StringLiteral(literal) => literal.value.as_str(),
         _ => None,
     }
 }

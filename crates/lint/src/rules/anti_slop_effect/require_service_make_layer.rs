@@ -308,7 +308,7 @@ fn import_source<'a>(semantic: &Semantic<'a>, expression: &Expression<'_>) -> Op
     }
 
     match nodes.parent_kind(declaration) {
-        AstKind::ImportDeclaration(import) => Some(import.source.value.as_str()),
+        AstKind::ImportDeclaration(import) => import.source.value.as_str(),
         _ => None,
     }
 }

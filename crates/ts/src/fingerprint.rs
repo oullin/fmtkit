@@ -410,7 +410,7 @@ fn mode(kind: AstKind<'_>, in_attribute: bool) -> Mode {
         AstKind::TSUnionType(union) if union.types.len() == 1 => Mode::Transparent,
         AstKind::TSIntersectionType(intersection) if intersection.types.len() == 1 => Mode::Transparent,
         AstKind::JSXExpressionContainer(container) => match &container.expression {
-            JSXExpression::StringLiteral(literal) if !in_attribute && literal.value.as_str().trim().is_empty() => Mode::Skip,
+            JSXExpression::StringLiteral(literal) if !in_attribute && literal.value.as_str().is_some_and(|value| value.trim().is_empty()) => Mode::Skip,
             JSXExpression::StringLiteral(_) => Mode::Transparent,
             _ => Mode::Ordered,
         },
@@ -466,7 +466,7 @@ fn payload(kind: AstKind<'_>, hasher: &mut FxHasher) {
         AstKind::LabelIdentifier(it) => hasher.write(it.name.as_str().as_bytes()),
         AstKind::PrivateIdentifier(it) => hasher.write(it.name.as_str().as_bytes()),
         AstKind::JSXIdentifier(it) => hasher.write(it.name.as_str().as_bytes()),
-        AstKind::StringLiteral(it) => hasher.write(it.value.as_str().as_bytes()),
+        AstKind::StringLiteral(it) => hasher.write(it.value.as_bytes()),
         AstKind::TemplateElement(it) => {
             // ECMAScript's raw value reads `\r\n` and `\r` as `\n`; oxc keeps the source text.
             let raw = it.value.raw.as_str();

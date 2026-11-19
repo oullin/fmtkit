@@ -4,12 +4,11 @@
 use std::sync::Arc;
 
 use fmtkit_config::{TrailingComma, TsFormat};
-use oxc_formatter::{CssInJsTemplate, HtmlEmbedMeta, JsFormatOptions};
+use oxc_formatter::{CssInJsTemplate, HtmlInJsTemplate, JsFormatOptions};
 use oxc_formatter_core::{
-    CoreFormatOptions, DispatchPayload, DispatchRequest, DispatchResponse, EmbeddedIr, FormatDispatcher, FormatOptions, FormatSession, LineEnding,
-    SessionServices,
+    CoreFormatOptions, DispatchRequest, DispatchResponse, EmbeddedIr, FormatDispatcher, FormatOptions, FormatSession, LineEnding, SessionServices,
 };
-use oxc_formatter_css::{CssFormatOptions, CssVariant};
+use oxc_formatter_css::{CssEmbeddedIn, CssFormatOptions, CssVariant};
 use oxc_formatter_graphql::GraphqlFormatOptions;
 use oxc_formatter_json::{JsonFormatOptions, JsonVariant};
 use oxc_formatter_yaml::YamlFormatOptions;
@@ -117,29 +116,28 @@ fn dispatcher(options: Options) -> FormatDispatcher {
             Route::Native(NativeLanguage::Graphql) => native(oxc_formatter_graphql::format_to_ir(session, code, options.graphql)),
             Route::Native(NativeLanguage::Css(variant)) => {
                 // css-in-js parses as SCSS with oxc_formatter's `${}` placeholders.
-                let in_js = request.parent_context.is_some_and(|context| context.downcast_ref::<CssInJsTemplate>().is_some());
-                let variant = if in_js { CssVariant::Scss } else { variant };
+                let in_js = request.parent_context_as::<CssInJsTemplate>().is_some();
+                let (variant, embedded_in) = if in_js { (CssVariant::Scss, Some(CssEmbeddedIn::CssInJsTemplate)) } else { (variant, None) };
 
-                native(oxc_formatter_css::format_to_ir(session, code, CssFormatOptions { variant, ..options.css }, in_js))
+                native(oxc_formatter_css::format_to_ir(session, code, CssFormatOptions { variant, ..options.css }, embedded_in))
             }
             Route::Native(NativeLanguage::Yaml) => native(oxc_formatter_yaml::format_to_ir(session, code, options.yaml)),
             Route::Native(NativeLanguage::Json(variant)) => {
                 native(oxc_formatter_json::format_to_ir(session, code, JsonFormatOptions { variant, ..options.json }))
             }
             Route::Text(TextLanguage::Html) => match text::html(code, &options.text) {
-                Some(formatted) => DispatchResponse::Formatted(DispatchPayload {
-                    doc: text::into_ir(session, &formatted, options.text.indent_width),
-                    tailwind_classes: Vec::new(),
-                    child_context: Some(Box::new(HtmlEmbedMeta { has_multiple_root_elements: Some(text::has_multiple_roots(code)) })),
-                }),
+                Some(formatted) => {
+                    // The child indents its roots where the backticks hug them, as
+                    // oxc's own HTML formatter does for html-in-js.
+                    let hugged = request.parent_context_as::<HtmlInJsTemplate>().is_some_and(|template| template.indent_multiple_roots);
+                    let ir = text::into_ir(session, &formatted, options.text.indent_width);
+
+                    DispatchResponse::Formatted(EmbeddedIr { ir: if hugged && text::has_multiple_roots(code) { text::indented(session, ir) } else { ir } })
+                }
                 None => DispatchResponse::PreserveOriginal,
             },
             Route::Text(TextLanguage::Markdown) => match text::markdown(code, &options.text) {
-                Some(formatted) => DispatchResponse::Formatted(DispatchPayload {
-                    doc: text::into_ir(session, &formatted, options.text.indent_width),
-                    tailwind_classes: Vec::new(),
-                    child_context: None,
-                }),
+                Some(formatted) => DispatchResponse::Formatted(EmbeddedIr { ir: text::into_ir(session, &formatted, options.text.indent_width) }),
                 None => DispatchResponse::PreserveOriginal,
             },
             Route::Text(TextLanguage::Angular) | Route::Unsupported => DispatchResponse::PreserveOriginal,
@@ -149,7 +147,7 @@ fn dispatcher(options: Options) -> FormatDispatcher {
 
 /// A native branch's result: a parse failure keeps the template as written.
 fn native<E>(result: Result<EmbeddedIr<'_>, E>) -> DispatchResponse<'_> {
-    result.map_or(DispatchResponse::PreserveOriginal, |embedded| DispatchResponse::Formatted(embedded.into()))
+    result.map_or(DispatchResponse::PreserveOriginal, DispatchResponse::Formatted)
 }
 
 #[cfg(test)]

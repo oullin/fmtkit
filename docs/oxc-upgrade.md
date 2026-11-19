@@ -10,7 +10,7 @@ fmtkit builds on [oxc](https://github.com/oxc-project/oxc) for parsing, semantic
 | `Cargo.toml` `[patch.crates-io]`        | `oxc_allocator`, routed to the same tag so that `oxc-markdown-parser` (crates.io) shares the git allocator type |
 | `Cargo.toml` `oxc-markdown-parser`      | the crates.io parser behind `oxc_formatter_markdown`; its version must accept the pinned allocator's API        |
 
-The current tag is `oxlint_v1.86.0`, the release that shipped oxlint 1.86.0 and oxfmt 0.71.0.
+The current tag is `oxlint_v1.94.0`, the release that shipped oxlint 1.94.0 and oxfmt 0.79.0.
 
 ## Where oxc reaches into fmtkit
 

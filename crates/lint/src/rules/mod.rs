@@ -5,6 +5,7 @@
 //! semantic model, built once per file alongside oxc_linter's.
 
 use std::any::{Any, TypeId};
+use std::borrow::Cow;
 use std::rc::Rc;
 
 use oxc_semantic::{AstNode, Semantic};
@@ -101,6 +102,12 @@ pub trait Rule: Send + Sync {
 /// Builds a rule from its options: the elements after the severity in
 /// `[severity, options...]`, or an empty slice.
 pub type Factory = fn(&[serde_json::Value]) -> Result<Box<dyn Rule>, String>;
+
+/// A JavaScript string as UTF-8, with each lone surrogate replaced by
+/// U+FFFD, as a JSON decoder reads one; borrowed unless it holds one.
+pub fn lossy(value: oxc_str::JSStr<'_>) -> Cow<'_, str> {
+    value.as_str().map_or_else(|| Cow::Owned(value.chars().map(|c| c.to_char().unwrap_or('\u{fffd}')).collect()), Cow::Borrowed)
+}
 
 /// Every native rule, by full name.
 pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {

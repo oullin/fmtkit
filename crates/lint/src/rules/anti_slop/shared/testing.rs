@@ -66,5 +66,5 @@ pub fn is_test_framework_object(ctx: &Context<'_, '_>, expression: &Expression<'
     nodes
         .ancestor_kinds(declaration)
         .find_map(|kind| if let AstKind::ImportDeclaration(import) = kind { Some(import.source.value.as_str()) } else { None })
-        .is_some_and(|source| (source == "vitest" && imported == "vi") || (source == "@jest/globals" && imported == "jest"))
+        .is_some_and(|source| (source == Some("vitest") && imported == "vi") || (source == Some("@jest/globals") && imported == "jest"))
 }

@@ -74,9 +74,9 @@ impl StateFlags {
     pub fn of_arguments(arguments: &[Argument<'_>]) -> Self {
         let flags = match (arguments.first(), arguments.get(1)) {
             (Some(Argument::RegExpLiteral(literal)), None) => return Self::of_literal(literal.regex.flags),
-            (_, Some(Argument::StringLiteral(flags))) => Some(flags.value.as_str()),
+            (_, Some(Argument::StringLiteral(flags))) => flags.value.as_str(),
             (_, Some(Argument::TemplateLiteral(template))) if template.expressions.is_empty() => {
-                template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()).map(oxc_ast::ast::Str::as_str)
+                template.quasis.first().and_then(|quasi| quasi.value.cooked).and_then(oxc_str::JSStr::as_str)
             }
             _ => None,
         }

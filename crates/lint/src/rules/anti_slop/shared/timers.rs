@@ -32,7 +32,7 @@ impl PromiseTimers {
                 continue;
             };
 
-            if !matches!(import.source.value.as_str(), "node:timers/promises" | "timers/promises") {
+            if !matches!(import.source.value.as_str(), Some("node:timers/promises" | "timers/promises")) {
                 continue;
             }
 

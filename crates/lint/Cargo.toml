@@ -24,6 +24,7 @@ oxc_linter.workspace = true
 oxc_parser.workspace = true
 oxc_semantic.workspace = true
 oxc_span.workspace = true
+oxc_str.workspace = true
 oxc_syntax.workspace = true
 regress = { workspace = true, features = ["utf16"] }
 rustc-hash.workspace = true

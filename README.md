@@ -18,7 +18,7 @@ brew install oullin/fmtkit/fmtkit
 # Docker (linux/amd64, linux/arm64; includes Go for go vet)
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" ghcr.io/oullin/fmtkit:latest check --all
 
-# From source (Rust 1.96+, Go 1.27.3)
+# From source (Rust 1.96+, Go 1.27.4)
 git clone https://github.com/oullin/fmtkit.git && cd fmtkit && make build
 ```
 
@@ -70,7 +70,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Vue, HTML, Markdown:** formatted as whole documents. Scripts inside them go through the script pipeline; styles and CSS fences through the oxc CSS formatter. Markdown prose is not rewrapped.
 
-**Lint:** Oxlint (pinned to `oxlint_v1.86.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
+**Lint:** Oxlint (pinned to `oxlint_v1.94.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
 
 ### What it leaves alone
 
@@ -275,7 +275,7 @@ fmtkit schema=2 mode=check result=fail files=2 changed=2 violations=5 lint=5 com
 
 ## Development
 
-Needs Rust 1.96+, Go 1.27.3, and Bash. Build output goes to `storage/`.
+Needs Rust 1.96+, Go 1.27.4, and Bash. Build output goes to `storage/`.
 
 | Target        | What it does                                          |
 | ------------- | ----------------------------------------------------- |

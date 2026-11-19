@@ -597,7 +597,7 @@ fn vouched(workdir: &Path, index: &gix::index::State, entry: &gix::index::Entry)
         return false;
     }
 
-    let Some(meta) = gix::path::try_from_bstr(entry.path(index)).ok().and_then(|rel| fs::symlink_metadata(workdir.join(rel)).ok()) else {
+    let Some(meta) = gix::path::from_bstr(entry.path(index)).ok().and_then(|rel| fs::symlink_metadata(workdir.join(rel)).ok()) else {
         return false;
     };
 

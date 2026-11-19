@@ -76,7 +76,7 @@ fn write_key(out: &mut String, key: &PropertyKey<'_>) {
             out.push_str(id.name.as_str());
         }
         PropertyKey::Identifier(id) => out.push_str(id.name.as_str()),
-        PropertyKey::StringLiteral(lit) => out.push_str(lit.value.as_str()),
+        PropertyKey::StringLiteral(lit) => push_js_str(out, lit.value.display()),
         PropertyKey::StaticMemberExpression(member) => write_member(out, &member.object, |out| out.push_str(member.property.name.as_str())),
         PropertyKey::ComputedMemberExpression(member) => write_member(out, &member.object, |out| write_expression(out, &member.expression)),
         PropertyKey::PrivateFieldExpression(member) => write_member(out, &member.object, |out| write_private(out, member.field.name.as_str())),
@@ -97,7 +97,7 @@ fn write_target(out: &mut String, target: &AssignmentTarget<'_>) {
 fn write_expression(out: &mut String, expression: &Expression<'_>) {
     match expression {
         Expression::Identifier(id) => out.push_str(id.name.as_str()),
-        Expression::StringLiteral(lit) => out.push_str(lit.value.as_str()),
+        Expression::StringLiteral(lit) => push_js_str(out, lit.value.display()),
         Expression::StaticMemberExpression(member) => write_member(out, &member.object, |out| out.push_str(member.property.name.as_str())),
         Expression::ComputedMemberExpression(member) => write_member(out, &member.object, |out| write_expression(out, &member.expression)),
         Expression::PrivateFieldExpression(member) => write_member(out, &member.object, |out| write_private(out, member.field.name.as_str())),
@@ -130,4 +130,12 @@ fn write_member(out: &mut String, object: &Expression<'_>, property: impl FnOnce
     if dotted && out.len() == before {
         out.pop();
     }
+}
+
+/// A string literal's value; a lone surrogate, which no ESLint or Sonar name
+/// can hold as UTF-8, is written as `\uXXXX`.
+fn push_js_str(out: &mut String, value: impl std::fmt::Display) {
+    use std::fmt::Write as _;
+
+    let _ = write!(out, "{value}");
 }

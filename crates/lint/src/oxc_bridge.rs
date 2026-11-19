@@ -496,13 +496,12 @@ enum TypeAwareNames {
 fn type_aware_names(text: &str, span: Span) -> TypeAwareNames {
     let Some(covered) = text.get(span.start as usize..span.end as usize) else { return TypeAwareNames::None };
     let body = covered.trim_start_matches("//").trim_start_matches("/*").trim_end_matches("*/").trim();
-    let body = body.split_once("--").map_or(body, |(names, _)| names);
     let names = match body.split_once(char::is_whitespace) {
         Some((directive, names)) if directive.starts_with("eslint-") || directive.starts_with("oxlint-") => names,
         None if body.starts_with("eslint-") || body.starts_with("oxlint-") => "",
         _ => body,
     };
-    let names: Vec<&str> = names.split([',', ' ', '\t', '\n', '\r']).filter(|name| !name.is_empty()).collect();
+    let names = directive_rule_names(names);
     let aware = names.iter().filter(|name| type_aware(&normalize_rule_name(name))).count();
 
     match aware {
@@ -510,6 +509,44 @@ fn type_aware_names(text: &str, span: Span) -> TypeAwareNames {
         n if n == names.len() => TypeAwareNames::All,
         _ => TypeAwareNames::Some,
     }
+}
+
+/// The rule names in the text after a directive, as oxc_linter's
+/// `collect_rule_names` reads them: separated by commas or any whitespace,
+/// and ended by a description that starts with `--` or with a `-` that has
+/// whitespace on both sides.
+fn directive_rule_names(text: &str) -> Vec<&str> {
+    let mut names = Vec::new();
+    let mut start = None;
+    let mut end = text.len();
+    let mut previous: Option<char> = None;
+    let mut chars = text.char_indices().peekable();
+
+    while let Some((index, ch)) = chars.next() {
+        let description =
+            ch == '-' && chars.peek().is_some_and(|&(_, next)| next == '-' || (previous.is_some_and(char::is_whitespace) && next.is_whitespace()));
+
+        if description {
+            end = index;
+            break;
+        }
+
+        if ch == ',' || ch.is_whitespace() {
+            if let Some(from) = start.take() {
+                names.push(&text[from..index]);
+            }
+        } else if start.is_none() {
+            start = Some(index);
+        }
+
+        previous = Some(ch);
+    }
+
+    if let Some(from) = start {
+        names.push(&text[from..end]);
+    }
+
+    names
 }
 
 /// The script sections of a file: the whole file, or a Vue file's `<script>` blocks.

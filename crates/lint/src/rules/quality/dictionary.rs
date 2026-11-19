@@ -9,24 +9,23 @@
 //! [`Types`]: super::super::anti_slop::shared::types::Types
 
 use oxc_ast::AstKind;
-use oxc_ast::ast::{TSInterfaceDeclaration, TSMappedType, TSSignature, TSType, TSTypeAliasDeclaration, TSTypeLiteral, TSTypeOperatorOperator, TSTypeReference};
-use rustc_hash::FxHashMap;
+use oxc_ast::ast::{TSInterfaceDeclaration, TSMappedType, TSSignature, TSType, TSTypeLiteral, TSTypeOperatorOperator, TSTypeReference};
+use oxc_semantic::NodeId;
 
 use super::super::anti_slop::shared::types::{UnsafeValue, WideningTarget, reference_name, type_arguments};
-use super::bindings::{Binding, Scoped};
+use super::bindings::{Binding, Scope, Scoped, Substitution, alias_substitutions};
 
 const BUILT_INS: [&str; 8] = ["Record", "Readonly", "Partial", "Required", "Pick", "Omit", "PropertyKey", "NonNullable"];
 
 const TRANSPARENT_WRAPPERS: [&str; 4] = ["Readonly", "Partial", "Required", "NonNullable"];
 
-/// Type parameter names bound to their arguments while resolving an alias.
-type Substitutions<'a> = FxHashMap<&'a str, &'a TSType<'a>>;
-
-/// Alias names already being resolved, to stop at cycles.
-type Resolving<'a> = Vec<&'a str>;
+/// The alias declarations being expanded, to stop at cycles. Keyed by
+/// declaration, so two aliases that share a name in different scopes are
+/// told apart.
+type Resolving = Vec<NodeId>;
 
 /// A dictionary value type with the substitutions in force where it appears.
-type ValueType<'a> = (&'a TSType<'a>, Substitutions<'a>);
+type ValueType<'a> = (&'a TSType<'a>, Scope<'a>);
 
 /// `ty` without parentheses and `readonly` operators.
 fn unwrap_transparent<'b, 'a>(mut ty: &'b TSType<'a>) -> &'b TSType<'a> {
@@ -48,10 +47,6 @@ fn is_transparent_wrapper(scoped: Scoped<'_, '_>, name: &str, reference: &TSType
     TRANSPARENT_WRAPPERS.contains(&name) && is_built_in(scoped, name, reference)
 }
 
-fn is_unapplied_reference_to(ty: &TSType<'_>, name: &str) -> bool {
-    matches!(unwrap_transparent(ty), TSType::TSTypeReference(reference) if reference_name(reference) == Some(name) && type_arguments(reference).is_empty())
-}
-
 fn is_never(ty: &TSType<'_>) -> bool {
     matches!(unwrap_transparent(ty), TSType::TSNeverKeyword(_))
 }
@@ -68,50 +63,23 @@ fn is_effectively_empty_interface(interface: &TSInterfaceDeclaration<'_>) -> boo
     interface.extends.is_empty() && interface.body.body.iter().all(is_effectively_empty_member)
 }
 
-fn resolved_substitution_argument<'a>(ty: &'a TSType<'a>, base: &Substitutions<'a>, resolving: &mut Resolving<'a>) -> &'a TSType<'a> {
-    let TSType::TSTypeReference(reference) = unwrap_transparent(ty) else {
-        return ty;
-    };
+/// What a type parameter reference `name` stands for in `substitutions`. A
+/// reference with type arguments is not a type parameter.
+fn substitution<'a>(substitutions: &Scope<'a>, name: &str, reference: &TSTypeReference<'a>) -> Option<Substitution<'a>> {
+    substitutions.get(name).filter(|_| type_arguments(reference).is_empty()).cloned()
+}
 
-    let Some(name) = reference_name(reference).filter(|name| !resolving.contains(name)) else {
-        return ty;
-    };
+/// Run `f` with `alias` marked as being expanded.
+fn expanding<T>(resolving: &mut Resolving, alias: NodeId, f: impl FnOnce(&mut Resolving) -> T) -> T {
+    resolving.push(alias);
 
-    let Some(substitution) = base.get(name) else {
-        return ty;
-    };
-
-    resolving.push(name);
-
-    let resolved = resolved_substitution_argument(substitution, base, resolving);
+    let result = f(resolving);
 
     resolving.pop();
-
-    resolved
+    result
 }
 
-fn alias_substitution<'a>(alias: &'a TSTypeAliasDeclaration<'a>, reference: &'a TSTypeReference<'a>, base: &Substitutions<'a>) -> Option<Substitutions<'a>> {
-    let arguments = type_arguments(reference);
-    let mut next = base.clone();
-
-    for (index, parameter) in alias.type_parameters.iter().flat_map(|parameters| parameters.params.iter()).enumerate() {
-        let argument = arguments.get(index).or(parameter.default.as_ref())?;
-        let resolved = resolved_substitution_argument(argument, &next, &mut Vec::new());
-
-        next.insert(parameter.name.name.as_str(), resolved);
-    }
-
-    Some(next)
-}
-
-fn with_name<'a>(resolving: &Resolving<'a>, name: &'a str) -> Resolving<'a> {
-    let mut next = resolving.clone();
-
-    next.push(name);
-    next
-}
-
-fn unsafe_direct_value<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Substitutions<'a>, resolving: &Resolving<'a>) -> Option<UnsafeValue> {
+fn unsafe_direct_value<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Scope<'a>, resolving: &mut Resolving) -> Option<UnsafeValue> {
     let reference = match unwrap_transparent(ty) {
         TSType::TSUnknownKeyword(_) => return Some(UnsafeValue::Unknown),
         TSType::TSAnyKeyword(_) => return Some(UnsafeValue::Any),
@@ -135,12 +103,12 @@ fn unsafe_direct_value<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitut
 
     let name = reference_name(reference)?;
 
-    if is_transparent_wrapper(scoped, name, reference) {
-        return unsafe_direct_value(scoped, type_arguments(reference).first()?, substitutions, resolving);
+    if let Some(substitution) = substitution(substitutions, name, reference) {
+        return unsafe_direct_value(scoped, substitution.ty, &substitution.scope, resolving);
     }
 
-    if let Some(substitution) = substitutions.get(name) {
-        return if is_unapplied_reference_to(substitution, name) { None } else { unsafe_direct_value(scoped, substitution, substitutions, resolving) };
+    if is_transparent_wrapper(scoped, name, reference) {
+        return unsafe_direct_value(scoped, type_arguments(reference).first()?, substitutions, resolving);
     }
 
     let Binding::Declared(id) = scoped.binding(name, reference.node_id.get()) else {
@@ -149,16 +117,16 @@ fn unsafe_direct_value<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitut
 
     let alias = match scoped.nodes().kind(id) {
         AstKind::TSInterfaceDeclaration(interface) => return is_effectively_empty_interface(interface).then_some(UnsafeValue::EmptyObject),
-        AstKind::TSTypeAliasDeclaration(alias) if !resolving.contains(&name) => alias,
+        AstKind::TSTypeAliasDeclaration(alias) if !resolving.contains(&id) => alias,
         _ => return None,
     };
 
-    let next = alias_substitution(alias, reference, substitutions)?;
+    let next = alias_substitutions(alias, reference, substitutions)?;
 
-    unsafe_direct_value(scoped, &alias.type_annotation, &next, &with_name(resolving, name))
+    expanding(resolving, id, |resolving| unsafe_direct_value(scoped, &alias.type_annotation, &next, resolving))
 }
 
-fn dictionary_value_types<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Substitutions<'a>, resolving: &Resolving<'a>) -> Vec<ValueType<'a>> {
+fn dictionary_value_types<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Scope<'a>, resolving: &mut Resolving) -> Vec<ValueType<'a>> {
     match unwrap_transparent(ty) {
         TSType::TSTypeLiteral(literal) => literal_value_types(literal, substitutions),
         TSType::TSMappedType(mapped) => mapped_value_types(mapped, substitutions),
@@ -170,15 +138,15 @@ fn dictionary_value_types<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substi
 fn reference_value_types<'a>(
     scoped: Scoped<'_, 'a>,
     reference: &'a TSTypeReference<'a>,
-    substitutions: &Substitutions<'a>,
-    resolving: &Resolving<'a>,
+    substitutions: &Scope<'a>,
+    resolving: &mut Resolving,
 ) -> Vec<ValueType<'a>> {
     let Some(name) = reference_name(reference) else {
         return Vec::new();
     };
 
-    if let Some(substitution) = substitutions.get(name) {
-        return if is_unapplied_reference_to(substitution, name) { Vec::new() } else { dictionary_value_types(scoped, substitution, substitutions, resolving) };
+    if let Some(substitution) = substitution(substitutions, name, reference) {
+        return dictionary_value_types(scoped, substitution.ty, &substitution.scope, resolving);
     }
 
     let arguments = type_arguments(reference);
@@ -195,18 +163,18 @@ fn reference_value_types<'a>(
         return arguments.first().map_or_else(Vec::new, |source| dictionary_value_types(scoped, source, substitutions, resolving));
     }
 
-    let Some(alias) = scoped.alias(name, reference.node_id.get()).filter(|_| !resolving.contains(&name)) else {
+    let Some(alias) = scoped.alias(name, reference.node_id.get()).filter(|alias| !resolving.contains(&alias.node_id.get())) else {
         return Vec::new();
     };
 
-    let Some(next) = alias_substitution(alias, reference, substitutions) else {
+    let Some(next) = alias_substitutions(alias, reference, substitutions) else {
         return Vec::new();
     };
 
-    dictionary_value_types(scoped, &alias.type_annotation, &next, &with_name(resolving, name))
+    expanding(resolving, alias.node_id.get(), |resolving| dictionary_value_types(scoped, &alias.type_annotation, &next, resolving))
 }
 
-fn literal_value_types<'a>(literal: &'a TSTypeLiteral<'a>, substitutions: &Substitutions<'a>) -> Vec<ValueType<'a>> {
+fn literal_value_types<'a>(literal: &'a TSTypeLiteral<'a>, substitutions: &Scope<'a>) -> Vec<ValueType<'a>> {
     literal
         .members
         .iter()
@@ -217,31 +185,31 @@ fn literal_value_types<'a>(literal: &'a TSTypeLiteral<'a>, substitutions: &Subst
         .collect()
 }
 
-fn mapped_value_types<'a>(mapped: &'a TSMappedType<'a>, substitutions: &Substitutions<'a>) -> Vec<ValueType<'a>> {
+fn mapped_value_types<'a>(mapped: &'a TSMappedType<'a>, substitutions: &Scope<'a>) -> Vec<ValueType<'a>> {
     mapped.type_annotation.as_ref().map_or_else(Vec::new, |value| vec![(value, substitutions.clone())])
 }
 
 fn first_unsafe<'a>(scoped: Scoped<'_, 'a>, values: Vec<ValueType<'a>>) -> Option<UnsafeValue> {
-    values.into_iter().find_map(|(value, substitutions)| unsafe_direct_value(scoped, value, &substitutions, &Vec::new()))
+    values.into_iter().find_map(|(value, substitutions)| unsafe_direct_value(scoped, value, &substitutions, &mut Vec::new()))
 }
 
 /// Whether a dictionary value type is an unsafe escape hatch, as the plugin's
 /// `classifyUnsafeDictionaryValue`.
 pub fn classify_unsafe_value<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>) -> Option<UnsafeValue> {
-    unsafe_direct_value(scoped, ty, &Substitutions::default(), &Vec::new())
+    unsafe_direct_value(scoped, ty, &Scope::default(), &mut Vec::new())
 }
 
 /// How a type node met in the walk leaks an unsafe dictionary value type, as
 /// the plugin's `classifyUnsafeDictionary`. Kinds that are never dictionaries
 /// give `None`.
 pub fn classify_unsafe_dictionary<'a>(scoped: Scoped<'_, 'a>, kind: AstKind<'a>) -> Option<UnsafeValue> {
-    let empty = Substitutions::default();
+    let empty = Scope::default();
     let values = match kind {
         AstKind::TSTypeLiteral(literal) => literal_value_types(literal, &empty),
         AstKind::TSMappedType(mapped) => mapped_value_types(mapped, &empty),
-        AstKind::TSTypeReference(reference) => reference_value_types(scoped, reference, &empty, &Vec::new()),
+        AstKind::TSTypeReference(reference) => reference_value_types(scoped, reference, &empty, &mut Vec::new()),
         AstKind::TSTypeOperator(operator) if operator.operator == TSTypeOperatorOperator::Readonly => {
-            dictionary_value_types(scoped, &operator.type_annotation, &empty, &Vec::new())
+            dictionary_value_types(scoped, &operator.type_annotation, &empty, &mut Vec::new())
         }
         // Not `TSParenthesizedType`: ESTree has no such node, so it never
         // encloses another type there.
@@ -277,13 +245,15 @@ pub fn classify_widening_target<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>) 
         return classify_widening_target(scoped, type_arguments(reference).first()?);
     }
 
+    let empty = Scope::default();
+
     if name == "Record" && is_built_in(scoped, name, reference) {
-        return has_broad_record_key(scoped, reference, &Substitutions::default()).then_some(WideningTarget::OpenDictionary);
+        return has_broad_record_key(scoped, reference, &empty).then_some(WideningTarget::OpenDictionary);
     }
 
     let alias = scoped.alias(name, reference.node_id.get())?;
-    let substitutions = alias_substitution(alias, reference, &Substitutions::default())?;
-    let resolved = classify_alias_broad_target(scoped, &alias.type_annotation, &substitutions, &vec![name]);
+    let substitutions = alias_substitutions(alias, reference, &empty)?;
+    let resolved = classify_alias_broad_target(scoped, &alias.type_annotation, &substitutions, &mut vec![alias.node_id.get()]);
 
     if alias.type_parameters.as_ref().is_some_and(|parameters| !parameters.params.is_empty()) {
         return (resolved == Some(WideningTarget::OpenDictionary)).then_some(WideningTarget::GenericContainer);
@@ -292,11 +262,11 @@ pub fn classify_widening_target<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>) 
     resolved
 }
 
-fn has_broad_record_key<'a>(scoped: Scoped<'_, 'a>, reference: &'a TSTypeReference<'a>, substitutions: &Substitutions<'a>) -> bool {
-    type_arguments(reference).first().is_none_or(|key| is_broad_mapped_key(scoped, key, substitutions, &Vec::new()))
+fn has_broad_record_key<'a>(scoped: Scoped<'_, 'a>, reference: &'a TSTypeReference<'a>, substitutions: &Scope<'a>) -> bool {
+    type_arguments(reference).first().is_none_or(|key| is_broad_mapped_key(scoped, key, substitutions, &mut Vec::new()))
 }
 
-fn is_broad_mapped_key<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Substitutions<'a>, visited: &Resolving<'a>) -> bool {
+fn is_broad_mapped_key<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Scope<'a>, visited: &mut Resolving) -> bool {
     let reference = match unwrap_transparent(ty) {
         TSType::TSStringKeyword(_) | TSType::TSNumberKeyword(_) | TSType::TSSymbolKeyword(_) => return true,
         TSType::TSUnionType(union) => return union.types.iter().any(|member| is_broad_mapped_key(scoped, member, substitutions, visited)),
@@ -308,8 +278,8 @@ fn is_broad_mapped_key<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitut
         return false;
     };
 
-    if let Some(substitution) = substitutions.get(name).filter(|substitution| !is_unapplied_reference_to(substitution, name)) {
-        return is_broad_mapped_key(scoped, substitution, substitutions, visited);
+    if let Some(substitution) = substitution(substitutions, name, reference) {
+        return is_broad_mapped_key(scoped, substitution.ty, &substitution.scope, visited);
     }
 
     if name == "PropertyKey" && is_built_in(scoped, name, reference) {
@@ -320,19 +290,15 @@ fn is_broad_mapped_key<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitut
         return false;
     };
 
-    if alias.type_parameters.as_ref().is_some_and(|parameters| !parameters.params.is_empty()) || visited.contains(&name) {
+    if alias.type_parameters.as_ref().is_some_and(|parameters| !parameters.params.is_empty()) || visited.contains(&alias.node_id.get()) {
         return false;
     }
 
-    is_broad_mapped_key(scoped, &alias.type_annotation, substitutions, &with_name(visited, name))
+    // A non-generic alias body sees no substitution.
+    expanding(visited, alias.node_id.get(), |visited| is_broad_mapped_key(scoped, &alias.type_annotation, &Scope::default(), visited))
 }
 
-fn classify_alias_broad_target<'a>(
-    scoped: Scoped<'_, 'a>,
-    ty: &'a TSType<'a>,
-    substitutions: &Substitutions<'a>,
-    resolving: &Resolving<'a>,
-) -> Option<WideningTarget> {
+fn classify_alias_broad_target<'a>(scoped: Scoped<'_, 'a>, ty: &'a TSType<'a>, substitutions: &Scope<'a>, resolving: &mut Resolving) -> Option<WideningTarget> {
     let reference = match unwrap_transparent(ty) {
         TSType::TSUnknownKeyword(_) => return Some(WideningTarget::Unknown),
         TSType::TSObjectKeyword(_) => return Some(WideningTarget::Object),
@@ -340,7 +306,7 @@ fn classify_alias_broad_target<'a>(
             return literal.members.iter().any(|member| matches!(member, TSSignature::TSIndexSignature(_))).then_some(WideningTarget::OpenDictionary);
         }
         TSType::TSMappedType(mapped) => {
-            return is_broad_mapped_key(scoped, &mapped.constraint, substitutions, &Vec::new()).then_some(WideningTarget::OpenDictionary);
+            return is_broad_mapped_key(scoped, &mapped.constraint, substitutions, &mut Vec::new()).then_some(WideningTarget::OpenDictionary);
         }
         TSType::TSTypeReference(reference) => reference,
         _ => return None,
@@ -348,8 +314,8 @@ fn classify_alias_broad_target<'a>(
 
     let name = reference_name(reference)?;
 
-    if let Some(substitution) = substitutions.get(name) {
-        return if is_unapplied_reference_to(substitution, name) { None } else { classify_alias_broad_target(scoped, substitution, substitutions, resolving) };
+    if let Some(substitution) = substitution(substitutions, name, reference) {
+        return classify_alias_broad_target(scoped, substitution.ty, &substitution.scope, resolving);
     }
 
     if is_transparent_wrapper(scoped, name, reference) {
@@ -360,8 +326,8 @@ fn classify_alias_broad_target<'a>(
         return has_broad_record_key(scoped, reference, substitutions).then_some(WideningTarget::OpenDictionary);
     }
 
-    let alias = scoped.alias(name, reference.node_id.get()).filter(|_| !resolving.contains(&name))?;
-    let next = alias_substitution(alias, reference, substitutions)?;
+    let alias = scoped.alias(name, reference.node_id.get()).filter(|alias| !resolving.contains(&alias.node_id.get()))?;
+    let next = alias_substitutions(alias, reference, substitutions)?;
 
-    classify_alias_broad_target(scoped, &alias.type_annotation, &next, &with_name(resolving, name))
+    expanding(resolving, alias.node_id.get(), |resolving| classify_alias_broad_target(scoped, &alias.type_annotation, &next, resolving))
 }

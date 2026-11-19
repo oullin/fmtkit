@@ -1282,3 +1282,49 @@ fn differential() {
         ],
     );
 }
+
+/// An argument that mentions a type parameter is resolved where it was
+/// written. Reading it inside the alias it is passed to recursed without end.
+#[test]
+fn compound_arguments_keep_their_scope() {
+    check(
+        "quality/no-known-value-widening",
+        "[]",
+        &[
+            Case {
+                name: "compound record keys",
+                path: "case.ts",
+                code: "type K<T> = Record<T | string, unknown>;\ntype O<T> = K<T | number>;\nexport type D = O<symbol>;\nexport const x: D = { a: 1 };\nexport const y = { a: 1 } as D;\n",
+                expected: &[
+                    (
+                        115,
+                        123,
+                        "The explicit open dictionary type on binding `x` discards known type evidence. Keep inference, validate with `satisfies`, or use a named owner contract.",
+                    ),
+                    (
+                        142,
+                        150,
+                        "The explicit open dictionary type on assertion discards known type evidence. Keep inference, validate with `satisfies`, or use a named owner contract.",
+                    ),
+                ],
+            },
+            Case {
+                name: "nested generic aliases",
+                path: "case.ts",
+                code: "type Inner<T> = Record<string, T>;\ntype Outer<T> = Inner<T | null>;\nexport type D = Outer<number>;\nexport const x: D = { a: 1 };\nexport const y = { a: 1 } as D;\n",
+                expected: &[
+                    (
+                        119,
+                        127,
+                        "The explicit open dictionary type on binding `x` discards known type evidence. Keep inference, validate with `satisfies`, or use a named owner contract.",
+                    ),
+                    (
+                        146,
+                        154,
+                        "The explicit open dictionary type on assertion discards known type evidence. Keep inference, validate with `satisfies`, or use a named owner contract.",
+                    ),
+                ],
+            },
+        ],
+    );
+}

@@ -200,12 +200,17 @@ fn infers(ty: &TSType<'_>, name: &str) -> bool {
 /// The type a type parameter stands for, with the substitutions in force
 /// where that type was written.
 #[derive(Clone)]
-struct Substitution<'a> {
-    ty: &'a TSType<'a>,
-    scope: Rc<Substitutions<'a>>,
+pub struct Substitution<'a> {
+    pub ty: &'a TSType<'a>,
+    pub scope: Scope<'a>,
 }
 
-type Substitutions<'a> = FxHashMap<&'a str, Substitution<'a>>;
+/// Type parameter names bound to their arguments inside one alias expansion.
+pub type Substitutions<'a> = FxHashMap<&'a str, Substitution<'a>>;
+
+/// The substitutions of one alias expansion, shared by the arguments that
+/// were written inside it.
+pub type Scope<'a> = Rc<Substitutions<'a>>;
 
 /// What [`Scoped::resolves_to`] looks for once aliases are resolved: the
 /// keyword itself, through parentheses and union members.
@@ -241,7 +246,7 @@ impl<'a> Resolver<'_, 'a> {
             {
                 self.resolving.push(alias.node_id.get());
 
-                let resolved = self.evaluate(&alias.type_annotation, &Rc::new(next));
+                let resolved = self.evaluate(&alias.type_annotation, &next);
 
                 self.resolving.pop();
 
@@ -271,14 +276,14 @@ fn is_promise(reference: &TSTypeReference<'_>) -> bool {
 }
 
 /// The substitutions inside `alias` for a `reference` to it: the outer ones,
-/// plus each type parameter bound to its argument (resolved where the
-/// reference is) or else its default (resolved inside the alias). `None`
-/// when a parameter has neither.
-fn alias_substitutions<'a>(
-    alias: &'a TSTypeAliasDeclaration<'a>,
-    reference: &'a TSTypeReference<'a>,
-    base: &Rc<Substitutions<'a>>,
-) -> Option<Substitutions<'a>> {
+/// as the plugin keeps them, plus each type parameter bound to its argument
+/// (resolved in `base`, where the reference is) or else its default
+/// (resolved inside the alias). `None` when a parameter has neither.
+///
+/// Every substitution keeps the scope it was written in, so a parameter
+/// whose argument mentions a parameter of the same name, as `T` in
+/// `Inner<T | null>`, reads the outer one and resolution terminates.
+pub fn alias_substitutions<'a>(alias: &'a TSTypeAliasDeclaration<'a>, reference: &'a TSTypeReference<'a>, base: &Scope<'a>) -> Option<Scope<'a>> {
     let arguments = type_arguments(reference);
     let mut next = (**base).clone();
 
@@ -290,5 +295,5 @@ fn alias_substitutions<'a>(
         next.insert(parameter.name.name.as_str(), Substitution { ty, scope });
     }
 
-    Some(next)
+    Some(Rc::new(next))
 }

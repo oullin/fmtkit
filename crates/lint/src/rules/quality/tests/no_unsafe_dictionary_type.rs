@@ -1021,3 +1021,70 @@ fn differential() {
         ],
     );
 }
+
+/// An argument that mentions a type parameter is resolved where it was
+/// written. Reading it inside the alias it is passed to recursed without end.
+#[test]
+fn compound_arguments_keep_their_scope() {
+    check(
+        "quality/no-unsafe-dictionary-type",
+        "[]",
+        &[
+            Case {
+                name: "nested generic aliases",
+                path: "case.ts",
+                code: "type Inner<T> = Record<string, T>;\ntype Outer<T> = Inner<T | null>;\nexport type D = Outer<number>;\nexport type E = Outer<unknown>;\nexport type F = Inner<unknown>;\n",
+                expected: &[
+                    (
+                        115,
+                        129,
+                        "This dictionary's union value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                    ),
+                    (
+                        147,
+                        161,
+                        "This dictionary's unknown value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                    ),
+                ],
+            },
+            Case {
+                name: "compound record keys",
+                path: "case.ts",
+                code: "type K<T> = Record<T | string, unknown>;\ntype O<T> = K<T | number>;\nexport type D = O<symbol>;\nexport const x: D = {};\n",
+                expected: &[
+                    (
+                        12,
+                        39,
+                        "This dictionary's unknown value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                    ),
+                    (
+                        53,
+                        66,
+                        "This dictionary's unknown value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                    ),
+                    (
+                        84,
+                        93,
+                        "This dictionary's unknown value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                    ),
+                ],
+            },
+            Case {
+                name: "explicit arguments resolve where they are written",
+                path: "case.ts",
+                code: "type A = string;\ntype Dict<A, B> = Record<string, B>;\nexport type D = Dict<unknown, A>;\n",
+                expected: &[],
+            },
+            Case {
+                name: "defaults see earlier parameters, not the caller",
+                path: "case.ts",
+                code: "type Pair<T, U = T> = Record<string, U>;\ntype Use<U> = Pair<number>;\nexport type A = Use<unknown>;\nexport type B = Pair<unknown>;\n",
+                expected: &[(
+                    115,
+                    128,
+                    "This dictionary's unknown value type gives callers no concrete value contract. Use an owner/schema-derived value type; parse external payloads before insertion.",
+                )],
+            },
+        ],
+    );
+}

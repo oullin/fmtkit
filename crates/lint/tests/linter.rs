@@ -236,6 +236,16 @@ fn directives_for_type_aware_rules_are_never_unused() {
         [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]
     );
 
+    // Rule names end where oxc_linter ends them: at `--`, or at a `-` with
+    // whitespace on both sides, and they split on any whitespace.
+    for directive in [
+        "// oxlint-disable-next-line typescript/no-floating-promises - awaited by the caller",
+        "// oxlint-disable-next-line typescript/no-floating-promises -- awaited - by the caller",
+        "// oxlint-disable-next-line typescript/no-floating-promises\u{a0}@typescript-eslint/no-unsafe-assignment",
+    ] {
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, &format!("{directive}\nf();\n")), [], "{directive}");
+    }
+
     // With a rule fmtkit runs beside it, the directive is reported but kept.
     let mixed = "/* oxlint-disable-next-line typescript/no-floating-promises, eqeqeq -- awaited by the caller */\nf();\n";
     let linted = linter.lint("a.ts", Lang::Ts, mixed, true);

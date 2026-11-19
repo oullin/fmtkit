@@ -1,4 +1,9 @@
-//! `anti-slop/no-conditional-empty-object-spread`: expectations recorded from the v1 plugin under oxlint 1.86.
+//! `quality/no-conditional-empty-object-spread`: expectations recorded from `@nkzw/oxlint-config` 3.0.0's
+//! `quality` plugin under oxlint 1.94.0: byte spans and exact messages.
+//!
+//! The first tables replay `anti-slop/no-conditional-empty-object-spread`'s cases
+//! (`anti_slop/tests/no_conditional_empty_object_spread.rs`, same names) with the findings the
+//! upstream plugin produced for them.
 
 use super::{Case, check};
 
@@ -6,7 +11,7 @@ use super::{Case, check};
 #[test]
 fn v1() {
     check(
-        "anti-slop/no-conditional-empty-object-spread",
+        "quality/no-conditional-empty-object-spread",
         "[]",
         &[
             Case {
@@ -39,10 +44,11 @@ fn v1() {
     );
 }
 
+/// `anti-slop/no-conditional-empty-object-spread`'s `edges` table.
 #[test]
 fn edges() {
     check(
-        "anti-slop/no-conditional-empty-object-spread",
+        "quality/no-conditional-empty-object-spread",
         "[]",
         &[
             Case {

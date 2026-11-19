@@ -176,7 +176,7 @@ pub type RuleSetting = serde_json::Value;
 pub struct Lint {
     /// Start from the bundled policy. Off, only `rules` apply.
     pub bundled: bool,
-    /// Overrides keyed by rule name (`eqeqeq`, `anti-slop/no-object-parameters`).
+    /// Overrides keyed by rule name (`eqeqeq`, `quality/no-object-parameters`).
     pub rules: BTreeMap<String, RuleSetting>,
     /// gitignore-style patterns the linter skips.
     pub ignore: Vec<String>,

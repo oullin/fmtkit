@@ -70,7 +70,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Vue, HTML, Markdown:** formatted as whole documents. Scripts inside them go through the script pipeline; styles and CSS fences through the oxc CSS formatter. Markdown prose is not rewrapped.
 
-**Lint:** Oxlint (pinned to `oxlint_v1.94.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
+**Lint:** Oxlint (pinned to `oxlint_v1.94.0`) with a bundled policy of 221 rules, derived from [`@nkzw/oxlint-config`](https://github.com/nkzw-tech/oxlint-config) 3.0 with its sorting preset, including native `perfectionist/*`, `@nkzw/*`, `quality/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default (twelve former `anti-slop/*` rules are now the bundled `quality/*` rules, and their old names still work as aliases); the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
 
 ### What it leaves alone
 
@@ -183,7 +183,8 @@ ignore = []                           # files lint skips (still formatted)
 
 [lint.rules]
 eqeqeq = ["error", "always"]          # severity, or [severity, options...]
-"anti-slop/no-object-parameters" = "warn"
+"quality/no-object-parameters" = "warn"
+"unused-directive" = "warn"              # default "error"; "off" stops the reports
 
 [complexity]
 cyclomatic = 15                       # 0 disables
@@ -191,6 +192,10 @@ cognitive = 20
 ```
 
 A rule setting replaces the bundled one entirely, options included, so repeat the options when you only change the severity. Severities are `off`/`allow`, `warn`, and `error`/`deny`.
+
+The bundled policy reports a disable directive (`// oxlint-disable-next-line rule`, or its `eslint-` form) that suppresses nothing as an `unused-directive` error, as `@nkzw/oxlint-config` 3.0 does. `fix` removes an unused `oxlint-` directive; it leaves an `eslint-` directive in place, because ESLint may still read it. Configure it as the rule `unused-directive` under `[lint.rules]` (`"warn"`, or `"off"` to stop the reports) or exempt files from it under `[[exempt]]`; it takes no options. Without the bundled policy it is off until you turn it on.
+
+Type-aware rules (oxc's tsgolint rules, such as `typescript/no-floating-promises`) need the TypeScript type checker, which fmtkit's single-file lint does not run. The bundled policy leaves out the ten that `@nkzw/oxlint-config` 3.0 enables, and enabling one under `[lint.rules]` is a configuration error. A directive that names only type-aware rules is never reported as unused, so a type-aware linter that runs beside fmtkit, such as `tsrs`, keeps its directives.
 
 ## Lint exemptions
 

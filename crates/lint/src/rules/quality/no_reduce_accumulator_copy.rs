@@ -1,4 +1,4 @@
-//! `anti-slop/no-reduce-accumulator-copy`: no copying a reducer's growing
+//! `quality/no-reduce-accumulator-copy`: no copying a reducer's growing
 //! accumulator on every iteration.
 //!
 //! Inside the callback of `.reduce(callback, init?)` or `.reduceRight(...)`,
@@ -15,11 +15,11 @@ use oxc_ast::ast::{Argument, BindingPattern, CallExpression, Expression, Functio
 use oxc_semantic::{AstNode, NodeId, Semantic, SymbolId};
 use oxc_span::{GetSpan, Span};
 
+use super::super::anti_slop::shared::ancestors;
+use super::super::anti_slop::shared::array_method::{self, Bare};
 use super::super::{Context, Rule};
-use super::shared::ancestors;
-use super::shared::array_method::{self, Bare};
 
-pub const NAME: &str = "anti-slop/no-reduce-accumulator-copy";
+pub const NAME: &str = "quality/no-reduce-accumulator-copy";
 
 pub struct NoReduceAccumulatorCopy;
 

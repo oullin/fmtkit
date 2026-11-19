@@ -14,7 +14,7 @@ use oxc_diagnostics::{OxcDiagnostic, Severity as OxcSeverity};
 use oxc_linter::loader::{JavaScriptSource, PartialLoader};
 use oxc_linter::{
     AllowWarnDeny, ConfigStore, ConfigStoreBuilder, ContextSubHost, ContextSubHostOptions, ExternalPluginStore, FixKind, LintOptions, LintPlugins, Message,
-    ModuleRecord, Oxlintrc, PossibleFixes, normalize_plugin_name, normalize_rule_name,
+    ModuleRecord, Oxlintrc, PossibleFixes, create_unused_directives_messages, normalize_plugin_name, normalize_rule_name,
 };
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
@@ -35,6 +35,11 @@ pub const POLICY: &str = include_str!("../policy/oxlintrc.json");
 /// The rule name used for parse and semantic errors, which stop a file from being linted.
 pub const SYNTAX_RULE: &str = "syntax";
 
+/// The rule that reports a disable or enable directive with no effect, as
+/// oxlint's `reportUnusedDisableDirectives` does. It is configured under
+/// `[lint.rules]` like any other rule and takes no options.
+pub const UNUSED_DIRECTIVE_RULE: &str = "unused-directive";
+
 /// The enabled native rules, with the severity each was configured at, and
 /// the files each rule, native or not, does not apply to.
 #[derive(Default)]
@@ -42,12 +47,15 @@ pub struct Natives {
     pub rules: Vec<Box<dyn Rule>>,
     pub severities: FxHashMap<&'static str, Severity>,
     pub exempt: Exempt,
+    /// How a directive that suppresses nothing is reported, when it is.
+    pub unused_directives: Option<AllowWarnDeny>,
 }
 
 /// The configuration both linters are built from.
 pub struct Built {
     pub store: ConfigStore,
     pub natives: Natives,
+    pub unused_directives: Option<AllowWarnDeny>,
 }
 
 /// Merge the bundled policy (when asked for) with `[lint.rules]`, route native
@@ -66,6 +74,12 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
     }
 
     for (name, setting) in &config.rules {
+        if let Some(quality) = rules::quality::alias_of(name)
+            && config.rules.contains_key(quality)
+        {
+            return Err(LintError::Rule { rule: name.clone(), message: format!("an alias of {quality}; configure one of the two names") });
+        }
+
         merged.insert(rule_key(name, &registry), (name.clone(), setting.clone()));
     }
 
@@ -78,6 +92,15 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
 
     for (key, (name, setting)) in merged {
         let (severity, options) = split_setting(&name, &setting)?;
+
+        if key == UNUSED_DIRECTIVE_RULE {
+            if !options.is_empty() {
+                return Err(LintError::Rule { rule: name, message: "takes no options".into() });
+            }
+
+            natives.unused_directives = severity.map(|severity| if severity == Severity::Error { AllowWarnDeny::Deny } else { AllowWarnDeny::Warn });
+            continue;
+        }
 
         if let Some(factory) = registry.get(key.as_str()) {
             let Some(severity) = severity else { continue };
@@ -92,6 +115,10 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
 
         if matches!(owner, Owner::Unknown) || !known_oxc_rule(&key) {
             return Err(LintError::Rule { rule: name, message: "unknown rule".into() });
+        }
+
+        if severity.is_some() && type_aware(&key) {
+            return Err(LintError::Rule { rule: name, message: "a type-aware rule, which needs type information that fmtkit does not have".into() });
         }
 
         if let Owner::Plugin(plugin) = owner
@@ -110,7 +137,9 @@ pub fn build(config: &fmtkit_config::Lint) -> Result<Built, LintError> {
 
     natives.exempt = exemptions(&config.exempt, &registry, &natives, &store, &base)?;
 
-    Ok(Built { store, natives })
+    let unused_directives = natives.unused_directives;
+
+    Ok(Built { store, natives, unused_directives })
 }
 
 /// Check every exemption names a rule that exists and is enabled, and build
@@ -134,7 +163,7 @@ fn exemptions(
         let fail = |message: &str| LintError::Exempt { rule: entry.rule.clone(), message: message.to_owned() };
         let named = rule_key(&entry.rule, registry);
 
-        if !registry.contains_key(named.as_str()) && (matches!(owner(&named), Owner::Unknown) || !known_oxc_rule(&named)) {
+        if named != UNUSED_DIRECTIVE_RULE && !registry.contains_key(named.as_str()) && (matches!(owner(&named), Owner::Unknown) || !known_oxc_rule(&named)) {
             return Err(fail("unknown rule"));
         }
 
@@ -159,6 +188,10 @@ fn exemptions(
 /// rules an override enables for some files.
 fn enabled_rules(natives: &Natives, store: &ConfigStore, base: &Map<String, Value>) -> FxHashSet<String> {
     let mut enabled: FxHashSet<String> = natives.severities.keys().map(|name| (*name).to_owned()).collect();
+
+    if natives.unused_directives.is_some() {
+        enabled.insert(UNUSED_DIRECTIVE_RULE.to_owned());
+    }
 
     for (rule, severity) in store.rules().iter() {
         if severity.severity.is_warn_deny() {
@@ -186,10 +219,17 @@ fn enabled_rules(natives: &Natives, store: &ConfigStore, base: &Map<String, Valu
     enabled
 }
 
-/// The key a rule is merged under: native names as written, oxc names normalized
-/// so `@typescript-eslint/x`, `typescript/x` and `eslint/x` / `x` collide.
+/// The key a rule is merged under: native names as written, an `anti-slop/*`
+/// alias as the `quality/*` rule it stands for, and oxc names normalized so
+/// `@typescript-eslint/x`, `typescript/x` and `eslint/x` / `x` collide.
 fn rule_key(name: &str, registry: &FxHashMap<&'static str, Factory>) -> String {
-    if registry.contains_key(name) { name.to_owned() } else { normalize_rule_name(name) }
+    if let Some(quality) = rules::quality::alias_of(name) {
+        quality.to_owned()
+    } else if registry.contains_key(name) || name == UNUSED_DIRECTIVE_RULE {
+        name.to_owned()
+    } else {
+        normalize_rule_name(name)
+    }
 }
 
 /// `"off"` / `"warn"` / `"error"` / `[severity, options...]` into a severity
@@ -259,6 +299,14 @@ fn known_oxc_rule(key: &str) -> bool {
     oxc_linter::rules::RULES.iter().any(|r| r.name() == rule && (r.plugin_name() == internal || (internal == "typescript" && r.plugin_name() == "eslint")))
 }
 
+/// Whether oxc_linter runs this normalized rule only with type information
+/// (a tsgolint rule), which fmtkit's single-file lint does not have.
+fn type_aware(key: &str) -> bool {
+    let Some(rule) = key.strip_prefix("typescript/").or_else(|| key.strip_prefix("@typescript-eslint/")) else { return false };
+
+    oxc_linter::rules::RULES.iter().any(|r| r.plugin_name() == "typescript" && r.name() == rule && r.is_tsgolint_rule())
+}
+
 fn build_store(rc: &Map<String, Value>) -> Result<ConfigStore, String> {
     let oxlintrc = Oxlintrc::from_json_value(&Value::Object(rc.clone())).map_err(|e| e.to_string())?;
     let mut plugins = ExternalPluginStore::new(false);
@@ -285,10 +333,11 @@ fn attribute_error(base: &Map<String, Value>, oxc_rules: &Map<String, Value>, me
 }
 
 /// Wrap a store in the two oxc linters `lint` needs: one that computes no fixes
-/// and one that computes safe fixes.
-pub fn linters(store: ConfigStore) -> (oxc_linter::Linter, oxc_linter::Linter) {
-    let check = oxc_linter::Linter::new(LintOptions::default(), store.clone(), None);
-    let fix = oxc_linter::Linter::new(LintOptions::default(), store, None).with_fix(FixKind::SafeFix);
+/// and one that computes safe fixes. oxc_linter reports unused directives in
+/// Vue files itself; [`run`] reports them for every other file.
+pub fn linters(store: ConfigStore, unused_directives: Option<AllowWarnDeny>) -> (oxc_linter::Linter, oxc_linter::Linter) {
+    let check = oxc_linter::Linter::new(LintOptions::default(), store.clone(), None).with_report_unused_directives(unused_directives);
+    let fix = oxc_linter::Linter::new(LintOptions::default(), store, None).with_fix(FixKind::SafeFix).with_report_unused_directives(unused_directives);
 
     (check, fix)
 }
@@ -360,7 +409,12 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
         let host = ContextSubHost::new(semantic, record, section.start, options);
 
         for finding in rules::run_all(&natives.rules, host.semantic(), rel) {
-            if exempt.native(finding.rule) || host.disable_directives().contains(finding.rule, finding.span) {
+            // A directive may still name a `quality/*` rule by its `anti-slop/*` alias.
+            let directives = host.disable_directives();
+            let suppressed = directives.contains(finding.rule, finding.span)
+                || rules::quality::alias(finding.rule).is_some_and(|alias| directives.contains(&alias, finding.span));
+
+            if exempt.native(finding.rule) || suppressed {
                 continue;
             }
 
@@ -391,8 +445,32 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
         return pass;
     }
 
-    for message in oxc.run(path, hosts, allocator) {
-        if exempt.oxc(&rule_code(&message.error)) {
+    // A directive counts as used when it suppressed a native finding above or
+    // an oxc_linter finding here. oxc_linter returns the directives of a file
+    // that is not a Vue file, whose unused ones it leaves to the caller.
+    let (mut messages, directives) = oxc.run_with_disable_directives::<false>(path, hosts, allocator, None, None);
+
+    if let (Some(severity), Some(directives)) = (natives.unused_directives, directives) {
+        messages.extend(create_unused_directives_messages(&directives, severity, fix.then_some((FixKind::SafeFix, text))));
+    }
+
+    for message in messages {
+        let unused = natives.unused_directives.is_some() && message.error.code.scope.is_none() && message.error.code.number.is_none();
+        let mut message = message;
+
+        // A directive for a type-aware rule serves a type-aware linter that
+        // runs beside fmtkit, so fmtkit cannot tell whether it is used.
+        if unused {
+            match type_aware_names(text, message.span) {
+                TypeAwareNames::None => {}
+                TypeAwareNames::All => continue,
+                TypeAwareNames::Some => message.fixes = PossibleFixes::None,
+            }
+        }
+
+        let rule = if unused { UNUSED_DIRECTIVE_RULE.to_owned() } else { rule_code(&message.error) };
+
+        if exempt.oxc(&rule) {
             continue;
         }
 
@@ -400,10 +478,38 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
             pass.fixes.push(unit);
         }
 
-        pass.diagnostics.push(to_diagnostic(rel, &index, &message.error, message.span));
+        pass.diagnostics.push(to_diagnostic(rel, &index, &message.error, message.span, rule));
     }
 
     pass
+}
+
+enum TypeAwareNames {
+    None,
+    Some,
+    All,
+}
+
+/// Which of the rules an unused-directive diagnostic covers are type-aware.
+/// The diagnostic points at one rule name, or at a whole directive comment
+/// when none of the rules it names suppressed anything.
+fn type_aware_names(text: &str, span: Span) -> TypeAwareNames {
+    let Some(covered) = text.get(span.start as usize..span.end as usize) else { return TypeAwareNames::None };
+    let body = covered.trim_start_matches("//").trim_start_matches("/*").trim_end_matches("*/").trim();
+    let body = body.split_once("--").map_or(body, |(names, _)| names);
+    let names = match body.split_once(char::is_whitespace) {
+        Some((directive, names)) if directive.starts_with("eslint-") || directive.starts_with("oxlint-") => names,
+        None if body.starts_with("eslint-") || body.starts_with("oxlint-") => "",
+        _ => body,
+    };
+    let names: Vec<&str> = names.split([',', ' ', '\t', '\n', '\r']).filter(|name| !name.is_empty()).collect();
+    let aware = names.iter().filter(|name| type_aware(&normalize_rule_name(name))).count();
+
+    match aware {
+        0 => TypeAwareNames::None,
+        n if n == names.len() => TypeAwareNames::All,
+        _ => TypeAwareNames::Some,
+    }
 }
 
 /// The script sections of a file: the whole file, or a Vue file's `<script>` blocks.
@@ -452,8 +558,7 @@ fn rule_code(error: &OxcDiagnostic) -> String {
     }
 }
 
-fn to_diagnostic(rel: &str, index: &LineIndex, error: &OxcDiagnostic, span: Span) -> Diagnostic {
-    let rule = rule_code(error);
+fn to_diagnostic(rel: &str, index: &LineIndex, error: &OxcDiagnostic, span: Span, rule: String) -> Diagnostic {
     let (line, column) = index.line_col(span.start);
     let severity = if matches!(error.severity, OxcSeverity::Error) { Severity::Error } else { Severity::Warning };
 

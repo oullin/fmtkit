@@ -4,26 +4,28 @@
 		"oxc",
 		"unicorn",
 		"import",
-		"react"
+		"react",
+		"jsx-a11y",
+		"promise",
+		"vitest"
 	],
 	"categories": {
 		"correctness": "error"
 	},
 	"rules": {
-    "boundaries/exported-class-count": "off",
-    "boundaries/barrel-only": "off",
-    "boundaries/relative-module": "off",
-    "boundaries/reserved-internal-name": "off",
-    "boundaries/dynamic-property-access": "off",
-    "boundaries/explicit-any": "off",
-    "boundaries/runtime-typeof": "off",
-    "boundaries/zod-infer": "off",
-    "boundaries/nullable-union": "off",
-    "boundaries/reserved-specifier": "off",
-    "boundaries/contracts-segment": "off",
-    "boundaries/route-literal": "off",
-    "boundaries/source-root": "off",
-
+		"boundaries/exported-class-count": "off",
+		"boundaries/barrel-only": "off",
+		"boundaries/relative-module": "off",
+		"boundaries/reserved-internal-name": "off",
+		"boundaries/dynamic-property-access": "off",
+		"boundaries/explicit-any": "off",
+		"boundaries/runtime-typeof": "off",
+		"boundaries/zod-infer": "off",
+		"boundaries/nullable-union": "off",
+		"boundaries/reserved-specifier": "off",
+		"boundaries/contracts-segment": "off",
+		"boundaries/route-literal": "off",
+		"boundaries/source-root": "off",
 		"@nkzw/ensure-relay-types": "error",
 		"@nkzw/no-instanceof": "error",
 		"@nkzw/require-use-effect-arguments": "error",
@@ -45,6 +47,7 @@
 		"getter-return": "error",
 		"import/export": "error",
 		"import/no-namespace": "error",
+		"jsx-a11y/alt-text": "error",
 		"max-depth": [
 			"error",
 			{
@@ -154,6 +157,7 @@
 				"caughtErrors": "none"
 			}
 		],
+		"no-useless-assignment": "error",
 		"no-useless-backreference": "error",
 		"no-useless-catch": "error",
 		"no-useless-escape": "error",
@@ -183,6 +187,7 @@
 		"oxc/double-comparisons": "error",
 		"oxc/misrefactored-assign-op": "error",
 		"oxc/missing-throw": "error",
+		"oxc/no-accumulating-spread": "error",
 		"oxc/number-arg-out-of-range": "error",
 		"oxc/uninvoked-array-callback": "error",
 		"perfectionist/sort-enums": [
@@ -210,7 +215,22 @@
 		],
 		"prefer-const": "error",
 		"prefer-object-has-own": "error",
+		"prefer-promise-reject-errors": "error",
 		"preserve-caught-error": "error",
+		"promise/no-multiple-resolved": "error",
+		"promise/no-return-in-finally": "error",
+		"quality/no-array-filter-map": "error",
+		"quality/no-chained-type-assertions": "error",
+		"quality/no-conditional-empty-object-spread": "error",
+		"quality/no-known-value-widening": "error",
+		"quality/no-object-parameters": "error",
+		"quality/no-reduce-accumulator-copy": "error",
+		"quality/no-reflect-apply": "error",
+		"quality/no-reflect-get": "error",
+		"quality/no-unknown-returns": "error",
+		"quality/no-unknown-type-aliases": "error",
+		"quality/no-unsafe-dictionary-type": "error",
+		"quality/no-widen-then-assert": "error",
 		"react/button-has-type": "error",
 		"react/checked-requires-onchange-or-readonly": "error",
 		"react/display-name": "error",
@@ -267,6 +287,7 @@
 		"typescript/no-empty-object-type": "error",
 		"typescript/no-explicit-any": "error",
 		"typescript/no-extra-non-null-assertion": "error",
+		"typescript/no-import-type-side-effects": "error",
 		"typescript/no-misused-new": "error",
 		"typescript/no-non-null-asserted-nullish-coalescing": "error",
 		"typescript/no-non-null-asserted-optional-chain": "error",
@@ -288,8 +309,10 @@
 		"unicorn/consistent-empty-array-spread": "error",
 		"unicorn/consistent-function-scoping": "error",
 		"unicorn/no-abusive-eslint-disable": "error",
+		"unicorn/no-array-fill-with-reference-type": "error",
 		"unicorn/no-hex-escape": "error",
 		"unicorn/no-invalid-fetch-options": "error",
+		"unicorn/no-invalid-remove-event-listener": "error",
 		"unicorn/no-magic-array-flat-depth": "error",
 		"unicorn/no-new-array": "off",
 		"unicorn/no-typeof-undefined": "error",
@@ -315,6 +338,7 @@
 		"unicorn/prefer-structured-clone": "error",
 		"unicorn/prefer-top-level-await": "error",
 		"unicorn/text-encoding-identifier-case": "error",
+		"unused-directive": "error",
 		"use-isnan": "error",
 		"valid-typeof": "error"
 	},
@@ -352,6 +376,15 @@
 				"no-with": "off",
 				"prefer-rest-params": "error",
 				"prefer-spread": "error"
+			}
+		},
+		{
+			"files": [
+				"**/*.{test,spec}.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+				"**/__tests__/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"
+			],
+			"rules": {
+				"vitest/require-awaited-expect-poll": "error"
 			}
 		}
 	]

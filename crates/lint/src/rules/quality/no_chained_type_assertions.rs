@@ -1,4 +1,4 @@
-//! `anti-slop/no-chained-type-assertions`: no nested `as` or angle-bracket
+//! `quality/no-chained-type-assertions`: no nested `as` or angle-bracket
 //! assertions, parenthesized or not, unless every link is `as const`.
 
 use oxc_ast::AstKind;
@@ -6,10 +6,10 @@ use oxc_ast::ast::{Expression, TSType, TSTypeName};
 use oxc_semantic::AstNode;
 use oxc_span::{GetSpan, Span};
 
+use super::super::anti_slop::shared::{parent, strip_parens};
 use super::super::{Context, Rule};
-use super::shared::{parent, strip_parens};
 
-pub const NAME: &str = "anti-slop/no-chained-type-assertions";
+pub const NAME: &str = "quality/no-chained-type-assertions";
 
 pub struct NoChainedTypeAssertions;
 

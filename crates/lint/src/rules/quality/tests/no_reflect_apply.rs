@@ -1,4 +1,9 @@
-//! `anti-slop/no-reflect-apply`: expectations recorded from the v1 plugin under oxlint 1.86.
+//! `quality/no-reflect-apply`: expectations recorded from `@nkzw/oxlint-config` 3.0.0's
+//! `quality` plugin under oxlint 1.94.0: byte spans and exact messages.
+//!
+//! The first tables replay `anti-slop/no-reflect-apply`'s cases
+//! (`anti_slop/tests/no_reflect_apply.rs`, same names) with the findings the
+//! upstream plugin produced for them.
 
 use super::{Case, check};
 
@@ -6,7 +11,7 @@ use super::{Case, check};
 #[test]
 fn v1() {
     check(
-        "anti-slop/no-reflect-apply",
+        "quality/no-reflect-apply",
         "[]",
         &[
             Case { name: "direct call", path: "case.ts", code: "export const value = ((a: number): number => a)(1);\n", expected: &[] },
@@ -33,10 +38,11 @@ fn v1() {
     );
 }
 
+/// `anti-slop/no-reflect-apply`'s `edges` table.
 #[test]
 fn edges() {
     check(
-        "anti-slop/no-reflect-apply",
+        "quality/no-reflect-apply",
         "[]",
         &[
             Case { name: "other Reflect methods", path: "case.ts", code: "Reflect.get({}, \"a\");\nReflect.has({}, \"a\");\n", expected: &[] },

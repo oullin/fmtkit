@@ -1,14 +1,14 @@
-//! `anti-slop/no-conditional-empty-object-spread`: no `...(flag ? value : {})`
+//! `quality/no-conditional-empty-object-spread`: no `...(flag ? value : {})`
 //! in object literals to omit a property.
 
 use oxc_ast::AstKind;
 use oxc_ast::ast::{Expression, ObjectPropertyKind};
 use oxc_semantic::AstNode;
 
+use super::super::anti_slop::shared::strip_parens;
 use super::super::{Context, Rule};
-use super::shared::strip_parens;
 
-pub const NAME: &str = "anti-slop/no-conditional-empty-object-spread";
+pub const NAME: &str = "quality/no-conditional-empty-object-spread";
 
 pub struct NoConditionalEmptyObjectSpread;
 

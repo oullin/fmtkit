@@ -1,4 +1,9 @@
-//! `anti-slop/no-chained-type-assertions`: expectations recorded from the v1 plugin under oxlint 1.86.
+//! `quality/no-chained-type-assertions`: expectations recorded from `@nkzw/oxlint-config` 3.0.0's
+//! `quality` plugin under oxlint 1.94.0: byte spans and exact messages.
+//!
+//! The first tables replay `anti-slop/no-chained-type-assertions`'s cases
+//! (`anti_slop/tests/no_chained_type_assertions.rs`, same names) with the findings the
+//! upstream plugin produced for them.
 
 use super::{Case, check};
 
@@ -6,7 +11,7 @@ use super::{Case, check};
 #[test]
 fn v1() {
     check(
-        "anti-slop/no-chained-type-assertions",
+        "quality/no-chained-type-assertions",
         "[]",
         &[
             Case { name: "no assertion", path: "case.ts", code: "export const total: number = 1;\n", expected: &[] },
@@ -35,10 +40,11 @@ fn v1() {
     );
 }
 
+/// `anti-slop/no-chained-type-assertions`'s `edges` table.
 #[test]
 fn edges() {
     check(
-        "anti-slop/no-chained-type-assertions",
+        "quality/no-chained-type-assertions",
         "[]",
         &[
             Case {

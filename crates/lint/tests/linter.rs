@@ -171,6 +171,124 @@ fn disable_directives_apply() {
     assert_eq!(rules_of(&linter, "a.js", Lang::Js, source), [("eslint/eqeqeq".to_owned(), 3, 7)]);
 }
 
+fn reporting_unused(setting: &str, rules: &[(&str, Value)]) -> Linter {
+    let mut rules = rules.to_vec();
+
+    rules.push((fmtkit_lint::UNUSED_DIRECTIVE_RULE, json!(setting)));
+    linter(&rules)
+}
+
+#[test]
+fn unused_directives_are_reported_at_the_configured_severity() {
+    let source = "// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n// oxlint-disable-next-line eqeqeq\nif (a == 2) {}\n";
+
+    assert_eq!(rules_of(&linter(&[("eqeqeq", json!("error"))]), "a.js", Lang::Js, source), []);
+
+    for (setting, severity) in [("warn", Severity::Warning), ("error", Severity::Error)] {
+        let diagnostics = reporting_unused(setting, &[("eqeqeq", json!("error"))]).lint("a.js", Lang::Js, source, false).diagnostics;
+        let found: Vec<_> = diagnostics.iter().map(|d| (d.rule.as_str(), d.line, d.column, d.severity)).collect();
+
+        assert_eq!(found, [(fmtkit_lint::UNUSED_DIRECTIVE_RULE, 1, 1, severity)], "{setting}");
+    }
+
+    assert_eq!(rules_of(&reporting_unused("off", &[("eqeqeq", json!("error"))]), "a.js", Lang::Js, source), []);
+}
+
+#[test]
+fn a_directive_that_suppresses_a_native_finding_is_used() {
+    let linter = reporting_unused("error", &[("no-only-tests/no-only-tests", json!("error"))]);
+    let source = "// oxlint-disable-next-line no-only-tests/no-only-tests\ndescribe.only('a', () => {});\n";
+
+    assert_eq!(rules_of(&linter, "a.test.ts", Lang::Ts, source), []);
+    assert_eq!(
+        rules_of(&linter, "a.test.ts", Lang::Ts, "// oxlint-disable-next-line no-only-tests/no-only-tests\ndescribe('a', () => {});\n"),
+        [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]
+    );
+}
+
+#[test]
+fn fix_removes_an_unused_oxlint_directive_only() {
+    let linter = reporting_unused("error", &[("eqeqeq", json!("error"))]);
+    let oxlint = linter.lint("a.js", Lang::Js, "// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n", true);
+
+    assert_eq!(oxlint.fixed.as_deref(), Some("if (a === 1) {}\n"));
+    assert_eq!(oxlint.diagnostics, []);
+
+    // ESLint may still need an `eslint-` directive, so removing one is only a suggestion.
+    let eslint = linter.lint("a.js", Lang::Js, "// eslint-disable-next-line eqeqeq\nif (a === 1) {}\n", true);
+
+    assert_eq!(eslint.fixed, None);
+    assert_eq!(eslint.diagnostics.len(), 1);
+}
+
+#[test]
+fn directives_for_type_aware_rules_are_never_unused() {
+    let linter = reporting_unused("error", &[]);
+
+    for name in ["typescript/no-floating-promises", "@typescript-eslint/no-floating-promises", "@typescript-eslint/no-unsafe-assignment"] {
+        let source = format!("// oxlint-disable-next-line {name}\nf();\n");
+
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, &source), [], "{name}");
+    }
+
+    assert_eq!(
+        rules_of(&linter, "a.ts", Lang::Ts, "// oxlint-disable-next-line typescript/no-explicit-any\nf();\n"),
+        [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]
+    );
+
+    // With a rule fmtkit runs beside it, the directive is reported but kept.
+    let mixed = "/* oxlint-disable-next-line typescript/no-floating-promises, eqeqeq -- awaited by the caller */\nf();\n";
+    let linted = linter.lint("a.ts", Lang::Ts, mixed, true);
+
+    assert_eq!(linted.fixed, None);
+    assert_eq!(linted.diagnostics.len(), 1);
+}
+
+#[test]
+fn unused_directives_in_vue_scripts_are_reported() {
+    let linter = reporting_unused("error", &[("eqeqeq", json!("error"))]);
+    let source = "<script>\n// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n</script>\n";
+
+    assert_eq!(rules_of(&linter, "a.vue", Lang::Vue, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 2, 1)]);
+}
+
+#[test]
+fn the_bundled_policy_reports_unused_directives_unless_turned_off() {
+    let source = "// oxlint-disable-next-line eqeqeq\nexport const a = 1;\n";
+
+    assert_eq!(rules_of(&Linter::new(&Lint::default()).unwrap(), "a.ts", Lang::Ts, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]);
+    let off = Lint { rules: [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), json!("off"))].into(), ..Lint::default() };
+
+    assert_eq!(rules_of(&Linter::new(&off).unwrap(), "a.ts", Lang::Ts, source), []);
+
+    for setting in [json!("loud"), json!(["error", {}])] {
+        let error = Linter::new(&only(&[(fmtkit_lint::UNUSED_DIRECTIVE_RULE, setting.clone())])).err().expect("an invalid setting is refused");
+
+        assert!(matches!(&error, LintError::Rule { rule, .. } if rule == fmtkit_lint::UNUSED_DIRECTIVE_RULE), "{setting}: {error}");
+    }
+}
+
+#[test]
+fn unused_directives_can_be_exempted() {
+    let exempt = vec![fmtkit_config::Exemption { rule: fmtkit_lint::UNUSED_DIRECTIVE_RULE.into(), reason: "generated".into(), paths: vec!["gen/".into()] }];
+    let config = Lint { exempt, ..only(&[("eqeqeq", json!("error")), (fmtkit_lint::UNUSED_DIRECTIVE_RULE, json!("error"))]) };
+    let linter = Linter::new(&config).unwrap();
+    let source = "// oxlint-disable-next-line eqeqeq\nexport const a = 1;\n";
+
+    assert_eq!(rules_of(&linter, "gen/a.ts", Lang::Ts, source), []);
+    assert_eq!(rules_of(&linter, "src/a.ts", Lang::Ts, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]);
+}
+
+#[test]
+fn type_aware_rules_are_config_errors() {
+    for name in ["typescript/no-floating-promises", "@typescript-eslint/await-thenable"] {
+        let error = Linter::new(&only(&[(name, json!("error"))])).err().unwrap_or_else(|| panic!("{name} should be rejected"));
+
+        assert!(matches!(&error, LintError::Rule { rule, message } if rule == name && message.contains("type-aware")), "{name}: {error}");
+        assert!(Linter::new(&only(&[(name, json!("off"))])).is_ok(), "{name} may be turned off");
+    }
+}
+
 #[test]
 fn ignore_patterns_match_paths_and_parents() {
     let config = Lint { ignore: vec!["dist/".into(), "*.gen.ts".into(), "/root-only.ts".into()], ..only(&[]) };

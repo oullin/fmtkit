@@ -1,4 +1,4 @@
-//! `anti-slop/no-array-filter-map`: no eager `.filter(...).map(...)` or
+//! `quality/no-array-filter-map`: no eager `.filter(...).map(...)` or
 //! `.map(...).filter(...)` pass pairs over a known array.
 //!
 //! Reports the outer call when its receiver, through parentheses, optional
@@ -10,10 +10,10 @@
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
 
+use super::super::anti_slop::shared::array_method::{self, Bare};
 use super::super::{Context, Rule};
-use super::shared::array_method::{self, Bare};
 
-pub const NAME: &str = "anti-slop/no-array-filter-map";
+pub const NAME: &str = "quality/no-array-filter-map";
 
 pub struct NoArrayFilterMap;
 

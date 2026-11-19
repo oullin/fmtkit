@@ -1,12 +1,12 @@
-//! `anti-slop/no-reflect-apply`: no `Reflect.apply`; call typed functions directly or model dynamic dispatch behind an interface.
+//! `quality/no-reflect-apply`: no `Reflect.apply`; call typed functions directly or model dynamic dispatch behind an interface.
 
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
 
+use super::super::anti_slop::shared::is_global_member;
 use super::super::{Context, Rule};
-use super::shared::is_global_member;
 
-pub const NAME: &str = "anti-slop/no-reflect-apply";
+pub const NAME: &str = "quality/no-reflect-apply";
 
 pub struct NoReflectApply;
 

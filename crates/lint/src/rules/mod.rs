@@ -24,6 +24,7 @@ pub mod no_only_tests;
 pub mod observability;
 pub mod perf;
 pub mod perfectionist;
+pub mod quality;
 
 /// One finding from a native rule, positioned by byte span.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +123,7 @@ pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
         .chain(observability::RULES)
         .chain(perf::RULES)
         .chain(perfectionist::RULES)
+        .chain(quality::RULES)
         .copied()
 }
 

@@ -1,6 +1,9 @@
-//! `anti-slop/no-reduce-accumulator-copy`: expectations recorded from the upstream plugin
-//! (github.com/k-mistele/anti-slop) under oxlint 1.86, one case per upstream
-//! RuleTester case in `src/rules/no-reduce-accumulator-copy.test.ts`.
+//! `quality/no-reduce-accumulator-copy`: expectations recorded from `@nkzw/oxlint-config` 3.0.0's
+//! `quality` plugin under oxlint 1.94.0: byte spans and exact messages.
+//!
+//! The first tables replay `anti-slop/no-reduce-accumulator-copy`'s cases
+//! (`anti_slop/tests/no_reduce_accumulator_copy.rs`, same names) with the findings the
+//! upstream plugin produced for them.
 
 use super::{Case, check};
 
@@ -8,7 +11,7 @@ use super::{Case, check};
 #[test]
 fn upstream() {
     check(
-        "anti-slop/no-reduce-accumulator-copy",
+        "quality/no-reduce-accumulator-copy",
         "[]",
         &[
             Case {
@@ -333,7 +336,7 @@ fn upstream() {
 #[test]
 fn edges() {
     check(
-        "anti-slop/no-reduce-accumulator-copy",
+        "quality/no-reduce-accumulator-copy",
         "[]",
         &[
             Case {

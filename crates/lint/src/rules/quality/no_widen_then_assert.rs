@@ -1,4 +1,4 @@
-//! `anti-slop/no-widen-then-assert`: no local `const` that widens a known value
+//! `quality/no-widen-then-assert`: no local `const` that widens a known value
 //! and is later asserted back to a narrower type.
 
 use oxc_ast::AstKind;
@@ -6,11 +6,11 @@ use oxc_ast::ast::{BindingPattern, Expression, IdentifierReference, TSSignature,
 use oxc_semantic::{AstNode, NodeId, Semantic, SymbolId};
 use oxc_span::{GetSpan, Span};
 
+use super::super::anti_slop::shared::types::{reference_name, type_arguments};
+use super::super::anti_slop::shared::{enclosing_function, is_js_space, strip_parens, strip_type_parens};
 use super::super::{Context, Rule};
-use super::shared::types::{reference_name, type_arguments};
-use super::shared::{enclosing_function, is_js_space, strip_parens, strip_type_parens};
 
-pub const NAME: &str = "anti-slop/no-widen-then-assert";
+pub const NAME: &str = "quality/no-widen-then-assert";
 
 pub struct NoWidenThenAssert;
 

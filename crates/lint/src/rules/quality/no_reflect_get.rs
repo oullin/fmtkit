@@ -1,12 +1,12 @@
-//! `anti-slop/no-reflect-get`: no `Reflect.get`; use typed property access or parse dynamic input into a domain type.
+//! `quality/no-reflect-get`: no `Reflect.get`; use typed property access or parse dynamic input into a domain type.
 
 use oxc_ast::AstKind;
 use oxc_semantic::AstNode;
 
+use super::super::anti_slop::shared::is_global_member;
 use super::super::{Context, Rule};
-use super::shared::is_global_member;
 
-pub const NAME: &str = "anti-slop/no-reflect-get";
+pub const NAME: &str = "quality/no-reflect-get";
 
 pub struct NoReflectGet;
 

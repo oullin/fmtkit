@@ -11,7 +11,7 @@ use oxc_allocator::Allocator;
 
 use fmtkit_core::{Diagnostic, EditSet, Lang};
 
-pub use oxc_bridge::{POLICY, SYNTAX_RULE};
+pub use oxc_bridge::{POLICY, SYNTAX_RULE, UNUSED_DIRECTIVE_RULE};
 
 /// How many fix-and-relint rounds `lint` runs before giving up on convergence.
 const MAX_FIX_ROUNDS: usize = 10;
@@ -52,7 +52,7 @@ const _: () = {
 impl Linter {
     pub fn new(config: &fmtkit_config::Lint) -> Result<Self, LintError> {
         let built = oxc_bridge::build(config)?;
-        let (check, fix) = oxc_bridge::linters(built.store);
+        let (check, fix) = oxc_bridge::linters(built.store, built.unused_directives);
         let ignore = ignore_matcher(&config.ignore)?;
 
         Ok(Self { check, fix, natives: built.natives, ignore })

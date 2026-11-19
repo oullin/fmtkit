@@ -12,14 +12,29 @@ on:
             - reopened
             - synchronize
             - ready_for_review
-            - edited
-    # tag.yml runs the suite before it tags a release.
-    workflow_call:
+
+# A new push to a pull request supersedes the run before it. Other runs get a
+# group of their own, so a main commit's suite is never cancelled: tag.yml
+# tags a release once this workflow passes on main.
+concurrency:
+    group: tests-${{ github.event.pull_request.number || github.run_id }}
+    cancel-in-progress: true
 
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     CARGO_TERM_COLOR: always
+    # scripts/lib/env.sh keeps the Go caches under storage/; naming them here
+    # too is what lets setup-go find, restore and save them.
+    GOCACHE: ${{ github.workspace }}/storage/.cache/go-build
+    GOMODCACHE: ${{ github.workspace }}/storage/.cache/gopath/pkg/mod
 
+# Swatinem/rust-cache: scripted builds go to storage/target, not ./target.
+# Only main saves; a pull request restores the cache of the main commit it
+# branched from and rebuilds just the workspace crates. Saving per pull request
+# would push the repository over its 10 GB cache quota and evict main's.
+#
+# The test profiles keep line tables only: panics still name file and line,
+# and the cached target dir is a fraction of the size.
 jobs:
     lint:
         runs-on: ubuntu-24.04
@@ -34,6 +49,10 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
               name: Cache Cargo
+              with:
+                  prefix-key: v1-rust
+                  workspaces: '. -> storage/target'
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
 
             - uses: actions/setup-go@v7.0.0
               name: Install Go
@@ -44,14 +63,17 @@ jobs:
             - name: rustfmt, clippy, gofmt and go vet
               run: ./scripts/task.sh lint
 
+    # Linux runs the same Rust and Go suites (Go with -race) in the coverage
+    # job, so only macOS needs a plain test run.
     test:
         strategy:
             fail-fast: false
             matrix:
                 runner:
-                    - ubuntu-24.04
                     - macos-15
         runs-on: ${{ matrix.runner }}
+        env:
+            CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
         steps:
             - uses: actions/checkout@v7.0.1
@@ -63,6 +85,10 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
               name: Cache Cargo
+              with:
+                  prefix-key: v1-rust
+                  workspaces: '. -> storage/target'
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
 
             - uses: actions/setup-go@v7.0.0
               name: Install Go
@@ -75,6 +101,8 @@ jobs:
 
     coverage:
         runs-on: ubuntu-24.04
+        env:
+            CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
         steps:
             - uses: actions/checkout@v7.0.1
@@ -88,6 +116,10 @@ jobs:
 
             - uses: Swatinem/rust-cache@v2
               name: Cache Cargo
+              with:
+                  prefix-key: v1-rust
+                  workspaces: '. -> storage/target'
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
 
             - uses: taiki-e/install-action@v2
               name: Install cargo-llvm-cov
@@ -123,8 +155,14 @@ jobs:
             - name: Install Rust
               run: rustup toolchain install
 
+            # bench.yml restores this release-profile cache under the same key.
             - uses: Swatinem/rust-cache@v2
               name: Cache Cargo
+              with:
+                  prefix-key: v1-rust
+                  shared-key: release
+                  workspaces: '. -> storage/target'
+                  save-if: ${{ github.ref == 'refs/heads/main' }}
 
             - uses: actions/setup-go@v7.0.0
               name: Install Go

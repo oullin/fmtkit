@@ -13,6 +13,9 @@ permissions:
 env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     CARGO_TERM_COLOR: always
+    # See tests.yml: scripts/lib/env.sh keeps the Go caches under storage/.
+    GOCACHE: ${{ github.workspace }}/storage/.cache/go-build
+    GOMODCACHE: ${{ github.workspace }}/storage/.cache/gopath/pkg/mod
 
 concurrency:
     group: bench-${{ github.event.pull_request.number }}
@@ -32,8 +35,15 @@ jobs:
             - name: Install Rust
               run: rustup toolchain install
 
+            # The release-profile cache the binary job in tests.yml saves on
+            # main. This workflow only runs on pull requests, so it never saves.
             - uses: Swatinem/rust-cache@v2
               name: Cache Cargo
+              with:
+                  prefix-key: v1-rust
+                  shared-key: release
+                  workspaces: '. -> storage/target'
+                  save-if: false
 
             - uses: actions/setup-go@v7.0.0
               name: Install Go
@@ -48,32 +58,35 @@ jobs:
               with:
                   tool: hyperfine@1
 
-            # Each side is built in its own checkout into storage/bench/<side>.
-            # A base that predates the Rust workspace has nothing to compare.
+            # Both sides build in this checkout, so they share one target dir:
+            # the base reuses the dependencies the head just compiled and only
+            # rebuilds the workspace crates. A base that predates the Rust
+            # workspace has nothing to compare.
             - name: Build base and head
               id: build
               env:
                   BASE_SHA: ${{ github.event.pull_request.base.sha }}
               run: |
                   build() {
-                      local checkout="$1" out="$2"
+                      local out="$1"
 
-                      "${checkout}/scripts/task.sh" build
+                      ./scripts/task.sh build
                       mkdir -p "$out"
-                      cp "${checkout}/storage/target/release/fmtkit" "${checkout}/storage/go-helper/fmtkit-go-helper" "$out/"
+                      cp storage/target/release/fmtkit storage/go-helper/fmtkit-go-helper "$out/"
                   }
 
-                  build "$PWD" "${PWD}/storage/bench/head"
+                  build "${PWD}/storage/bench/head"
 
-                  git worktree add --detach "${RUNNER_TEMP}/base" "$BASE_SHA"
-
-                  if [[ ! -f "${RUNNER_TEMP}/base/Cargo.toml" ]]; then
+                  if ! git cat-file -e "${BASE_SHA}:Cargo.toml" 2> /dev/null; then
                       echo 'base predates the Rust workspace; skipping the comparison'
                       echo "skip=true" >> "$GITHUB_OUTPUT"
                       exit 0
                   fi
 
-                  build "${RUNNER_TEMP}/base" "${PWD}/storage/bench/base"
+                  head_sha="$(git rev-parse HEAD)"
+                  git checkout --quiet --detach "$BASE_SHA"
+                  build "${PWD}/storage/bench/base"
+                  git checkout --quiet --detach "$head_sha"
 
             - name: Compare base and head
               if: steps.build.outputs.skip != 'true'

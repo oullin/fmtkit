@@ -132,7 +132,8 @@ run_test() {
 }
 
 # Both gates hold at 90% of lines. cargo-llvm-cov must be installed
-# (`cargo install cargo-llvm-cov`).
+# (`cargo install cargo-llvm-cov`). The Go suite runs with -race, as in `test`,
+# so CI's linux coverage job also stands in for a linux `test` run.
 run_coverage() {
 	local go_coverage profile
 
@@ -144,7 +145,7 @@ run_coverage() {
 
 	profile="$(canonical_path "${CACHE_DIR}/go-helper.cover.out")"
 
-	with_env go -C "${REPO_ROOT}/go/helper" test ./... -coverprofile="$profile" -covermode=atomic
+	with_env go -C "${REPO_ROOT}/go/helper" test -race ./... -coverprofile="$profile" -covermode=atomic
 
 	go_coverage="$(go -C "${REPO_ROOT}/go/helper" tool cover -func="$profile" | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')"
 

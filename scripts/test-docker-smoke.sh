@@ -47,9 +47,10 @@ else
 	# which would compile the whole tree a second time. The plain build counts
 	# only if it landed in <target-dir>/release: a target set in cargo's config
 	# (CARGO_BUILD_TARGET or build.target) builds under <target-dir>/<triple>/
-	# instead, and may name another arch.
+	# instead, and may name another arch, or one whose std is not installed, so
+	# a failed plain build also falls through to the explicit one.
 	if [[ -z "${CARGO_BUILD_TARGET:-}" && "$(rustc -vV | sed -n 's/^host: //p')" == "$triple" ]]; then
-		fmtkit_bin="$(build_fmtkit)"
+		fmtkit_bin="$(build_fmtkit)" || fmtkit_bin=''
 
 		if [[ -z "$fmtkit_bin" || ! "$(dirname "$fmtkit_bin")" -ef "${CARGO_TARGET_DIR}/release" ]]; then
 			fmtkit_bin=''

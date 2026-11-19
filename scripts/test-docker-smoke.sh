@@ -33,19 +33,32 @@ mkdir -p "$platform_dir"
 if (($# == 1)); then
 	tar -xJf "$1" -C "$platform_dir" --strip-components 1
 else
+	# Builds fmtkit and prints the binary path cargo reports.
+	build_fmtkit() {
+		cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit "$@" \
+			--message-format=json-render-diagnostics \
+			| sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -n1
+	}
+
+	fmtkit_bin=''
+
 	# On a linux host of the same arch, the plain release build is the binary
 	# the image needs. An explicit --target builds into a directory of its own,
-	# which would compile the whole tree a second time. Cargo reports where the
-	# binary landed, which also covers a target set in its config.
-	target_args=(--target "$triple")
-
+	# which would compile the whole tree a second time. The plain build counts
+	# only if it landed in <target-dir>/release: a target set in cargo's config
+	# (CARGO_BUILD_TARGET or build.target) builds under <target-dir>/<triple>/
+	# instead, and may name another arch.
 	if [[ -z "${CARGO_BUILD_TARGET:-}" && "$(rustc -vV | sed -n 's/^host: //p')" == "$triple" ]]; then
-		target_args=()
+		fmtkit_bin="$(build_fmtkit)"
+
+		if [[ -z "$fmtkit_bin" || ! "$(dirname "$fmtkit_bin")" -ef "${CARGO_TARGET_DIR}/release" ]]; then
+			fmtkit_bin=''
+		fi
 	fi
 
-	fmtkit_bin="$(cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit \
-		${target_args[@]+"${target_args[@]}"} --message-format=json-render-diagnostics \
-		| sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -n1)"
+	if [[ -z "$fmtkit_bin" ]]; then
+		fmtkit_bin="$(build_fmtkit --target "$triple")"
+	fi
 
 	if [[ -z "$fmtkit_bin" ]]; then
 		printf 'cargo did not report a fmtkit binary\n' >&2

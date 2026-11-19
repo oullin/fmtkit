@@ -35,14 +35,24 @@ if (($# == 1)); then
 else
 	# On a linux host of the same arch, the plain release build is the binary
 	# the image needs. An explicit --target builds into a directory of its own,
-	# which would compile the whole tree a second time.
-	if [[ "$(rustc -vV | sed -n 's/^host: //p')" == "$triple" ]]; then
-		cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit
-		cp "${CARGO_TARGET_DIR}/release/fmtkit" "$platform_dir/"
-	else
-		cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit --target "$triple"
-		cp "${CARGO_TARGET_DIR}/${triple}/release/fmtkit" "$platform_dir/"
+	# which would compile the whole tree a second time. Cargo reports where the
+	# binary landed, which also covers a target set in its config.
+	target_args=(--target "$triple")
+
+	if [[ -z "${CARGO_BUILD_TARGET:-}" && "$(rustc -vV | sed -n 's/^host: //p')" == "$triple" ]]; then
+		target_args=()
 	fi
+
+	fmtkit_bin="$(cargo build --manifest-path "${REPO_ROOT}/Cargo.toml" --release --locked -p fmtkit \
+		${target_args[@]+"${target_args[@]}"} --message-format=json-render-diagnostics \
+		| sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' | tail -n1)"
+
+	if [[ -z "$fmtkit_bin" ]]; then
+		printf 'cargo did not report a fmtkit binary\n' >&2
+		exit 1
+	fi
+
+	cp "$fmtkit_bin" "$platform_dir/"
 	"${REPO_ROOT}/scripts/build-go-helper.sh" "$triple"
 	cp "$(canonical_path "$GO_HELPER_DIR")/fmtkit-go-helper" "$platform_dir/"
 fi

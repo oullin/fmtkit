@@ -44,6 +44,18 @@ pub struct Linted {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+/// What [`Linter::lint_types`] reports.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TypeAwareLint {
+    /// The findings, sorted by file, then position.
+    pub diagnostics: Vec<Diagnostic>,
+    /// The file, line and column of each disable directive that names no rule
+    /// and suppressed a tsrs finding. [`Linter::lint`] reports such a
+    /// directive as unused when it suppressed nothing there, so that report is
+    /// withdrawn.
+    pub used_directives: Vec<(String, u32, u32)>,
+}
+
 /// A configured linter. Build once, share across threads.
 pub struct Linter {
     check: oxc_linter::Linter,
@@ -100,9 +112,9 @@ impl Linter {
     /// The findings come sorted by file, then position. A program diagnostic
     /// (a tsconfig error) is reported as [`PROGRAM_RULE`] against the file it
     /// names, which may be outside `files`.
-    pub fn lint_types(&self, root: &Path, tsrs: &Path, files: &[String], overrides: &[(String, String)]) -> Result<Vec<Diagnostic>, TypeAwareError> {
+    pub fn lint_types(&self, root: &Path, tsrs: &Path, files: &[String], overrides: &[(String, String)]) -> Result<TypeAwareLint, TypeAwareError> {
         let Some(store) = &self.type_store else {
-            return Ok(Vec::new());
+            return Ok(TypeAwareLint::default());
         };
 
         let mut groups: Vec<type_aware::Group> = Vec::new();
@@ -133,7 +145,7 @@ impl Linter {
         }
 
         if groups.is_empty() {
-            return Ok(Vec::new());
+            return Ok(TypeAwareLint::default());
         }
 
         let findings = type_aware::run(tsrs, &type_aware::Request { root, groups: &groups, overrides })?;
@@ -146,6 +158,7 @@ impl Linter {
         }
 
         let mut diagnostics = Vec::new();
+        let mut used_directives = Vec::new();
 
         for (rel, at) in &linted {
             let own = by_file.remove(*rel).unwrap_or_default();
@@ -156,7 +169,10 @@ impl Linter {
 
             let text = text(rel).unwrap_or_default();
 
-            diagnostics.extend(oxc_bridge::judge_type_aware(&self.natives, rel, &text, &own, &rule_sets[*at]));
+            let (judged, used) = oxc_bridge::judge_type_aware(&self.natives, rel, &text, &own, &rule_sets[*at]);
+
+            diagnostics.extend(judged);
+            used_directives.extend(used.into_iter().map(|(line, column)| ((*rel).to_owned(), line, column)));
         }
 
         // Program diagnostics, and anything reported for a file that was not sent.
@@ -177,7 +193,15 @@ impl Linter {
         diagnostics.sort_by(|a, b| (&a.file, a.line, a.column, &a.rule, &a.message).cmp(&(&b.file, b.line, b.column, &b.rule, &b.message)));
         diagnostics.dedup();
 
-        Ok(diagnostics)
+        Ok(TypeAwareLint { diagnostics, used_directives })
+    }
+
+    /// Whether [`Linter::lint_types`] sends this file to tsrs: a script that
+    /// `[lint] ignore` does not skip and that a type-aware rule applies to.
+    fn type_checks(&self, rel: &str, lang: Lang) -> bool {
+        self.type_store.as_ref().is_some_and(|store| {
+            lang.is_script() && SourceType::from_path(rel).is_ok() && !self.ignores(rel) && !oxc_bridge::type_aware_rules_for(store, rel).is_empty()
+        })
     }
 
     /// Whether `[lint] ignore` excludes this repository-relative path.
@@ -188,15 +212,16 @@ impl Linter {
     /// Lint one file. Vue files lint their `<script>` blocks.
     pub fn lint(&self, rel: &str, lang: Lang, source: &str, fix: bool) -> Linted {
         let mut allocator = Allocator::default();
+        let type_checked = self.type_checks(rel, lang);
 
         if !fix {
-            let pass = oxc_bridge::run(&self.check, &self.natives, &allocator, rel, lang, source, false);
+            let pass = oxc_bridge::run(&self.check, &self.natives, &allocator, rel, lang, source, false, type_checked);
 
             return Linted { fixed: None, diagnostics: sorted(pass.diagnostics) };
         }
 
         let mut text = source.to_owned();
-        let mut pass = oxc_bridge::run(&self.fix, &self.natives, &allocator, rel, lang, &text, true);
+        let mut pass = oxc_bridge::run(&self.fix, &self.natives, &allocator, rel, lang, &text, true, type_checked);
 
         for _ in 0..MAX_FIX_ROUNDS {
             if pass.syntax_error || pass.fixes.is_empty() {
@@ -207,7 +232,7 @@ impl Linter {
 
             allocator.reset();
 
-            let relinted = oxc_bridge::run(&self.fix, &self.natives, &allocator, rel, lang, &next, true);
+            let relinted = oxc_bridge::run(&self.fix, &self.natives, &allocator, rel, lang, &next, true, type_checked);
 
             // A fix that breaks the parse is discarded along with the rest of its round.
             if relinted.syntax_error {

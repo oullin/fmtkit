@@ -228,7 +228,10 @@ fn fix_removes_an_unused_oxlint_directive_only() {
 fn directives_for_type_aware_rules_are_left_to_the_type_aware_lane() {
     let linter = reporting_unused("error", &[]);
 
-    for name in ["typescript/no-floating-promises", "@typescript-eslint/no-floating-promises", "@typescript-eslint/no-unsafe-assignment"] {
+    // oxc_linter matches a bare name by its last segment, so it names the type-aware rule too.
+    for name in
+        ["typescript/no-floating-promises", "@typescript-eslint/no-floating-promises", "@typescript-eslint/no-unsafe-assignment", "no-floating-promises"]
+    {
         let source = format!("// oxlint-disable-next-line {name}\nf();\n");
 
         assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, &source), [], "{name}");

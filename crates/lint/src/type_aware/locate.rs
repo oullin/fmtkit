@@ -35,6 +35,10 @@ struct Inputs<'a> {
 ///
 /// A path named by the environment or the configuration that is not an
 /// executable is an error rather than a reason to keep looking.
+///
+/// The path returned is absolute: tsrs runs from `root`, where a relative
+/// path, such as `FMTKIT_TSRS=./tools/tsrs` or a relative `PATH` entry, would
+/// name another file.
 pub fn locate(root: &Path, configured: Option<&str>) -> Result<PathBuf, TypeAwareError> {
     let exe = std::env::current_exe().ok();
     let canonical = exe.as_deref().and_then(|exe| exe.canonicalize().ok());
@@ -47,7 +51,7 @@ pub fn locate(root: &Path, configured: Option<&str>) -> Result<PathBuf, TypeAwar
         path_var: std::env::var_os("PATH"),
     };
 
-    resolve(inputs, is_executable, is_script)
+    resolve(inputs, is_executable, is_script).map(|found| std::path::absolute(&found).unwrap_or(found))
 }
 
 fn resolve(inputs: Inputs<'_>, executable: impl Fn(&Path) -> bool, script: impl Fn(&Path) -> bool) -> Result<PathBuf, TypeAwareError> {

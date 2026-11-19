@@ -409,6 +409,17 @@ pub fn type_aware(key: &str) -> bool {
     oxc_linter::rules::RULES.iter().any(|r| r.plugin_name() == "typescript" && r.name() == rule && r.is_tsgolint_rule())
 }
 
+/// The type-aware rule a disable directive names, by its bare name. oxc_linter
+/// matches a directive name to a rule by its last `/` segment, so a bare
+/// `no-floating-promises` names the type-aware rule as well as
+/// `typescript/no-floating-promises` does.
+fn directive_type_aware_rule(name: &str) -> Option<String> {
+    let key = normalize_rule_name(name);
+    let key = if type_aware(&key) || name.contains('/') { key } else { format!("typescript/{name}") };
+
+    type_aware(&key).then(|| key.rsplit_once('/').map_or_else(|| key.clone(), |(_, bare)| bare.to_owned()))
+}
+
 fn build_store(rc: &Map<String, Value>) -> Result<ConfigStore, String> {
     let oxlintrc = Oxlintrc::from_json_value(&Value::Object(rc.clone())).map_err(|e| e.to_string())?;
     let mut plugins = ExternalPluginStore::new(false);
@@ -471,7 +482,13 @@ pub struct Pass {
 
 /// One pass over `text`: parse and build semantic once per script section, run
 /// the native rules over it, then hand the same semantic to oxc_linter.
-pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, rel: &str, lang: Lang, text: &str, fix: bool) -> Pass {
+///
+/// `type_checked` says tsrs also checks this file. A directive that names no
+/// rule may then suppress a tsrs finding, which this pass cannot see, so its
+/// unused report carries no fix, and [`judge_type_aware`] withdraws the report
+/// when the directive did suppress one.
+#[allow(clippy::too_many_arguments, reason = "one pass reads every input once")]
+pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, rel: &str, lang: Lang, text: &str, fix: bool, type_checked: bool) -> Pass {
     let path = Path::new(rel);
     let index = LineIndex::new(text);
     let sections = sections(path, lang, text);
@@ -566,8 +583,9 @@ pub fn run(oxc: &oxc_linter::Linter, natives: &Natives, allocator: &Allocator, r
         if unused {
             match type_aware_names(text, message.span) {
                 TypeAwareNames::None => {}
+                TypeAwareNames::Ruleless if !type_checked => {}
                 TypeAwareNames::All => continue,
-                TypeAwareNames::Some => message.fixes = PossibleFixes::None,
+                TypeAwareNames::Some | TypeAwareNames::Ruleless => message.fixes = PossibleFixes::None,
             }
         }
 
@@ -617,7 +635,11 @@ pub fn type_aware_rules_for(store: &ConfigStore, rel: &str) -> Vec<(TsRule, Seve
 /// suppressed no finding of that rule here. A directive for a type-aware rule
 /// that is off may serve a type-aware linter beside fmtkit, so it is never
 /// reported. The unused-directive findings carry no fix.
-pub fn judge_type_aware(natives: &Natives, rel: &str, text: &str, findings: &[Finding], rules: &[(TsRule, Severity)]) -> Vec<Diagnostic> {
+///
+/// It also returns the line and column of each directive that names no rule
+/// and suppressed a finding here, whose unused report from [`run`] stands
+/// withdrawn.
+pub fn judge_type_aware(natives: &Natives, rel: &str, text: &str, findings: &[Finding], rules: &[(TsRule, Severity)]) -> (Vec<Diagnostic>, Vec<(u32, u32)>) {
     let index = LineIndex::new(text);
     let exempt = natives.exempt.for_file(rel);
     let unused = natives.unused_directives.filter(|_| !exempt.oxc(UNUSED_DIRECTIVE_RULE));
@@ -626,7 +648,7 @@ pub fn judge_type_aware(natives: &Natives, rel: &str, text: &str, findings: &[Fi
     let directives = text.contains("-disable").then(|| disable_directives(&allocator, rel, text)).flatten();
 
     if findings.is_empty() && (unused.is_none() || directives.is_none()) {
-        return out;
+        return (out, Vec::new());
     }
 
     for finding in findings {
@@ -663,7 +685,37 @@ pub fn judge_type_aware(natives: &Natives, rel: &str, text: &str, findings: &[Fi
         }
     }
 
-    out
+    let used_ruleless = match (unused, &directives) {
+        (Some(_), Some(host)) => used_ruleless_directives(text, host.disable_directives()).into_iter().map(|span| index.line_col(span.start)).collect(),
+        _ => Vec::new(),
+    };
+
+    (out, used_ruleless)
+}
+
+/// The directives that name no rule and suppressed a finding, by the outer
+/// span of their comment. oxc_linter keeps a ruleless comment's content span
+/// (without `//` or `/*`) in `disable_rule_comments`, but reports and
+/// collects unused comments by their outer span.
+fn used_ruleless_directives(text: &str, directives: &DisableDirectives) -> Vec<Span> {
+    let unused: FxHashSet<Span> = directives.collect_unused_disable_comments().iter().map(|comment| comment.span).collect();
+
+    directives
+        .disable_rule_comments()
+        .iter()
+        .filter(|comment| matches!(comment.r#type, RuleCommentType::All))
+        .filter_map(|comment| {
+            let start = comment.span.start.checked_sub(2)?;
+            let opener = text.get(start as usize..comment.span.start as usize)?;
+            let outer = match opener {
+                "//" => Span::new(start, comment.span.end),
+                "/*" => Span::new(start, comment.span.end + 2),
+                _ => return None,
+            };
+
+            (!unused.contains(&outer)).then_some(outer)
+        })
+        .collect()
 }
 
 /// The names in disable directives that name a type-aware rule in `rules`
@@ -686,8 +738,7 @@ fn unused_type_aware_directives(directives: &DisableDirectives, rules: &[(TsRule
         let RuleCommentType::Single(entries) = &comment.r#type else { continue };
 
         for rule in entries {
-            let key = normalize_rule_name(&rule.rule_name);
-            let on = type_aware(&key) && key.rsplit_once('/').is_some_and(|(_, bare)| rules.iter().any(|(r, _)| r.name == bare));
+            let on = directive_type_aware_rule(&rule.rule_name).is_some_and(|bare| rules.iter().any(|(r, _)| r.name == bare));
             let span = rule.name_span;
 
             if on && (names.contains(&span) || comments.iter().any(|c| c.start <= span.start && span.end <= c.end)) {
@@ -724,6 +775,8 @@ fn disable_directives<'a>(allocator: &'a Allocator, rel: &str, text: &'a str) ->
 }
 
 enum TypeAwareNames {
+    /// The directive names no rule, so it covers every rule, tsrs's included.
+    Ruleless,
     None,
     Some,
     All,
@@ -741,7 +794,12 @@ fn type_aware_names(text: &str, span: Span) -> TypeAwareNames {
         _ => body,
     };
     let names = directive_rule_names(names);
-    let aware = names.iter().filter(|name| type_aware(&normalize_rule_name(name))).count();
+
+    if names.is_empty() {
+        return TypeAwareNames::Ruleless;
+    }
+
+    let aware = names.iter().filter(|name| directive_type_aware_rule(name).is_some()).count();
 
     match aware {
         0 => TypeAwareNames::None,

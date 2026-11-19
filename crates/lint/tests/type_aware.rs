@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use fmtkit_config::{Exemption, Lint, TypeAwarePreset};
-use fmtkit_core::Severity;
+use fmtkit_core::{Lang, Severity};
 use fmtkit_lint::{Linter, UNUSED_DIRECTIVE_RULE};
 use serde_json::json;
 
@@ -51,7 +51,7 @@ impl Project {
         let overrides: Vec<(String, String)> = overrides.iter().map(|(f, t)| ((*f).to_owned(), (*t).to_owned())).collect();
         let found = linter.lint_types(self.root(), &self.tsrs, &files, &overrides).unwrap();
 
-        found.into_iter().map(|d| (d.file, d.rule, d.line, d.column, d.severity)).collect()
+        found.diagnostics.into_iter().map(|d| (d.file, d.rule, d.line, d.column, d.severity)).collect()
     }
 }
 
@@ -156,6 +156,41 @@ fn directives_suppress_findings_and_unused_ones_are_reported() {
     let other = only("typescript/no-for-in-array", json!("error"));
 
     assert_eq!(project.lint(&other, &["src/directives.ts"], &[]), []);
+}
+
+const RULELESS: &str = "import { save } from './api';
+
+export function go(): void {
+\t// oxlint-disable-next-line
+\tsave('a');
+\t// oxlint-disable-next-line
+\tvoid save('b');
+\t/* oxlint-disable-next-line */
+\tsave('c');
+}
+";
+
+/// A directive that names no rule may suppress a tsrs finding, which the
+/// file's own lint cannot see. That lint reports every directive here as
+/// unused but removes none, and tsrs withdraws the report for each one that
+/// suppressed its finding.
+#[test]
+fn a_ruleless_directive_that_suppresses_a_tsrs_finding_is_kept() {
+    let Some(project) = Project::new() else { return };
+
+    project.write("src/ruleless.ts", RULELESS);
+
+    let linter = Linter::new(&only("typescript/no-floating-promises", json!("error"))).unwrap();
+    let linted = linter.lint("src/ruleless.ts", Lang::Ts, RULELESS, true);
+    let unused: Vec<(u32, u32)> = linted.diagnostics.iter().filter(|d| d.rule == UNUSED_DIRECTIVE_RULE).map(|d| (d.line, d.column)).collect();
+
+    assert_eq!(linted.fixed, None);
+    assert_eq!(unused, [(4, 2), (6, 2), (8, 2)]);
+
+    let found = linter.lint_types(project.root(), &project.tsrs, &["src/ruleless.ts".to_owned()], &[]).unwrap();
+
+    assert_eq!(found.diagnostics, []);
+    assert_eq!(found.used_directives, [("src/ruleless.ts".to_owned(), 4, 2), ("src/ruleless.ts".to_owned(), 8, 2)]);
 }
 
 #[test]

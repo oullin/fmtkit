@@ -11,9 +11,10 @@
 
 use std::path::Path;
 
-use fmtkit_core::{Diagnostic, FileOutcome, Lang};
+use fmtkit_core::{FileOutcome, Lang};
 use fmtkit_discover::SourceFile;
-use fmtkit_lint::{Linter, TypeAwareError};
+use fmtkit_lint::{Linter, TypeAwareError, TypeAwareLint, UNUSED_DIRECTIVE_RULE};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// The files to send: every script file in scope that `[lint] ignore` does
 /// not skip. Vue files are left out, as the protocol has no Vue support.
@@ -25,28 +26,39 @@ pub fn files(linter: Option<&Linter>, script_files: &[SourceFile]) -> Vec<String
     script_files.iter().filter(|file| file.lang.is_script() && !linter.ignores(&file.rel)).map(|file| file.rel.clone()).collect()
 }
 
-pub fn run(root: &Path, linter: &Linter, tsrs: &Path, files: &[String]) -> Result<Vec<Diagnostic>, TypeAwareError> {
+pub fn run(root: &Path, linter: &Linter, tsrs: &Path, files: &[String]) -> Result<TypeAwareLint, TypeAwareError> {
     linter.lint_types(root, tsrs, files, &[])
 }
 
 /// Add each finding to its file's outcome. A file that was sent but has no
 /// outcome (a generated file) or failed keeps nothing; a finding for a file
-/// that was not sent (a tsconfig error) gets an outcome of its own.
-pub fn merge(outcomes: &mut Vec<FileOutcome>, sent: &[String], diagnostics: Vec<Diagnostic>) {
+/// that was not sent (a tsconfig error) gets an outcome of its own. A
+/// directive that names no rule and suppressed a tsrs finding loses the
+/// unused report the file's own lint gave it.
+pub fn merge(outcomes: &mut Vec<FileOutcome>, sent: &[String], found: TypeAwareLint) {
+    let mut index: FxHashMap<String, usize> = outcomes.iter().enumerate().map(|(at, outcome)| (outcome.file.clone(), at)).collect();
+    let sent: FxHashSet<&str> = sent.iter().map(String::as_str).collect();
     let mut touched = Vec::new();
 
-    for diagnostic in diagnostics {
-        match outcomes.iter().position(|outcome| outcome.file == diagnostic.file) {
-            Some(at) if outcomes[at].error.is_none() => {
+    for (file, line, column) in &found.used_directives {
+        if let Some(&at) = index.get(file) {
+            outcomes[at].lint.retain(|d| !(d.rule == UNUSED_DIRECTIVE_RULE && d.line == *line && d.column == *column));
+        }
+    }
+
+    for diagnostic in found.diagnostics {
+        match index.get(&diagnostic.file) {
+            Some(&at) if outcomes[at].error.is_none() => {
                 outcomes[at].lint.push(diagnostic);
                 touched.push(at);
             }
             Some(_) => {}
-            None if sent.contains(&diagnostic.file) => {}
+            None if sent.contains(diagnostic.file.as_str()) => {}
             None => {
                 let file = diagnostic.file.clone();
 
                 outcomes.push(FileOutcome { lint: vec![diagnostic], ..FileOutcome::new(&file, Lang::from_path(Path::new(&file))) });
+                index.insert(file, outcomes.len() - 1);
                 touched.push(outcomes.len() - 1);
             }
         }
@@ -66,6 +78,7 @@ pub fn merge(outcomes: &mut Vec<FileOutcome>, sent: &[String], diagnostics: Vec<
 #[cfg(test)]
 mod tests {
     use fmtkit_core::{Diagnostic, FileOutcome, Lang, Severity};
+    use fmtkit_lint::{TypeAwareLint, UNUSED_DIRECTIVE_RULE};
 
     use super::merge;
 
@@ -87,7 +100,7 @@ mod tests {
             finding("tsconfig.json", 0, "typescript/program"),
         ];
 
-        merge(&mut outcomes, &sent, found);
+        merge(&mut outcomes, &sent, TypeAwareLint { diagnostics: found, used_directives: Vec::new() });
 
         let rules: Vec<(&str, u32)> = outcomes[0].lint.iter().map(|d| (d.rule.as_str(), d.line)).collect();
 
@@ -96,5 +109,19 @@ mod tests {
         assert_eq!(outcomes.len(), 3);
         assert_eq!(outcomes[2].file, "tsconfig.json");
         assert_eq!(outcomes[2].lint[0].rule, "typescript/program");
+    }
+
+    #[test]
+    fn a_ruleless_directive_that_suppressed_a_tsrs_finding_is_not_unused() {
+        let mut outcomes = vec![FileOutcome {
+            lint: vec![finding("a.ts", 3, UNUSED_DIRECTIVE_RULE), finding("a.ts", 7, UNUSED_DIRECTIVE_RULE)],
+            ..FileOutcome::new("a.ts", Some(Lang::Ts))
+        }];
+
+        merge(&mut outcomes, &["a.ts".into()], TypeAwareLint { diagnostics: Vec::new(), used_directives: vec![("a.ts".into(), 3, 1)] });
+
+        let left: Vec<u32> = outcomes[0].lint.iter().map(|d| d.line).collect();
+
+        assert_eq!(left, [7]);
     }
 }

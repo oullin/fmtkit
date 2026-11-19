@@ -110,6 +110,26 @@ pub fn lossy(value: oxc_str::JSStr<'_>) -> Cow<'_, str> {
     value.as_str().map_or_else(|| Cow::Owned(value.chars().map(|c| c.to_char().unwrap_or('\u{fffd}')).collect()), Cow::Borrowed)
 }
 
+/// A JavaScript string as an identity: distinct strings stay distinct. A
+/// lone surrogate is written as U+FFFD followed by its code unit in four hex
+/// digits, and U+FFFD itself as U+FFFD `fffd`, the encoding oxc used before
+/// `JSStr`. Use [`lossy`] for text a user reads.
+pub fn identity(value: oxc_str::JSStr<'_>) -> Cow<'_, str> {
+    match value.as_str() {
+        Some(text) if !text.contains('\u{fffd}') => Cow::Borrowed(text),
+        _ => Cow::Owned(
+            value
+                .chars()
+                .map(|c| match c.to_char() {
+                    Some('\u{fffd}') => "\u{fffd}fffd".to_owned(),
+                    Some(c) => c.to_string(),
+                    None => format!("\u{fffd}{:04x}", c.to_u32()),
+                })
+                .collect(),
+        ),
+    }
+}
+
 /// Every native rule, by full name.
 pub fn registry() -> impl Iterator<Item = (&'static str, Factory)> {
     anti_slop::RULES

@@ -389,3 +389,20 @@ fn recommended_alphabet() -> &'static str {
         characters.concat()
     })
 }
+
+/// Enum members named by different lone surrogates are different members
+/// when dependencies are matched, so they form no cycle.
+#[test]
+fn lone_surrogate_member_names_stay_distinct() {
+    let config = fmtkit_config::Lint {
+        bundled: false,
+        rules: [("perfectionist/sort-enums".to_owned(), serde_json::json!(["error", { "type": "unsorted", "useExperimentalDependencyDetection": false }]))]
+            .into(),
+        ..fmtkit_config::Lint::default()
+    };
+    let linter = fmtkit_lint::Linter::new(&config).unwrap();
+    let source = "enum E {\n\t'\\uD801' = 1,\n\tA = E['\\uD801'],\n\t'\\uD800' = E.A + 1,\n}\n";
+    let linted = linter.lint("a.ts", fmtkit_core::Lang::Ts, source, true);
+
+    assert_eq!(linted, fmtkit_lint::Linted::default());
+}

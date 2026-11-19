@@ -632,6 +632,7 @@ dependencies = [
  "fmtkit-core",
  "fmtkit-discover",
  "fmtkit-engine",
+ "fmtkit-lint",
  "fmtkit-report",
  "mimalloc",
  "postcard",
@@ -765,6 +766,7 @@ dependencies = [
  "regress",
  "rustc-hash",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

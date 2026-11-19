@@ -4,7 +4,7 @@
 //! Reports the spread in every position (object and array literals, call
 //! arguments, JSX spread attributes), looking through parentheses only:
 //! `...((a ? b : c) as T)` passes. Unlike
-//! `anti-slop/no-conditional-empty-object-spread`, the branches need not be
+//! `quality/no-conditional-empty-object-spread`, the branches need not be
 //! empty. No options.
 
 use oxc_ast::AstKind;

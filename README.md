@@ -26,7 +26,7 @@ Release archives (`fmtkit-<target>.tar.xz`) cover `aarch64`/`x86_64` on macOS an
 
 fmtkit finds the helper through `FMTKIT_GO_HELPER`, then beside itself (as invoked, then with symlinks resolved), then in `../share/fmtkit/` (Homebrew), then on `PATH`. A missing or incompatible helper exits with code 3.
 
-No Node.js is needed. `go` on `PATH` is needed only for `go vet` and `--resolve-imports`.
+No Node.js is needed. `go` on `PATH` is needed only for `go vet` and `--resolve-imports`. Opt-in [type-aware rules](docs/type-aware.md) also need the native `tsrs` binary (`npm i -D tsrs`).
 
 ## Quickstart
 
@@ -70,7 +70,7 @@ fmtkit changes layout and applies safe lint fixes; it does not change behaviour 
 
 **Vue, HTML, Markdown:** formatted as whole documents. Scripts inside them go through the script pipeline; styles and CSS fences through the oxc CSS formatter. Markdown prose is not rewrapped.
 
-**Lint:** Oxlint (pinned to `oxlint_v1.94.0`) with a bundled policy of 210 rules, including native `perfectionist/*`, `@nkzw/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default; the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
+**Lint:** Oxlint (pinned to `oxlint_v1.94.0`) with a bundled policy of 221 rules, derived from [`@nkzw/oxlint-config`](https://github.com/nkzw-tech/oxlint-config) 3.0 with its sorting preset, including native `perfectionist/*`, `@nkzw/*`, `quality/*`, and `no-only-tests/*` rules. The [`anti-slop/*`, `anti-slop-martinfowler/*` and `anti-slop-effect/*` rules](docs/anti-slop.md) are available but off by default (twelve former `anti-slop/*` rules are now the bundled `quality/*` rules, and their old names still work as aliases); the last two flag code smells from Martin Fowler's _Refactoring_ and check Effect programs. The native [`boundaries/*` rules](docs/boundaries.md) provide opt-in TypeScript file, type, and module policies ported from Omniyat’s `oc` engine. `error` fails the run; `warn` does not. The native [observability catch rules](docs/observability-catches.md) are also off by default; enable them to require catch reporting or propagation and reject promise handlers that discard errors. The native [`perf/*` rules](docs/perf.md) are opt-in too: they flag regular expressions built on every call, repeated URL parsing, Drizzle reads of every column, and queries awaited inside loops. The opt-in [`naming/*` rules](docs/naming.md) report folders, files and declarations whose names start with what their path already says (`naming/no-redundant-name-prefix`), and declared names with more words than a limit (`naming/max-name-words`).
 
 ### What it leaves alone
 
@@ -120,6 +120,7 @@ printf 'const a = {b:1}\n' | fmtkit format --stdin-filepath web/x.ts
 | `FMTKIT_JOBS`      | Worker threads when `--jobs` is not given.                 |
 | `FMTKIT_CACHE_DIR` | Cache directory (default: the OS cache dir + `fmtkit/v2`). |
 | `FMTKIT_GO_HELPER` | Path of `fmtkit-go-helper`.                                |
+| `FMTKIT_TSRS`      | Path of the native `tsrs` binary, for type-aware rules.    |
 | `NO_COLOR`         | Disable colour under `--color auto`.                       |
 
 ### Cache
@@ -180,10 +181,13 @@ arrow_parens = "always"               # "always", "avoid"
 bundled = true                        # false = start from no rules
 ignore = []                           # files lint skips (still formatted)
 # exemptions = "lint-exempt.toml"     # [[exempt]] entries, relative to this file
+# type_aware = "nkzw"                 # nkzw's ten type-aware rules, run through tsrs
+# tsrs = "node_modules/@tsrs/darwin-arm64/tsrs"   # where tsrs is, if fmtkit cannot find it
 
 [lint.rules]
 eqeqeq = ["error", "always"]          # severity, or [severity, options...]
-"anti-slop/no-object-parameters" = "warn"
+"quality/no-object-parameters" = "warn"
+"unused-directive" = "warn"              # default "error"; "off" stops the reports
 
 [complexity]
 cyclomatic = 15                       # 0 disables
@@ -191,6 +195,10 @@ cognitive = 20
 ```
 
 A rule setting replaces the bundled one entirely, options included, so repeat the options when you only change the severity. Severities are `off`/`allow`, `warn`, and `error`/`deny`.
+
+The bundled policy reports a disable directive (`// oxlint-disable-next-line rule`, or its `eslint-` form) that suppresses nothing as an `unused-directive` error, as `@nkzw/oxlint-config` 3.0 does. `fix` removes an unused `oxlint-` directive; it leaves an `eslint-` directive in place, because ESLint may still read it. Configure it as the rule `unused-directive` under `[lint.rules]` (`"warn"`, or `"off"` to stop the reports) or exempt files from it under `[[exempt]]`; it takes no options. Without the bundled policy it is off until you turn it on.
+
+Type-aware rules (oxc's tsgolint rules, such as `typescript/no-floating-promises`) need the TypeScript type checker. They are opt-in: name one under `[lint.rules]`, or set `[lint] type_aware = "nkzw"` for the ten that `@nkzw/oxlint-config` 3.0 enables, which the bundled policy leaves out. fmtkit then runs them once per run through the native [tsrs](https://www.npmjs.com/package/tsrs) binary (`npm i -D tsrs`) and reports them like any other finding. Directives, `[[exempt]]` entries, and `[lint] ignore` apply to them. A run that needs tsrs and cannot find it exits with code 2 and says how to install it. These findings are not cached and have no fixes; see [Type-aware rules](docs/type-aware.md).
 
 ## Lint exemptions
 
@@ -287,7 +295,7 @@ Needs Rust 1.96+, Go 1.27.4, and Bash. Build output goes to `storage/`.
 
 `scripts/task.sh` also provides `self-check` (format the tree with `--all --no-cache` and fail if anything moves) and `coverage` (90% line coverage for Rust and Go). CI runs lint, tests on Ubuntu and macOS, coverage, smoke tests, the self-check, a benchmark gate (more than 10% slower fails), and nightly fuzzing.
 
-The code lives in `crates/` (cli, engine, discover, config, core, ts, hosts, lint, go, cache, report, testkit) and `go/helper`. Only the engine writes source files. The workspace forbids unsafe code, denies pedantic clippy, and never panics on input. See also [Upgrading oxc](docs/oxc-upgrade.md), [Known upstream issues](docs/known-issues.md), and `go/helper/proto/PROTOCOL.md`.
+The code lives in `crates/` (cli, engine, discover, config, core, ts, hosts, lint, go, cache, report, testkit) and `go/helper`. Only the engine writes source files. The workspace forbids unsafe code, denies pedantic clippy, and never panics on input. See also [Upgrading oxc](docs/oxc-upgrade.md), [Known upstream issues](docs/known-issues.md), [Type-aware rules](docs/type-aware.md), and `go/helper/proto/PROTOCOL.md`.
 
 **Releases:** a merge to `main` with an untagged version in `Cargo.toml` is tagged and released (archives, Homebrew, Docker) only while the repository variable `RELEASES` is `enabled`.
 

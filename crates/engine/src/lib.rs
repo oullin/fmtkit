@@ -6,6 +6,7 @@ mod complexity;
 mod go_lane;
 mod progress;
 mod script_lane;
+mod type_aware_lane;
 mod write;
 
 use std::path::{Path, PathBuf};
@@ -19,7 +20,7 @@ use fmtkit_config::Config;
 use fmtkit_core::{Diagnostic, FileOutcome, Lane, Lang, Mode, REPORT_SCHEMA, Report, RunResult, Severity, VetOutcome};
 use fmtkit_discover::{Discovery, Memory, Repository, Scope, SourceFile};
 use fmtkit_go::{GoError, Helper, VetMemo, VetTargets};
-use fmtkit_lint::{LintError, Linter};
+use fmtkit_lint::{LintError, Linter, TypeAwareError};
 
 pub use progress::Progress;
 
@@ -31,6 +32,8 @@ pub enum EngineError {
     Lint(#[from] LintError),
     #[error(transparent)]
     Go(#[from] GoError),
+    #[error(transparent)]
+    TypeAware(#[from] TypeAwareError),
     #[error("worker pool: {0}")]
     Pool(String),
     #[error("{path}: unsupported file type")]
@@ -42,7 +45,11 @@ pub enum EngineError {
 impl EngineError {
     /// Whether the failure is fmtkit's own (exit 3) rather than the user's input (exit 2).
     pub fn is_internal(&self) -> bool {
-        matches!(self, Self::Go(_) | Self::Pool(_))
+        match self {
+            Self::Go(_) | Self::Pool(_) => true,
+            Self::TypeAware(e) => !e.is_setup(),
+            _ => false,
+        }
     }
 }
 
@@ -203,14 +210,33 @@ impl Session {
 
         let linter = self.linter.as_ref().map(|(_, linter)| linter).filter(|_| script_files.iter().any(|f| f.lang.is_lintable()));
         let state = Run { config, mode: options.mode, cache, linter, progress };
+        let to_check = type_aware_lane::files(linter, &script_files);
 
-        let (scripts, go, vet) = thread::scope(|s| {
+        // A run that needs tsrs and cannot find it stops before writing anything.
+        let tsrs = match linter.filter(|_| !to_check.is_empty()) {
+            Some(linter) => Some((linter, linter.locate_tsrs(&options.root)?)),
+            None => None,
+        };
+
+        // tsrs reads the files from disk: in check mode, which writes
+        // nothing, it runs beside the other lanes; in format mode, after them.
+        let beside = options.mode == Mode::Check;
+        let type_aware = |(linter, tsrs): &(&Linter, PathBuf)| type_aware_lane::run(&options.root, linter, tsrs, &to_check);
+
+        let (mut scripts, go, vet, types) = thread::scope(|s| {
             let vet = s.spawn(|| vet_for(config, options, cache, &discovery, &go_files));
             let go = (!go_files.is_empty()).then(|| s.spawn(|| go_lane::process(&state, options.go_helper.as_deref(), &go_files, pool)));
+            let types = tsrs.as_ref().filter(|_| beside).map(|tsrs| s.spawn(|| type_aware(tsrs)));
             let scripts: Vec<FileOutcome> = pool.install(|| script_files.par_iter().filter_map(|file| script_lane::process(&state, file)).collect());
 
-            (scripts, go.map(join), join(vet))
+            (scripts, go.map(join), join(vet), types.map(join))
         });
+
+        let types = types.or_else(|| tsrs.as_ref().map(type_aware));
+
+        if let Some(types) = types {
+            type_aware_lane::merge(&mut scripts, &to_check, types?);
+        }
 
         let go = go.transpose()?.unwrap_or_default();
         let lanes = selected_lanes(&options.scope);

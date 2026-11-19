@@ -171,6 +171,195 @@ fn disable_directives_apply() {
     assert_eq!(rules_of(&linter, "a.js", Lang::Js, source), [("eslint/eqeqeq".to_owned(), 3, 7)]);
 }
 
+fn reporting_unused(setting: &str, rules: &[(&str, Value)]) -> Linter {
+    let mut rules = rules.to_vec();
+
+    rules.push((fmtkit_lint::UNUSED_DIRECTIVE_RULE, json!(setting)));
+    linter(&rules)
+}
+
+#[test]
+fn unused_directives_are_reported_at_the_configured_severity() {
+    let source = "// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n// oxlint-disable-next-line eqeqeq\nif (a == 2) {}\n";
+
+    assert_eq!(rules_of(&linter(&[("eqeqeq", json!("error"))]), "a.js", Lang::Js, source), []);
+
+    for (setting, severity) in [("warn", Severity::Warning), ("error", Severity::Error)] {
+        let diagnostics = reporting_unused(setting, &[("eqeqeq", json!("error"))]).lint("a.js", Lang::Js, source, false).diagnostics;
+        let found: Vec<_> = diagnostics.iter().map(|d| (d.rule.as_str(), d.line, d.column, d.severity)).collect();
+
+        assert_eq!(found, [(fmtkit_lint::UNUSED_DIRECTIVE_RULE, 1, 1, severity)], "{setting}");
+    }
+
+    assert_eq!(rules_of(&reporting_unused("off", &[("eqeqeq", json!("error"))]), "a.js", Lang::Js, source), []);
+}
+
+#[test]
+fn a_directive_that_suppresses_a_native_finding_is_used() {
+    let linter = reporting_unused("error", &[("no-only-tests/no-only-tests", json!("error"))]);
+    let source = "// oxlint-disable-next-line no-only-tests/no-only-tests\ndescribe.only('a', () => {});\n";
+
+    assert_eq!(rules_of(&linter, "a.test.ts", Lang::Ts, source), []);
+    assert_eq!(
+        rules_of(&linter, "a.test.ts", Lang::Ts, "// oxlint-disable-next-line no-only-tests/no-only-tests\ndescribe('a', () => {});\n"),
+        [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]
+    );
+}
+
+#[test]
+fn fix_removes_an_unused_oxlint_directive_only() {
+    let linter = reporting_unused("error", &[("eqeqeq", json!("error"))]);
+    let oxlint = linter.lint("a.js", Lang::Js, "// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n", true);
+
+    assert_eq!(oxlint.fixed.as_deref(), Some("if (a === 1) {}\n"));
+    assert_eq!(oxlint.diagnostics, []);
+
+    // ESLint may still need an `eslint-` directive, so removing one is only a suggestion.
+    let eslint = linter.lint("a.js", Lang::Js, "// eslint-disable-next-line eqeqeq\nif (a === 1) {}\n", true);
+
+    assert_eq!(eslint.fixed, None);
+    assert_eq!(eslint.diagnostics.len(), 1);
+}
+
+/// The per-file lint never judges a directive for a type-aware rule: the
+/// type-aware lane does when the rule is on (tests/type_aware.rs), and when it
+/// is off the directive may serve a type-aware linter beside fmtkit.
+#[test]
+fn directives_for_type_aware_rules_are_left_to_the_type_aware_lane() {
+    let linter = reporting_unused("error", &[]);
+
+    // oxc_linter matches a bare name by its last segment, so it names the type-aware rule too.
+    for name in
+        ["typescript/no-floating-promises", "@typescript-eslint/no-floating-promises", "@typescript-eslint/no-unsafe-assignment", "no-floating-promises"]
+    {
+        let source = format!("// oxlint-disable-next-line {name}\nf();\n");
+
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, &source), [], "{name}");
+    }
+
+    assert_eq!(
+        rules_of(&linter, "a.ts", Lang::Ts, "// oxlint-disable-next-line typescript/no-explicit-any\nf();\n"),
+        [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]
+    );
+
+    // Rule names end where oxc_linter ends them: at `--`, or at a `-` with
+    // whitespace on both sides, and they split on any whitespace.
+    for directive in [
+        "// oxlint-disable-next-line typescript/no-floating-promises - awaited by the caller",
+        "// oxlint-disable-next-line typescript/no-floating-promises -- awaited - by the caller",
+        "// oxlint-disable-next-line typescript/no-floating-promises\u{a0}@typescript-eslint/no-unsafe-assignment",
+    ] {
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, &format!("{directive}\nf();\n")), [], "{directive}");
+    }
+
+    // With a rule fmtkit runs beside it, the directive is reported but kept.
+    let mixed = "/* oxlint-disable-next-line typescript/no-floating-promises, eqeqeq -- awaited by the caller */\nf();\n";
+    let linted = linter.lint("a.ts", Lang::Ts, mixed, true);
+
+    assert_eq!(linted.fixed, None);
+    assert_eq!(linted.diagnostics.len(), 1);
+}
+
+#[test]
+fn unused_directives_in_vue_scripts_are_reported() {
+    let linter = reporting_unused("error", &[("eqeqeq", json!("error"))]);
+    let source = "<script>\n// oxlint-disable-next-line eqeqeq\nif (a === 1) {}\n</script>\n";
+
+    assert_eq!(rules_of(&linter, "a.vue", Lang::Vue, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 2, 1)]);
+}
+
+#[test]
+fn the_bundled_policy_reports_unused_directives_unless_turned_off() {
+    let source = "// oxlint-disable-next-line eqeqeq\nexport const a = 1;\n";
+
+    assert_eq!(rules_of(&Linter::new(&Lint::default()).unwrap(), "a.ts", Lang::Ts, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]);
+    let off = Lint { rules: [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), json!("off"))].into(), ..Lint::default() };
+
+    assert_eq!(rules_of(&Linter::new(&off).unwrap(), "a.ts", Lang::Ts, source), []);
+
+    for setting in [json!("loud"), json!(["error", {}])] {
+        let error = Linter::new(&only(&[(fmtkit_lint::UNUSED_DIRECTIVE_RULE, setting.clone())])).err().expect("an invalid setting is refused");
+
+        assert!(matches!(&error, LintError::Rule { rule, .. } if rule == fmtkit_lint::UNUSED_DIRECTIVE_RULE), "{setting}: {error}");
+    }
+}
+
+#[test]
+fn unused_directives_can_be_exempted() {
+    let exempt = vec![fmtkit_config::Exemption { rule: fmtkit_lint::UNUSED_DIRECTIVE_RULE.into(), reason: "generated".into(), paths: vec!["gen/".into()] }];
+    let config = Lint { exempt, ..only(&[("eqeqeq", json!("error")), (fmtkit_lint::UNUSED_DIRECTIVE_RULE, json!("error"))]) };
+    let linter = Linter::new(&config).unwrap();
+    let source = "// oxlint-disable-next-line eqeqeq\nexport const a = 1;\n";
+
+    assert_eq!(rules_of(&linter, "gen/a.ts", Lang::Ts, source), []);
+    assert_eq!(rules_of(&linter, "src/a.ts", Lang::Ts, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]);
+}
+
+/// Naming a type-aware rule under `[lint.rules]` is the opt-in: the config
+/// builds, the rule is listed for the type-aware lane, and the in-process
+/// lint never reports it.
+#[test]
+fn type_aware_rules_are_opt_in() {
+    for name in ["typescript/no-floating-promises", "@typescript-eslint/await-thenable"] {
+        let linter = Linter::new(&only(&[(name, json!("error"))])).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let key = name.replace("@typescript-eslint/", "typescript/");
+
+        assert_eq!(linter.type_aware_rules(), [key], "{name}");
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, "async function f() {}\nf();\nawait 1;\n"), [], "{name}");
+        assert!(Linter::new(&only(&[(name, json!("off"))])).unwrap().type_aware_rules().is_empty(), "{name} may be turned off");
+    }
+
+    // The bundled `correctness` category holds type-aware rules too; they run only when named.
+    assert_eq!(Linter::new(&Lint::default()).unwrap().type_aware_rules(), [] as [String; 0]);
+
+    let options = Linter::new(&only(&[("typescript/return-await", json!(["error", "error-handling-correctness-only"]))])).unwrap();
+
+    assert_eq!(options.type_aware_rules(), ["typescript/return-await"]);
+
+    let error = Linter::new(&only(&[("typescript/return-await", json!(["error", "always", "never"]))])).err().expect("two options are refused");
+
+    assert!(matches!(&error, LintError::Rule { rule, message } if rule == "typescript/return-await" && message.contains("at most one option")), "{error}");
+}
+
+#[test]
+fn the_nkzw_preset_turns_on_its_ten_type_aware_rules() {
+    let preset = Lint { type_aware: Some(fmtkit_config::TypeAwarePreset::Nkzw), ..Lint::default() };
+    let linter = Linter::new(&preset).unwrap();
+
+    assert_eq!(
+        linter.type_aware_rules(),
+        [
+            "typescript/await-thenable",
+            "typescript/no-array-delete",
+            "typescript/no-duplicate-type-constituents",
+            "typescript/no-floating-promises",
+            "typescript/no-for-in-array",
+            "typescript/no-misused-promises",
+            "typescript/no-misused-spread",
+            "typescript/no-unsafe-unary-minus",
+            "typescript/require-array-sort-compare",
+            "typescript/return-await",
+        ]
+    );
+
+    // `[lint.rules]` replaces a preset rule; without the bundled policy the preset still applies.
+    let tuned = Lint { rules: [("typescript/no-floating-promises".to_owned(), json!("off"))].into(), ..preset.clone() };
+
+    assert!(!Linter::new(&tuned).unwrap().type_aware_rules().iter().any(|rule| rule.ends_with("no-floating-promises")));
+    assert_eq!(Linter::new(&Lint { bundled: false, ..preset }).unwrap().type_aware_rules().len(), 10);
+}
+
+#[test]
+fn type_aware_rules_can_be_exempted() {
+    let exempt = vec![fmtkit_config::Exemption { rule: "@typescript-eslint/no-floating-promises".into(), reason: "r".into(), paths: vec!["legacy/".into()] }];
+
+    assert!(Linter::new(&Lint { exempt: exempt.clone(), ..only(&[("typescript/no-floating-promises", json!("error"))]) }).is_ok());
+
+    let off = Linter::new(&Lint { exempt, ..only(&[("typescript/no-floating-promises", json!("off"))]) });
+
+    assert!(matches!(off, Err(LintError::Exempt { .. })));
+}
+
 #[test]
 fn ignore_patterns_match_paths_and_parents() {
     let config = Lint { ignore: vec!["dist/".into(), "*.gen.ts".into(), "/root-only.ts".into()], ..only(&[]) };

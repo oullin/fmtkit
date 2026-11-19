@@ -12,31 +12,19 @@
 mod max_doc_comment_lines;
 mod max_ternary_depth;
 mod no_ambient_nondeterminism;
-mod no_array_filter_map;
-mod no_chained_type_assertions;
-mod no_conditional_empty_object_spread;
 mod no_conditional_spread;
 mod no_disabled_type_assertion_rules;
 mod no_hookless_use_function;
-mod no_known_value_widening;
 mod no_low_value_comments;
 mod no_module_mocking;
-mod no_object_parameters;
 mod no_polling_loop_in_tests;
 mod no_real_time_wait_in_tests;
-mod no_reduce_accumulator_copy;
-mod no_reflect_apply;
-mod no_reflect_get;
 mod no_reprovide_ambient_service;
 mod no_runtime_typeof;
 mod no_shape_in_symbol_names;
 mod no_test_in_loop;
 mod no_unknown_parameters;
-mod no_unknown_returns;
-mod no_unknown_type_aliases;
 mod no_unreasoned_test_skip;
-mod no_unsafe_dictionary_type;
-mod no_widen_then_assert;
 mod require_readable_spacing;
 mod require_safety_comment_for_type_assertion;
 mod require_suppression_reason;
@@ -117,31 +105,19 @@ fn every_rule_is_registered() {
             "anti-slop/max-doc-comment-lines",
             "anti-slop/max-ternary-depth",
             "anti-slop/no-ambient-nondeterminism",
-            "anti-slop/no-array-filter-map",
-            "anti-slop/no-chained-type-assertions",
-            "anti-slop/no-conditional-empty-object-spread",
             "anti-slop/no-conditional-spread",
             "anti-slop/no-disabled-type-assertion-rules",
             "anti-slop/no-hookless-use-function",
-            "anti-slop/no-known-value-widening",
             "anti-slop/no-low-value-comments",
             "anti-slop/no-module-mocking",
-            "anti-slop/no-object-parameters",
             "anti-slop/no-polling-loop-in-tests",
             "anti-slop/no-real-time-wait-in-tests",
-            "anti-slop/no-reduce-accumulator-copy",
-            "anti-slop/no-reflect-apply",
-            "anti-slop/no-reflect-get",
             "anti-slop/no-reprovide-ambient-service",
             "anti-slop/no-runtime-typeof",
             "anti-slop/no-shape-in-symbol-names",
             "anti-slop/no-test-in-loop",
             "anti-slop/no-unknown-parameters",
-            "anti-slop/no-unknown-returns",
-            "anti-slop/no-unknown-type-aliases",
             "anti-slop/no-unreasoned-test-skip",
-            "anti-slop/no-unsafe-dictionary-type",
-            "anti-slop/no-widen-then-assert",
             "anti-slop/require-readable-spacing",
             "anti-slop/require-safety-comment-for-type-assertion",
             "anti-slop/require-suppression-reason",

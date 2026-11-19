@@ -22,12 +22,15 @@ use super::shared::{comment_value, is_js_space};
 pub const NAME: &str = "anti-slop/no-disabled-type-assertion-rules";
 
 /// The rules that keep type assertions out. An inline disable of any of them
-/// lets a cast through.
-const DEFAULT_RULES: [&str; 6] = [
+/// lets a cast through. `anti-slop/no-chained-type-assertions` and
+/// `anti-slop/no-widen-then-assert` are aliases of the `quality/` rules.
+const DEFAULT_RULES: [&str; 8] = [
     "anti-slop/no-chained-type-assertions",
     "anti-slop/no-widen-then-assert",
     "anti-slop/require-safety-comment-for-type-assertion",
     "effecttsgo/unsafe-effect-type-assertion",
+    "quality/no-chained-type-assertions",
+    "quality/no-widen-then-assert",
     "typescript/consistent-type-assertions",
     "typescript/no-unsafe-type-assertion",
 ];

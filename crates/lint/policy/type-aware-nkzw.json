@@ -1,0 +1,39 @@
+{
+	"rules": {
+		"typescript/await-thenable": [
+			"error",
+			{
+				"allowMixedPromiseArrays": true
+			}
+		],
+		"typescript/no-array-delete": "error",
+		"typescript/no-duplicate-type-constituents": "error",
+		"typescript/no-for-in-array": "error",
+		"typescript/no-misused-promises": [
+			"error",
+			{
+				"checksVoidReturn": false
+			}
+		],
+		"typescript/no-misused-spread": "error",
+		"typescript/no-unsafe-unary-minus": "error",
+		"typescript/require-array-sort-compare": "error",
+		"typescript/return-await": [
+			"error",
+			"error-handling-correctness-only"
+		]
+	},
+	"overrides": [
+		{
+			"files": [
+				"**/*.ts",
+				"**/*.tsx",
+				"**/*.mts",
+				"**/*.cts"
+			],
+			"rules": {
+				"typescript/no-floating-promises": "error"
+			}
+		}
+	]
+}

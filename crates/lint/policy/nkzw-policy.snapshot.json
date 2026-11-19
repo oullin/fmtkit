@@ -1,6 +1,6 @@
 {
-	"source": "https://raw.githubusercontent.com/nkzw-tech/oxlint-config/cb48b60893ebf3d6ec0655b295fce70fb51c376a/index.js",
-	"version": "2.0.1",
+	"source": "https://raw.githubusercontent.com/nkzw-tech/oxlint-config/fca2f5b6446c3df7a8ce44688c2847898988b593/with-sorting.js",
+	"version": "3.0.0",
 	"config": {
 		"categories": {
 			"correctness": "off"
@@ -17,6 +17,10 @@
 				"specifier": "@nkzw/eslint-plugin"
 			},
 			{
+				"name": "quality",
+				"specifier": "@nkzw/oxlint-config/quality"
+			},
+			{
 				"name": "no-only-tests",
 				"specifier": "eslint-plugin-no-only-tests"
 			},
@@ -25,6 +29,10 @@
 				"specifier": "eslint-plugin-perfectionist"
 			}
 		],
+		"options": {
+			"reportUnusedDisableDirectives": "error",
+			"typeAware": true
+		},
 		"overrides": [
 			{
 				"files": [
@@ -34,6 +42,7 @@
 					"**/*.cts"
 				],
 				"rules": {
+					"@typescript-eslint/no-floating-promises": "error",
 					"constructor-super": "off",
 					"getter-return": "off",
 					"no-class-assign": "off",
@@ -57,6 +66,15 @@
 			},
 			{
 				"files": [
+					"**/*.{test,spec}.{js,jsx,ts,tsx,mjs,mts,cjs,cts}",
+					"**/__tests__/**/*.{js,jsx,ts,tsx,mjs,mts,cjs,cts}"
+				],
+				"rules": {
+					"vitest/require-awaited-expect-poll": "error"
+				}
+			},
+			{
+				"files": [
 					"server/scripts/**/*.tsx",
 					"server/src/app.tsx",
 					"server/src/index.tsx",
@@ -66,22 +84,17 @@
 				"rules": {
 					"no-console": "off"
 				}
-			},
-			{
-				"files": [
-					"server/**/*.tsx"
-				],
-				"rules": {
-					"react/rules-of-hooks": "off"
-				}
 			}
 		],
 		"plugins": [
 			"typescript",
 			"import",
+			"jsx-a11y",
 			"oxc",
+			"promise",
 			"react",
-			"unicorn"
+			"unicorn",
+			"vitest"
 		],
 		"rules": {
 			"@nkzw/ensure-relay-types": "error",
@@ -93,11 +106,29 @@
 					"default": "generic"
 				}
 			],
+			"@typescript-eslint/await-thenable": [
+				"error",
+				{
+					"allowMixedPromiseArrays": true
+				}
+			],
+			"@typescript-eslint/ban-ts-comment": "error",
+			"@typescript-eslint/no-array-delete": "error",
 			"@typescript-eslint/no-duplicate-enum-values": "error",
+			"@typescript-eslint/no-duplicate-type-constituents": "error",
 			"@typescript-eslint/no-empty-object-type": "error",
 			"@typescript-eslint/no-explicit-any": "error",
 			"@typescript-eslint/no-extra-non-null-assertion": "error",
+			"@typescript-eslint/no-for-in-array": "error",
+			"@typescript-eslint/no-import-type-side-effects": "error",
 			"@typescript-eslint/no-misused-new": "error",
+			"@typescript-eslint/no-misused-promises": [
+				"error",
+				{
+					"checksVoidReturn": false
+				}
+			],
+			"@typescript-eslint/no-misused-spread": "error",
 			"@typescript-eslint/no-non-null-asserted-nullish-coalescing": "error",
 			"@typescript-eslint/no-non-null-asserted-optional-chain": "error",
 			"@typescript-eslint/no-require-imports": "error",
@@ -105,9 +136,15 @@
 			"@typescript-eslint/no-unnecessary-type-constraint": "error",
 			"@typescript-eslint/no-unsafe-declaration-merging": "error",
 			"@typescript-eslint/no-unsafe-function-type": "error",
+			"@typescript-eslint/no-unsafe-unary-minus": "error",
 			"@typescript-eslint/no-wrapper-object-types": "error",
 			"@typescript-eslint/prefer-as-const": "error",
 			"@typescript-eslint/prefer-namespace-keyword": "error",
+			"@typescript-eslint/require-array-sort-compare": "error",
+			"@typescript-eslint/return-await": [
+				"error",
+				"error-handling-correctness-only"
+			],
 			"@typescript-eslint/triple-slash-reference": "error",
 			"array-callback-return": "error",
 			"constructor-super": "error",
@@ -123,6 +160,7 @@
 			"getter-return": "error",
 			"import-x/export": "error",
 			"import-x/no-namespace": "error",
+			"jsx-a11y/alt-text": "error",
 			"no-array-constructor": "error",
 			"no-async-promise-executor": "error",
 			"no-case-declarations": "error",
@@ -191,6 +229,7 @@
 					"varsIgnorePattern": "^_"
 				}
 			],
+			"no-useless-assignment": "error",
 			"no-useless-backreference": "error",
 			"no-useless-catch": "error",
 			"no-useless-escape": "error",
@@ -217,6 +256,7 @@
 			"oxc/double-comparisons": "error",
 			"oxc/misrefactored-assign-op": "error",
 			"oxc/missing-throw": "error",
+			"oxc/no-accumulating-spread": "error",
 			"oxc/number-arg-out-of-range": "error",
 			"oxc/uninvoked-array-callback": "error",
 			"perfectionist/sort-enums": [
@@ -244,7 +284,22 @@
 			],
 			"prefer-const": "error",
 			"prefer-object-has-own": "error",
+			"prefer-promise-reject-errors": "error",
 			"preserve-caught-error": "error",
+			"promise/no-multiple-resolved": "error",
+			"promise/no-return-in-finally": "error",
+			"quality/no-array-filter-map": "error",
+			"quality/no-chained-type-assertions": "error",
+			"quality/no-conditional-empty-object-spread": "error",
+			"quality/no-known-value-widening": "error",
+			"quality/no-object-parameters": "error",
+			"quality/no-reduce-accumulator-copy": "error",
+			"quality/no-reflect-apply": "error",
+			"quality/no-reflect-get": "error",
+			"quality/no-unknown-returns": "error",
+			"quality/no-unknown-type-aliases": "error",
+			"quality/no-unsafe-dictionary-type": "error",
+			"quality/no-widen-then-assert": "error",
 			"react/button-has-type": "error",
 			"react/checked-requires-onchange-or-readonly": "error",
 			"react/display-name": "error",
@@ -285,8 +340,10 @@
 			"unicorn/consistent-empty-array-spread": "error",
 			"unicorn/consistent-function-scoping": "error",
 			"unicorn/no-abusive-eslint-disable": "error",
+			"unicorn/no-array-fill-with-reference-type": "error",
 			"unicorn/no-hex-escape": "error",
 			"unicorn/no-invalid-fetch-options": "error",
+			"unicorn/no-invalid-remove-event-listener": "error",
 			"unicorn/no-magic-array-flat-depth": "error",
 			"unicorn/no-typeof-undefined": "error",
 			"unicorn/no-unnecessary-slice-end": "error",

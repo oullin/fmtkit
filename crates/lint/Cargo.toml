@@ -30,3 +30,6 @@ regress = { workspace = true, features = ["utf16"] }
 rustc-hash.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

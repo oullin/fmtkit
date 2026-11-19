@@ -26,7 +26,7 @@ Release archives (`fmtkit-<target>.tar.xz`) cover `aarch64`/`x86_64` on macOS an
 
 fmtkit finds the helper through `FMTKIT_GO_HELPER`, then beside itself (as invoked, then with symlinks resolved), then in `../share/fmtkit/` (Homebrew), then on `PATH`. A missing or incompatible helper exits with code 3.
 
-No Node.js is needed. `go` on `PATH` is needed only for `go vet` and `--resolve-imports`.
+No Node.js is needed. `go` on `PATH` is needed only for `go vet` and `--resolve-imports`. Opt-in [type-aware rules](docs/type-aware.md) also need the native `tsrs` binary (`npm i -D tsrs`).
 
 ## Quickstart
 
@@ -120,6 +120,7 @@ printf 'const a = {b:1}\n' | fmtkit format --stdin-filepath web/x.ts
 | `FMTKIT_JOBS`      | Worker threads when `--jobs` is not given.                 |
 | `FMTKIT_CACHE_DIR` | Cache directory (default: the OS cache dir + `fmtkit/v2`). |
 | `FMTKIT_GO_HELPER` | Path of `fmtkit-go-helper`.                                |
+| `FMTKIT_TSRS`      | Path of the native `tsrs` binary, for type-aware rules.    |
 | `NO_COLOR`         | Disable colour under `--color auto`.                       |
 
 ### Cache
@@ -180,6 +181,8 @@ arrow_parens = "always"               # "always", "avoid"
 bundled = true                        # false = start from no rules
 ignore = []                           # files lint skips (still formatted)
 # exemptions = "lint-exempt.toml"     # [[exempt]] entries, relative to this file
+# type_aware = "nkzw"                 # nkzw's ten type-aware rules, run through tsrs
+# tsrs = "node_modules/@tsrs/darwin-arm64/tsrs"   # where tsrs is, if fmtkit cannot find it
 
 [lint.rules]
 eqeqeq = ["error", "always"]          # severity, or [severity, options...]
@@ -195,7 +198,7 @@ A rule setting replaces the bundled one entirely, options included, so repeat th
 
 The bundled policy reports a disable directive (`// oxlint-disable-next-line rule`, or its `eslint-` form) that suppresses nothing as an `unused-directive` error, as `@nkzw/oxlint-config` 3.0 does. `fix` removes an unused `oxlint-` directive; it leaves an `eslint-` directive in place, because ESLint may still read it. Configure it as the rule `unused-directive` under `[lint.rules]` (`"warn"`, or `"off"` to stop the reports) or exempt files from it under `[[exempt]]`; it takes no options. Without the bundled policy it is off until you turn it on.
 
-Type-aware rules (oxc's tsgolint rules, such as `typescript/no-floating-promises`) need the TypeScript type checker, which fmtkit's single-file lint does not run. The bundled policy leaves out the ten that `@nkzw/oxlint-config` 3.0 enables, and enabling one under `[lint.rules]` is a configuration error. A directive that names only type-aware rules is never reported as unused, so a type-aware linter that runs beside fmtkit, such as `tsrs`, keeps its directives.
+Type-aware rules (oxc's tsgolint rules, such as `typescript/no-floating-promises`) need the TypeScript type checker. They are opt-in: name one under `[lint.rules]`, or set `[lint] type_aware = "nkzw"` for the ten that `@nkzw/oxlint-config` 3.0 enables, which the bundled policy leaves out. fmtkit then runs them once per run through the native [tsrs](https://www.npmjs.com/package/tsrs) binary (`npm i -D tsrs`) and reports them like any other finding. Directives, `[[exempt]]` entries, and `[lint] ignore` apply to them. A run that needs tsrs and cannot find it exits with code 2 and says how to install it. These findings are not cached and have no fixes; see [Type-aware rules](docs/type-aware.md).
 
 ## Lint exemptions
 
@@ -292,7 +295,7 @@ Needs Rust 1.96+, Go 1.27.4, and Bash. Build output goes to `storage/`.
 
 `scripts/task.sh` also provides `self-check` (format the tree with `--all --no-cache` and fail if anything moves) and `coverage` (90% line coverage for Rust and Go). CI runs lint, tests on Ubuntu and macOS, coverage, smoke tests, the self-check, a benchmark gate (more than 10% slower fails), and nightly fuzzing.
 
-The code lives in `crates/` (cli, engine, discover, config, core, ts, hosts, lint, go, cache, report, testkit) and `go/helper`. Only the engine writes source files. The workspace forbids unsafe code, denies pedantic clippy, and never panics on input. See also [Upgrading oxc](docs/oxc-upgrade.md), [Known upstream issues](docs/known-issues.md), and `go/helper/proto/PROTOCOL.md`.
+The code lives in `crates/` (cli, engine, discover, config, core, ts, hosts, lint, go, cache, report, testkit) and `go/helper`. Only the engine writes source files. The workspace forbids unsafe code, denies pedantic clippy, and never panics on input. See also [Upgrading oxc](docs/oxc-upgrade.md), [Known upstream issues](docs/known-issues.md), [Type-aware rules](docs/type-aware.md), and `go/helper/proto/PROTOCOL.md`.
 
 **Releases:** a merge to `main` with an untagged version in `Cargo.toml` is tagged and released (archives, Homebrew, Docker) only while the repository variable `RELEASES` is `enabled`.
 

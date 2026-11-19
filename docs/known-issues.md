@@ -148,3 +148,10 @@ These are gaps in fmtkit itself rather than in a dependency.
 - Observed: no finding. oxlint 1.94.0 reports `import/export` here, because its CLI builds a module graph and resolves every `export *`. fmtkit lints each file on its own, without a module graph or a resolver, so the rule sees only the names that the file itself declares.
 - Expected: the duplicate export is reported.
 - fmtkit: the rule still reports duplicates within a single file. Cross-module duplicates surface at type-check time (`tsc` reports TS2308).
+
+### Type-aware rules are not cached and have no fixes
+
+- Input: a type-aware rule (such as `typescript/no-floating-promises`) turned on under `[lint.rules]` or with `[lint] type_aware = "nkzw"`.
+- Observed: tsrs runs on every run that has a script file in scope, including runs that `fmtkit serve` answers; `format` does not apply tsrs's fixes; `--stdin-filepath` and `.vue` files are not checked by these rules.
+- Expected: `format` applies the safe fixes of `return-await` and `no-duplicate-type-constituents`, as `oxlint --type-aware --fix` does.
+- fmtkit: see [Type-aware rules](type-aware.md#limitations) for why each of these holds.

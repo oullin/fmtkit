@@ -221,8 +221,11 @@ fn fix_removes_an_unused_oxlint_directive_only() {
     assert_eq!(eslint.diagnostics.len(), 1);
 }
 
+/// The per-file lint never judges a directive for a type-aware rule: the
+/// type-aware lane does when the rule is on (tests/type_aware.rs), and when it
+/// is off the directive may serve a type-aware linter beside fmtkit.
 #[test]
-fn directives_for_type_aware_rules_are_never_unused() {
+fn directives_for_type_aware_rules_are_left_to_the_type_aware_lane() {
     let linter = reporting_unused("error", &[]);
 
     for name in ["typescript/no-floating-promises", "@typescript-eslint/no-floating-promises", "@typescript-eslint/no-unsafe-assignment"] {
@@ -279,14 +282,69 @@ fn unused_directives_can_be_exempted() {
     assert_eq!(rules_of(&linter, "src/a.ts", Lang::Ts, source), [(fmtkit_lint::UNUSED_DIRECTIVE_RULE.to_owned(), 1, 1)]);
 }
 
+/// Naming a type-aware rule under `[lint.rules]` is the opt-in: the config
+/// builds, the rule is listed for the type-aware lane, and the in-process
+/// lint never reports it.
 #[test]
-fn type_aware_rules_are_config_errors() {
+fn type_aware_rules_are_opt_in() {
     for name in ["typescript/no-floating-promises", "@typescript-eslint/await-thenable"] {
-        let error = Linter::new(&only(&[(name, json!("error"))])).err().unwrap_or_else(|| panic!("{name} should be rejected"));
+        let linter = Linter::new(&only(&[(name, json!("error"))])).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let key = name.replace("@typescript-eslint/", "typescript/");
 
-        assert!(matches!(&error, LintError::Rule { rule, message } if rule == name && message.contains("type-aware")), "{name}: {error}");
-        assert!(Linter::new(&only(&[(name, json!("off"))])).is_ok(), "{name} may be turned off");
+        assert_eq!(linter.type_aware_rules(), [key], "{name}");
+        assert_eq!(rules_of(&linter, "a.ts", Lang::Ts, "async function f() {}\nf();\nawait 1;\n"), [], "{name}");
+        assert!(Linter::new(&only(&[(name, json!("off"))])).unwrap().type_aware_rules().is_empty(), "{name} may be turned off");
     }
+
+    // The bundled `correctness` category holds type-aware rules too; they run only when named.
+    assert_eq!(Linter::new(&Lint::default()).unwrap().type_aware_rules(), [] as [String; 0]);
+
+    let options = Linter::new(&only(&[("typescript/return-await", json!(["error", "error-handling-correctness-only"]))])).unwrap();
+
+    assert_eq!(options.type_aware_rules(), ["typescript/return-await"]);
+
+    let error = Linter::new(&only(&[("typescript/return-await", json!(["error", "always", "never"]))])).err().expect("two options are refused");
+
+    assert!(matches!(&error, LintError::Rule { rule, message } if rule == "typescript/return-await" && message.contains("at most one option")), "{error}");
+}
+
+#[test]
+fn the_nkzw_preset_turns_on_its_ten_type_aware_rules() {
+    let preset = Lint { type_aware: Some(fmtkit_config::TypeAwarePreset::Nkzw), ..Lint::default() };
+    let linter = Linter::new(&preset).unwrap();
+
+    assert_eq!(
+        linter.type_aware_rules(),
+        [
+            "typescript/await-thenable",
+            "typescript/no-array-delete",
+            "typescript/no-duplicate-type-constituents",
+            "typescript/no-floating-promises",
+            "typescript/no-for-in-array",
+            "typescript/no-misused-promises",
+            "typescript/no-misused-spread",
+            "typescript/no-unsafe-unary-minus",
+            "typescript/require-array-sort-compare",
+            "typescript/return-await",
+        ]
+    );
+
+    // `[lint.rules]` replaces a preset rule; without the bundled policy the preset still applies.
+    let tuned = Lint { rules: [("typescript/no-floating-promises".to_owned(), json!("off"))].into(), ..preset.clone() };
+
+    assert!(!Linter::new(&tuned).unwrap().type_aware_rules().iter().any(|rule| rule.ends_with("no-floating-promises")));
+    assert_eq!(Linter::new(&Lint { bundled: false, ..preset }).unwrap().type_aware_rules().len(), 10);
+}
+
+#[test]
+fn type_aware_rules_can_be_exempted() {
+    let exempt = vec![fmtkit_config::Exemption { rule: "@typescript-eslint/no-floating-promises".into(), reason: "r".into(), paths: vec!["legacy/".into()] }];
+
+    assert!(Linter::new(&Lint { exempt: exempt.clone(), ..only(&[("typescript/no-floating-promises", json!("error"))]) }).is_ok());
+
+    let off = Linter::new(&Lint { exempt, ..only(&[("typescript/no-floating-promises", json!("off"))]) });
+
+    assert!(matches!(off, Err(LintError::Exempt { .. })));
 }
 
 #[test]

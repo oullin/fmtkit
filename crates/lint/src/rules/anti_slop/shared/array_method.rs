@@ -43,7 +43,7 @@ pub fn method_target<'b, 'a>(callee: &'b Expression<'a>) -> Option<(&'a str, &'b
     match unwrap(callee) {
         Bare::Member(MemberExpression::StaticMemberExpression(member)) => Some((member.property.name.as_str(), &member.object)),
         Bare::Member(MemberExpression::ComputedMemberExpression(member)) => match strip_parens(&member.expression) {
-            Expression::StringLiteral(key) => Some((key.value.as_str(), &member.object)),
+            Expression::StringLiteral(key) => key.value.as_str().map(|key| (key, &member.object)),
             _ => None,
         },
         _ => None,

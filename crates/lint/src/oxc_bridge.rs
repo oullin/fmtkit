@@ -161,7 +161,7 @@ fn enabled_rules(natives: &Natives, store: &ConfigStore, base: &Map<String, Valu
     let mut enabled: FxHashSet<String> = natives.severities.keys().map(|name| (*name).to_owned()).collect();
 
     for (rule, severity) in store.rules().iter() {
-        if severity.is_warn_deny() {
+        if severity.severity.is_warn_deny() {
             enabled.insert(normalize_rule_name(&format!("{}/{}", rule.plugin_name(), rule.name())));
         }
     }

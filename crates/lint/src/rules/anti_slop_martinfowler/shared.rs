@@ -347,7 +347,7 @@ fn static_key_name<'a>(key: &'a PropertyKey<'a>, computed: bool) -> Option<Strin
     match key {
         PropertyKey::StaticIdentifier(identifier) => Some(identifier.name.to_string()),
         PropertyKey::PrivateIdentifier(identifier) => Some(format!("#{}", identifier.name)),
-        PropertyKey::StringLiteral(literal) => Some(literal.value.to_string()),
+        PropertyKey::StringLiteral(literal) => Some(crate::rules::lossy(literal.value).into_owned()),
         _ => None,
     }
 }
@@ -356,9 +356,9 @@ fn static_key_name<'a>(key: &'a PropertyKey<'a>, computed: bool) -> Option<Strin
 /// with no substitutions.
 fn string_argument(arguments: &[Argument<'_>]) -> Option<String> {
     match arguments.first()?.as_expression().map(strip_parens)? {
-        Expression::StringLiteral(literal) => Some(literal.value.to_string()),
+        Expression::StringLiteral(literal) => Some(crate::rules::lossy(literal.value).into_owned()),
         Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
-            template.quasis.first().and_then(|quasi| quasi.value.cooked.as_ref()).map(ToString::to_string)
+            template.quasis.first().and_then(|quasi| quasi.value.cooked).map(|cooked| crate::rules::lossy(cooked).into_owned())
         }
         _ => None,
     }

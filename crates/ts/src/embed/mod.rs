@@ -1,4 +1,4 @@
-//! Embedded languages in template literals, ported from oxfmt 0.71.0's
+//! Embedded languages in template literals, ported from oxfmt 0.79.0's
 //! `core::embed` (`dispatcher.rs`, `services.rs`, `prettier_string.rs`).
 //!
 //! oxc_formatter decides which templates hold another language (`css`,

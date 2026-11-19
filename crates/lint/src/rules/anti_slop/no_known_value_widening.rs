@@ -255,7 +255,7 @@ fn key_name(source: &str, key: &PropertyKey<'_>) -> String {
 
     match expression {
         Expression::Identifier(it) => it.name.to_string(),
-        Expression::StringLiteral(it) => it.value.to_string(),
+        Expression::StringLiteral(it) => crate::rules::lossy(it.value).into_owned(),
         Expression::NumericLiteral(it) => it.value.to_js_string(),
         Expression::BigIntLiteral(it) => it.value.to_string(),
         Expression::BooleanLiteral(it) => it.value.to_string(),

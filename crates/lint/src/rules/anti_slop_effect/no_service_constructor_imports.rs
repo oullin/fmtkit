@@ -28,7 +28,9 @@ impl Rule for NoServiceConstructorImports {
         let AstKind::ImportDeclaration(import) = node.kind() else {
             return;
         };
-        let source = import.source.value.as_str();
+        let Some(source) = import.source.value.as_str() else {
+            return;
+        };
 
         if !(source.starts_with("./") || source.starts_with("../")) || is_test_file(ctx.rel) {
             return;

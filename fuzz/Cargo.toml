@@ -24,7 +24,7 @@ fmtkit-ts = { path = "../crates/ts" }
 # Copied from the root Cargo.toml: a patch only applies from the workspace
 # being built. Keep the tag in step with the root's oxc pin.
 [patch.crates-io]
-oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
 
 [profile.release]
 debug = 1

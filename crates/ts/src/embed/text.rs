@@ -15,7 +15,7 @@ use markup_fmt::config::{FormatOptions, LanguageOptions, LayoutOptions, LineBrea
 use markup_fmt::{Hints, Language};
 use oxc_allocator::{Allocator, ArenaVec};
 use oxc_formatter::JsFormatOptions;
-use oxc_formatter_core::{FormatElement, FormatSession, IndentWidth, LineEnding, LineMode, LineWidth, TextWidth};
+use oxc_formatter_core::{FormatElement, FormatSession, IndentWidth, LineEnding, LineMode, LineWidth, Tag};
 use oxc_formatter_css::{CssFormatOptions, CssVariant};
 use oxc_formatter_markdown::{MarkdownFormatOptions, ProseWrap};
 use oxc_markdown_parser::Segment;
@@ -206,11 +206,24 @@ pub(super) fn into_ir<'a>(session: &FormatSession<'a>, text: &str, indent_width:
         if !line.is_empty() {
             let line = allocator.alloc_str(line);
 
-            ir.push(FormatElement::Text { text: line, width: TextWidth::from_text(line, indent_width) });
+            ir.push(FormatElement::text(line, indent_width));
         }
     }
 
     ir
+}
+
+/// `ir` one indent deeper: Prettier's `indent(group(content))` for an
+/// html-in-js template whose backticks hug more than one root.
+pub(super) fn indented<'a>(session: &FormatSession<'a>, ir: ArenaVec<'a, FormatElement<'a>>) -> ArenaVec<'a, FormatElement<'a>> {
+    let allocator = session.allocator();
+    let mut out = ArenaVec::with_capacity_in(ir.len() + 2, &allocator);
+
+    out.push(FormatElement::Tag(Tag::StartIndent));
+    out.extend(ir);
+    out.push(FormatElement::Tag(Tag::EndIndent));
+
+    out
 }
 
 /// Elements that never have content or a closing tag.

@@ -570,13 +570,9 @@ fn fuzz_findings_that_settle_within_the_round_budget() {
 fn fuzz_findings_that_never_settle_are_refused() {
     for (lang, source) in [
         (Lang::Vue, "{{`\n`\n\0}"),
-        (Lang::Vue, "{{a\n`\n}}"),
         (Lang::Vue, "{{{;}\n`\n`}"),
         (Lang::Html, "<style>s\n`\nd</style>"),
         (Lang::Markdown, "- a\n\n  {{\n}}"),
-        (Lang::Markdown, "- d\n  >`d\n`"),
-        (Lang::Markdown, "- ;\n<e>\n\t\t\u{b}"),
-        (Lang::Markdown, "- `\n\t\t`\n<m>\n"),
         (Lang::Markdown, "```css\n{r:(}"),
     ] {
         let result = format_real(lang, source);
@@ -585,7 +581,25 @@ fn fuzz_findings_that_never_settle_are_refused() {
     }
 }
 
-/// oxc-css-parser 0.0.15 reaches an `unreachable!` on a hyphen that neither
+/// oxc_formatter_markdown 0.79 settles these lazy lines, which 0.71 indented
+/// differently on every run.
+#[test]
+fn lazy_lines_in_list_items_settle() {
+    assert_eq!(assert_settles(Lang::Markdown, "- d\n  >`d\n`"), "- d\n    > `d\n    > `\n");
+    assert_eq!(assert_settles(Lang::Markdown, "- d\n  ><C\na"), "- d\n    > <C\n    > a\n");
+    assert_eq!(assert_settles(Lang::Markdown, "- ;\n<e>\n\t\t\u{b}"), "- ;\n<e>\n    \t\u{b}\n");
+    assert_eq!(assert_settles(Lang::Markdown, "- `\n\t\t`\n<m>\n"), "- `\n    \t`\n<m>\n");
+    assert_eq!(assert_settles(Lang::Markdown, "- <D\n\t\tm>\n<t>\n"), "- <D\n    \tm>\n<t>\n");
+}
+
+/// markup_fmt 0.28 rejects this Vue interpolation, which 0.27 reformatted
+/// without settling; it stays as written either way.
+#[test]
+fn an_unterminated_vue_interpolation_is_a_syntax_error() {
+    assert!(matches!(format_real(Lang::Vue, "{{a\n`\n}}"), Err(HostError::Syntax { .. })));
+}
+
+/// oxc-css-parser 0.0.22 reaches an `unreachable!` on a hyphen that neither
 /// starts an identifier nor ends the input; see `docs/known-issues.md`. A
 /// failure here means the parser was fixed: update the document.
 #[test]

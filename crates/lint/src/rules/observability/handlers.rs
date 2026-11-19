@@ -105,7 +105,9 @@ const ASYNCHRONOUS_METHODS: [&str; 5] = ["parseAsync", "safeParseAsync", "spa", 
 fn asynchronous_call(callee: &Expression<'_>) -> bool {
     match unwrap(callee) {
         Expression::StaticMemberExpression(member) => ASYNCHRONOUS_METHODS.contains(&member.property.name.as_str()),
-        Expression::ComputedMemberExpression(member) => member.static_property_name().is_some_and(|name| ASYNCHRONOUS_METHODS.contains(&name.as_str())),
+        Expression::ComputedMemberExpression(member) => {
+            member.static_property_name().is_some_and(|name| name.as_str().is_some_and(|name| ASYNCHRONOUS_METHODS.contains(&name)))
+        }
         _ => false,
     }
 }
@@ -229,7 +231,7 @@ fn resolve_expression<'s, 'a>(expression: &'s Expression<'a>, semantic: &'s Sema
                 AstKind::Class(class) => Some(Value::Class { class, instance: false }),
                 AstKind::ImportSpecifier(_) | AstKind::ImportDefaultSpecifier(_) | AstKind::ImportNamespaceSpecifier(_) => {
                     semantic.nodes().ancestor_kinds(declaration).find_map(|kind| match kind {
-                        AstKind::ImportDeclaration(import) => Some(Value::Import(import.source.value.as_str())),
+                        AstKind::ImportDeclaration(import) => import.source.value.as_str().map(Value::Import),
                         _ => None,
                     })
                 }

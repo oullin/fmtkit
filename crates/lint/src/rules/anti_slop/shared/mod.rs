@@ -96,7 +96,7 @@ pub fn member<'b, 'a>(expression: &'b Expression<'a>) -> Option<(&'b Expression<
     match strip_parens(expression) {
         Expression::StaticMemberExpression(member) => Some((&member.object, member.property.name.as_str())),
         Expression::ComputedMemberExpression(member) => match strip_parens(&member.expression) {
-            Expression::StringLiteral(key) => Some((&member.object, key.value.as_str())),
+            Expression::StringLiteral(key) => key.value.as_str().map(|key| (&member.object, key)),
             _ => None,
         },
         _ => None,

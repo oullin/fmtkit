@@ -175,7 +175,7 @@ fn subtree(nodes: &AstNodes<'_>, root: NodeId) -> Vec<NodeId> {
 /// `String(literal.value)` for what ESTree calls a `Literal`.
 fn literal(expression: &Expression<'_>) -> Option<String> {
     Some(match expression {
-        Expression::StringLiteral(literal) => literal.value.to_string(),
+        Expression::StringLiteral(literal) => super::lossy(literal.value).into_owned(),
         Expression::NumericLiteral(literal) => jsnum::format(literal.value),
         Expression::BooleanLiteral(literal) => literal.value.to_string(),
         Expression::NullLiteral(_) => "null".to_owned(),

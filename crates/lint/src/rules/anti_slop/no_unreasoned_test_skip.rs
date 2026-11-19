@@ -45,7 +45,7 @@ impl Rule for NoUnreasonedTestSkip {
             AstKind::StaticMemberExpression(member) if SKIP_MODIFIERS.contains(&member.property.name.as_str()) && is_test_chain(&member.object) => member.span,
             // `it["skip"](…)` is the same registration; only a dynamic key is unknowable here.
             AstKind::ComputedMemberExpression(member)
-                if matches!(strip_parens(&member.expression), Expression::StringLiteral(key) if SKIP_MODIFIERS.contains(&key.value.as_str()))
+                if matches!(strip_parens(&member.expression), Expression::StringLiteral(key) if key.value.as_str().is_some_and(|key| SKIP_MODIFIERS.contains(&key)))
                     && is_test_chain(&member.object) =>
             {
                 member.span
@@ -70,7 +70,7 @@ fn skips_by_option(argument: &Argument<'_>) -> bool {
             return false;
         };
 
-        property.key.static_name().is_some_and(|key| SKIP_MODIFIERS.contains(&key.as_ref()))
+        property.key.static_name().is_some_and(|key| key.as_str().is_some_and(|key| SKIP_MODIFIERS.contains(&key)))
             && matches!(strip_parens(&property.value), Expression::BooleanLiteral(value) if value.value)
     })
 }

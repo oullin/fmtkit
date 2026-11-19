@@ -38,25 +38,26 @@ fmtkit-report = { path = "crates/report" }
 fmtkit-testkit = { path = "crates/testkit" }
 fmtkit-ts = { path = "crates/ts" }
 
-# oxc: every crate pinned to the one release tag that shipped oxlint 1.86.0 and
-# oxfmt 0.71.0. oxc_linter and the formatters are not published to crates.io.
+# oxc: every crate pinned to the one release tag that shipped oxlint 1.94.0 and
+# oxfmt 0.79.0. oxc_linter and the formatters are not published to crates.io.
 # Upgrade all of them together; see docs/oxc-upgrade.md.
-oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_ast = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_ast_visit = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_diagnostics = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_core = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_css = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_markdown = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_linter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_graphql = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_json = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
-oxc_formatter_yaml = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_ast = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_ast_visit = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_diagnostics = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_core = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_css = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_markdown = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_linter = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_str = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_syntax = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_graphql = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_json = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
+oxc_formatter_yaml = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
 
 anyhow = "1"
 blake3 = "1"
@@ -70,9 +71,9 @@ gix = { version = "0", default-features = false, features = ["index", "dirwalk",
 ignore = "0.4"
 # `fmtkit serve --watch`: kqueue on macOS, inotify (through rustix) on Linux.
 kqueue = "1"
-markup_fmt = "0.27"
+markup_fmt = "0.28"
 # The parser behind oxc_formatter_markdown, for walking fenced code blocks.
-oxc-markdown-parser = "0.0.2"
+oxc-markdown-parser = "0.0.4"
 mimalloc = { version = "0", default-features = false }
 proptest = "1"
 rayon = "1"
@@ -91,7 +92,7 @@ regress = "0.12"
 # oxc-markdown-parser (crates.io) depends on oxc_allocator from crates.io; route
 # it to the pinned git copy so there is one allocator type, as oxc itself does.
 [patch.crates-io]
-oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.86.0" }
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "oxlint_v1.94.0" }
 
 [profile.release]
 lto = "thin"

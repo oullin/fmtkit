@@ -18,6 +18,9 @@ export DIST_TEST_DIR="${DIST_TEST_DIR:-storage/dist-test}"
 export GOCACHE="${GOCACHE:-${CACHE_DIR}/go-build}"
 export GOPATH="${GOPATH:-${CACHE_DIR}/gopath}"
 export GOMODCACHE="${GOMODCACHE:-${GOPATH}/pkg/mod}"
+# staticcheck keeps its own cache rather than using GOCACHE, and defaults to
+# the user cache directory.
+export STATICCHECK_CACHE="${STATICCHECK_CACHE:-${CACHE_DIR}/staticcheck}"
 
 repo_path() {
 	local path="$1"
@@ -81,7 +84,7 @@ assert_no_legacy_artifacts() {
 ensure_storage_layout() {
 	local dir
 
-	for dir in CARGO_TARGET_DIR GO_HELPER_DIR DIST_TEST_DIR GOCACHE GOPATH GOMODCACHE; do
+	for dir in CARGO_TARGET_DIR GO_HELPER_DIR DIST_TEST_DIR GOCACHE GOPATH GOMODCACHE STATICCHECK_CACHE; do
 		assert_under_storage "$dir" "${!dir}"
 		mkdir -p "$(canonical_path "${!dir}")"
 	done

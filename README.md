@@ -285,15 +285,19 @@ fmtkit schema=2 mode=check result=fail files=2 changed=2 violations=5 lint=5 com
 
 Needs Rust 1.96+, Go 1.27.4, and Bash. Build output goes to `storage/`.
 
-| Target        | What it does                                          |
-| ------------- | ----------------------------------------------------- |
-| `make build`  | Build fmtkit and the Go helper.                       |
-| `make format` | Format the repository (or `ARGS`) with fmtkit itself. |
-| `make check`  | Check the repository (or `ARGS`) without writing.     |
-| `make lint`   | rustfmt, clippy, gofmt, and `go vet`, read-only.      |
-| `make test`   | Rust and Go tests.                                    |
+| Target           | What it does                                                         |
+| ---------------- | -------------------------------------------------------------------- |
+| `make build`     | Build fmtkit and the Go helper.                                      |
+| `make format`    | Format the repository (or `ARGS`) with fmtkit itself.                |
+| `make check`     | Check the repository (or `ARGS`) without writing.                    |
+| `make lint`      | rustfmt, clippy, gofmt, and `go vet`, read-only.                     |
+| `make test`      | Rust and Go tests.                                                   |
+| `make audit`     | govulncheck and `staticcheck -checks=all` on the Go helper.          |
+| `make modernise` | Preview `go fix` modernisations of the Go helper as a diff.          |
+| `make profile`   | CPU, memory and trace profiles of the Go helper benchmarks in `PKG`. |
+| `make pprof`     | Open the `PROFILE` (`cpu` or `mem`) profile in pprof on port 5000.   |
 
-`scripts/task.sh` also provides `self-check` (format the tree with `--all --no-cache` and fail if anything moves) and `coverage` (90% line coverage for Rust and Go). CI runs lint, tests on Ubuntu and macOS, coverage, smoke tests, the self-check, a benchmark gate (more than 10% slower fails), and nightly fuzzing.
+`scripts/task.sh` also provides `self-check` (format the tree with `--all --no-cache` and fail if anything moves) and `coverage` (90% line coverage for Rust and Go). govulncheck and staticcheck are pinned as tool directives in `go/helper/go.mod`. CI runs lint, the Go audit, tests on Ubuntu and macOS, coverage, smoke tests, the self-check, a benchmark gate (more than 10% slower fails), and nightly fuzzing.
 
 The code lives in `crates/` (cli, engine, discover, config, core, ts, hosts, lint, go, cache, report, testkit) and `go/helper`. Only the engine writes source files. The workspace forbids unsafe code, denies pedantic clippy, and never panics on input. See also [Upgrading oxc](docs/oxc-upgrade.md), [Known upstream issues](docs/known-issues.md), [Type-aware rules](docs/type-aware.md), and `go/helper/proto/PROTOCOL.md`.
 

@@ -69,6 +69,24 @@ jobs:
             - name: rustfmt, clippy, gofmt and go vet
               run: ./scripts/task.sh lint
 
+    # govulncheck and staticcheck run as the tool directives pinned in
+    # go/helper/go.mod, so this job needs Go only.
+    audit:
+        runs-on: ubuntu-24.04
+
+        steps:
+            - uses: actions/checkout@v7.0.1
+              name: Checkout repository
+
+            - uses: actions/setup-go@v7.0.0
+              name: Install Go
+              with:
+                  go-version-file: go/helper/go.mod
+                  cache-dependency-path: go/helper/go.sum
+
+            - name: govulncheck and staticcheck
+              run: ./scripts/task.sh audit
+
     # Linux runs the same Rust and Go suites (Go with -race) in the coverage
     # job, so only macOS needs a plain test run.
     test:

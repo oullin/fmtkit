@@ -18,6 +18,12 @@ export DIST_TEST_DIR="${DIST_TEST_DIR:-storage/dist-test}"
 export GOCACHE="${GOCACHE:-${CACHE_DIR}/go-build}"
 export GOPATH="${GOPATH:-${CACHE_DIR}/gopath}"
 export GOMODCACHE="${GOMODCACHE:-${GOPATH}/pkg/mod}"
+# staticcheck keeps its own cache rather than using GOCACHE, and defaults to
+# the user cache directory. It must be absolute, as staticcheck runs under
+# `go -C go/helper`.
+STATICCHECK_CACHE="${STATICCHECK_CACHE:-${CACHE_DIR}/staticcheck}"
+[[ "$STATICCHECK_CACHE" == /* ]] || STATICCHECK_CACHE="${REPO_ROOT}/${STATICCHECK_CACHE}"
+export STATICCHECK_CACHE
 
 repo_path() {
 	local path="$1"

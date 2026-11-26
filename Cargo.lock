@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -643,7 +643,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-cache"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "blake3",
  "dirs",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-config"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "blake3",
  "serde",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-core"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -676,7 +676,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-discover"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-config",
  "fmtkit-core",
@@ -693,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-engine"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-cache",
  "fmtkit-config",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-go"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "blake3",
  "crossbeam-channel",
@@ -727,7 +727,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-hosts"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "anyhow",
  "fmtkit-config",
@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-lint"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-config",
  "fmtkit-core",
@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-report"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-core",
  "serde",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-testkit"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-core",
  "proptest",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "fmtkit-ts"
-version = "2.7.0"
+version = "2.7.1"
 dependencies = [
  "fmtkit-config",
  "fmtkit-core",

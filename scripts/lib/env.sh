@@ -87,7 +87,7 @@ assert_no_legacy_artifacts() {
 ensure_storage_layout() {
 	local dir
 
-	for dir in CARGO_TARGET_DIR GO_HELPER_DIR DIST_TEST_DIR GOCACHE GOPATH GOMODCACHE STATICCHECK_CACHE; do
+	for dir in CARGO_TARGET_DIR GO_HELPER_DIR DIST_TEST_DIR GOCACHE GOPATH GOMODCACHE; do
 		assert_under_storage "$dir" "${!dir}"
 		mkdir -p "$(canonical_path "${!dir}")"
 	done

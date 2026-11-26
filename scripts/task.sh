@@ -163,8 +163,11 @@ run_coverage() {
 }
 
 # Both tools are pinned as tool directives in go/helper/go.mod, so `go tool`
-# runs the versions recorded there rather than whatever is on PATH.
+# runs the versions recorded there rather than whatever is on PATH. Only this
+# task runs staticcheck, so only this task asserts where its cache goes.
 run_audit() {
+	assert_under_storage STATICCHECK_CACHE "$STATICCHECK_CACHE"
+
 	with_env go -C "${REPO_ROOT}/go/helper" tool govulncheck ./...
 	with_env go -C "${REPO_ROOT}/go/helper" tool staticcheck -checks=all ./...
 }

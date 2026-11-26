@@ -22,6 +22,14 @@ usage: task.sh <task> [args...]
   lint                rustfmt, clippy, gofmt and go vet, all read-only
   test                the Rust workspace and Go helper test suites
   coverage            enforce the Rust and Go coverage gates
+  audit               govulncheck and staticcheck -checks=all on the Go helper
+  modernise           preview go fix's modernisations of the Go helper as a
+                      diff; writes nothing
+  profile [pkg] [re]  run the Go helper benchmarks in pkg (default ./format)
+                      matching re (default .) with CPU, memory and execution
+                      trace profiles written to storage/.cache/profile/
+  pprof [cpu|mem]     open a profile from `profile` with go tool pprof on
+                      http://localhost:5000
   with-env <cmd> ...  run a command with the storage env and layout asserted
 EOF_USAGE
 }
@@ -154,6 +162,63 @@ run_coverage() {
 	awk -v coverage="${go_coverage}" 'BEGIN { exit !(coverage >= 90) }'
 }
 
+# Both tools are pinned as tool directives in go/helper/go.mod, so `go tool`
+# runs the versions recorded there rather than whatever is on PATH.
+run_audit() {
+	with_env go -C "${REPO_ROOT}/go/helper" tool govulncheck ./...
+	with_env go -C "${REPO_ROOT}/go/helper" tool staticcheck -checks=all ./...
+}
+
+# Shows what `go fix` would modernise without applying any of it.
+run_modernise() {
+	with_env go -C "${REPO_ROOT}/go/helper" fix -diff ./...
+}
+
+# Profiles the helper through its benchmarks rather than a debug listener: the
+# helper is a short-lived stdio process with no server to attach one to. The
+# test binary is kept beside the profiles so pprof can symbolise them.
+run_profile() {
+	local pkg="${1:-./format}"
+	local pattern="${2:-.}"
+	local dir
+
+	dir="$(canonical_path "${CACHE_DIR}/profile")"
+	mkdir -p "$dir"
+
+	with_env go -C "${REPO_ROOT}/go/helper" test -run '^$' -bench "$pattern" -benchmem "$pkg" \
+		-o "${dir}/bench.test" \
+		-cpuprofile "${dir}/cpu.out" \
+		-memprofile "${dir}/mem.out" \
+		-trace "${dir}/trace.out"
+
+	printf '\nprofiles in %s\n' "$dir"
+	printf 'open one with: scripts/task.sh pprof [cpu|mem]\n'
+	printf 'open the trace with: go tool trace %s/trace.out\n' "$dir"
+}
+
+run_pprof() {
+	local kind="${1:-cpu}"
+	local dir profile
+
+	case "$kind" in
+		cpu | mem) ;;
+		*)
+			printf 'pprof: expected cpu or mem, got %s\n' "$kind" >&2
+			exit 2
+			;;
+	esac
+
+	dir="$(canonical_path "${CACHE_DIR}/profile")"
+	profile="${dir}/${kind}.out"
+
+	if [[ ! -f "$profile" ]]; then
+		printf 'pprof: %s is missing; run scripts/task.sh profile first\n' "$profile" >&2
+		exit 1
+	fi
+
+	with_env go -C "${REPO_ROOT}/go/helper" tool pprof -http=:5000 "${dir}/bench.test" "$profile"
+}
+
 task="${1:-help}"
 shift || true
 
@@ -178,6 +243,18 @@ case "$task" in
 		;;
 	coverage)
 		run_coverage
+		;;
+	audit)
+		run_audit
+		;;
+	modernise)
+		run_modernise
+		;;
+	profile)
+		run_profile "$@"
+		;;
+	pprof)
+		run_pprof "$@"
 		;;
 	with-env)
 		with_env "$@"

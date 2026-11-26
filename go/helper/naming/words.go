@@ -1,9 +1,6 @@
 package naming
 
-import (
-	"strings"
-	"unicode"
-)
+import "unicode"
 
 // initialisms are Go's common initialisms, after golint's list. An
 // initialism is one word whatever its case, as the generic split already
@@ -105,15 +102,4 @@ func pluralInitialism(runes []rune, start, at int) bool {
 	}
 
 	return at+2 == len(runes) || !unicode.IsLower(runes[at+2])
-}
-
-// lower returns the words of name in lowercase.
-func lower(name string) []string {
-	words := Split(name)
-
-	for i, w := range words {
-		words[i] = strings.ToLower(w)
-	}
-
-	return words
 }

@@ -4,8 +4,11 @@ SHELL := /bin/bash
 # fmtkit formats itself with the binary it ships: these targets build fmtkit and
 # its Go helper from this checkout and run them.
 ARGS ?= .
+PKG ?= ./format
+BENCH ?= .
+PROFILE ?= cpu
 
-.PHONY: help build format format-all check lint test version
+.PHONY: help build format format-all check lint test audit modernise profile pprof version
 
 help: ## Show the available targets
 	@printf 'fmtkit\n\n'
@@ -15,9 +18,13 @@ help: ## Show the available targets
 	@printf '  make check       Check ARGS without writing anything\n'
 	@printf '  make lint        rustfmt, clippy, gofmt and go vet\n'
 	@printf '  make test        Run the Rust and Go test suites\n'
+	@printf '  make audit       govulncheck and staticcheck on the Go helper\n'
+	@printf '  make modernise   Preview go fix modernisations as a diff\n'
+	@printf '  make profile     Profile the Go helper benchmarks in PKG\n'
+	@printf '  make pprof       Open PROFILE (cpu or mem) in go tool pprof\n'
 	@printf '  make version     Print the version the working tree builds as\n'
 	@printf '\nAdd --ts or --go to ARGS to run only that lane.\n'
-	@printf '\nVariables: ARGS\n'
+	@printf '\nVariables: ARGS, PKG, BENCH, PROFILE\n'
 
 build: ## Build fmtkit and the Go helper
 	@./scripts/task.sh build
@@ -36,6 +43,18 @@ lint: ## rustfmt, clippy, gofmt and go vet
 
 test: ## Run the Rust and Go test suites
 	@./scripts/task.sh test
+
+audit: ## govulncheck and staticcheck on the Go helper
+	@./scripts/task.sh audit
+
+modernise: ## Preview go fix modernisations as a diff
+	@./scripts/task.sh modernise
+
+profile: ## Profile the Go helper benchmarks in PKG
+	@./scripts/task.sh profile '$(PKG)' '$(BENCH)'
+
+pprof: ## Open PROFILE (cpu or mem) in go tool pprof
+	@./scripts/task.sh pprof $(PROFILE)
 
 version: ## Print the version the working tree builds as
 	@./scripts/task.sh fmtkit version

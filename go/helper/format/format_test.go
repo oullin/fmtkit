@@ -2,6 +2,7 @@ package format_test
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -274,5 +275,27 @@ func TestProcessParsesTheFinalTextOnceForEveryCheck(t *testing.T) {
 	if alone.Error != "" || shared.Error != "" || !slices.Equal(alone.Complexity, shared.Complexity) {
 		t.Fatalf("complexity alone = %+v, with the other checks = %+v (%q)",
 			alone.Complexity, shared.Complexity, shared.Error)
+	}
+}
+
+// BenchmarkProcess runs every step over this package's own source, the
+// workload the profile tasks in scripts/task.sh record.
+func BenchmarkProcess(b *testing.B) {
+	src, err := os.ReadFile("format.go")
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	limits := proto.Limits{MaxDepth: 4, MaxNestedFuncs: 3, MaxLineLength: 120, TabWidth: 4}
+	steps := allSteps
+	steps.MaxWords = 2
+	steps.Lint = limits
+	req := proto.Request{Rel: "format/format.go", Abs: "/repo/format/format.go", Source: src, Steps: steps}
+
+	for b.Loop() {
+		if reply := format.Process(req); reply.Error != "" {
+			b.Fatal(reply.Error)
+		}
 	}
 }
